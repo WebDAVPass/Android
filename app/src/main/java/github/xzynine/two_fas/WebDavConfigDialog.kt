@@ -5,6 +5,7 @@ import android.widget.Toast
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import github.xzynine.two_fas.theme.getAppRoundedCorner
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -220,16 +221,20 @@ fun WebDavConfigDialog(
     onConfigSaved: (serverUrl: String, username: String, password: String) -> Unit = { _, _, _ -> }
 ) {
     // WebDAV配置弹窗
-    if (showDialog) androidx.compose.ui.window.Dialog(
+    if (showDialog) {
+        // 获取统一的圆角半径
+        val cornerRadius = getAppRoundedCorner()
+        
+        androidx.compose.ui.window.Dialog(
             onDismissRequest = onDismissRequest
         ) {
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp)
-                    .border(1.dp, MiuixTheme.colorScheme.outline, RoundedCornerShape(16.dp)),
+                    .border(1.dp, MiuixTheme.colorScheme.outline, RoundedCornerShape(cornerRadius)),
                 color = MiuixTheme.colorScheme.surface,
-                shape = RoundedCornerShape(16.dp)
+                shape = RoundedCornerShape(cornerRadius)
             ) {
                 Column(
                     modifier = Modifier
@@ -263,3 +268,4 @@ fun WebDavConfigDialog(
             }
         }
     }
+}

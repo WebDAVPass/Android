@@ -12,15 +12,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import github.xzynine.two_fas.theme.AppTheme
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.useful.Move
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.icon.icons.useful.Settings
-import top.yukonga.miuix.kmp.icon.icons.useful.Personal
 import top.yukonga.miuix.kmp.icon.icons.useful.Save
+import top.yukonga.miuix.kmp.icon.icons.useful.Move
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: android.os.Bundle?) {
@@ -56,35 +56,27 @@ fun MainScreen() {
     // 基于Miuix Scaffold的主界面
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = when (selectedIndex) {
-                    0 -> "2FA 管理器"
-                    1 -> "WebDAV 文件浏览器"
-                    2 -> "设置"
-                    else -> "2FA 管理器"
-                },
-                navigationIcon = {},
-                actions = {
-                    IconButton(onClick = { showWebDavDialog = true }) {
-                        Icon(
-                            imageVector = MiuixIcons.Useful.Personal,
-                            contentDescription = "WebDAV配置"
-                        )
-                    }
-                }
-            )
+            // 只有在首页时显示标题
+            if (selectedIndex == 0) {
+                TopAppBar(
+                    title = "2FA 管理器",
+                    navigationIcon = {},
+                    actions = {}
+                )
+            }
         },
         content = {
             // 主界面内容区域，根据选中的导航项显示不同内容
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(it)
+                modifier = Modifier.fillMaxSize()
             ) {
                 when (selectedIndex) {
                     0 -> {
                         Box(
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(it)
+                                .padding(top = 16.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
@@ -103,16 +95,10 @@ fun MainScreen() {
                         )
                     }
                     2 -> {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "设置页面",
-                                fontSize = 18.sp,
-                                color = MiuixTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
+                        // 设置页面
+                        SettingsScreen(
+                            onWebDavConfigClick = { showWebDavDialog = true }
+                        )
                     }
                 }
             }

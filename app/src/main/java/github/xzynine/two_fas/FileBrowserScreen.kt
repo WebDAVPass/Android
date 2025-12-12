@@ -152,9 +152,10 @@ fun FileBrowserScreen(
                             contentDescription = "刷新"
                         )
                     }
-                }
+                },
+                defaultWindowInsetsPadding = true
             )
-        }
+        },
     ) {
         Column(
             modifier = Modifier
