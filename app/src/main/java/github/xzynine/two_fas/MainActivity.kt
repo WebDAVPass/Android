@@ -11,7 +11,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.text.input.*
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -44,7 +45,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun WebDavConfigScreen() {
     val context = LocalContext.current
-    var serverUrl by remember { mutableStateOf("") }
+    // 设置默认服务器URL为坚果云WebDAV地址
+    var serverUrl by remember { mutableStateOf("https://dav.jianguoyun.com/dav/") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isTesting by remember { mutableStateOf(false) }
@@ -52,7 +54,7 @@ fun WebDavConfigScreen() {
     var urlError by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope() // 使用rememberCoroutineScope代替CoroutineScope
 
-    // URL格式验证
+    // URL格式验证函数
     fun validateUrl(url: String): String? {
         return if (url.isNotEmpty() && !url.matches(Regex("^https?://.*"))) {
             "请输入有效的HTTP/HTTPS URL"
@@ -66,13 +68,15 @@ fun WebDavConfigScreen() {
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        top.yukonga.miuix.kmp.basic.Text(
+        // 页面标题
+        Text(
             text = "WebDAV 配置",
             fontSize = 24.sp,
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
-        top.yukonga.miuix.kmp.basic.TextField(
+        // 服务器地址输入框
+        TextField(
             value = serverUrl,
             onValueChange = { 
                 serverUrl = it 
@@ -83,7 +87,7 @@ fun WebDavConfigScreen() {
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             singleLine = true,
             leadingIcon = {
-                top.yukonga.miuix.kmp.basic.Icon(
+                Icon(
                     imageVector = MiuixIcons.Useful.Search,
                     contentDescription = "服务器地址",
                     modifier = Modifier.padding(horizontal = 12.dp)
@@ -92,7 +96,8 @@ fun WebDavConfigScreen() {
         )
         
         if (urlError != null) {
-            top.yukonga.miuix.kmp.basic.Text(
+            // URL格式错误提示
+            Text(
                 text = urlError!!,
                 color = MiuixTheme.colorScheme.error,
                 fontSize = 12.sp,
@@ -102,7 +107,8 @@ fun WebDavConfigScreen() {
             )
         }
 
-        top.yukonga.miuix.kmp.basic.TextField(
+        // 用户名输入框
+        TextField(
             value = username,
             onValueChange = { username = it },
             label = "用户名",
@@ -110,7 +116,7 @@ fun WebDavConfigScreen() {
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             singleLine = true,
             leadingIcon = {
-                top.yukonga.miuix.kmp.basic.Icon(
+                Icon(
                     imageVector = MiuixIcons.Useful.Personal,
                     contentDescription = "用户名",
                     modifier = Modifier.padding(horizontal = 12.dp)
@@ -118,7 +124,8 @@ fun WebDavConfigScreen() {
             }
         )
 
-        top.yukonga.miuix.kmp.basic.TextField(
+        // 密码输入框
+        TextField(
             value = password,
             onValueChange = { password = it },
             label = "密码",
@@ -127,18 +134,18 @@ fun WebDavConfigScreen() {
             singleLine = true,
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             leadingIcon = {
-                top.yukonga.miuix.kmp.basic.Icon(
+                Icon(
                     imageVector = MiuixIcons.Useful.AddSecret,
                     contentDescription = "密码",
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
             },
             trailingIcon = {
-                top.yukonga.miuix.kmp.basic.IconButton(
+                IconButton(
                     onClick = { passwordVisible = !passwordVisible },
                     modifier = Modifier.padding(end = 12.dp)
                 ) {
-                    top.yukonga.miuix.kmp.basic.Icon(
+                    Icon(
                         imageVector = if (passwordVisible) MiuixIcons.Basic.Check else MiuixIcons.Basic.ArrowRight,
                         contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
                     )
@@ -146,7 +153,8 @@ fun WebDavConfigScreen() {
             }
         )
 
-        top.yukonga.miuix.kmp.basic.Button(
+        // 测试连接按钮
+        Button(
             onClick = {
                 if (serverUrl.trim().isEmpty()) {
                     Toast.makeText(context, "请输入服务器地址", Toast.LENGTH_SHORT).show()
@@ -184,10 +192,11 @@ fun WebDavConfigScreen() {
             modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
             enabled = !isTesting
         ) {
-            top.yukonga.miuix.kmp.basic.Text(text = if (isTesting) "测试中..." else "测试连接")
+            Text(text = if (isTesting) "测试中..." else "测试连接")
         }
 
-        top.yukonga.miuix.kmp.basic.Button(
+        // 浏览文件按钮
+        Button(
             onClick = {
                 if (serverUrl.trim().isEmpty()) {
                     Toast.makeText(context, "请输入服务器地址", Toast.LENGTH_SHORT).show()
@@ -215,7 +224,7 @@ fun WebDavConfigScreen() {
             modifier = Modifier.fillMaxWidth(),
             enabled = !isTesting
         ) {
-            top.yukonga.miuix.kmp.basic.Text(text = "浏览文件")
+            Text(text = "浏览文件")
         }
     }
 }
