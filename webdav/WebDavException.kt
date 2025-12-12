@@ -1,4 +1,4 @@
-package github.xzynine.two_fas.lib.webdav
+package io.legado.app.lib.webdav
 
 open class WebDavException(msg: String) : Exception(msg) {
 
