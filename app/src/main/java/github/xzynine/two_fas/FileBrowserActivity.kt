@@ -19,7 +19,7 @@ import github.xzynine.two_fas.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.rememberCoroutineScope
+import androidx.compose.runtime.rememberCoroutineScope
 import top.yukonga.miuix.kmp.basic.*
 
 
@@ -114,15 +114,7 @@ fun FileBrowserScreen(
     top.yukonga.miuix.kmp.basic.Scaffold(
         topBar = {
             top.yukonga.miuix.kmp.basic.TopAppBar(
-                title = { 
-                    Column {
-                        top.yukonga.miuix.kmp.basic.Text(text = "WebDAV 文件浏览器")
-                        top.yukonga.miuix.kmp.basic.Text(
-                            text = currentPath,
-                            fontSize = 12.sp
-                        )
-                    }
-                },
+                title = "WebDAV 文件浏览器",
                 navigationIcon = {
                     top.yukonga.miuix.kmp.basic.IconButton(onClick = { navigateUp() }) {
                         top.yukonga.miuix.kmp.basic.Text(text = "←", fontSize = 20.sp)
@@ -205,7 +197,7 @@ fun FileItem(
             ) {
                 top.yukonga.miuix.kmp.basic.Text(
                     text = file.displayName,
-                    style = top.yukonga.miuix.kmp.theme.MiuixTheme.textStyles.bodyLarge
+                    fontSize = 16.sp
                 )
                 top.yukonga.miuix.kmp.basic.Text(
                     text = if (file.isDir) "文件夹" else formatFileSize(file.size),

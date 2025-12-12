@@ -68,7 +68,6 @@ dependencies {
     // Coroutines 相关依赖
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-compose:1.7.1")
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

@@ -11,10 +11,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.input.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.rememberCoroutineScope
+import androidx.compose.runtime.rememberCoroutineScope
 import github.xzynine.two_fas.lib.webdav.Authorization
 import github.xzynine.two_fas.lib.webdav.WebDav
 import github.xzynine.two_fas.theme.AppTheme
@@ -50,38 +51,41 @@ fun WebDavConfigScreen() {
         top.yukonga.miuix.kmp.basic.Text(
             text = "WebDAV 配置",
             fontSize = 24.sp,
-            modifier = Modifier.padding(bottom = 24.dp),
-            style = top.yukonga.miuix.kmp.theme.MiuixTheme.textStyles.headlineLarge
+            modifier = Modifier.padding(bottom = 24.dp)
         )
 
         top.yukonga.miuix.kmp.basic.TextField(
             value = serverUrl,
             onValueChange = { serverUrl = it },
-            label = { top.yukonga.miuix.kmp.basic.Text("服务器地址") },
-            placeholder = { top.yukonga.miuix.kmp.basic.Text("https://example.com/webdav") },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            label = "服务器地址",
+            useLabelAsPlaceholder = true,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            singleLine = true
         )
 
         top.yukonga.miuix.kmp.basic.TextField(
             value = username,
             onValueChange = { username = it },
-            label = { top.yukonga.miuix.kmp.basic.Text("用户名") },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+            label = "用户名",
+            useLabelAsPlaceholder = true,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+            singleLine = true
         )
 
         top.yukonga.miuix.kmp.basic.TextField(
             value = password,
             onValueChange = { password = it },
-            label = { top.yukonga.miuix.kmp.basic.Text("密码") },
-            placeholder = { top.yukonga.miuix.kmp.basic.Text("密码") },
-            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp)
+            label = "密码",
+            useLabelAsPlaceholder = true,
+            modifier = Modifier.fillMaxWidth().padding(bottom = 24.dp),
+            singleLine = true
         )
 
         top.yukonga.miuix.kmp.basic.Button(
             onClick = {
                 if (serverUrl.trim().isEmpty()) {
                     Toast.makeText(context, "请输入服务器地址", Toast.LENGTH_SHORT).show()
-                    return@top.yukonga.miuix.kmp.basic.Button
+                    return@Button
                 }
                 isTesting = true
                 Toast.makeText(context, "正在测试连接...", Toast.LENGTH_SHORT).show()
@@ -118,7 +122,7 @@ fun WebDavConfigScreen() {
             onClick = {
                 if (serverUrl.trim().isEmpty()) {
                     Toast.makeText(context, "请输入服务器地址", Toast.LENGTH_SHORT).show()
-                    return@top.yukonga.miuix.kmp.basic.Button
+                    return@Button
                 }
 
                 // 创建包含2fas_xzy子目录的URL
