@@ -20,7 +20,4 @@ data class Authorization(
         return "$username:$password"
     }
 
-    // 简化构造函数，仅保留基本的用户名密码构造
-    constructor() : this("", "")
-
 }
