@@ -48,14 +48,7 @@ suspend fun OkHttpClient.newCallResponseBody(
     }
 }
 
-suspend fun OkHttpClient.newCallStrResponse(
-    retry: Int = 0,
-    builder: Request.Builder.() -> Unit
-): StrResponse {
-    return newCallResponse(retry, builder).let {
-        StrResponse(it, it.body?.text() ?: it.message)
-    }
-}
+
 
 suspend fun Call.await(): Response = suspendCancellableCoroutine { block ->
 

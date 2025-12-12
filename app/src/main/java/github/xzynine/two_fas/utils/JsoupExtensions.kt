@@ -35,7 +35,7 @@ fun Element.textArray(): Array<String> {
         }
     }, this)
     val text = StringUtil.releaseBuilder(sb).trim { it <= ' ' }
-    return text.splitNotBlank("\n")
+    return text.split("\n").filter { it.isNotBlank() }.toTypedArray()
 }
 
 fun Element.findNS(tag: String, namespace: String): Elements {

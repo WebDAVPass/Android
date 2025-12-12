@@ -1,13 +1,8 @@
 package github.xzynine.two_fas.constant
 
 import android.annotation.SuppressLint
-import android.content.Context
-import android.content.pm.PackageManager
-import android.provider.Settings
 import androidx.annotation.Keep
-import cn.hutool.crypto.digest.DigestUtil
-import org.apache.commons.lang3.time.FastDateFormat
-import java.util.Calendar
+import java.text.SimpleDateFormat
 
 /**
  * 应用常量
@@ -28,16 +23,16 @@ object AppConst {
 
     const val DEFAULT_WEBDAV_ID = -1L
 
-    val timeFormat: FastDateFormat by lazy {
-        FastDateFormat.getInstance("HH:mm")
+    val timeFormat: SimpleDateFormat by lazy {
+        SimpleDateFormat("HH:mm")
     }
 
-    val dateFormat: FastDateFormat by lazy {
-        FastDateFormat.getInstance("yyyy/MM/dd HH:mm")
+    val dateFormat: SimpleDateFormat by lazy {
+        SimpleDateFormat("yyyy/MM/dd HH:mm")
     }
 
-    val fileNameFormat: FastDateFormat by lazy {
-        FastDateFormat.getInstance("yy-MM-dd-HH-mm-ss")
+    val fileNameFormat: SimpleDateFormat by lazy {
+        SimpleDateFormat("yy-MM-dd-HH-mm-ss")
     }
 
     const val imagePathKey = "imagePath"

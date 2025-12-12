@@ -7,7 +7,6 @@ import com.google.gson.JsonDeserializer
 import com.google.gson.JsonElement
 import com.google.gson.JsonParseException
 import com.google.gson.JsonSyntaxException
-import com.google.gson.Strictness
 import com.google.gson.ToNumberPolicy
 import com.google.gson.internal.LinkedTreeMap
 import com.google.gson.reflect.TypeToken
@@ -39,7 +38,6 @@ val GSON: Gson by lazy {
 
 val GSONStrict: Gson by lazy {
     INITIAL_GSON.newBuilder()
-        .setStrictness(Strictness.STRICT)
         .create()
 }
 

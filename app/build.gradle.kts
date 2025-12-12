@@ -54,6 +54,7 @@ dependencies {
     implementation(libs.okhttp) // OkHttp3 网络库
     implementation(libs.jsoup) // Jsoup XML解析库
     implementation(libs.hutool.core) // Hutool工具库
+    implementation("com.google.code.gson:gson:2.10.1") // Gson JSON解析库
     
     // Compose 相关依赖
     implementation(libs.compose.ui)
