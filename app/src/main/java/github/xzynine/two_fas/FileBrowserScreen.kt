@@ -20,7 +20,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.graphics.vector.ImageVector
 import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.icons.basic.ArrowRight
+import top.yukonga.miuix.kmp.icon.icons.useful.Back
+import top.yukonga.miuix.kmp.icon.icons.useful.Info
+import top.yukonga.miuix.kmp.icon.icons.useful.New
+import top.yukonga.miuix.kmp.icon.icons.useful.Refresh
+
 
 
 
@@ -44,6 +52,12 @@ class FileBrowserActivity : ComponentActivity() {
     }
 }
 
+/**
+ * 文件浏览器界面组件
+ * @param serverUrl WebDAV服务器地址
+ * @param username 用户名
+ * @param password 密码
+ */
 @Composable
 fun FileBrowserScreen(
     serverUrl: String,
@@ -117,17 +131,26 @@ fun FileBrowserScreen(
                 title = "WebDAV 文件浏览器",
                 navigationIcon = {
                     top.yukonga.miuix.kmp.basic.IconButton(onClick = { navigateUp() }) {
-                        top.yukonga.miuix.kmp.basic.Text(text = "←", fontSize = 20.sp)
+                        top.yukonga.miuix.kmp.basic.Icon(
+                            imageVector = MiuixIcons.Useful.Back,
+                            contentDescription = "返回"
+                        )
                     }
                 },
                 actions = {
                     top.yukonga.miuix.kmp.basic.IconButton(onClick = { 
                         Toast.makeText(context, "上传功能开发中...", Toast.LENGTH_SHORT).show()
                     }) {
-                        top.yukonga.miuix.kmp.basic.Text(text = "📤", fontSize = 20.sp)
+                        top.yukonga.miuix.kmp.basic.Icon(
+                            imageVector = MiuixIcons.Useful.New,
+                            contentDescription = "上传"
+                        )
                     }
                     top.yukonga.miuix.kmp.basic.IconButton(onClick = { loadFileList() }) {
-                        top.yukonga.miuix.kmp.basic.Text(text = "🔄", fontSize = 20.sp)
+                        top.yukonga.miuix.kmp.basic.Icon(
+                            imageVector = MiuixIcons.Useful.Refresh,
+                            contentDescription = "刷新"
+                        )
                     }
                 }
             )
@@ -186,10 +209,11 @@ fun FileItem(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // 使用emoji表示文件夹和文件，更直观
-            top.yukonga.miuix.kmp.basic.Text(
-                text = if (file.isDir) "📁" else "📄",
-                fontSize = 24.sp
+            // 使用Miuix图标表示文件夹和文件，更直观
+            top.yukonga.miuix.kmp.basic.Icon(
+                imageVector = if (file.isDir) MiuixIcons.Useful.New else MiuixIcons.Useful.Info,
+                contentDescription = if (file.isDir) "文件夹" else "文件",
+                modifier = Modifier.size(24.dp)
             )
             Spacer(modifier = Modifier.width(16.dp))
             Column(
@@ -206,7 +230,10 @@ fun FileItem(
             }
             Spacer(modifier = Modifier.width(8.dp))
             if (file.isDir) {
-                top.yukonga.miuix.kmp.basic.Text(text = "→", fontSize = 16.sp)
+                top.yukonga.miuix.kmp.basic.Icon(
+                    imageVector = MiuixIcons.Basic.ArrowRight,
+                    contentDescription = "进入目录"
+                )
             }
         }
     }

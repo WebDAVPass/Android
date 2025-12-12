@@ -31,9 +31,10 @@ import top.yukonga.miuix.kmp.icon.icons.useful.Info
 /**
  * WebDAV配置内容组件，用于在弹窗中显示
  * @param onDismiss 关闭弹窗的回调
+ * @param onConfigSaved 配置保存成功的回调
  */
 @Composable
-fun WebDavConfigContent(onDismiss: () -> Unit) {
+fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String, username: String, password: String) -> Unit) {
     val context = LocalContext.current
     // 设置默认服务器URL为坚果云WebDAV地址
     var serverUrl by remember { mutableStateOf("https://dav.jianguoyun.com/dav/") }
@@ -194,19 +195,14 @@ fun WebDavConfigContent(onDismiss: () -> Unit) {
                     "${serverUrl}/2fas_xzy/"
                 }
 
-                // 跳转到文件浏览界面
-                val intent = Intent(context, FileBrowserActivity::class.java)
-                intent.putExtra("SERVER_URL", webdavUrl)
-                intent.putExtra("USERNAME", username)
-                intent.putExtra("PASSWORD", password)
-                context.startActivity(intent)
-                // 关闭弹窗
+                // 保存配置并关闭弹窗
+                onConfigSaved(webdavUrl, username, password)
                 onDismiss()
             },
             modifier = Modifier.fillMaxWidth(),
             enabled = !isTesting
         ) {
-            top.yukonga.miuix.kmp.basic.Text(text = "浏览文件")
+            top.yukonga.miuix.kmp.basic.Text(text = "保存配置")
         }
     }
 }
@@ -215,11 +211,13 @@ fun WebDavConfigContent(onDismiss: () -> Unit) {
  * WebDAV配置弹窗组件
  * @param showDialog 是否显示弹窗
  * @param onDismissRequest 关闭弹窗的回调
+ * @param onConfigSaved 配置保存成功的回调
  */
 @Composable
 fun WebDavConfigDialog(
     showDialog: Boolean,
-    onDismissRequest: () -> Unit
+    onDismissRequest: () -> Unit,
+    onConfigSaved: (serverUrl: String, username: String, password: String) -> Unit = { _, _, _ -> }
 ) {
     // WebDAV配置弹窗
     if (showDialog) androidx.compose.ui.window.Dialog(
@@ -245,7 +243,10 @@ fun WebDavConfigDialog(
                     )
 
                     // 配置内容
-                    WebDavConfigContent(onDismiss = onDismissRequest)
+                    WebDavConfigContent(
+                        onDismiss = onDismissRequest,
+                        onConfigSaved = onConfigSaved
+                    )
 
                     // 关闭按钮
                     Row(
