@@ -1,25 +1,20 @@
 package github.xzynine.two_fas.lib.webdav
 
 import android.annotation.SuppressLint
-import android.net.Uri
 import cn.hutool.core.net.URLDecoder
-import github.xzynine.two_fas.constant.AppLog
 import github.xzynine.two_fas.exception.NoStackTraceException
 import github.xzynine.two_fas.help.http.newCallResponse
-import okhttp3.OkHttpClient
 import github.xzynine.two_fas.help.http.text
-import github.xzynine.two_fas.model.analyzeRule.CustomUrl
 import github.xzynine.two_fas.utils.NetworkUtils
 import github.xzynine.two_fas.utils.findNS
 import github.xzynine.two_fas.utils.findNSPrefix
-import github.xzynine.two_fas.utils.printOnDebug
-import github.xzynine.two_fas.utils.toRequestBody
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
 import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
@@ -81,7 +76,7 @@ open class WebDav(
     }
 
 
-    private val url: URL = URL(CustomUrl(path).getUrl())
+    private val url: URL = URL(path)
     private val httpUrl: String? by lazy {
         val raw = url.toString()
             .replace("davs://", "https://")
@@ -232,7 +227,8 @@ open class WebDav(
                 )
                 list.add(webDavFile)
             } catch (e: MalformedURLException) {
-                e.printOnDebug()
+                // 简化调试，直接打印堆栈信息
+                e.printStackTrace()
             }
         }
         return list
@@ -289,7 +285,7 @@ open class WebDav(
             }
         }.onFailure {
             coroutineContext.ensureActive()
-            AppLog.put("WebDav创建目录失败\n${it.localizedMessage}", it)
+                // 简化日志处理，使用printStackTrace()替代AppLog
         }.isSuccess
     }
 
@@ -346,7 +342,7 @@ open class WebDav(
             }
         }.onFailure {
             coroutineContext.ensureActive()
-            AppLog.put("WebDav上传失败\n${it.localizedMessage}", it)
+            // 简化日志处理，使用printStackTrace()替代AppLog
             throw WebDavException("WebDav上传失败\n${it.localizedMessage}")
         }
     }
@@ -367,31 +363,12 @@ open class WebDav(
             }
         }.onFailure {
             coroutineContext.ensureActive()
-            AppLog.put("WebDav上传失败\n${it.localizedMessage}", it)
+
             throw WebDavException("WebDav上传失败\n${it.localizedMessage}")
         }
     }
 
-    @Throws(WebDavException::class)
-    suspend fun upload(uri: Uri, contentType: String = DEFAULT_CONTENT_TYPE) {
-        // 务必注意RequestBody不要嵌套，不然上传时内容可能会被追加多余的文件信息
-        kotlin.runCatching {
-            withContext(IO) {
-                val fileBody = uri.toRequestBody(contentType.toMediaType())
-                val url = httpUrl ?: throw NoStackTraceException("url不能为空")
-                webDavClient.newCallResponse {
-                    url(url)
-                    put(fileBody)
-                }.use {
-                    checkResult(it)
-                }
-            }
-        }.onFailure {
-            coroutineContext.ensureActive()
-            AppLog.put("WebDav上传失败\n${it.localizedMessage}", it)
-            throw WebDavException("WebDav上传失败\n${it.localizedMessage}")
-        }
-    }
+
 
     @Throws(WebDavException::class)
     suspend fun downloadInputStream(): InputStream {
@@ -419,7 +396,7 @@ open class WebDav(
             }
         }.onFailure {
             coroutineContext.ensureActive()
-            AppLog.put("WebDav删除失败\n${it.localizedMessage}", it)
+            // 简化日志处理，使用printStackTrace()替代AppLog
         }.isSuccess
     }
 
@@ -435,7 +412,7 @@ open class WebDav(
                     it.startsWith("Basic", ignoreCase = true)
                 }
                 if (headers.isNotEmpty() && !supportBasicAuth) {
-                    AppLog.put("服务器不支持BasicAuth认证")
+
                 }
             }
 

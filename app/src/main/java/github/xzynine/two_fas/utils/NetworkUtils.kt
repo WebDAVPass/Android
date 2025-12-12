@@ -19,120 +19,13 @@ import java.util.Enumeration
 object NetworkUtils {
 
     /**
-     * 判断是否联网
-     * 简化实现，直接返回true，实际网络错误会在WebDAV操作中抛出
-     */
-    fun isAvailable(): Boolean {
-        return true
-    }
-
-    private val notNeedEncodingQuery: BitSet by lazy {
-        val bitSet = BitSet(256)
-        for (i in 'a'.code..'z'.code) {
-            bitSet.set(i)
-        }
-        for (i in 'A'.code..'Z'.code) {
-            bitSet.set(i)
-        }
-        for (i in '0'.code..'9'.code) {
-            bitSet.set(i)
-        }
-        for (char in "!$&()*+,-./:;=?@[\\]^_`{|}~") {
-            bitSet.set(char.code)
-        }
-        return@lazy bitSet
-    }
-
-    private val notNeedEncodingForm: BitSet by lazy {
-        val bitSet = BitSet(256)
-        for (i in 'a'.code..'z'.code) {
-            bitSet.set(i)
-        }
-        for (i in 'A'.code..'Z'.code) {
-            bitSet.set(i)
-        }
-        for (i in '0'.code..'9'.code) {
-            bitSet.set(i)
-        }
-        for (char in "*-._") {
-            bitSet.set(char.code)
-        }
-        return@lazy bitSet
-    }
-
-    /**
-     * 支持JAVA的URLEncoder.encode出来的string做判断。 即: 将' '转成'+'
-     * 0-9a-zA-Z保留 <br></br>
-     * ! * ' ( ) ; : @ & = + $ , / ? # [ ] 保留
-     * 其他字符转成%XX的格式，X是16进制的大写字符，范围是[0-9A-F]
-     */
-    fun encodedQuery(str: String): Boolean {
-        var needEncode = false
-        var i = 0
-        while (i < str.length) {
-            val c = str[i]
-            if (notNeedEncodingQuery.get(c.code)) {
-                i++
-                continue
-            }
-            if (c == '%' && i + 2 < str.length) {
-                // 判断是否符合urlEncode规范
-                val c1 = str[++i]
-                val c2 = str[++i]
-                if (isDigit16Char(c1) && isDigit16Char(c2)) {
-                    i++
-                    continue
-                }
-            }
-            // 其他字符，肯定需要urlEncode
-            needEncode = true
-            break
-        }
-
-        return !needEncode
-    }
-
-    fun encodedForm(str: String): Boolean {
-        var needEncode = false
-        var i = 0
-        while (i < str.length) {
-            val c = str[i]
-            if (notNeedEncodingForm.get(c.code)) {
-                i++
-                continue
-            }
-            if (c == '%' && i + 2 < str.length) {
-                // 判断是否符合urlEncode规范
-                val c1 = str[++i]
-                val c2 = str[++i]
-                if (isDigit16Char(c1) && isDigit16Char(c2)) {
-                    i++
-                    continue
-                }
-            }
-            // 其他字符，肯定需要urlEncode
-            needEncode = true
-            break
-        }
-
-        return !needEncode
-    }
-
-    /**
-     * 判断c是否是16进制的字符
-     */
-    private fun isDigit16Char(c: Char): Boolean {
-        return c in '0'..'9' || c in 'A'..'F' || c in 'a'..'f'
-    }
-
-    /**
      * 获取绝对地址
      */
     fun getAbsoluteURL(baseURL: String?, relativePath: String): String {
         if (baseURL.isNullOrEmpty()) return relativePath.trim()
-        var absoluteUrl: URL? = null
+        var absoluteUrl: java.net.URL? = null
         try {
-            absoluteUrl = URL(baseURL.substringBefore(","))
+            absoluteUrl = java.net.URL(baseURL.substringBefore(","))
         } catch (e: Exception) {
             // 简化实现，移除对printOnDebug的依赖
         }
@@ -142,7 +35,7 @@ object NetworkUtils {
     /**
      * 获取绝对地址
      */
-    fun getAbsoluteURL(baseURL: URL?, relativePath: String): String {
+    fun getAbsoluteURL(baseURL: java.net.URL?, relativePath: String): String {
         val relativePathTrim = relativePath.trim()
         if (baseURL == null) return relativePathTrim
         if (relativePathTrim.startsWith("http://", true) || relativePathTrim.startsWith("https://", true)) return relativePathTrim
@@ -150,7 +43,7 @@ object NetworkUtils {
         if (relativePathTrim.startsWith("javascript")) return ""
         var relativeUrl = relativePathTrim
         try {
-            val parseUrl = URL(baseURL, relativePath)
+            val parseUrl = java.net.URL(baseURL, relativePath)
             relativeUrl = parseUrl.toString()
             return relativeUrl
         } catch (e: Exception) {
@@ -159,6 +52,9 @@ object NetworkUtils {
         return relativeUrl
     }
 
+    /**
+     * 获取基础URL
+     */
     fun getBaseUrl(url: String?): String? {
         url ?: return null
         if (url.startsWith("http://", true)
@@ -170,67 +66,6 @@ object NetworkUtils {
             } else url.substring(0, index)
         }
         return null
-    }
-
-    fun getDomain(url: String): String {
-        val baseUrl = getBaseUrl(url) ?: return url
-        return kotlin.runCatching {
-            URL(baseUrl).host
-        }.getOrDefault(baseUrl)
-    }
-
-    /**
-     * Get local Ip address.
-     */
-    fun getLocalIPAddress(): List<InetAddress> {
-        val enumeration: Enumeration<NetworkInterface>
-        try {
-            enumeration = NetworkInterface.getNetworkInterfaces()
-        } catch (e: SocketException) {
-            e.printStackTrace()
-            return emptyList()
-        }
-
-        val addressList = mutableListOf<InetAddress>()
-
-        while (enumeration.hasMoreElements()) {
-            val nif = enumeration.nextElement()
-            val addresses = nif.inetAddresses ?: continue
-            while (addresses.hasMoreElements()) {
-                val address = addresses.nextElement()
-                if (!address.isLoopbackAddress && isIPv4Address(address.hostAddress)) {
-                    addressList.add(address)
-                }
-            }
-        }
-        return addressList
-    }
-
-    /**
-     * Check if valid IPV4 address.
-     *
-     * @param input the address string to check for validity.
-     * @return True if the input parameter is a valid IPv4 address.
-     */
-    fun isIPv4Address(input: String?): Boolean {
-        return input != null && input.isNotEmpty()
-                && input[0] in '1'..'9'
-                && input.count { it == '.' } == 3
-                && Validator.isIpv4(input)
-    }
-
-    /**
-     * Check if valid IPV6 address.
-     */
-    fun isIPv6Address(input: String?): Boolean {
-        return input != null && input.contains(":") && Validator.isIpv6(input)
-    }
-
-    /**
-     * Check if valid IP address.
-     */
-    fun isIPAddress(input: String?): Boolean {
-        return isIPv4Address(input) || isIPv6Address(input)
     }
 
 }
