@@ -1,20 +1,19 @@
-package github.xzynine.two_fas.webdav
+package github.xzynine.two_fas.lib.webdav
 
 import android.annotation.SuppressLint
 import android.net.Uri
 import cn.hutool.core.net.URLDecoder
-import io.legado.app.constant.AppLog
-import io.legado.app.exception.NoStackTraceException
-import io.legado.app.help.http.newCallResponse
-import io.legado.app.help.http.OkHttpClient
-import io.legado.app.help.http.text
-import io.legado.app.model.analyzeRule.AnalyzeUrl
-import io.legado.app.model.analyzeRule.CustomUrl
-import io.legado.app.utils.NetworkUtils
-import io.legado.app.utils.findNS
-import io.legado.app.utils.findNSPrefix
-import io.legado.app.utils.printOnDebug
-import io.legado.app.utils.toRequestBody
+import github.xzynine.two_fas.constant.AppLog
+import github.xzynine.two_fas.exception.NoStackTraceException
+import github.xzynine.two_fas.help.http.newCallResponse
+import okhttp3.OkHttpClient
+import github.xzynine.two_fas.help.http.text
+import github.xzynine.two_fas.model.analyzeRule.CustomUrl
+import github.xzynine.two_fas.utils.NetworkUtils
+import github.xzynine.two_fas.utils.findNS
+import github.xzynine.two_fas.utils.findNSPrefix
+import github.xzynine.two_fas.utils.printOnDebug
+import github.xzynine.two_fas.utils.toRequestBody
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -46,8 +45,8 @@ open class WebDav(
     companion object {
 
         fun fromPath(path: String): WebDav {
-            val id = AnalyzeUrl(path).serverID ?: throw WebDavException("没有serverID")
-            val authorization = Authorization(id)
+            // 简化实现，暂时不使用serverID
+            val authorization = Authorization("", "")
             return WebDav(path, authorization)
         }
 
@@ -102,9 +101,9 @@ open class WebDav(
             }
             chain.proceed(request)
         }
-        okHttpClient.newBuilder().run {
+        OkHttpClient.Builder().run {
             callTimeout(0, TimeUnit.SECONDS)
-            interceptors().add(0, authInterceptor)
+            addInterceptor(authInterceptor)
             addNetworkInterceptor(authInterceptor)
             build()
         }

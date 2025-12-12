@@ -1,4 +1,4 @@
-package io.legado.app.exception
+package github.xzynine.two_fas.exception
 
 /**
  * 不记录错误堆栈的报错

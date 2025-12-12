@@ -1,8 +1,5 @@
-package io.legado.app.help.http
+package github.xzynine.two_fas.help.http
 
-import io.legado.app.utils.EncodingDetect
-import io.legado.app.utils.GSON
-import io.legado.app.utils.Utf8BomUtils
 import kotlinx.coroutines.suspendCancellableCoroutine
 import okhttp3.Call
 import okhttp3.Callback
@@ -79,7 +76,7 @@ suspend fun Call.await(): Response = suspendCancellableCoroutine { block ->
 }
 
 fun ResponseBody.text(encode: String? = null): String {
-    val responseBytes = Utf8BomUtils.removeUTF8BOM(bytes())
+    val responseBytes = bytes()
     var charsetName: String? = encode
 
     charsetName?.let {
@@ -91,9 +88,8 @@ fun ResponseBody.text(encode: String? = null): String {
         return String(responseBytes, charset)
     }
 
-    //根据内容判断
-    charsetName = EncodingDetect.getHtmlEncode(responseBytes)
-    return String(responseBytes, Charset.forName(charsetName))
+    //默认使用UTF-8编码
+    return String(responseBytes, Charset.forName("UTF-8"))
 }
 
 fun ResponseBody.decompressed(): ResponseBody {
@@ -179,7 +175,7 @@ fun Request.Builder.postMultipart(type: String?, form: Map<String, Any>) {
                     }
 
                     else -> {
-                        GSON.toJson(file).toRequestBody(mediaType)
+                        file.toString().toRequestBody(mediaType)
                     }
                 }
                 multipartBody.addFormDataPart(it.key, fileName, requestBody)

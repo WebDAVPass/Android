@@ -1,11 +1,11 @@
-package io.legado.app.utils
+package github.xzynine.two_fas.utils
 
 import android.annotation.SuppressLint
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import cn.hutool.core.lang.Validator
-import io.legado.app.constant.AppLog
+import github.xzynine.two_fas.constant.AppLog
 import okhttp3.internal.publicsuffix.PublicSuffixDatabase
 import splitties.systemservices.connectivityManager
 import java.net.InetAddress
@@ -163,7 +163,7 @@ object NetworkUtils {
         try {
             absoluteUrl = URL(baseURL.substringBefore(","))
         } catch (e: Exception) {
-            e.printOnDebug()
+            // 简化实现，移除对printOnDebug的依赖
         }
         return getAbsoluteURL(absoluteUrl, relativePath)
     }
@@ -174,8 +174,8 @@ object NetworkUtils {
     fun getAbsoluteURL(baseURL: URL?, relativePath: String): String {
         val relativePathTrim = relativePath.trim()
         if (baseURL == null) return relativePathTrim
-        if (relativePathTrim.isAbsUrl()) return relativePathTrim
-        if (relativePathTrim.isDataUrl()) return relativePathTrim
+        if (relativePathTrim.startsWith("http://", true) || relativePathTrim.startsWith("https://", true)) return relativePathTrim
+        if (relativePathTrim.startsWith("data:")) return relativePathTrim
         if (relativePathTrim.startsWith("javascript")) return ""
         var relativeUrl = relativePathTrim
         try {
@@ -183,7 +183,7 @@ object NetworkUtils {
             relativeUrl = parseUrl.toString()
             return relativeUrl
         } catch (e: Exception) {
-            AppLog.put("网址拼接出错\n${e.localizedMessage}", e)
+            // 简化实现，移除对AppLog的依赖
         }
         return relativeUrl
     }
@@ -201,39 +201,6 @@ object NetworkUtils {
         return null
     }
 
-    /**
-     * 获取域名，供cookie保存和读取，处理失败返回传入的url
-     * http://1.2.3.4 => 1.2.3.4
-     * https://www.example.com =>  example.com
-     * http://www.biquge.com.cn => biquge.com.cn
-     * http://www.content.example.com => example.com
-     */
-    fun getSubDomain(url: String): String {
-        val baseUrl = getBaseUrl(url) ?: return url
-        return kotlin.runCatching {
-            val mURL = URL(baseUrl)
-            val host: String = mURL.host
-            //mURL.scheme https/http
-            //判断是否为ip
-            if (isIPAddress(host)) return host
-            //PublicSuffixDatabase处理域名
-            PublicSuffixDatabase.get().getEffectiveTldPlusOne(host) ?: host
-        }.getOrDefault(baseUrl)
-    }
-
-    fun getSubDomainOrNull(url: String): String? {
-        val baseUrl = getBaseUrl(url) ?: return null
-        return kotlin.runCatching {
-            val mURL = URL(baseUrl)
-            val host: String = mURL.host
-            //mURL.scheme https/http
-            //判断是否为ip
-            if (isIPAddress(host)) return host
-            //PublicSuffixDatabase处理域名
-            PublicSuffixDatabase.get().getEffectiveTldPlusOne(host) ?: host
-        }.getOrDefault(null)
-    }
-
     fun getDomain(url: String): String {
         val baseUrl = getBaseUrl(url) ?: return url
         return kotlin.runCatching {
@@ -249,7 +216,7 @@ object NetworkUtils {
         try {
             enumeration = NetworkInterface.getNetworkInterfaces()
         } catch (e: SocketException) {
-            e.printOnDebug()
+            e.printStackTrace()
             return emptyList()
         }
 

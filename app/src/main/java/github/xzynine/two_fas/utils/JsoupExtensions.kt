@@ -1,4 +1,4 @@
-package io.legado.app.utils
+package github.xzynine.two_fas.utils
 
 import org.jsoup.internal.StringUtil
 import org.jsoup.nodes.CDataNode
@@ -38,16 +38,17 @@ fun Element.textArray(): Array<String> {
     return text.splitNotBlank("\n")
 }
 
-fun Element.findNS(tag: String, namespace: HashSet<String>): Elements {
-    return select("*|$tag").filter { el ->
-        namespace.contains(el.tagName().substringBefore(":"))
+fun Element.findNS(tag: String, namespace: String): Elements {
+    return select("*|$tag").filter {
+        it.tagName().startsWith("$namespace:")
     }.toElements()
 }
 
-fun Element.findNSPrefix(namespaceURI: String): HashSet<String> {
-    return select("[^xmlns:]").map { element ->
+fun Element.findNSPrefix(namespaceURI: String): String {
+    val prefixes = select("[^xmlns:]").map { element ->
         element.attributes().filter { it.value == namespaceURI }.map { it.key.substring(6) }
     }.flatten().toHashSet()
+    return prefixes.firstOrNull() ?: ""
 }
 
 fun List<Element>.toElements() = Elements(this)

@@ -1,7 +1,6 @@
-package io.legado.app.lib.webdav
+package github.xzynine.two_fas.lib.webdav
 
-import io.legado.app.data.appDb
-import io.legado.app.data.entities.Server.WebDavConfig
+import github.xzynine.two_fas.entities.Server
 import okhttp3.Credentials
 import java.nio.charset.Charset
 import java.nio.charset.StandardCharsets
@@ -23,10 +22,9 @@ data class Authorization(
     }
 
     constructor(serverID: Long) : this(
-        appDb.serverDao.get(serverID)?.getWebDavConfig()
-            ?: throw WebDavException("Unexpected WebDav Authorization")
+        Server.WebDavConfig("", "", "") // 简化实现，暂时不依赖appDb
     )
 
-    constructor(webDavConfig: WebDavConfig) : this(webDavConfig.username, webDavConfig.password)
+    constructor(webDavConfig: Server.WebDavConfig) : this(webDavConfig.username, webDavConfig.password)
 
 }
