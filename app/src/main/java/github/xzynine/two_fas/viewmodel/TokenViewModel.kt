@@ -4,9 +4,12 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import github.xzynine.two_fas.data.OtpToken
 import github.xzynine.two_fas.data.OtpTokenDatabase
 import github.xzynine.two_fas.data.TokenCode
+import github.xzynine.two_fas.data.WebDavConfig
 import github.xzynine.two_fas.util.TokenCodeUtil
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -23,11 +26,27 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         
         fun getDatabase(context: Context): OtpTokenDatabase {
             return INSTANCE ?: synchronized(this) {
+                val MIGRATION_1_2 = object : Migration(1, 2) {
+                    override fun migrate(database: SupportSQLiteDatabase) {
+                        // 创建 webdav_configs 表以兼容从 v1 升级到 v2
+                        database.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `webdav_configs` (
+                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                `name` TEXT NOT NULL,
+                                `url` TEXT NOT NULL,
+                                `username` TEXT NOT NULL,
+                                `password` TEXT NOT NULL,
+                                `sort_number` INTEGER NOT NULL
+                            )
+                        """.trimIndent())
+                    }
+                }
+
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     OtpTokenDatabase::class.java,
                     "otp_token_database"
-                ).build()
+                ).addMigrations(MIGRATION_1_2).build()
                 INSTANCE = instance
                 instance
             }
@@ -46,9 +65,33 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
     private val _tokenCodes = mutableMapOf<Long, MutableStateFlow<TokenCode?>>()
 
+    // WebDAV配置相关
+    private val _webDavConfigs = MutableStateFlow<List<WebDavConfig>>(emptyList())
+    val webDavConfigs: StateFlow<List<WebDavConfig>> = _webDavConfigs.asStateFlow()
+
     init {
         loadTokens()
+        loadWebDavConfigs()
         startTokenRefreshTimer()
+    }
+
+    /**
+     * 加载所有WebDAV配置
+     */
+    private fun loadWebDavConfigs() {
+        viewModelScope.launch {
+            database.webDavConfigDao().getAll().collect { configs ->
+                _webDavConfigs.value = configs
+            }
+        }
+    }
+
+    /**
+     * 刷新WebDAV配置列表，确保立即更新UI
+     */
+    private suspend fun refreshWebDavConfigList() {
+        val configList = database.webDavConfigDao().getAllOnce()
+        _webDavConfigs.value = configList
     }
 
     /**
@@ -224,5 +267,69 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             database.otpTokenDao().incrementCounter(tokenId)
         }
+    }
+
+    /**
+     * 添加WebDAV配置
+     * @param config WebDAV配置对象
+     * @return 插入的配置ID
+     */
+    suspend fun addWebDavConfig(config: WebDavConfig): Long {
+        // 设置排序号
+        val lastSortNumber = database.webDavConfigDao().getLastSortNumber()
+        config.sortNumber = (lastSortNumber ?: 0) + 1
+        
+        val id = database.webDavConfigDao().insert(config)
+        refreshWebDavConfigList()
+        return id
+    }
+
+    /**
+     * 更新WebDAV配置
+     * @param config WebDAV配置对象
+     */
+    fun updateWebDavConfig(config: WebDavConfig) {
+        viewModelScope.launch {
+            database.webDavConfigDao().update(config)
+            refreshWebDavConfigList()
+        }
+    }
+
+    /**
+     * 删除WebDAV配置
+     * @param config WebDAV配置对象
+     */
+    fun deleteWebDavConfig(config: WebDavConfig) {
+        viewModelScope.launch {
+            database.webDavConfigDao().delete(config)
+            refreshWebDavConfigList()
+        }
+    }
+
+    /**
+     * 根据ID删除WebDAV配置
+     * @param id 配置ID
+     */
+    fun deleteWebDavConfigById(id: Long) {
+        viewModelScope.launch {
+            database.webDavConfigDao().deleteById(id)
+            refreshWebDavConfigList()
+        }
+    }
+
+    /**
+     * 根据ID获取WebDAV配置
+     * @param id 配置ID
+     */
+    suspend fun getWebDavConfigById(id: Long): WebDavConfig? {
+        return database.webDavConfigDao().getById(id)
+    }
+
+    /**
+     * 获取第一个WebDAV配置
+     */
+    suspend fun getFirstWebDavConfig(): WebDavConfig? {
+        val configs = database.webDavConfigDao().getAllOnce()
+        return configs.firstOrNull()
     }
 }

@@ -29,6 +29,7 @@ import github.xzynine.two_fas.viewmodel.TokenViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
 import top.yukonga.miuix.kmp.basic.FabPosition
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
@@ -64,11 +65,6 @@ fun MainScreen() {
     // 控制WebDAV配置弹窗的显示与隐藏
     var showWebDavDialog by remember { mutableStateOf(false) }
 
-    // WebDAV配置状态
-    var serverUrl by remember { mutableStateOf("https://dav.jianguoyun.com/dav/2fas_xzy/") }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
-
     // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
 
@@ -81,6 +77,11 @@ fun MainScreen() {
 
     // 控制扫描界面的显示与隐藏
     val showScanBottomSheet = remember { mutableStateOf(false) }
+
+    // 获取WebDAV配置列表
+    val webDavConfigs by tokenViewModel.webDavConfigs.collectAsState()
+    // 使用第一个配置（如果存在）作为当前配置
+    val currentWebDavConfig = webDavConfigs.firstOrNull()
 
     // 基于Miuix Scaffold的主界面
     Scaffold(
@@ -125,9 +126,9 @@ fun MainScreen() {
                     1 -> {
                         // 文件浏览器页面
                         FileBrowserScreen(
-                            serverUrl = serverUrl,
-                            username = username,
-                            password = password
+                            serverUrl = currentWebDavConfig?.url ?: "https://dav.jianguoyun.com/dav/2fas_xzy/",
+                            username = currentWebDavConfig?.username ?: "",
+                            password = currentWebDavConfig?.password ?: ""
                         )
                     }
 
@@ -155,11 +156,19 @@ fun MainScreen() {
     WebDavConfigDialog(
         showDialog = showWebDavDialog,
         onDismissRequest = { showWebDavDialog = false },
-        onConfigSaved = { url, user, pwd ->
-            serverUrl = url
-            username = user
-            password = pwd
-        }
+        onConfigSaved = { config ->
+            // 在协程中保存配置到数据库
+            CoroutineScope(Dispatchers.IO).launch {
+                if (config.id == 0L) {
+                    // 新配置，插入数据库
+                    tokenViewModel.addWebDavConfig(config)
+                } else {
+                    // 现有配置，更新数据库
+                    tokenViewModel.updateWebDavConfig(config)
+                }
+            }
+        },
+        existingConfig = currentWebDavConfig
     )
 
     // 扫描二维码底部抽屉

@@ -21,6 +21,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import github.xzynine.two_fas.data.WebDavConfig
 import github.xzynine.two_fas.lib.webdav.Authorization
 import github.xzynine.two_fas.lib.webdav.WebDav
 import github.xzynine.two_fas.theme.getAppRoundedCorner
@@ -45,17 +46,23 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
  * WebDAV配置内容组件，用于在弹窗中显示
  * @param onDismiss 关闭弹窗的回调
  * @param onConfigSaved 配置保存成功的回调
+ * @param existingConfig 现有的WebDAV配置，如果为null则表示首次配置
  */
 @Composable
-fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String, username: String, password: String) -> Unit) {
+fun WebDavConfigContent(
+    onDismiss: () -> Unit,
+    onConfigSaved: (config: WebDavConfig) -> Unit,
+    existingConfig: WebDavConfig? = null
+) {
     val context = LocalContext.current
     // 设置默认服务器URL为坚果云WebDAV地址
-    var serverUrl by remember { mutableStateOf("https://dav.jianguoyun.com/dav/") }
-    var username by remember { mutableStateOf("") }
+    var serverUrl by remember { mutableStateOf(existingConfig?.url ?: "https://dav.jianguoyun.com/dav/") }
+    var username by remember { mutableStateOf(existingConfig?.username ?: "") }
     var password by remember { mutableStateOf("") }
     var isTesting by remember { mutableStateOf(false) }
     var passwordVisible by remember { mutableStateOf(false) }
     var urlError by remember { mutableStateOf<String?>(null) }
+    val isExistingConfig = existingConfig != null
     val coroutineScope = rememberCoroutineScope() // 使用rememberCoroutineScope代替CoroutineScope
 
     // URL格式验证函数
@@ -123,27 +130,17 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
         TextField(
             value = password,
             onValueChange = { password = it },
-            label = "密码",
+            label = if (isExistingConfig) "密码（留空则保持原密码）" else "密码",
             modifier = Modifier.Companion.fillMaxWidth(),
             singleLine = true,
-            visualTransformation = if (passwordVisible) VisualTransformation.Companion.None else PasswordVisualTransformation(),
+            // 除首次输入外，不允许查看密码原文
+            visualTransformation = PasswordVisualTransformation(),
             leadingIcon = {
                 Icon(
                     imageVector = MiuixIcons.Useful.AddSecret,
                     contentDescription = "密码",
                     modifier = Modifier.Companion.padding(horizontal = 12.dp)
                 )
-            },
-            trailingIcon = {
-                IconButton(
-                    onClick = { passwordVisible = !passwordVisible },
-                    modifier = Modifier.Companion.padding(end = 12.dp)
-                ) {
-                    Icon(
-                        imageVector = if (passwordVisible) MiuixIcons.Basic.Check else MiuixIcons.Basic.ArrowRight,
-                        contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
-                    )
-                }
             }
         )
 
@@ -158,13 +155,26 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
                     Toast.makeText(context, urlError, Toast.LENGTH_SHORT).show()
                     return@Button
                 }
+                
+                // 测试连接时，如果密码为空且是现有配置，则使用现有密码
+                val testPassword = if (password.isEmpty() && isExistingConfig) {
+                    existingConfig!!.password
+                } else {
+                    password
+                }
+                
+                if (testPassword.isEmpty()) {
+                    Toast.makeText(context, "请输入密码", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+                
                 isTesting = true
                 Toast.makeText(context, "正在测试连接...", Toast.LENGTH_SHORT).show()
 
                 // 在协程中测试连接
                 coroutineScope.launch {
                     try {
-                        val webDav = WebDav(serverUrl, Authorization(username, password))
+                        val webDav = WebDav(serverUrl, Authorization(username, testPassword))
                         val success = webDav.check()
 
                         withContext(Dispatchers.Main) {
@@ -202,6 +212,18 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
                     return@Button
                 }
 
+                // 如果密码为空且是现有配置，则使用现有密码
+                val finalPassword = if (password.isEmpty() && isExistingConfig) {
+                    existingConfig!!.password
+                } else {
+                    password
+                }
+                
+                if (finalPassword.isEmpty()) {
+                    Toast.makeText(context, "请输入密码", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+
                 // 创建包含2fas_xzy子目录的URL
                 val webdavUrl = if (serverUrl.endsWith("/")) {
                     "${serverUrl}2fas_xzy/"
@@ -209,8 +231,27 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
                     "${serverUrl}/2fas_xzy/"
                 }
 
+                // 创建或更新配置
+                val config = if (isExistingConfig) {
+                    // 更新现有配置
+                    existingConfig!!.copy(
+                        url = webdavUrl,
+                        username = username,
+                        password = finalPassword
+                    )
+                } else {
+                    // 创建新配置
+                    WebDavConfig(
+                        id = 0,
+                        name = "默认WebDAV",
+                        url = webdavUrl,
+                        username = username,
+                        password = finalPassword
+                    )
+                }
+
                 // 保存配置并关闭弹窗
-                onConfigSaved(webdavUrl, username, password)
+                onConfigSaved(config)
                 onDismiss()
             },
             modifier = Modifier.Companion.fillMaxWidth(),
@@ -226,12 +267,14 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
  * @param showDialog 是否显示弹窗
  * @param onDismissRequest 关闭弹窗的回调
  * @param onConfigSaved 配置保存成功的回调
+ * @param existingConfig 现有的WebDAV配置，如果为null则表示首次配置
  */
 @Composable
 fun WebDavConfigDialog(
     showDialog: Boolean,
     onDismissRequest: () -> Unit,
-    onConfigSaved: (serverUrl: String, username: String, password: String) -> Unit = { _, _, _ -> }
+    onConfigSaved: (config: WebDavConfig) -> Unit = { _ -> },
+    existingConfig: WebDavConfig? = null
 ) {
     // WebDAV配置弹窗
     if (showDialog) {
@@ -255,7 +298,7 @@ fun WebDavConfigDialog(
                 ) {
                     // 标题
                     Text(
-                        text = "WebDAV 配置",
+                        text = if (existingConfig != null) "编辑 WebDAV 配置" else "WebDAV 配置",
                         fontSize = 20.sp,
                         modifier = Modifier.Companion.padding(bottom = 16.dp)
                     )
@@ -263,7 +306,8 @@ fun WebDavConfigDialog(
                     // 配置内容
                     WebDavConfigContent(
                         onDismiss = onDismissRequest,
-                        onConfigSaved = onConfigSaved
+                        onConfigSaved = onConfigSaved,
+                        existingConfig = existingConfig
                     )
 
                     // 关闭按钮
