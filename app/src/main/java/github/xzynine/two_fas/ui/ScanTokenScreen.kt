@@ -17,6 +17,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
@@ -35,6 +36,7 @@ fun ScanTokenScreen(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
     val tokenViewModel = remember { TokenViewModel(context) }
     val tokenQRCodeDecoder = remember { TokenQRCodeDecoder() }
@@ -64,20 +66,13 @@ fun ScanTokenScreen(
     
     // 相机提供程序
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
-    var cameraProvider by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var camera by remember { mutableStateOf<Camera?>(null) }
     var foundToken by remember { mutableStateOf(false) }
     
     // 请求相机权限
     LaunchedEffect(key1 = Unit) {
         if (!hasCameraPermission) {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
-    
-    // 初始化相机提供程序
-    LaunchedEffect(key1 = hasCameraPermission) {
-        if (hasCameraPermission) {
-            cameraProvider = cameraProviderFuture.get()
         }
     }
     
@@ -91,13 +86,62 @@ fun ScanTokenScreen(
             )
             
             // 设置相机
-            if (hasCameraPermission && cameraProvider != null) {
-                setupCamera(context, previewView, cameraProvider!!, tokenQRCodeDecoder, tokenViewModel) { 
-                    foundToken = true
-                    coroutineScope.launch {
-                        onTokenScanned()
+            if (hasCameraPermission) {
+                // 初始化相机提供程序并设置相机
+                cameraProviderFuture.addListener({ 
+                    val cameraProvider = cameraProviderFuture.get()
+                    
+                    // 创建预览用例
+                    val preview = Preview.Builder()
+                        .setTargetAspectRatio(AspectRatio.RATIO_16_9)
+                        .build()
+                        .also {
+                            it.setSurfaceProvider(previewView.surfaceProvider)
+                        }
+                    
+                    // 创建图像分析用例
+                    val imageAnalyzer = ImageAnalysis.Builder()
+                        .setTargetAspectRatio(AspectRatio.RATIO_16_9)
+                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                        .build()
+                        .also {
+                            it.setAnalyzer(
+                                Executors.newSingleThreadExecutor()
+                            ) { imageProxy ->
+                                processImageProxy(
+                                    context,
+                                    imageProxy,
+                                    tokenQRCodeDecoder,
+                                    tokenViewModel
+                                ) { 
+                                    foundToken = true
+                                    coroutineScope.launch {
+                                        onTokenScanned()
+                                    }
+                                }
+                            }
+                        }
+                    
+                    // 选择后置摄像头
+                    val cameraSelector = CameraSelector.Builder()
+                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                        .build()
+                    
+                    try {
+                        // 清除之前的绑定
+                        cameraProvider.unbindAll()
+                        
+                        // 绑定相机用例
+                        camera = cameraProvider.bindToLifecycle(
+                            lifecycleOwner,
+                            cameraSelector,
+                            preview,
+                            imageAnalyzer
+                        )
+                    } catch (exc: Exception) {
+                        Log.e("ScanTokenScreen", "无法绑定相机用例", exc)
                     }
-                }
+                }, ContextCompat.getMainExecutor(context))
             }
             
             previewView
@@ -107,61 +151,6 @@ fun ScanTokenScreen(
     
     // 扫描成功后，直接通过回调通知父组件，不显示额外的对话框
     // 因为我们已经在processImageProxy中显示了Toast提示
-}
-
-/**
- * 设置相机
- */
-private fun setupCamera(
-    context: Context,
-    previewView: PreviewView,
-    cameraProvider: ProcessCameraProvider,
-    tokenQRCodeDecoder: TokenQRCodeDecoder,
-    tokenViewModel: TokenViewModel,
-    onTokenFound: () -> Unit
-) {
-    // 清除之前的绑定
-    cameraProvider.unbindAll()
-    
-    // 创建预览用例
-    val preview = Preview.Builder()
-        .setTargetAspectRatio(AspectRatio.RATIO_16_9)
-        .build()
-        .also {
-            it.setSurfaceProvider(previewView.surfaceProvider)
-        }
-    
-    // 创建图像分析用例
-    val imageAnalyzer = ImageAnalysis.Builder()
-        .setTargetAspectRatio(AspectRatio.RATIO_16_9)
-        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-        .build()
-        .also {
-            it.setAnalyzer(
-                Executors.newSingleThreadExecutor()
-            ) { imageProxy ->
-                processImageProxy(
-                    context,
-                    imageProxy,
-                    tokenQRCodeDecoder,
-                    tokenViewModel,
-                    onTokenFound
-                )
-            }
-        }
-    
-    // 选择后置摄像头
-    val cameraSelector = CameraSelector.Builder()
-        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-        .build()
-    
-    // 绑定相机用例
-    cameraProvider.bindToLifecycle(
-        context as androidx.lifecycle.LifecycleOwner,
-        cameraSelector,
-        preview,
-        imageAnalyzer
-    )
 }
 
 /**
