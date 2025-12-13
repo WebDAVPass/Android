@@ -67,7 +67,9 @@ fun ScanTokenScreen(
     // 相机提供程序
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     var camera by remember { mutableStateOf<Camera?>(null) }
-    var foundToken by remember { mutableStateOf(false) }
+    
+    // 为每个AndroidView实例创建独立的foundToken状态
+    val foundToken = remember { mutableStateOf(false) }
     
     // 请求相机权限
     LaunchedEffect(key1 = Unit) {
@@ -108,14 +110,32 @@ fun ScanTokenScreen(
                             it.setAnalyzer(
                                 Executors.newSingleThreadExecutor()
                             ) { imageProxy ->
+                                // 如果已经找到令牌，直接关闭图像代理
+                                if (foundToken.value) {
+                                    imageProxy.close()
+                                    return@setAnalyzer
+                                }
+                                
+                                // 处理图像
                                 processImageProxy(
                                     context,
                                     imageProxy,
                                     tokenQRCodeDecoder,
                                     tokenViewModel
-                                ) { 
-                                    foundToken = true
+                                ) { tokenString ->
+                                    // 标记已找到令牌
+                                    foundToken.value = true
+                                    
+                                    // 在主线程上更新UI
                                     coroutineScope.launch {
+                                        // 显示成功提示
+                                        Toast.makeText(
+                                            context,
+                                            "令牌添加成功",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
+                                        
+                                        // 通知父组件
                                         onTokenScanned()
                                     }
                                 }
@@ -161,35 +181,36 @@ private fun processImageProxy(
     imageProxy: ImageProxy,
     tokenQRCodeDecoder: TokenQRCodeDecoder,
     tokenViewModel: TokenViewModel,
-    onTokenFound: () -> Unit
+    onTokenFound: (String) -> Unit
 ) {
     try {
-        // 解析二维码
-        val tokenString = tokenQRCodeDecoder.parseQRCode(imageProxy)
+        // 使用use块确保资源正确释放
+        val tokenString = imageProxy.use { image ->
+            tokenQRCodeDecoder.parseQRCode(image)
+        }
         
         if (tokenString != null) {
             Log.d("ScanTokenScreen", "Found token: $tokenString")
             
-            // 从URI创建令牌
-            val token = OtpTokenFactory.createFromUri(Uri.parse(tokenString))
-            
-            // 保存令牌
-            tokenViewModel.addToken(token)
-            
-            // 显示成功提示
-            Toast.makeText(
-                context,
-                "令牌添加成功",
-                Toast.LENGTH_SHORT
-            ).show()
-            
-            // 调用回调
-            onTokenFound()
+            try {
+                // 从URI创建令牌
+                val token = OtpTokenFactory.createFromUri(Uri.parse(tokenString))
+                
+                // 保存令牌
+                tokenViewModel.addToken(token)
+                
+                // 调用回调
+                onTokenFound(tokenString)
+            } catch (e: Exception) {
+                Log.e("ScanTokenScreen", "Error creating token from URI: ${e.message}")
+                Toast.makeText(
+                    context,
+                    "无效的二维码格式",
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
         }
     } catch (e: Exception) {
         Log.e("ScanTokenScreen", "Error processing image: ${e.message}")
-    } finally {
-        // 关闭图像代理
-        imageProxy.close()
     }
 }

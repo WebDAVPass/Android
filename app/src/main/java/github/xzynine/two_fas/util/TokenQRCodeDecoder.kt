@@ -16,7 +16,7 @@ import com.google.zxing.qrcode.QRCodeReader
 class TokenQRCodeDecoder {
 
     private val tag: String = TokenQRCodeDecoder::class.java.simpleName
-
+    private val qrCodeReader = QRCodeReader()
     private lateinit var imageData: ByteArray
 
     /**
@@ -34,6 +34,7 @@ class TokenQRCodeDecoder {
 
         synchronized(imageData) {
             // 只需要YUV的Y分量
+
             val y = image.planes[0]
             val ySize = y.buffer.remaining()
 
@@ -49,7 +50,7 @@ class TokenQRCodeDecoder {
             )
 
             return try {
-                QRCodeReader().decode(BinaryBitmap(HybridBinarizer(ls))).text
+                qrCodeReader.decode(BinaryBitmap(HybridBinarizer(ls))).text
             } catch (e: NotFoundException) {
                 Log.d(tag, "未找到二维码")
                 null
@@ -59,6 +60,8 @@ class TokenQRCodeDecoder {
             } catch (e: FormatException) {
                 Log.e(tag, "二维码格式错误", e)
                 null
+            } finally {
+                qrCodeReader.reset()
             }
         }
     }
