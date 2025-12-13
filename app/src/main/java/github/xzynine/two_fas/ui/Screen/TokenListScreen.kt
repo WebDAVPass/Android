@@ -49,6 +49,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.extra.SuperDialog
+import github.xzynine.two_fas.ui.Dialog.ConfirmationDialog
 import github.xzynine.two_fas.ui.Dialog.TokenDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.useful.Edit
@@ -129,16 +130,19 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
                     )
                 }
 
-            DialogState.DELETE -> selectedToken?.let { token ->
-                DeleteConfirmationDialog(
-                    token = token,
+            DialogState.DELETE -> selectedToken?.let {
+                ConfirmationDialog(
+                    title = "确认删除",
+                    summary = "确定要删除令牌 \"${it.issuer ?: it.label}\" 吗？此操作无法撤销。",
                     show = true,
                     onDismiss = {
                         dialogState = DialogState.NONE
                         selectedToken = null
                     },
+                    confirmButtonText = "删除",
+                    isDestructive = true,
                     onConfirm = {
-                        tokenViewModel.deleteToken(token.id)
+                        tokenViewModel.deleteToken(it.id)
                         dialogState = DialogState.NONE
                         selectedToken = null
                     }
@@ -152,45 +156,7 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
 
 
 
-/**
- * 删除确认对话框
- */
-@Composable
-fun DeleteConfirmationDialog(
-    token: OtpToken,
-    show: Boolean,
-    onDismiss: () -> Unit,
-    onConfirm: () -> Unit
-) {
-    SuperDialog(
-        title = "确认删除",
-        summary = "确定要删除令牌 \"${token.issuer ?: token.label}\" 吗？此操作无法撤销。",
-        show = remember { mutableStateOf(show) },
-        onDismissRequest = onDismiss
-    ) {
-        Row(
-            modifier = Modifier.Companion.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            // 取消按钮
-            TextButton(
-                text = "取消",
-                onClick = onDismiss,
-                modifier = Modifier.Companion.weight(1f)
-            )
 
-            Spacer(modifier = Modifier.Companion.width(16.dp))
-
-            // 确认删除按钮
-            TextButton(
-                text = "删除",
-                onClick = onConfirm,
-                modifier = Modifier.Companion.weight(1f),
-                colors = ButtonDefaults.textButtonColorsPrimary()
-            )
-        }
-    }
-}
 
 /**
  * 单个令牌项组件

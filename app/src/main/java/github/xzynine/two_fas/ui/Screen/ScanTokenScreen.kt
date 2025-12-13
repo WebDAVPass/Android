@@ -55,6 +55,7 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import github.xzynine.two_fas.ui.Dialog.ConfirmationDialog
 import github.xzynine.two_fas.ui.Dialog.TokenDialog
 import github.xzynine.two_fas.data.OtpTokenFactory
 import github.xzynine.two_fas.util.TokenQRCodeDecoder
@@ -358,34 +359,18 @@ fun ScanTokenScreen(
         }
     }
 
-    // 当识别到二维码错误或令牌规则错误时，使用 SuperDialog 提示更换图片后重试
+    // 当识别到二维码错误或令牌规则错误时，使用 ConfirmationDialog 提示更换图片后重试
     if (pickedImageError != null) {
-        SuperDialog(
+        ConfirmationDialog(
             title = pickedImageError ?: "解析失败",
-            show = remember { mutableStateOf(true) },
-            onDismissRequest = { pickedImageError = null }
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Button(
-                    onClick = {
-                        pickedImageError = null
-                        imagePickerLauncher.launch(arrayOf("image/*"))
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(text = "更换图片重试")
-                }
-                Button(
-                    onClick = { pickedImageError = null },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(text = "取消")
-                }
+            show = true,
+            onDismiss = { pickedImageError = null },
+            confirmButtonText = "更换图片重试",
+            onConfirm = { 
+                pickedImageError = null 
+                imagePickerLauncher.launch(arrayOf("image/*")) 
             }
-        }
+        )
     }
 }
 
