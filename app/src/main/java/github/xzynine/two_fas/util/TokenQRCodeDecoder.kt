@@ -20,11 +20,30 @@ class TokenQRCodeDecoder {
     private lateinit var imageData: ByteArray
 
     /**
+     * 二维码解析结果类
+     */
+    data class ParseResult(
+        val success: Boolean,
+        val content: String? = null,
+        val errorType: ErrorType? = null
+    ) {
+        /**
+         * 二维码解析错误类型
+         */
+        enum class ErrorType {
+            NOT_FOUND,        // 未找到二维码
+            CHECKSUM_ERROR,   // 校验和错误
+            FORMAT_ERROR,     // 格式错误
+            UNKNOWN_ERROR     // 其他未知错误
+        }
+    }
+
+    /**
      * 从相机图像中解析二维码
      * @param image 相机捕获的图像
-     * @return 二维码内容，如果解析失败则返回null
+     * @return 解析结果对象，包含成功状态、内容和错误类型
      */
-    fun parseQRCode(image: ImageProxy): String? {
+    fun parseQRCode(image: ImageProxy): ParseResult {
         // 在某些手机上，行跨度大于宽度。使用行跨度来避免缓冲区溢出
         val rowStride = image.planes[0].rowStride
 
@@ -50,16 +69,20 @@ class TokenQRCodeDecoder {
             )
 
             return try {
-                qrCodeReader.decode(BinaryBitmap(HybridBinarizer(ls))).text
+                val result = qrCodeReader.decode(BinaryBitmap(HybridBinarizer(ls))).text
+                ParseResult(success = true, content = result)
             } catch (e: NotFoundException) {
-                Log.d(tag, "未找到二维码")
-                null
+                // 未找到二维码，不记录日志
+                ParseResult(success = false, errorType = ParseResult.ErrorType.NOT_FOUND)
             } catch (e: ChecksumException) {
                 Log.e(tag, "二维码校验和错误", e)
-                null
+                ParseResult(success = false, errorType = ParseResult.ErrorType.CHECKSUM_ERROR)
             } catch (e: FormatException) {
                 Log.e(tag, "二维码格式错误", e)
-                null
+                ParseResult(success = false, errorType = ParseResult.ErrorType.FORMAT_ERROR)
+            } catch (e: Exception) {
+                Log.e(tag, "二维码解析未知错误", e)
+                ParseResult(success = false, errorType = ParseResult.ErrorType.UNKNOWN_ERROR)
             } finally {
                 qrCodeReader.reset()
             }

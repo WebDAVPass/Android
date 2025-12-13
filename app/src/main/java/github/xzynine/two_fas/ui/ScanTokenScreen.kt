@@ -186,55 +186,92 @@ private fun processImageProxy(
     onTokenFound: (String) -> Unit
 ) {
     try {
-        // 使用use块确保资源正确释放
-        val tokenString = imageProxy.use { image ->
-            tokenQRCodeDecoder.parseQRCode(image)
-        }
-        
-        if (tokenString != null) {
-            Log.d("ScanTokenScreen", "Found token: $tokenString")
+        // 在use块内部处理所有逻辑，确保imageProxy未被关闭
+        imageProxy.use { image ->
+            val parseResult = tokenQRCodeDecoder.parseQRCode(image)
             
-            try {
-                // 从URI创建令牌
-                val token = OtpTokenFactory.createFromUri(Uri.parse(tokenString))
-                
-                // 使用Dispatchers.Main协程作用域，确保UI操作在主线程执行
-                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            when {
+                parseResult.success -> {
+                    // 解析成功，获取二维码内容
+                    val tokenString = parseResult.content ?: return@use
+                    Log.d("ScanTokenScreen", "Found token: $tokenString")
+                    
                     try {
-                        // 保存令牌
-                        val isAdded = tokenViewModel.addToken(token)
+                        // 从URI创建令牌
+                        val token = OtpTokenFactory.createFromUri(Uri.parse(tokenString))
                         
-                        if (isAdded) {
-                            // 调用回调
-                            onTokenFound(tokenString)
-                        } else {
-                            // 密钥已存在，显示提示
-                            Log.d("ScanTokenScreen", "Token with secret already exists")
-                            Toast.makeText(
-                                context,
-                                "该令牌已存在",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                        // 使用Dispatchers.Main协程作用域，确保UI操作在主线程执行
+                        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                            try {
+                                // 保存令牌
+                                val isAdded = tokenViewModel.addToken(token)
+                                
+                                if (isAdded) {
+                                // 调用回调
+                                onTokenFound(tokenString)
+                            } else {
+                                // 密钥已存在，显示提示，简化日志记录
+                                Log.d("ScanTokenScreen", "Token with secret already exists")
+                                Toast.makeText(
+                                    context,
+                                    "该令牌已存在",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                            } catch (e: Exception) {
+                                Log.e("ScanTokenScreen", "Error adding token '$tokenString': ${e.message}", e)
+                                Toast.makeText(
+                                    context,
+                                    "添加令牌失败",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
                         }
                     } catch (e: Exception) {
-                        Log.e("ScanTokenScreen", "Error adding token: ${e.message}")
+                        Log.e("ScanTokenScreen", "Error creating token from URI '$tokenString': ${e.message}", e)
                         Toast.makeText(
                             context,
-                            "添加令牌失败",
+                            "无效的二维码格式",
                             Toast.LENGTH_SHORT
                         ).show()
                     }
                 }
-            } catch (e: Exception) {
-                Log.e("ScanTokenScreen", "Error creating token from URI: ${e.message}")
-                Toast.makeText(
-                    context,
-                    "无效的二维码格式",
-                    Toast.LENGTH_SHORT
-                ).show()
+                parseResult.errorType != null && parseResult.errorType != TokenQRCodeDecoder.ParseResult.ErrorType.NOT_FOUND -> {
+                    // 解析失败，且不是"未找到二维码"类型，显示错误提示
+                    val errorMessage = when (parseResult.errorType) {
+                        TokenQRCodeDecoder.ParseResult.ErrorType.CHECKSUM_ERROR -> "二维码校验和错误"
+                        TokenQRCodeDecoder.ParseResult.ErrorType.FORMAT_ERROR -> "二维码格式错误"
+                        TokenQRCodeDecoder.ParseResult.ErrorType.UNKNOWN_ERROR -> "二维码解析失败"
+                        else -> "二维码解析失败"
+                    }
+                    // 添加更多调试信息，包括图像信息
+                    Log.e("ScanTokenScreen", "$errorMessage: 图像尺寸=${image.width}x${image.height}，图像格式=${image.format}")
+                    
+                    // 在主线程显示Toast
+                    kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                        Toast.makeText(
+                            context,
+                            errorMessage,
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+                // 其他情况（如NOT_FOUND），不显示提示，也不记录日志
+                else -> {
+                    // 未找到二维码，不记录日志
+                }
             }
         }
     } catch (e: Exception) {
-        Log.e("ScanTokenScreen", "Error processing image: ${e.message}")
+        Log.e("ScanTokenScreen", "Error processing image: ${e.message}", e)
+        
+        // 显示未知错误提示
+        kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+            Toast.makeText(
+                context,
+                "二维码处理失败",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
     }
 }
