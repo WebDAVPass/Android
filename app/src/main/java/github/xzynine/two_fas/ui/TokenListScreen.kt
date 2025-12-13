@@ -17,6 +17,7 @@ import github.xzynine.two_fas.viewmodel.TokenViewModel
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
 
 /**
  * 令牌列表界面
@@ -49,7 +50,10 @@ fun TokenListScreen() {
         ) {
             items(tokens) { token ->
                 TokenItem(token = token, tokenViewModel = tokenViewModel)
-                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    thickness = 0.5.dp
+                )
             }
         }
     }
