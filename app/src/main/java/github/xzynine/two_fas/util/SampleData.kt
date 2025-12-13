@@ -36,7 +36,7 @@ object SampleData {
                 imagePath = null,
                 tokenType = OtpTokenType.TOTP,
                 algorithm = "SHA1",
-                secret = "JBSWY3DPEHPK3PXP", // Base32 for "Hello!"
+                secret = "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", // Base32 for "12345678901234567890"
                 digits = 6,
                 counter = 0,
                 period = 30,
@@ -50,7 +50,7 @@ object SampleData {
                 imagePath = null,
                 tokenType = OtpTokenType.TOTP,
                 algorithm = "SHA1",
-                secret = "JBSWY3DPEHPK3PXP", // Base32 for "Hello!"
+                secret = "ONXW2ZJLVNRSWS3TPO5TW4EQGE4WA4ZU", // Base32 for "abcdefghijklmnopqrstuvwxyz"
                 digits = 6,
                 counter = 0,
                 period = 30,

@@ -196,11 +196,24 @@ private fun processImageProxy(
                 // 从URI创建令牌
                 val token = OtpTokenFactory.createFromUri(Uri.parse(tokenString))
                 
-                // 保存令牌
-                tokenViewModel.addToken(token)
-                
-                // 调用回调
-                onTokenFound(tokenString)
+                // 使用协程作用域调用挂起函数
+                kotlinx.coroutines.runBlocking {
+                    // 保存令牌
+                    val isAdded = tokenViewModel.addToken(token)
+                    
+                    if (isAdded) {
+                        // 调用回调
+                        onTokenFound(tokenString)
+                    } else {
+                        // 密钥已存在，显示提示
+                        Log.d("ScanTokenScreen", "Token with secret already exists")
+                        Toast.makeText(
+                            context,
+                            "该令牌已存在",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
             } catch (e: Exception) {
                 Log.e("ScanTokenScreen", "Error creating token from URI: ${e.message}")
                 Toast.makeText(

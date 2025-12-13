@@ -52,14 +52,18 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 加载所有令牌
+     * 加载所有令牌，并检查和处理重复数据
      */
     private fun loadTokens() {
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 // 只获取一次初始数据
-                val tokenList = database.otpTokenDao().getAllOnce()
+                var tokenList = database.otpTokenDao().getAllOnce()
+                
+                // 检查并处理重复数据
+                tokenList = processDuplicateTokens(tokenList)
+                
                 _tokens.value = tokenList
                 // 为每个令牌创建代码流
                 tokenList.forEach { token ->
@@ -74,6 +78,48 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 _isLoading.value = false
             }
         }
+    }
+    
+    /**
+     * 处理重复令牌，删除重复项，保留最新的（id最大的）
+     */
+    private fun processDuplicateTokens(tokens: List<OtpToken>): List<OtpToken> {
+        // 使用密钥+关联服务+标签作为键，值为令牌列表
+        val tokenMap = mutableMapOf<String, MutableList<OtpToken>>()
+        
+        // 将令牌分组
+        tokens.forEach { token ->
+            // 创建分组键：密钥+关联服务+标签
+            val key = "${token.secret}_${token.issuer}_${token.label}"
+            if (!tokenMap.containsKey(key)) {
+                tokenMap[key] = mutableListOf()
+            }
+            tokenMap[key]?.add(token)
+        }
+        
+        val uniqueTokens = mutableListOf<OtpToken>()
+        
+        // 处理每个分组
+        tokenMap.forEach { (_, tokenList) ->
+            if (tokenList.size > 1) {
+                // 有重复，保留id最大的（最新的）
+                val uniqueToken = tokenList.maxByOrNull { it.id }!!
+                uniqueTokens.add(uniqueToken)
+                
+                // 删除重复项（id不是最大的）
+                viewModelScope.launch {
+                    val tokensToDelete = tokenList.filter { it.id != uniqueToken.id }
+                    tokensToDelete.forEach {
+                        database.otpTokenDao().deleteById(it.id)
+                    }
+                }
+            } else {
+                // 没有重复，直接添加
+                uniqueTokens.add(tokenList[0])
+            }
+        }
+        
+        return uniqueTokens
     }
 
     /**
@@ -115,13 +161,21 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
     /**
      * 添加新令牌
+     * @return 是否成功添加（如果密钥+关联服务+标签已存在则返回false）
      */
-    fun addToken(token: OtpToken) {
-        viewModelScope.launch {
-            database.otpTokenDao().insert(token)
-            // 重新加载令牌列表，以便新添加的令牌能够立即显示在界面上
-            loadTokens()
+    suspend fun addToken(token: OtpToken): Boolean {
+        // 检查是否已存在相同密钥+关联服务+标签的令牌
+        val count = database.otpTokenDao().countBySecretIssuerLabel(token.secret, token.issuer, token.label)
+        if (count > 0) {
+            // 密钥+关联服务+标签已存在，不允许添加
+            return false
         }
+        
+        // 密钥+关联服务+标签不存在，可以添加
+        database.otpTokenDao().insert(token)
+        // 重新加载令牌列表，以便新添加的令牌能够立即显示在界面上
+        loadTokens()
+        return true
     }
 
     /**
