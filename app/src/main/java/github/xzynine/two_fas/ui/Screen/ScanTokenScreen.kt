@@ -11,7 +11,6 @@ import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.camera.core.AspectRatio
 import androidx.camera.core.Camera
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -21,7 +20,18 @@ import androidx.camera.core.resolutionselector.ResolutionSelector
 import androidx.camera.core.resolutionselector.ResolutionStrategy
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
@@ -31,10 +41,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Color
 import androidx.core.content.ContextCompat
+import android.graphics.BitmapFactory
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.icon.MiuixIcons
 import github.xzynine.two_fas.data.OtpTokenFactory
 import github.xzynine.two_fas.util.TokenQRCodeDecoder
 import github.xzynine.two_fas.viewmodel.TokenViewModel
@@ -44,6 +65,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.Executors
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.icon.icons.useful.AddSecret
+import top.yukonga.miuix.kmp.icon.icons.useful.Scan
 
 /**
  * 扫描二维码界面
@@ -83,6 +107,66 @@ fun ScanTokenScreen(
         }
     )
 
+    // 图片选择（上传截图）Launcher：使用 OpenDocument 以支持 4.4+
+    var pickedImageError by remember { mutableStateOf<String?>(null) }
+    val imagePickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri: Uri? ->
+            if (uri == null) return@rememberLauncherForActivityResult
+            try {
+                // 读取位图
+                val input = context.contentResolver.openInputStream(uri)
+                val bitmap = input.use { stream ->
+                    if (stream == null) null else BitmapFactory.decodeStream(stream)
+                }
+                if (bitmap == null) {
+                    pickedImageError = "无法读取图片文件"
+                    return@rememberLauncherForActivityResult
+                }
+
+                // 复用二维码解析逻辑（期望 TokenQRCodeDecoder 支持位图解析）
+                val parseResult = tokenQRCodeDecoder.parseQRCode(bitmap)
+                if (parseResult.success) {
+                    val tokenString = parseResult.content ?: run {
+                        pickedImageError = "二维码内容为空"
+                        return@rememberLauncherForActivityResult
+                    }
+
+                    try {
+                        val uriStr = Uri.parse(tokenString)
+                        val token = OtpTokenFactory.createFromUri(uriStr)
+                        coroutineScope.launch(Dispatchers.Main) {
+                            val added = tokenViewModel.addToken(token)
+                            if (added) {
+                                Toast.makeText(context, "令牌添加成功", Toast.LENGTH_SHORT).show()
+                                onTokenScanned()
+                            } else {
+                                pickedImageError = "该令牌已存在"
+                            }
+                        }
+                    } catch (e: Exception) {
+                        val errorMessage = when (e) {
+                            is IllegalArgumentException -> e.message ?: "无效的令牌参数"
+                            is NoSuchAlgorithmException -> "不支持的加密算法"
+                            else -> "无效的二维码格式"
+                        }
+                        pickedImageError = errorMessage
+                    }
+                } else {
+                    pickedImageError = when (parseResult.errorType) {
+                        TokenQRCodeDecoder.ParseResult.ErrorType.CHECKSUM_ERROR -> "二维码校验和错误"
+                        TokenQRCodeDecoder.ParseResult.ErrorType.FORMAT_ERROR -> "二维码格式错误"
+                        TokenQRCodeDecoder.ParseResult.ErrorType.NOT_FOUND -> "未检测到二维码"
+                        else -> "二维码解析失败"
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e("ImagePicker", "Error: ${e.message}", e)
+                pickedImageError = "图片处理失败"
+            }
+        }
+    )
+
     // 相机提供程序
     val cameraProviderFuture = remember { ProcessCameraProvider.getInstance(context) }
     var camera by remember { mutableStateOf<Camera?>(null) }
@@ -92,126 +176,266 @@ fun ScanTokenScreen(
     // 缓存最近识别到的URL，用于同一次识别周期内的重复截停
     val lastScannedUrl = remember { mutableStateOf<String?>(null) }
 
-    // 请求相机权限
     LaunchedEffect(key1 = Unit) {
         if (!hasCameraPermission) {
             cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
         }
     }
 
-    // 相机预览
-    AndroidView(
-        factory = { context ->
-            val previewView = PreviewView(context)
-            previewView.layoutParams = ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.MATCH_PARENT
-            )
+    // 底部操作面板状态（手动输入）
+    var showManualInput by remember { mutableStateOf(false) }
+    var manualInputText by remember { mutableStateOf("") }
 
-            // 设置相机
-            if (hasCameraPermission) {
-                // 初始化相机提供程序并设置相机
-                cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
+    MiuixTheme {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+        // 相机区域占页面高度约 3/5，并应用圆角
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxSize(0.6f)
+                .padding(16.dp)
+                .clip(RoundedCornerShape(24.dp))
+        ) {
+            AndroidView(
+                factory = { context ->
+                    val previewView = PreviewView(context)
+                    previewView.layoutParams = ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.MATCH_PARENT
+                    )
 
-                    // 创建预览用例
-                    val preview = Preview.Builder()
-                        .setResolutionSelector(
-                            ResolutionSelector.Builder()
-                                .setResolutionStrategy(
-                                    ResolutionStrategy(
-                                        Size(1280, 720),
-                                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
-                                    )
+                    // 设置相机
+                    if (hasCameraPermission) {
+                        // 初始化相机提供程序并设置相机
+                        cameraProviderFuture.addListener({
+                            val cameraProvider = cameraProviderFuture.get()
+
+                            // 创建预览用例
+                            val preview = Preview.Builder()
+                                .setResolutionSelector(
+                                    ResolutionSelector.Builder()
+                                        .setResolutionStrategy(
+                                            ResolutionStrategy(
+                                                Size(1280, 720),
+                                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                                            )
+                                        )
+                                        .build()
                                 )
                                 .build()
-                        )
-                        .build()
-                        .also {
-                            it.setSurfaceProvider(previewView.surfaceProvider)
-                        }
-
-                    // 创建图像分析用例
-                    val imageAnalyzer = ImageAnalysis.Builder()
-                        .setResolutionSelector(
-                            ResolutionSelector.Builder()
-                                .setResolutionStrategy(
-                                    ResolutionStrategy(
-                                        Size(1280, 720),
-                                        ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
-                                    )
-                                )
-                                .build()
-                        )
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .build()
-                        .also {
-                            it.setAnalyzer(
-                                Executors.newSingleThreadExecutor()
-                            ) { imageProxy ->
-                                // 如果已经找到令牌，直接关闭图像代理
-                                if (foundToken.value) {
-                                    imageProxy.close()
-                                    return@setAnalyzer
+                                .also {
+                                    it.setSurfaceProvider(previewView.surfaceProvider)
                                 }
 
-                                // 处理图像
-                                processImageProxy(
-                                    context,
-                                    imageProxy,
-                                    tokenQRCodeDecoder,
-                                    tokenViewModel,
-                                    onTokenFound = { tokenString ->
-                                        // 标记已找到令牌
-                                        foundToken.value = true
-
-                                        // 在主线程上更新UI
-                                        coroutineScope.launch {
-                                            // 显示成功提示
-                                            Toast.makeText(
-                                                context,
-                                                "令牌添加成功",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-
-                                            // 通知父组件
-                                            onTokenScanned()
-                                        }
-                                    },
-                                    lastScannedUrl = lastScannedUrl
+                            // 创建图像分析用例
+                            val imageAnalyzer = ImageAnalysis.Builder()
+                                .setResolutionSelector(
+                                    ResolutionSelector.Builder()
+                                        .setResolutionStrategy(
+                                            ResolutionStrategy(
+                                                Size(1280, 720),
+                                                ResolutionStrategy.FALLBACK_RULE_CLOSEST_HIGHER_THEN_LOWER
+                                            )
+                                        )
+                                        .build()
                                 )
+                                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                                .build()
+                                .also {
+                                    it.setAnalyzer(
+                                        Executors.newSingleThreadExecutor()
+                                    ) { imageProxy ->
+                                        // 如果已经找到令牌，直接关闭图像代理
+                                        if (foundToken.value) {
+                                            imageProxy.close()
+                                            return@setAnalyzer
+                                        }
+
+                                        // 处理图像
+                                        processImageProxy(
+                                            context,
+                                            imageProxy,
+                                            tokenQRCodeDecoder,
+                                            tokenViewModel,
+                                            onTokenFound = { tokenString ->
+                                                // 标记已找到令牌
+                                                foundToken.value = true
+
+                                                // 在主线程上更新UI
+                                                coroutineScope.launch {
+                                                    // 显示成功提示
+                                                    Toast.makeText(
+                                                        context,
+                                                        "令牌添加成功",
+                                                        Toast.LENGTH_SHORT
+                                                    ).show()
+
+                                                    // 通知父组件
+                                                    onTokenScanned()
+                                                }
+                                            },
+                                            lastScannedUrl = lastScannedUrl
+                                        )
+                                    }
+                                }
+
+                            // 选择后置摄像头
+                            val cameraSelector = CameraSelector.Builder()
+                                .requireLensFacing(CameraSelector.LENS_FACING_BACK)
+                                .build()
+
+                            try {
+                                // 清除之前的绑定
+                                cameraProvider.unbindAll()
+
+                                // 绑定相机用例
+                                camera = cameraProvider.bindToLifecycle(
+                                    lifecycleOwner,
+                                    cameraSelector,
+                                    preview,
+                                    imageAnalyzer
+                                )
+                            } catch (exc: Exception) {
+                                Log.e("ScanTokenScreen", "无法绑定相机用例", exc)
+                            }
+                        }, ContextCompat.getMainExecutor(context))
+                    }
+
+                    previewView
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+
+        // 底部操作行：其他方法
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Text(text = "其他方法")
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Button(onClick = { showManualInput = true }) {
+                    Icon(imageVector = MiuixIcons.Useful.AddSecret, contentDescription = "手动输入")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "手动输入密钥")
+                }
+                Button(onClick = {
+                    // 选择图片（图片/*），解析二维码并尝试添加
+                    imagePickerLauncher.launch(arrayOf("image/*"))
+                }) {
+                    Icon(imageVector = MiuixIcons.Useful.Scan, contentDescription = "上传图片")
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(text = "上传带有二维码的截图")
+                }
+            }
+        }
+            // 手动输入密钥弹窗
+            if (showManualInput) {
+                SuperDialog(
+                    title = "手动输入密钥",
+                    show = remember { mutableStateOf(true) },
+                    onDismissRequest = { showManualInput = false }
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        TextField(
+                            value = manualInputText,
+                            onValueChange = { manualInputText = it },
+                            label = "密钥/密钥URI",
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Button(onClick = { showManualInput = false }) {
+                                Text(text = "取消")
+                            }
+                            Button(onClick = {
+                                val text = manualInputText.trim()
+                                if (text.isEmpty()) {
+                                    Toast.makeText(context, "请输入内容", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+
+                                // 复用现有逻辑：URI 优先，否则尝试以 otpauth URI 包装密钥
+                                try {
+                                    val uri = try {
+                                        Uri.parse(text)
+                                    } catch (e: Exception) {
+                                        null
+                                    }
+
+                                    val finalUri = if (uri != null && uri.scheme != null) {
+                                        uri
+                                    } else {
+                                        // 简单兜底：将纯密钥包装为 otpauth URI，明确默认参数
+                                        // 默认：TOTP、SHA1、30s、6位
+                                        Uri.parse("otpauth://totp/Manual?secret=${text}&algorithm=SHA1&digits=6&period=30")
+                                    }
+
+                                    val token = OtpTokenFactory.createFromUri(finalUri)
+                                    coroutineScope.launch(Dispatchers.Main) {
+                                        val added = tokenViewModel.addToken(token)
+                                        if (added) {
+                                            Toast.makeText(context, "令牌添加成功", Toast.LENGTH_SHORT).show()
+                                            showManualInput = false
+                                            onTokenScanned()
+                                        } else {
+                                            Toast.makeText(context, "该令牌已存在", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    Log.e("ManualInput", "Error: ${e.message}", e)
+                                    Toast.makeText(context, "输入内容无效", Toast.LENGTH_SHORT).show()
+                                }
+                            }) {
+                                Text(text = "添加")
                             }
                         }
-
-                    // 选择后置摄像头
-                    val cameraSelector = CameraSelector.Builder()
-                        .requireLensFacing(CameraSelector.LENS_FACING_BACK)
-                        .build()
-
-                    try {
-                        // 清除之前的绑定
-                        cameraProvider.unbindAll()
-
-                        // 绑定相机用例
-                        camera = cameraProvider.bindToLifecycle(
-                            lifecycleOwner,
-                            cameraSelector,
-                            preview,
-                            imageAnalyzer
-                        )
-                    } catch (exc: Exception) {
-                        Log.e("ScanTokenScreen", "无法绑定相机用例", exc)
                     }
-                }, ContextCompat.getMainExecutor(context))
+                }
             }
+        }
+    }
 
-            previewView
-        },
-        modifier = Modifier.Companion.fillMaxSize()
-    )
-
-    // 扫描成功后，直接通过回调通知父组件，不显示额外的对话框
-    // 因为我们已经在processImageProxy中显示了Toast提示
+    // 当识别到二维码错误或令牌规则错误时，使用 SuperDialog 提示更换图片后重试
+    if (pickedImageError != null) {
+        SuperDialog(
+            title = pickedImageError ?: "解析失败",
+            show = remember { mutableStateOf(true) },
+            onDismissRequest = { pickedImageError = null }
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Button(
+                    onClick = {
+                        pickedImageError = null
+                        imagePickerLauncher.launch(arrayOf("image/*"))
+                    },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(text = "更换图片重试")
+                }
+                Button(
+                    onClick = { pickedImageError = null },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(text = "取消")
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -350,7 +574,7 @@ private fun processImageProxy(
                     Log.e("QRCodeScanner", "$errorMessage: 图像尺寸=${image.width}x${image.height}，图像格式=${image.format}")
 
                     // 在主线程显示Toast
-                    GlobalScope.launch(Dispatchers.Main) {
+                    Handler(context.mainLooper).post {
                         Toast.makeText(
                             context,
                             errorMessage,
@@ -368,7 +592,7 @@ private fun processImageProxy(
         Log.e("QRCodeScanner", "Error processing image: ${e.message}", e)
 
         // 显示未知错误提示
-        GlobalScope.launch(Dispatchers.Main) {
+        Handler(context.mainLooper).post {
             Toast.makeText(
                 context,
                 "二维码处理失败",
