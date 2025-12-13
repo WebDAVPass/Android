@@ -63,7 +63,8 @@ object OtpTokenFactory {
             d = if (issuerExt == "Steam") "5" else "6"
         }
         val digits = d.toInt()
-        if (issuerExt != "Steam" && digits != 6 && digits != 7 && digits != 8 && digits != 5)
+        // 验证位数范围
+        if (issuerExt != "Steam" && digits !in 5..8)
             throw IllegalArgumentException("位数必须为5到8之间")
 
         // 解析周期
