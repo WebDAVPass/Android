@@ -16,3 +16,4 @@ local.properties
 app/debug/
 
 .trae/
+.idea/inspectionProfiles/Project_Default.xml
