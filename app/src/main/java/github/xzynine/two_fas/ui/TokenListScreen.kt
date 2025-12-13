@@ -11,6 +11,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import github.xzynine.two_fas.data.OtpToken
 import github.xzynine.two_fas.viewmodel.TokenViewModel
 import top.yukonga.miuix.kmp.basic.Text
@@ -60,6 +61,14 @@ fun TokenListScreen() {
 @Composable
 fun TokenItem(token: OtpToken, tokenViewModel: TokenViewModel) {
     val tokenCode by tokenViewModel.getTokenCode(token.id).collectAsState(null)
+    
+    // 实时更新的时间状态，用于倒计时显示
+    val currentTime by produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            delay(1000)
+            value = System.currentTimeMillis()
+        }
+    }
 
     Row(
         modifier = Modifier
@@ -91,8 +100,8 @@ fun TokenItem(token: OtpToken, tokenViewModel: TokenViewModel) {
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold
                 )
-                // 显示剩余时间
-                val remainingTime = (code.end - System.currentTimeMillis()) / 1000
+                // 显示剩余时间，使用实时更新的时间状态
+                val remainingTime = maxOf(0, (code.end - currentTime) / 1000)
                 Text(
                     text = "${remainingTime}s",
                     fontSize = 12.sp,

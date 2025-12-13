@@ -10,6 +10,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.NavigationBar
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -28,6 +29,7 @@ import top.yukonga.miuix.kmp.icon.icons.useful.Save
 import top.yukonga.miuix.kmp.icon.icons.useful.Move
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -53,8 +55,8 @@ fun MainScreen() {
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     
-    // 导航状态管理
-    var selectedIndex by remember { mutableStateOf(0) }
+    // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
+    var selectedIndex by rememberSaveable { mutableStateOf(0) }
     
     // 导航项配置
     val navigationItems = listOf(
