@@ -215,8 +215,9 @@ private fun processImageProxy(
                     // 解析URI对象
                     val uri = Uri.parse(tokenString)
                     
-                    // 从URI创建令牌
+                    // 从URI创建令牌 - 这里会执行令牌规则验证
                     val token = OtpTokenFactory.createFromUri(uri)
+                    Log.d("QRCodeScanner", "令牌规则验证通过，准备检查是否已存在")
                     
                     // 检查令牌是否已存在，使用同步方式避免重复处理
                     val isExists = kotlinx.coroutines.runBlocking {
@@ -227,7 +228,7 @@ private fun processImageProxy(
                     
                     if (isExists) {
                         // 令牌已存在，直接截停，显示提示
-                        Log.d("QRCodeScanner", "Token already exists, skipping addition")
+                        Log.d("QRCodeScanner", "令牌已存在，跳过添加操作")
                         // 使用主线程显示Toast
                         android.os.Handler(context.mainLooper).post {
                             Toast.makeText(
@@ -268,12 +269,29 @@ private fun processImageProxy(
                         }
                     }
                 } catch (e: Exception) {
-                    Log.e("QRCodeScanner", "Error processing QR code: ${e.message}", e)
+                    val errorMsg = when (e) {
+                        is IllegalArgumentException -> {
+                            // 令牌规则验证失败，显示具体错误信息
+                            Log.e("QRCodeScanner", "令牌规则验证失败: ${e.message}", e)
+                            e.message ?: "无效的令牌参数"
+                        }
+                        is java.security.NoSuchAlgorithmException -> {
+                            // 算法不支持
+                            Log.e("QRCodeScanner", "不支持的算法: ${e.message}", e)
+                            "不支持的加密算法"
+                        }
+                        else -> {
+                            // 其他错误
+                            Log.e("QRCodeScanner", "二维码处理失败: ${e.message}", e)
+                            "无效的二维码格式"
+                        }
+                    }
+                    
                     // 使用主线程显示Toast
                     android.os.Handler(context.mainLooper).post {
                         Toast.makeText(
                             context,
-                            if (e is IllegalArgumentException) e.message else "无效的二维码格式",
+                            errorMsg,
                             Toast.LENGTH_SHORT
                         ).show()
                     }
