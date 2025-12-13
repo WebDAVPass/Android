@@ -56,41 +56,50 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     private fun loadTokens() {
         viewModelScope.launch {
-            _isLoading.value = true
-            try {
-                // 只获取一次初始数据
-                var tokenList = database.otpTokenDao().getAllOnce()
-                
-                // 检查并处理重复数据
-                tokenList = processDuplicateTokens(tokenList)
-                
-                _tokens.value = tokenList
-                // 为每个令牌创建代码流
-                tokenList.forEach { token ->
-                    if (!_tokenCodes.containsKey(token.id)) {
-                        _tokenCodes[token.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(token))
-                    }
+            refreshTokenList()
+        }
+    }
+    
+    /**
+     * 刷新令牌列表，确保立即更新UI
+     * 在当前协程中同步执行
+     */
+    private suspend fun refreshTokenList() {
+        _isLoading.value = true
+        try {
+            // 只获取一次初始数据
+            var tokenList = database.otpTokenDao().getAllOnce()
+            
+            // 检查并处理重复数据
+            tokenList = processDuplicateTokens(tokenList)
+            
+            _tokens.value = tokenList
+            // 为每个令牌创建代码流
+            tokenList.forEach { token ->
+                if (!_tokenCodes.containsKey(token.id)) {
+                    _tokenCodes[token.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(token))
                 }
-            } catch (e: Exception) {
-                // 如果出现异常，确保加载状态结束
-                _tokens.value = emptyList()
-            } finally {
-                _isLoading.value = false
             }
+        } catch (e: Exception) {
+            // 如果出现异常，确保加载状态结束
+            _tokens.value = emptyList()
+        } finally {
+            _isLoading.value = false
         }
     }
     
     /**
      * 处理重复令牌，删除重复项，保留最新的（id最大的）
+     * 重复判断基于：secret + algorithm + digits + period
      */
     private fun processDuplicateTokens(tokens: List<OtpToken>): List<OtpToken> {
-        // 使用密钥+关联服务+标签作为键，值为令牌列表
+        // 使用密钥+算法+位数+周期作为键，值为令牌列表
         val tokenMap = mutableMapOf<String, MutableList<OtpToken>>()
         
         // 将令牌分组
         tokens.forEach { token ->
-            // 创建分组键：密钥+关联服务+标签
-            val key = "${token.secret}_${token.issuer}_${token.label}"
+            // 创建分组键：密钥+算法+位数+周期
+            val key = "${token.secret}_${token.algorithm}_${token.digits}_${token.period}"
             if (!tokenMap.containsKey(key)) {
                 tokenMap[key] = mutableListOf()
             }
@@ -161,20 +170,25 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
     /**
      * 添加新令牌
-     * @return 是否成功添加（如果密钥+关联服务+标签已存在则返回false）
+     * @return 是否成功添加（如果密钥+算法+位数+周期已存在则返回false）
      */
     suspend fun addToken(token: OtpToken): Boolean {
-        // 检查是否已存在相同密钥+关联服务+标签的令牌
-        val count = database.otpTokenDao().countBySecretIssuerLabel(token.secret, token.issuer, token.label)
+        // 检查是否已存在相同密钥+算法+位数+周期的令牌
+        val count = database.otpTokenDao().countBySecretAlgorithmDigitsPeriod(
+            token.secret,
+            token.algorithm,
+            token.digits,
+            token.period
+        )
         if (count > 0) {
-            // 密钥+关联服务+标签已存在，不允许添加
+            // 密钥+算法+位数+周期已存在，不允许添加
             return false
         }
         
-        // 密钥+关联服务+标签不存在，可以添加
+        // 密钥+算法+位数+周期不存在，可以添加
         database.otpTokenDao().insert(token)
-        // 重新加载令牌列表，以便新添加的令牌能够立即显示在界面上
-        loadTokens()
+        // 刷新令牌列表，确保立即更新UI
+        refreshTokenList()
         return true
     }
 
@@ -185,8 +199,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             database.otpTokenDao().deleteById(tokenId)
             _tokenCodes.remove(tokenId)
-            // 重新加载令牌列表
-            loadTokens()
+            // 刷新令牌列表，确保立即更新UI
+            refreshTokenList()
         }
     }
 
@@ -198,8 +212,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             database.otpTokenDao().update(token)
             // 刷新代码
             _tokenCodes[token.id]?.value = tokenCodeUtil.generateTokenCode(token)
-            // 重新加载令牌列表
-            loadTokens()
+            // 刷新令牌列表，确保立即更新UI
+            refreshTokenList()
         }
     }
 

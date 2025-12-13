@@ -32,11 +32,10 @@ interface OtpTokenDao {
     @Query("select ordinal from otp_tokens order by ordinal desc limit 1")
     fun getLastOrdinal(): Long?
 
-    @Query("select count(*) from otp_tokens where secret = :secret")
-    suspend fun countBySecret(secret: String): Int
-    
-    @Query("select count(*) from otp_tokens where secret = :secret and issuer = :issuer and label = :label")
-    suspend fun countBySecretIssuerLabel(secret: String, issuer: String?, label: String): Int
+
+
+    @Query("select count(*) from otp_tokens where secret = :secret and algorithm = :algorithm and digits = :digits and period = :period")
+    suspend fun countBySecretAlgorithmDigitsPeriod(secret: String, algorithm: String, digits: Int, period: Int): Int
 
     @Query("delete from otp_tokens where id = :id")
     suspend fun deleteById(id: Long): Void
