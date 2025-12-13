@@ -1,17 +1,19 @@
 package github.xzynine.two_fas.ui
 
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
+import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.DpSize
@@ -21,7 +23,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import github.xzynine.two_fas.data.OtpToken
 import github.xzynine.two_fas.viewmodel.TokenViewModel
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
@@ -278,114 +283,115 @@ fun TokenItem(token: OtpToken, tokenViewModel: TokenViewModel, onLongClick: () -
         }
     }
 
-    // 长按检测
-    val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
+    // 上下文
+    val context = LocalContext.current
     
-    // 长按计时器
-    var longPressTriggered by remember { mutableStateOf(false) }
-    
-    LaunchedEffect(isPressed) {
-        if (isPressed && !longPressTriggered) {
-            delay(500) // 长按500ms触发
-            if (isPressed) {
-                longPressTriggered = true
-                onLongClick()
-            }
-        } else if (!isPressed) {
-            longPressTriggered = false
-        }
+    // 复制到剪贴板功能
+    fun copyToClipboard(code: String) {
+        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clipData = ClipData.newPlainText("2FA Token", code)
+        clipboardManager.setPrimaryClip(clipData)
+        Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
     }
-
-    Row(
+    
+    Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp)
-            .clickable(
-                interactionSource = interactionSource,
-                indication = null,
-                onClick = {},
-                onClickLabel = "长按编辑令牌"
-            ),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+            .padding(16.dp),
+        colors = CardDefaults.defaultColors(
+            color = MiuixTheme.colorScheme.surface
+        ),
+        pressFeedbackType = PressFeedbackType.Sink,
+        showIndication = true,
+        onClick = {
+            tokenCode?.let { copyToClipboard(it.code) }
+        },
+        onLongPress = onLongClick
     ) {
-        // 左侧：图标、发行者、标签和6位码区域
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // 图标（暂时使用编辑图标占位）
-            Icon(
-                imageVector = MiuixIcons.Useful.Edit,
-                contentDescription = "令牌图标",
-                tint = MiuixTheme.colorScheme.primary,
-                modifier = Modifier.size(32.dp)
-            )
-            
-            Column(
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+            // 左侧：图标、发行者、标签和6位码区域
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 发行者（如果有）
-                if (token.issuer != null) {
-                    Text(
-                        text = token.issuer,
-                        fontSize = 14.sp,
-                        fontWeight = FontWeight.Medium,
-                        color = MiuixTheme.colorScheme.onSurface
-                    )
-                }
-                
-                // 标签
-                Text(
-                    text = token.label,
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.outline,
-                    fontWeight = FontWeight.Normal
+                // 图标（暂时使用编辑图标占位）
+                Icon(
+                    imageVector = MiuixIcons.Useful.Edit,
+                    contentDescription = "令牌图标",
+                    tint = MiuixTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
                 )
                 
-                // 6位码
-                tokenCode?.let { code ->
-                    val remainingTime = maxOf(0, (code.end - currentTime) / 1000)
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // 发行者（如果有）
+                    if (token.issuer != null) {
+                        Text(
+                            text = token.issuer,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = MiuixTheme.colorScheme.onSurface
+                        )
+                    }
+                    
+                    // 标签
                     Text(
-                        text = code.code,
-                        fontSize = 24.sp,
-                        fontWeight = FontWeight.Bold,
+                        text = token.label,
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.outline,
+                        fontWeight = FontWeight.Normal
+                    )
+                    
+                    // 6位码
+                    tokenCode?.let { code ->
+                        val remainingTime = maxOf(0, (code.end - currentTime) / 1000)
+                        Text(
+                            text = code.code,
+                            fontSize = 24.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
+                        )
+                    }
+                }
+            }
+            
+            // 右侧：倒计时区域（包裹在环形进度条中）
+            tokenCode?.let { code ->
+                val remainingTime = maxOf(0, (code.end - currentTime) / 1000)
+                val progress = remainingTime.toFloat() / 30f // 30秒总时间
+                
+                Box(
+                    modifier = Modifier.size(56.dp),
+                    contentAlignment = Alignment.Center // 容器级别设置居中对齐
+                ) {
+                    // 环形进度条 - 向右下角偏移使其右下角与文本中心对齐
+                    CircularProgressIndicator(
+                        progress = progress,
+                        modifier = Modifier
+                            .size(56.dp)
+                            .offset(x = 14.dp, y = 14.dp), // 向右下角偏移自身尺寸的四分之一
+                        strokeWidth = 4.dp,
+                        colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                            foregroundColor = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
+                            backgroundColor = MiuixTheme.colorScheme.outline.copy(alpha = 0.1f)
+                        )
+                    )
+                    
+                    // 倒计时文本 - 继承Box的居中对齐
+                    Text(
+                        text = "${remainingTime}s",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
                     )
                 }
-            }
-        }
-        
-        // 右侧：倒计时区域（包裹在环形进度条中）
-        tokenCode?.let { code ->
-            val remainingTime = maxOf(0, (code.end - currentTime) / 1000)
-            val progress = remainingTime.toFloat() / 30f // 30秒总时间
-            
-            Box(
-                modifier = Modifier.size(56.dp),
-                contentAlignment = Alignment.Center // 容器级别设置居中对齐
-            ) {
-                // 环形进度条 - 向右下角偏移使其右下角与文本中心对齐
-                CircularProgressIndicator(
-                    progress = progress,
-                    modifier = Modifier
-                        .size(56.dp)
-                        .offset(x = 14.dp, y = 14.dp), // 向右下角偏移自身尺寸的四分之一
-                    strokeWidth = 4.dp,
-                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
-                        foregroundColor = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
-                        backgroundColor = MiuixTheme.colorScheme.outline.copy(alpha = 0.1f)
-                    )
-                )
-                
-                // 倒计时文本 - 继承Box的居中对齐
-                Text(
-                    text = "${remainingTime}s",
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
-                )
             }
         }
     }
