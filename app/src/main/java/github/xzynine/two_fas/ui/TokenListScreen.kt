@@ -7,11 +7,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
@@ -89,23 +92,23 @@ fun TokenListScreen() {
         // 根据状态显示对应的弹窗
         when (dialogState) {
             DialogState.EDIT -> selectedToken?.let { token ->
-                EditTokenBottomSheet(
-                    token = token,
-                    show = true,
-                    onDismiss = { 
-                        dialogState = DialogState.NONE
-                        selectedToken = null
-                    },
-                    onDelete = {
-                        dialogState = DialogState.DELETE
-                    },
-                    onSave = { updatedToken ->
-                        tokenViewModel.updateToken(updatedToken)
-                        dialogState = DialogState.NONE
-                        selectedToken = null
-                    }
-                )
-            }
+                    EditTokenDialog(
+                        token = token,
+                        show = true,
+                        onDismiss = { 
+                            dialogState = DialogState.NONE
+                            selectedToken = null
+                        },
+                        onDelete = {
+                            dialogState = DialogState.DELETE
+                        },
+                        onSave = { updatedToken ->
+                            tokenViewModel.updateToken(updatedToken)
+                            dialogState = DialogState.NONE
+                            selectedToken = null
+                        }
+                    )
+                }
             
             DialogState.DELETE -> selectedToken?.let { token ->
                 DeleteConfirmationDialog(
@@ -129,10 +132,10 @@ fun TokenListScreen() {
 }
 
 /**
- * 编辑令牌底部抽屉
+ * 编辑令牌对话框
  */
 @Composable
-fun EditTokenBottomSheet(
+fun EditTokenDialog(
     token: OtpToken,
     show: Boolean,
     onDismiss: () -> Unit,
@@ -143,64 +146,77 @@ fun EditTokenBottomSheet(
     var label by remember { mutableStateOf(token.label) }
     var secret by remember { mutableStateOf(token.secret) }
 
-    SuperBottomSheet(
-        show = remember { mutableStateOf(show) },
+    SuperDialog(
         title = "编辑令牌",
-        onDismissRequest = onDismiss
+        summary = "修改令牌信息",
+        show = remember { mutableStateOf(show) },
+        onDismissRequest = onDismiss,
+        defaultWindowInsetsPadding = true, // 启用默认窗口插入内边距，正确处理输入法
+        insideMargin = DpSize(16.dp, 16.dp) // 设置内部边距
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
         ) {
-            // 发行者输入框
-            TextField(
-                value = issuer,
-                onValueChange = { issuer = it },
-                label = "发行者 (可选)",
-                modifier = Modifier.fillMaxWidth()
-            )
-            
-            // 标签输入框
-            TextField(
-                value = label,
-                onValueChange = { label = it },
-                label = "标签",
-                modifier = Modifier.fillMaxWidth()
-            )
-            
-            // 密钥输入框
-            TextField(
-                value = secret,
-                onValueChange = { secret = it },
-                label = "密钥",
+            // 编辑区域
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                readOnly = true // 密钥通常不建议修改
-            )
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 发行者输入框
+                TextField(
+                    value = issuer,
+                    onValueChange = { issuer = it },
+                    label = "发行者",
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                // 标签输入框
+                TextField(
+                    value = label,
+                    onValueChange = { label = it },
+                    label = "标签",
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                // 密钥输入框
+                TextField(
+                    value = secret,
+                    onValueChange = { secret = it },
+                    label = "密钥",
+                    modifier = Modifier.fillMaxWidth(),
+                    readOnly = true // 密钥通常不建议修改
+                )
+            }
             
-            // 操作按钮
+            Spacer(modifier = Modifier.height(24.dp))
+            
+            // 操作按钮区域
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 // 删除按钮
-            TextButton(
-                text = "删除",
-                onClick = onDelete,
-                colors = ButtonDefaults.textButtonColorsPrimary()
-            )
-            
-            // 保存按钮
-            TextButton(
-                text = "保存",
-                onClick = {
-                    val updatedToken = token.copy(
-                        issuer = if (issuer.isBlank()) null else issuer,
-                        label = label,
-                        secret = secret
-                    )
-                    onSave(updatedToken)
-                }
-            )
+                TextButton(
+                    text = "删除",
+                    onClick = onDelete,
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
+                
+                // 保存按钮
+                TextButton(
+                    text = "保存",
+                    onClick = {
+                        val updatedToken = token.copy(
+                            issuer = if (issuer.isBlank()) null else issuer,
+                            label = label,
+                            secret = secret
+                        )
+                        onSave(updatedToken)
+                    },
+                    colors = ButtonDefaults.textButtonColorsPrimary()
+                )
             }
         }
     }
