@@ -38,7 +38,9 @@ fun ScanTokenScreen(
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
-    val tokenViewModel = remember { TokenViewModel(context) }
+    // 使用Application Context创建ViewModel，确保所有实例共享同一个ViewModel
+    val appContext = context.applicationContext
+    val tokenViewModel = remember { TokenViewModel(appContext) }
     val tokenQRCodeDecoder = remember { TokenQRCodeDecoder() }
     
     // 相机权限状态
@@ -196,20 +198,29 @@ private fun processImageProxy(
                 // 从URI创建令牌
                 val token = OtpTokenFactory.createFromUri(Uri.parse(tokenString))
                 
-                // 使用协程作用域调用挂起函数
-                kotlinx.coroutines.runBlocking {
-                    // 保存令牌
-                    val isAdded = tokenViewModel.addToken(token)
-                    
-                    if (isAdded) {
-                        // 调用回调
-                        onTokenFound(tokenString)
-                    } else {
-                        // 密钥已存在，显示提示
-                        Log.d("ScanTokenScreen", "Token with secret already exists")
+                // 使用Dispatchers.Main协程作用域，确保UI操作在主线程执行
+                kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Main) {
+                    try {
+                        // 保存令牌
+                        val isAdded = tokenViewModel.addToken(token)
+                        
+                        if (isAdded) {
+                            // 调用回调
+                            onTokenFound(tokenString)
+                        } else {
+                            // 密钥已存在，显示提示
+                            Log.d("ScanTokenScreen", "Token with secret already exists")
+                            Toast.makeText(
+                                context,
+                                "该令牌已存在",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    } catch (e: Exception) {
+                        Log.e("ScanTokenScreen", "Error adding token: ${e.message}")
                         Toast.makeText(
                             context,
-                            "该令牌已存在",
+                            "添加令牌失败",
                             Toast.LENGTH_SHORT
                         ).show()
                     }

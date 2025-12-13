@@ -52,7 +52,9 @@ enum class DialogState { NONE, EDIT, DELETE }
 @Composable
 fun TokenListScreen() {
     val context = LocalContext.current
-    val tokenViewModel: TokenViewModel = remember { TokenViewModel(context) }
+    // 使用Application Context创建ViewModel，确保所有实例共享同一个ViewModel
+    val appContext = context.applicationContext
+    val tokenViewModel: TokenViewModel = remember { TokenViewModel(appContext) }
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val isLoading by tokenViewModel.isLoading.collectAsState(false)
     
