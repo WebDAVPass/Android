@@ -48,6 +48,9 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun MainScreen() {
     val context = LocalContext.current
+    // 在顶层创建并共享一个 TokenViewModel，传递给各子界面
+    val appContext = context.applicationContext
+    val tokenViewModel = remember { TokenViewModel(appContext) }
     
     // 控制WebDAV配置弹窗的显示与隐藏
     var showWebDavDialog by remember { mutableStateOf(false) }
@@ -107,7 +110,7 @@ fun MainScreen() {
             ) {
                 when (selectedIndex) {
                     0 -> {
-                        TokenListScreen()
+                        TokenListScreen(tokenViewModel = tokenViewModel)
                     }
                     1 -> {
                         // 文件浏览器页面
@@ -163,7 +166,9 @@ fun MainScreen() {
                     .height(500.dp) // 设置固定高度，避免全屏显示
             ) {
                 ScanTokenScreen(
+                    tokenViewModel = tokenViewModel,
                     onTokenScanned = {
+                        // 关闭抽屉，令牌列表将通过同一个 ViewModel 自动刷新
                         showScanBottomSheet.value = false
                     },
                     onDismiss = {

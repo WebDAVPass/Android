@@ -32,15 +32,14 @@ import java.util.concurrent.Executors
  */
 @Composable
 fun ScanTokenScreen(
+    tokenViewModel: TokenViewModel,
     onTokenScanned: () -> Unit,
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val coroutineScope = rememberCoroutineScope()
-    // 使用Application Context创建ViewModel，确保所有实例共享同一个ViewModel
-    val appContext = context.applicationContext
-    val tokenViewModel = remember { TokenViewModel(appContext) }
+    // 由父组件传入共享的 ViewModel，避免多实例导致状态不一致
     val tokenQRCodeDecoder = remember { TokenQRCodeDecoder() }
     
     // 相机权限状态
