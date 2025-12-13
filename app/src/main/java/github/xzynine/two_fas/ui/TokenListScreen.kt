@@ -33,6 +33,11 @@ import top.yukonga.miuix.kmp.icon.icons.useful.Delete
 import top.yukonga.miuix.kmp.icon.icons.useful.Edit
 
 /**
+ * 弹窗状态枚举
+ */
+enum class DialogState { NONE, EDIT, DELETE }
+
+/**
  * 令牌列表界面
  */
 @Composable
@@ -42,10 +47,9 @@ fun TokenListScreen() {
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val isLoading by tokenViewModel.isLoading.collectAsState(false)
     
-    // 长按功能状态管理
+    // 长按功能状态管理 - 使用枚举确保单例
+    var dialogState by remember { mutableStateOf(DialogState.NONE) }
     var selectedToken by remember { mutableStateOf<OtpToken?>(null) }
-    var showEditBottomSheet by remember { mutableStateOf(false) }
-    var showDeleteDialog by remember { mutableStateOf(false) }
 
     if (isLoading) {
         Box(
@@ -72,7 +76,7 @@ fun TokenListScreen() {
                     tokenViewModel = tokenViewModel,
                     onLongClick = {
                         selectedToken = token
-                        showEditBottomSheet = true
+                        dialogState = DialogState.EDIT
                     }
                 )
                 HorizontalDivider(
@@ -82,35 +86,44 @@ fun TokenListScreen() {
             }
         }
         
-        // 编辑底部抽屉
-        selectedToken?.let { token ->
-            EditTokenBottomSheet(
-                token = token,
-                show = showEditBottomSheet,
-                onDismiss = { showEditBottomSheet = false },
-                onDelete = {
-                    showEditBottomSheet = false
-                    selectedToken = token
-                    showDeleteDialog = true
-                },
-                onSave = { updatedToken ->
-                    tokenViewModel.updateToken(updatedToken)
-                    showEditBottomSheet = false
-                }
-            )
-        }
-        
-        // 删除确认对话框
-        selectedToken?.let { token ->
-            DeleteConfirmationDialog(
-                token = token,
-                show = showDeleteDialog,
-                onDismiss = { showDeleteDialog = false },
-                onConfirm = {
-                    tokenViewModel.deleteToken(token.id)
-                    showDeleteDialog = false
-                }
-            )
+        // 根据状态显示对应的弹窗
+        when (dialogState) {
+            DialogState.EDIT -> selectedToken?.let { token ->
+                EditTokenBottomSheet(
+                    token = token,
+                    show = true,
+                    onDismiss = { 
+                        dialogState = DialogState.NONE
+                        selectedToken = null
+                    },
+                    onDelete = {
+                        dialogState = DialogState.DELETE
+                    },
+                    onSave = { updatedToken ->
+                        tokenViewModel.updateToken(updatedToken)
+                        dialogState = DialogState.NONE
+                        selectedToken = null
+                    }
+                )
+            }
+            
+            DialogState.DELETE -> selectedToken?.let { token ->
+                DeleteConfirmationDialog(
+                    token = token,
+                    show = true,
+                    onDismiss = { 
+                        dialogState = DialogState.NONE
+                        selectedToken = null
+                    },
+                    onConfirm = {
+                        tokenViewModel.deleteToken(token.id)
+                        dialogState = DialogState.NONE
+                        selectedToken = null
+                    }
+                )
+            }
+            
+            DialogState.NONE -> { /* 不显示任何弹窗 */ }
         }
     }
 }
