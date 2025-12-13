@@ -1,38 +1,47 @@
-package github.xzynine.two_fas
+package github.xzynine.two_fas.ui
 
+import android.content.Context
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.NavigationBar
-import top.yukonga.miuix.kmp.basic.NavigationItem
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
+import github.xzynine.two_fas.ui.Screen.FileBrowserScreen
+import github.xzynine.two_fas.ui.Screen.SettingsScreen
+import github.xzynine.two_fas.ui.Dialog.WebDavConfigDialog
 import github.xzynine.two_fas.theme.AppTheme
-import github.xzynine.two_fas.ui.ScanTokenScreen
-import github.xzynine.two_fas.ui.TokenListScreen
+import github.xzynine.two_fas.ui.Screen.ScanTokenScreen
+import github.xzynine.two_fas.ui.Screen.TokenListScreen
 import github.xzynine.two_fas.util.SampleData
 import github.xzynine.two_fas.viewmodel.TokenViewModel
-import top.yukonga.miuix.kmp.basic.*
-import top.yukonga.miuix.kmp.extra.SuperBottomSheet
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.icon.icons.useful.Settings
-import top.yukonga.miuix.kmp.icon.icons.useful.Save
-import top.yukonga.miuix.kmp.icon.icons.useful.Move
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.basic.FabPosition
+import top.yukonga.miuix.kmp.basic.FloatingActionButton
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationItem
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.extra.SuperBottomSheet
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.icons.useful.Move
+import top.yukonga.miuix.kmp.icon.icons.useful.Save
 import top.yukonga.miuix.kmp.icon.icons.useful.Scan
+import top.yukonga.miuix.kmp.icon.icons.useful.Settings
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -51,28 +60,28 @@ fun MainScreen() {
     // 在顶层创建并共享一个 TokenViewModel，传递给各子界面
     val appContext = context.applicationContext
     val tokenViewModel = remember { TokenViewModel(appContext) }
-    
+
     // 控制WebDAV配置弹窗的显示与隐藏
     var showWebDavDialog by remember { mutableStateOf(false) }
-    
+
     // WebDAV配置状态
     var serverUrl by remember { mutableStateOf("https://dav.jianguoyun.com/dav/2fas_xzy/") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
-    
+
     // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
-    
+
     // 导航项配置
     val navigationItems = listOf(
         NavigationItem("首页", MiuixIcons.Useful.Save),
         NavigationItem("文件", MiuixIcons.Useful.Move),
         NavigationItem("设置", MiuixIcons.Useful.Settings)
     )
-    
+
     // 控制扫描界面的显示与隐藏
     val showScanBottomSheet = remember { mutableStateOf(false) }
-    
+
     // 基于Miuix Scaffold的主界面
     Scaffold(
         topBar = {
@@ -100,11 +109,11 @@ fun MainScreen() {
                 }
             }
         },
-        floatingActionButtonPosition = FabPosition.End,
+        floatingActionButtonPosition = FabPosition.Companion.End,
         content = { paddingValues ->
             // 主界面内容区域，根据选中的导航项显示不同内容
             Box(
-                modifier = Modifier
+                modifier = Modifier.Companion
                     .fillMaxSize()
                     .padding(paddingValues)
             ) {
@@ -112,6 +121,7 @@ fun MainScreen() {
                     0 -> {
                         TokenListScreen(tokenViewModel = tokenViewModel)
                     }
+
                     1 -> {
                         // 文件浏览器页面
                         FileBrowserScreen(
@@ -120,6 +130,7 @@ fun MainScreen() {
                             password = password
                         )
                     }
+
                     2 -> {
                         // 设置页面
                         SettingsScreen(
@@ -139,7 +150,7 @@ fun MainScreen() {
             )
         }
     )
-    
+
     // 使用外部文件中的WebDAV配置弹窗组件
     WebDavConfigDialog(
         showDialog = showWebDavDialog,
@@ -150,7 +161,7 @@ fun MainScreen() {
             password = pwd
         }
     )
-    
+
     // 扫描二维码底部抽屉
     SuperBottomSheet(
         show = showScanBottomSheet,
@@ -161,7 +172,7 @@ fun MainScreen() {
         content = {
             // 扫描界面内容
             Box(
-                modifier = Modifier
+                modifier = Modifier.Companion
                     .fillMaxWidth()
                     .height(500.dp) // 设置固定高度，避免全屏显示
             ) {
@@ -183,12 +194,12 @@ fun MainScreen() {
 /**
  * 添加示例数据到数据库
  */
-private fun addSampleData(context: android.content.Context) {
+private fun addSampleData(context: Context) {
     CoroutineScope(Dispatchers.IO).launch {
         try {
             val tokenViewModel = TokenViewModel(context)
             val sampleTokens = SampleData.generateSampleTokens()
-            
+
             sampleTokens.forEach { token ->
                 tokenViewModel.addToken(token)
             }

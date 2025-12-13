@@ -1,33 +1,45 @@
-package github.xzynine.two_fas
+package github.xzynine.two_fas.ui.Dialog
 
-import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import github.xzynine.two_fas.theme.getAppRoundedCorner
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import github.xzynine.two_fas.lib.webdav.Authorization
+import github.xzynine.two_fas.lib.webdav.WebDav
+import github.xzynine.two_fas.theme.getAppRoundedCorner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import androidx.compose.runtime.rememberCoroutineScope
-import github.xzynine.two_fas.lib.webdav.Authorization
-import github.xzynine.two_fas.lib.webdav.WebDav
-import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.icon.icons.basic.Check
 import top.yukonga.miuix.kmp.icon.icons.basic.ArrowRight
-import top.yukonga.miuix.kmp.icon.icons.useful.Personal
+import top.yukonga.miuix.kmp.icon.icons.basic.Check
 import top.yukonga.miuix.kmp.icon.icons.useful.AddSecret
 import top.yukonga.miuix.kmp.icon.icons.useful.Info
-
+import top.yukonga.miuix.kmp.icon.icons.useful.Personal
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 /**
  * WebDAV配置内容组件，用于在弹窗中显示
@@ -55,37 +67,37 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
 
     // 使用普通Column布局
     Column(
-        modifier = Modifier
+        modifier = Modifier.Companion
             .fillMaxWidth()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 服务器地址输入框
-        top.yukonga.miuix.kmp.basic.TextField(
+        TextField(
             value = serverUrl,
-            onValueChange = { 
-                serverUrl = it 
+            onValueChange = {
+                serverUrl = it
                 urlError = validateUrl(it)
             },
             label = "服务器地址",
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.Companion.fillMaxWidth(),
             singleLine = true,
             leadingIcon = {
                 Icon(
                     imageVector = MiuixIcons.Useful.Info,
                     contentDescription = "服务器地址",
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.Companion.padding(horizontal = 12.dp)
                 )
             }
         )
-        
+
         if (urlError != null) {
             // URL格式错误提示
             Text(
                 text = urlError!!,
                 color = MiuixTheme.colorScheme.error,
                 fontSize = 12.sp,
-                modifier = Modifier
+                modifier = Modifier.Companion
                     .fillMaxWidth()
                     .padding(start = 16.dp, top = 4.dp)
             )
@@ -96,38 +108,38 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
             value = username,
             onValueChange = { username = it },
             label = "用户名",
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.Companion.fillMaxWidth(),
             singleLine = true,
             leadingIcon = {
                 Icon(
                     imageVector = MiuixIcons.Useful.Personal,
                     contentDescription = "用户名",
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.Companion.padding(horizontal = 12.dp)
                 )
             }
         )
 
         // 密码输入框
-        top.yukonga.miuix.kmp.basic.TextField(
+        TextField(
             value = password,
             onValueChange = { password = it },
             label = "密码",
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.Companion.fillMaxWidth(),
             singleLine = true,
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) VisualTransformation.Companion.None else PasswordVisualTransformation(),
             leadingIcon = {
-                top.yukonga.miuix.kmp.basic.Icon(
+                Icon(
                     imageVector = MiuixIcons.Useful.AddSecret,
                     contentDescription = "密码",
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.Companion.padding(horizontal = 12.dp)
                 )
             },
             trailingIcon = {
-                top.yukonga.miuix.kmp.basic.IconButton(
+                IconButton(
                     onClick = { passwordVisible = !passwordVisible },
-                    modifier = Modifier.padding(end = 12.dp)
+                    modifier = Modifier.Companion.padding(end = 12.dp)
                 ) {
-                    top.yukonga.miuix.kmp.basic.Icon(
+                    Icon(
                         imageVector = if (passwordVisible) MiuixIcons.Basic.Check else MiuixIcons.Basic.ArrowRight,
                         contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
                     )
@@ -136,7 +148,7 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
         )
 
         // 测试连接按钮
-        top.yukonga.miuix.kmp.basic.Button(
+        Button(
             onClick = {
                 if (serverUrl.trim().isEmpty()) {
                     Toast.makeText(context, "请输入服务器地址", Toast.LENGTH_SHORT).show()
@@ -154,7 +166,7 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
                     try {
                         val webDav = WebDav(serverUrl, Authorization(username, password))
                         val success = webDav.check()
-                        
+
                         withContext(Dispatchers.Main) {
                             if (success) {
                                 Toast.makeText(context, "连接成功", Toast.LENGTH_SHORT).show()
@@ -165,20 +177,21 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "连接错误: ${e.message}", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "连接错误: ${e.message}", Toast.LENGTH_SHORT)
+                                .show()
                             isTesting = false
                         }
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.Companion.fillMaxWidth(),
             enabled = !isTesting
         ) {
-            top.yukonga.miuix.kmp.basic.Text(text = if (isTesting) "测试中..." else "测试连接")
+            Text(text = if (isTesting) "测试中..." else "测试连接")
         }
 
         // 浏览文件按钮
-        top.yukonga.miuix.kmp.basic.Button(
+        Button(
             onClick = {
                 if (serverUrl.trim().isEmpty()) {
                     Toast.makeText(context, "请输入服务器地址", Toast.LENGTH_SHORT).show()
@@ -200,10 +213,10 @@ fun WebDavConfigContent(onDismiss: () -> Unit, onConfigSaved: (serverUrl: String
                 onConfigSaved(webdavUrl, username, password)
                 onDismiss()
             },
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier.Companion.fillMaxWidth(),
             enabled = !isTesting
         ) {
-            top.yukonga.miuix.kmp.basic.Text(text = "保存配置")
+            Text(text = "保存配置")
         }
     }
 }
@@ -224,27 +237,27 @@ fun WebDavConfigDialog(
     if (showDialog) {
         // 获取统一的圆角半径
         val cornerRadius = getAppRoundedCorner()
-        
-        androidx.compose.ui.window.Dialog(
+
+        Dialog(
             onDismissRequest = onDismissRequest
         ) {
             Surface(
-                modifier = Modifier
+                modifier = Modifier.Companion
                     .fillMaxWidth()
                     .padding(16.dp)
                     .border(1.dp, MiuixTheme.colorScheme.outline, RoundedCornerShape(cornerRadius)),
                 color = MiuixTheme.colorScheme.surface,
-                shape = RoundedCornerShape(cornerRadius)
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius)
             ) {
                 Column(
-                    modifier = Modifier
+                    modifier = Modifier.Companion
                         .padding(16.dp)
                 ) {
                     // 标题
-                    top.yukonga.miuix.kmp.basic.Text(
+                    Text(
                         text = "WebDAV 配置",
                         fontSize = 20.sp,
-                        modifier = Modifier.padding(bottom = 16.dp)
+                        modifier = Modifier.Companion.padding(bottom = 16.dp)
                     )
 
                     // 配置内容
@@ -255,7 +268,7 @@ fun WebDavConfigDialog(
 
                     // 关闭按钮
                     Row(
-                        modifier = Modifier
+                        modifier = Modifier.Companion
                             .fillMaxWidth()
                             .padding(top = 16.dp),
                         horizontalArrangement = Arrangement.End

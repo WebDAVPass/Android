@@ -1,7 +1,7 @@
 package github.xzynine.two_fas.entities
 
-import github.xzynine.two_fas.utils.GSON
-import github.xzynine.two_fas.utils.fromJsonObject
+import github.xzynine.two_fas.util.GSON
+import github.xzynine.two_fas.util.fromJsonObject
 
 /**
  * 服务器

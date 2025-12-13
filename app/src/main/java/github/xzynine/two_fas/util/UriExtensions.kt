@@ -1,4 +1,4 @@
-package github.xzynine.two_fas.utils
+package github.xzynine.two_fas.util
 
 import android.net.Uri
 import okhttp3.MediaType

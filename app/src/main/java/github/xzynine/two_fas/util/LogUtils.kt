@@ -1,8 +1,5 @@
-@file:Suppress("unused")
+package github.xzynine.two_fas.util
 
-package github.xzynine.two_fas.utils
-
-import android.os.Build
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.logging.Level

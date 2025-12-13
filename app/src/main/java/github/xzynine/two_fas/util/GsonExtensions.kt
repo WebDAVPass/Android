@@ -1,4 +1,4 @@
-package github.xzynine.two_fas.utils
+package github.xzynine.two_fas.util
 
 import com.google.gson.Gson
 import com.google.gson.GsonBuilder
@@ -44,7 +44,7 @@ val GSONStrict: Gson by lazy {
 inline fun <reified T> genericType(): Type = object : TypeToken<T>() {}.type
 
 inline fun <reified T> Gson.fromJsonObject(json: String?): Result<T> {
-    return kotlin.runCatching {
+    return runCatching {
         if (json == null) {
             throw JsonSyntaxException("解析字符串为空")
         }
@@ -53,7 +53,7 @@ inline fun <reified T> Gson.fromJsonObject(json: String?): Result<T> {
 }
 
 inline fun <reified T> Gson.fromJsonArray(json: String?): Result<List<T>> {
-    return kotlin.runCatching {
+    return runCatching {
         if (json == null) {
             throw JsonSyntaxException("解析字符串为空")
         }
@@ -70,7 +70,7 @@ inline fun <reified T> Gson.fromJsonArray(json: String?): Result<List<T>> {
 }
 
 inline fun <reified T> Gson.fromJsonObject(inputStream: InputStream?): Result<T> {
-    return kotlin.runCatching {
+    return runCatching {
         if (inputStream == null) {
             throw JsonSyntaxException("解析流为空")
         }
@@ -80,7 +80,7 @@ inline fun <reified T> Gson.fromJsonObject(inputStream: InputStream?): Result<T>
 }
 
 inline fun <reified T> Gson.fromJsonArray(inputStream: InputStream?): Result<List<T>> {
-    return kotlin.runCatching {
+    return runCatching {
         if (inputStream == null) {
             throw JsonSyntaxException("解析流为空")
         }

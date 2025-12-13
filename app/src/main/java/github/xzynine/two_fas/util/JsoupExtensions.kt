@@ -1,4 +1,4 @@
-package github.xzynine.two_fas.utils
+package github.xzynine.two_fas.util
 
 import org.jsoup.internal.StringUtil
 import org.jsoup.nodes.CDataNode
@@ -8,7 +8,6 @@ import org.jsoup.nodes.TextNode
 import org.jsoup.select.Elements
 import org.jsoup.select.NodeTraversor
 import org.jsoup.select.NodeVisitor
-
 
 fun Element.textArray(): Array<String> {
     val sb = StringUtil.borrowBuilder()
@@ -76,4 +75,3 @@ private fun preserveWhitespace(node: Node?): Boolean {
 private fun lastCharIsWhitespace(sb: java.lang.StringBuilder): Boolean {
     return sb.isNotEmpty() && sb[sb.length - 1] == ' '
 }
-

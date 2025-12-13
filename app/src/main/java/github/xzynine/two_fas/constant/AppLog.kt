@@ -1,7 +1,7 @@
 package github.xzynine.two_fas.constant
 
 import android.util.Log
-import github.xzynine.two_fas.utils.LogUtils
+import github.xzynine.two_fas.util.LogUtils
 
 object AppLog {
 

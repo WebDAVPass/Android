@@ -1,19 +1,6 @@
-package github.xzynine.two_fas.utils
+package github.xzynine.two_fas.util
 
-import android.annotation.SuppressLint
-import android.net.ConnectivityManager
-import android.net.NetworkCapabilities
-import android.os.Build
-import cn.hutool.core.lang.Validator
-import github.xzynine.two_fas.constant.AppLog
-import okhttp3.internal.publicsuffix.PublicSuffixDatabase
-
-import java.net.InetAddress
-import java.net.NetworkInterface
-import java.net.SocketException
 import java.net.URL
-import java.util.BitSet
-import java.util.Enumeration
 
 @Suppress("unused", "MemberVisibilityCanBePrivate")
 object NetworkUtils {
@@ -23,9 +10,9 @@ object NetworkUtils {
      */
     fun getAbsoluteURL(baseURL: String?, relativePath: String): String {
         if (baseURL.isNullOrEmpty()) return relativePath.trim()
-        var absoluteUrl: java.net.URL? = null
+        var absoluteUrl: URL? = null
         try {
-            absoluteUrl = java.net.URL(baseURL.substringBefore(","))
+            absoluteUrl = URL(baseURL.substringBefore(","))
         } catch (e: Exception) {
             // 简化实现，移除对printOnDebug的依赖
         }
@@ -35,7 +22,7 @@ object NetworkUtils {
     /**
      * 获取绝对地址
      */
-    fun getAbsoluteURL(baseURL: java.net.URL?, relativePath: String): String {
+    fun getAbsoluteURL(baseURL: URL?, relativePath: String): String {
         val relativePathTrim = relativePath.trim()
         if (baseURL == null) return relativePathTrim
         if (relativePathTrim.startsWith("http://", true) || relativePathTrim.startsWith("https://", true)) return relativePathTrim
@@ -43,7 +30,7 @@ object NetworkUtils {
         if (relativePathTrim.startsWith("javascript")) return ""
         var relativeUrl = relativePathTrim
         try {
-            val parseUrl = java.net.URL(baseURL, relativePath)
+            val parseUrl = URL(baseURL, relativePath)
             relativeUrl = parseUrl.toString()
             return relativeUrl
         } catch (e: Exception) {

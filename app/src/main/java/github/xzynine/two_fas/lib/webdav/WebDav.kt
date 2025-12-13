@@ -5,9 +5,9 @@ import cn.hutool.core.net.URLDecoder
 import github.xzynine.two_fas.exception.NoStackTraceException
 import github.xzynine.two_fas.help.http.newCallResponse
 import github.xzynine.two_fas.help.http.text
-import github.xzynine.two_fas.utils.NetworkUtils
-import github.xzynine.two_fas.utils.findNS
-import github.xzynine.two_fas.utils.findNSPrefix
+import github.xzynine.two_fas.util.NetworkUtils
+import github.xzynine.two_fas.util.findNS
+import github.xzynine.two_fas.util.findNSPrefix
 import kotlinx.coroutines.Dispatchers.IO
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
