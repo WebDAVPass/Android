@@ -68,7 +68,7 @@ fun MainScreen() {
     )
     
     // 控制扫描界面的显示与隐藏
-    var showScanBottomSheet by remember { mutableStateOf(false) }
+    val showScanBottomSheet = remember { mutableStateOf(false) }
     
     // 基于Miuix Scaffold的主界面
     Scaffold(
@@ -87,7 +87,7 @@ fun MainScreen() {
             if (selectedIndex == 0) {
                 FloatingActionButton(
                     onClick = {
-                        showScanBottomSheet = true
+                        showScanBottomSheet.value = true
                     }
                 ) {
                     Icon(
@@ -150,9 +150,11 @@ fun MainScreen() {
     
     // 扫描二维码底部抽屉
     SuperBottomSheet(
-        show = remember { mutableStateOf(showScanBottomSheet) },
+        show = showScanBottomSheet,
         title = "扫描二维码",
-        onDismissRequest = { showScanBottomSheet = false },
+        onDismissRequest = {
+            showScanBottomSheet.value = false
+        },
         content = {
             // 扫描界面内容
             Box(
@@ -162,10 +164,10 @@ fun MainScreen() {
             ) {
                 ScanTokenScreen(
                     onTokenScanned = {
-                        showScanBottomSheet = false
+                        showScanBottomSheet.value = false
                     },
                     onDismiss = {
-                        showScanBottomSheet = false
+                        showScanBottomSheet.value = false
                     }
                 )
             }
