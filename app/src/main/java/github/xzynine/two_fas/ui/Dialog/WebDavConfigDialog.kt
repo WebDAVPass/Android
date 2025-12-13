@@ -55,8 +55,17 @@ fun WebDavConfigContent(
     existingConfig: WebDavConfig? = null
 ) {
     val context = LocalContext.current
+    // 处理现有配置的URL，移除自定义路径
+    val originalUrl = existingConfig?.url?.let {
+        if (it.endsWith("/2fas_xzy/") || it.endsWith("/2fas_xzy")) {
+            it.substringBeforeLast("/2fas_xzy")
+        } else {
+            it
+        }
+    } ?: "https://dav.jianguoyun.com/dav/"
+    
     // 设置默认服务器URL为坚果云WebDAV地址
-    var serverUrl by remember { mutableStateOf(existingConfig?.url ?: "https://dav.jianguoyun.com/dav/") }
+    var serverUrl by remember { mutableStateOf(originalUrl) }
     var username by remember { mutableStateOf(existingConfig?.username ?: "") }
     var password by remember { mutableStateOf("") }
     var isTesting by remember { mutableStateOf(false) }
@@ -133,14 +142,22 @@ fun WebDavConfigContent(
             label = if (isExistingConfig) "密码（留空则保持原密码）" else "密码",
             modifier = Modifier.Companion.fillMaxWidth(),
             singleLine = true,
-            // 除首次输入外，不允许查看密码原文
-            visualTransformation = PasswordVisualTransformation(),
+            // 支持切换密码可见性
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             leadingIcon = {
                 Icon(
                     imageVector = MiuixIcons.Useful.AddSecret,
                     contentDescription = "密码",
                     modifier = Modifier.Companion.padding(horizontal = 12.dp)
                 )
+            },
+            trailingIcon = {
+                IconButton(onClick = { passwordVisible = !passwordVisible }) {
+                    Icon(
+                        imageVector = if (passwordVisible) MiuixIcons.Basic.Check else MiuixIcons.Basic.ArrowRight,
+                        contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
+                    )
+                }
             }
         )
 
