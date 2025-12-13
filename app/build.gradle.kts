@@ -57,6 +57,14 @@ dependencies {
     implementation(libs.hutool.core) // Hutool工具库
     implementation("com.google.code.gson:gson:2.10.1") // Gson JSON解析库
     
+    // CameraX 核心库
+    implementation("androidx.camera:camera-core:1.3.3")
+    implementation("androidx.camera:camera-camera2:1.3.3")
+    implementation("androidx.camera:camera-lifecycle:1.3.3")
+    implementation("androidx.camera:camera-view:1.3.3")
+    // ZXing 二维码解析库
+    implementation("com.google.zxing:core:3.5.3")
+    
     // Compose 相关依赖
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)

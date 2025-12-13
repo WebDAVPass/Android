@@ -17,11 +17,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import github.xzynine.two_fas.theme.AppTheme
+import github.xzynine.two_fas.ui.ScanTokenScreen
 import github.xzynine.two_fas.ui.TokenListScreen
 import github.xzynine.two_fas.util.SampleData
 import github.xzynine.two_fas.viewmodel.TokenViewModel
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.*
+import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.icon.icons.useful.Settings
@@ -31,6 +32,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.icon.icons.useful.Scan
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -65,6 +67,9 @@ fun MainScreen() {
         NavigationItem("设置", MiuixIcons.Useful.Settings)
     )
     
+    // 控制扫描界面的显示与隐藏
+    var showScanBottomSheet by remember { mutableStateOf(false) }
+    
     // 基于Miuix Scaffold的主界面
     Scaffold(
         topBar = {
@@ -77,6 +82,22 @@ fun MainScreen() {
                 )
             }
         },
+        floatingActionButton = {
+            // 只有在首页时显示悬浮扫描按钮
+            if (selectedIndex == 0) {
+                FloatingActionButton(
+                    onClick = {
+                        showScanBottomSheet = true
+                    }
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Useful.Scan,
+                        contentDescription = "扫描二维码"
+                    )
+                }
+            }
+        },
+        floatingActionButtonPosition = FabPosition.End,
         content = { paddingValues ->
             // 主界面内容区域，根据选中的导航项显示不同内容
             Box(
@@ -124,6 +145,30 @@ fun MainScreen() {
             serverUrl = url
             username = user
             password = pwd
+        }
+    )
+    
+    // 扫描二维码底部抽屉
+    SuperBottomSheet(
+        show = remember { mutableStateOf(showScanBottomSheet) },
+        title = "扫描二维码",
+        onDismissRequest = { showScanBottomSheet = false },
+        content = {
+            // 扫描界面内容
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(500.dp) // 设置固定高度，避免全屏显示
+            ) {
+                ScanTokenScreen(
+                    onTokenScanned = {
+                        showScanBottomSheet = false
+                    },
+                    onDismiss = {
+                        showScanBottomSheet = false
+                    }
+                )
+            }
         }
     )
 }

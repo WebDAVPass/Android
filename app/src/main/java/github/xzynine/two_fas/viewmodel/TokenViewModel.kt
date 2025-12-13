@@ -119,6 +119,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     fun addToken(token: OtpToken) {
         viewModelScope.launch {
             database.otpTokenDao().insert(token)
+            // 重新加载令牌列表，以便新添加的令牌能够立即显示在界面上
+            loadTokens()
         }
     }
 
