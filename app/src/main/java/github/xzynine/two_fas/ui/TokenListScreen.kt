@@ -44,7 +44,7 @@ fun TokenListScreen() {
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         ) {
             items(tokens) { token ->
                 TokenItem(token = token, tokenViewModel = tokenViewModel)

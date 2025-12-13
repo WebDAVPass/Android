@@ -12,10 +12,13 @@ import top.yukonga.miuix.kmp.basic.NavigationItem
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import github.xzynine.two_fas.theme.AppTheme
 import github.xzynine.two_fas.ui.TokenListScreen
+import github.xzynine.two_fas.util.SampleData
+import github.xzynine.two_fas.viewmodel.TokenViewModel
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -23,6 +26,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.icon.icons.useful.Settings
 import top.yukonga.miuix.kmp.icon.icons.useful.Save
 import top.yukonga.miuix.kmp.icon.icons.useful.Move
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,6 +43,8 @@ class MainActivity : ComponentActivity() {
 
 @Composable
 fun MainScreen() {
+    val context = LocalContext.current
+    
     // 控制WebDAV配置弹窗的显示与隐藏
     var showWebDavDialog by remember { mutableStateOf(false) }
     
@@ -67,10 +75,12 @@ fun MainScreen() {
                 )
             }
         },
-        content = {
+        content = { paddingValues ->
             // 主界面内容区域，根据选中的导航项显示不同内容
             Box(
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues)
             ) {
                 when (selectedIndex) {
                     0 -> {
@@ -87,7 +97,8 @@ fun MainScreen() {
                     2 -> {
                         // 设置页面
                         SettingsScreen(
-                            onWebDavConfigClick = { showWebDavDialog = true }
+                            onWebDavConfigClick = { showWebDavDialog = true },
+                            onAddSampleDataClick = { addSampleData(context) }
                         )
                     }
                 }
@@ -113,4 +124,22 @@ fun MainScreen() {
             password = pwd
         }
     )
+}
+
+/**
+ * 添加示例数据到数据库
+ */
+private fun addSampleData(context: android.content.Context) {
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val tokenViewModel = TokenViewModel(context)
+            val sampleTokens = SampleData.generateSampleTokens()
+            
+            sampleTokens.forEach { token ->
+                tokenViewModel.addToken(token)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 }
