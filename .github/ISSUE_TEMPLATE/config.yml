@@ -1,0 +1,9 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 讨论区（Q&A / 讨论 / 建议）
+    # 用 {{ github.repository }} 替代固定仓库前缀，自动适配当前仓库
+    url: https://github.com/{{ github.repository }}/discussions
+    about: 非缺陷问题请转至 Discussions，避免占用 issue 列表。
+
+# 可选：按需定义模板排序或别名（当前仅一个模板，无需设置）
+# issue_template: bug-report.yml
