@@ -49,6 +49,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.extra.SuperDialog
+import github.xzynine.two_fas.ui.Dialog.TokenDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.useful.Edit
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -110,7 +111,7 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
         // 根据状态显示对应的弹窗
         when (dialogState) {
             DialogState.EDIT -> selectedToken?.let { token ->
-                    EditTokenDialog(
+                    TokenDialog(
                         token = token,
                         show = true,
                         onDismiss = {
@@ -149,96 +150,7 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
     }
 }
 
-/**
- * 编辑令牌对话框
- */
-@Composable
-fun EditTokenDialog(
-    token: OtpToken,
-    show: Boolean,
-    onDismiss: () -> Unit,
-    onDelete: () -> Unit,
-    onSave: (OtpToken) -> Unit
-) {
-    var issuer by remember { mutableStateOf(token.issuer ?: "") }
-    var label by remember { mutableStateOf(token.label) }
-    var secret by remember { mutableStateOf(token.secret) }
 
-    SuperDialog(
-        title = "编辑令牌",
-        summary = "修改令牌信息",
-        show = remember { mutableStateOf(show) },
-        onDismissRequest = onDismiss,
-        defaultWindowInsetsPadding = true, // 启用默认窗口插入内边距，正确处理输入法
-        insideMargin = DpSize(16.dp, 16.dp) // 设置内部边距
-    ) {
-        Column(
-            modifier = Modifier.Companion
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-        ) {
-            // 编辑区域
-            Column(
-                modifier = Modifier.Companion.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // 发行者输入框
-                TextField(
-                    value = issuer,
-                    onValueChange = { issuer = it },
-                    label = "发行者",
-                    modifier = Modifier.Companion.fillMaxWidth()
-                )
-
-                // 标签输入框
-                TextField(
-                    value = label,
-                    onValueChange = { label = it },
-                    label = "标签",
-                    modifier = Modifier.Companion.fillMaxWidth()
-                )
-
-                // 密钥输入框
-                TextField(
-                    value = secret,
-                    onValueChange = { secret = it },
-                    label = "密钥",
-                    modifier = Modifier.Companion.fillMaxWidth(),
-                    readOnly = true // 密钥通常不建议修改
-                )
-            }
-
-            Spacer(modifier = Modifier.Companion.height(24.dp))
-
-            // 操作按钮区域
-            Row(
-                modifier = Modifier.Companion.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // 删除按钮
-                TextButton(
-                    text = "删除",
-                    onClick = onDelete,
-                    colors = ButtonDefaults.textButtonColorsPrimary()
-                )
-
-                // 保存按钮
-                TextButton(
-                    text = "保存",
-                    onClick = {
-                        val updatedToken = token.copy(
-                            issuer = if (issuer.isBlank()) null else issuer,
-                            label = label,
-                            secret = secret
-                        )
-                        onSave(updatedToken)
-                    },
-                    colors = ButtonDefaults.textButtonColorsPrimary()
-                )
-            }
-        }
-    }
-}
 
 /**
  * 删除确认对话框

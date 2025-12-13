@@ -53,9 +53,9 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import github.xzynine.two_fas.ui.Dialog.TokenDialog
 import github.xzynine.two_fas.data.OtpTokenFactory
 import github.xzynine.two_fas.util.TokenQRCodeDecoder
 import github.xzynine.two_fas.viewmodel.TokenViewModel
@@ -338,68 +338,19 @@ fun ScanTokenScreen(
         }
             // 手动输入密钥弹窗
             if (showManualInput) {
-                SuperDialog(
-                    title = "手动输入密钥",
-                    show = remember { mutableStateOf(true) },
-                    onDismissRequest = { showManualInput = false }
+                TokenDialog(
+                    token = null,
+                    show = true,
+                    onDismiss = { showManualInput = false }
                 ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        TextField(
-                            value = manualInputText,
-                            onValueChange = { manualInputText = it },
-                            label = "密钥/密钥URI",
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(16.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Button(onClick = { showManualInput = false }) {
-                                Text(text = "取消")
-                            }
-                            Button(onClick = {
-                                val text = manualInputText.trim()
-                                if (text.isEmpty()) {
-                                    Toast.makeText(context, "请输入内容", Toast.LENGTH_SHORT).show()
-                                    return@Button
-                                }
-
-                                // 复用现有逻辑：URI 优先，否则尝试以 otpauth URI 包装密钥
-                                try {
-                                    val uri = try {
-                                        Uri.parse(text)
-                                    } catch (e: Exception) {
-                                        null
-                                    }
-
-                                    val finalUri = if (uri != null && uri.scheme != null) {
-                                        uri
-                                    } else {
-                                        // 简单兜底：将纯密钥包装为 otpauth URI，明确默认参数
-                                        // 默认：TOTP、SHA1、30s、6位
-                                        Uri.parse("otpauth://totp/Manual?secret=${text}&algorithm=SHA1&digits=6&period=30")
-                                    }
-
-                                    val token = OtpTokenFactory.createFromUri(finalUri)
-                                    coroutineScope.launch(Dispatchers.Main) {
-                                        val added = tokenViewModel.addToken(token)
-                                        if (added) {
-                                            Toast.makeText(context, "令牌添加成功", Toast.LENGTH_SHORT).show()
-                                            showManualInput = false
-                                            onTokenScanned()
-                                        } else {
-                                            Toast.makeText(context, "该令牌已存在", Toast.LENGTH_SHORT).show()
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e("ManualInput", "Error: ${e.message}", e)
-                                    Toast.makeText(context, "输入内容无效", Toast.LENGTH_SHORT).show()
-                                }
-                            }) {
-                                Text(text = "添加")
-                            }
+                    coroutineScope.launch(Dispatchers.Main) {
+                        val added = tokenViewModel.addToken(it)
+                        if (added) {
+                            Toast.makeText(context, "令牌添加成功", Toast.LENGTH_SHORT).show()
+                            showManualInput = false
+                            onTokenScanned()
+                        } else {
+                            Toast.makeText(context, "该令牌已存在", Toast.LENGTH_SHORT).show()
                         }
                     }
                 }
