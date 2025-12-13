@@ -10,6 +10,9 @@ import github.xzynine.two_fas.data.AppDatabase
 import github.xzynine.two_fas.data.OtpToken
 import github.xzynine.two_fas.data.TokenCode
 import github.xzynine.two_fas.data.WebDavConfig
+import github.xzynine.two_fas.lib.webdav.WebDav
+import github.xzynine.two_fas.lib.webdav.Authorization
+import github.xzynine.two_fas.util.BackupUtil
 import github.xzynine.two_fas.util.TokenCodeUtil
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,11 +73,25 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     // WebDAV配置相关
     private val _webDavConfigs = MutableStateFlow<List<WebDavConfig>>(emptyList())
     val webDavConfigs: StateFlow<List<WebDavConfig>> = _webDavConfigs.asStateFlow()
-
+    
+    // 备份相关状态
+    private val _isBackupInProgress = MutableStateFlow(false)
+    val isBackupInProgress: StateFlow<Boolean> = _isBackupInProgress.asStateFlow()
+    
+    private val _isRestoreInProgress = MutableStateFlow(false)
+    val isRestoreInProgress: StateFlow<Boolean> = _isRestoreInProgress.asStateFlow()
+    
+    private val _backupStatus = MutableStateFlow("")
+    val backupStatus: StateFlow<String> = _backupStatus.asStateFlow()
+    
+    private val _customEncryptionPassword = MutableStateFlow<String?>(null)
+    val customEncryptionPassword: StateFlow<String?> = _customEncryptionPassword.asStateFlow()
+    
     init {
         loadTokens()
         loadWebDavConfigs()
         startTokenRefreshTimer()
+        autoRestoreTokens()
     }
 
     /**
@@ -234,6 +251,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         database.otpTokenDao().insert(token)
         // 刷新令牌列表，确保立即更新UI
         refreshTokenList()
+        
+        // 自动备份
+        backupTokens()
+        
         return true
     }
 
@@ -246,6 +267,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             _tokenCodes.remove(tokenId)
             // 刷新令牌列表，确保立即更新UI
             refreshTokenList()
+            
+            // 自动备份
+            backupTokens()
         }
     }
 
@@ -259,6 +283,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             _tokenCodes[token.id]?.value = tokenCodeUtil.generateTokenCode(token)
             // 刷新令牌列表，确保立即更新UI
             refreshTokenList()
+            
+            // 自动备份
+            backupTokens()
         }
     }
 
@@ -333,5 +360,133 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun getFirstWebDavConfig(): WebDavConfig? {
         val configs = database.webDavConfigDao().getAllOnce()
         return configs.firstOrNull()
+    }
+    
+    /**
+     * 获取设备ID
+     */
+    private fun getDeviceId(): String {
+        // 使用应用上下文的设备ID，或者生成一个唯一ID并存储
+        return android.provider.Settings.Secure.getString(
+            context.contentResolver,
+            android.provider.Settings.Secure.ANDROID_ID
+        ) ?: "unknown_device"
+    }
+    
+    /**
+     * 获取加密密码
+     */
+    private suspend fun getEncryptionPassword(): String {
+        return _customEncryptionPassword.value ?: getFirstWebDavConfig()?.password ?: ""
+    }
+    
+    /**
+     * 设置自定义加密密码
+     */
+    fun setCustomEncryptionPassword(password: String?) {
+        _customEncryptionPassword.value = password
+    }
+    
+    /**
+     * 自动恢复令牌
+     */
+    private fun autoRestoreTokens() {
+        viewModelScope.launch {
+            try {
+                _isRestoreInProgress.value = true
+                _backupStatus.value = "正在尝试自动恢复..."
+                
+                val webDavConfig = getFirstWebDavConfig() ?: return@launch
+                val password = webDavConfig.password
+                
+                val restoreResult = restoreTokensWithPassword(webDavConfig, password)
+                if (restoreResult) {
+                    _backupStatus.value = "自动恢复成功"
+                } else {
+                    _backupStatus.value = "自动恢复失败，需要手动输入密码"
+                }
+            } catch (e: Exception) {
+                _backupStatus.value = "自动恢复失败：${e.message}"
+            } finally {
+                _isRestoreInProgress.value = false
+            }
+        }
+    }
+    
+    /**
+     * 手动恢复令牌
+     * @param password 恢复密码
+     */
+    fun manualRestoreTokens(password: String) {
+        viewModelScope.launch {
+            try {
+                _isRestoreInProgress.value = true
+                _backupStatus.value = "正在手动恢复..."
+                
+                val webDavConfig = getFirstWebDavConfig() ?: throw Exception("未配置WebDAV")
+                
+                val restoreResult = restoreTokensWithPassword(webDavConfig, password)
+                if (restoreResult) {
+                    _backupStatus.value = "手动恢复成功"
+                } else {
+                    _backupStatus.value = "手动恢复失败：密码错误"
+                }
+            } catch (e: Exception) {
+                _backupStatus.value = "手动恢复失败：${e.message}"
+            } finally {
+                _isRestoreInProgress.value = false
+            }
+        }
+    }
+    
+    /**
+     * 使用指定密码恢复令牌
+     * @param webDavConfig WebDAV配置
+     * @param password 恢复密码
+     * @return 是否恢复成功
+     */
+    private suspend fun restoreTokensWithPassword(webDavConfig: WebDavConfig, password: String): Boolean {
+        return try {
+            val webDav = WebDav(webDavConfig.url, Authorization(webDavConfig.username, webDavConfig.password))
+            val deviceId = getDeviceId()
+            
+            val restoredTokens = BackupUtil.restoreTokens(webDav, password, deviceId)
+            if (restoredTokens.isNotEmpty()) {
+                // 插入或更新恢复的令牌
+                database.otpTokenDao().insertAll(restoredTokens)
+                refreshTokenList()
+                true
+            } else {
+                false
+            }
+        } catch (e: Exception) {
+            false
+        }
+    }
+    
+    /**
+     * 备份令牌
+     */
+    fun backupTokens() {
+        viewModelScope.launch {
+            try {
+                _isBackupInProgress.value = true
+                _backupStatus.value = "正在备份..."
+                
+                val webDavConfig = getFirstWebDavConfig() ?: throw Exception("未配置WebDAV")
+                val encryptionPassword = getEncryptionPassword()
+                
+                val tokens = database.otpTokenDao().getAllOnce()
+                val webDav = WebDav(webDavConfig.url, Authorization(webDavConfig.username, webDavConfig.password))
+                val deviceId = getDeviceId()
+                
+                BackupUtil.backupTokens(webDav, tokens, encryptionPassword, deviceId, context)
+                _backupStatus.value = "备份成功"
+            } catch (e: Exception) {
+                _backupStatus.value = "备份失败：${e.message}"
+            } finally {
+                _isBackupInProgress.value = false
+            }
+        }
     }
 }

@@ -37,6 +37,13 @@ interface OtpTokenDao {
     @Query("select count(*) from otp_tokens where secret = :secret and algorithm = :algorithm and digits = :digits and period = :period")
     suspend fun countBySecretAlgorithmDigitsPeriod(secret: String, algorithm: String, digits: Int, period: Int): Int
 
+    /**
+     * 根据唯一标识查询令牌
+     * 唯一标识由secret、algorithm、digits和period生成
+     */
+    @Query("select * from otp_tokens where secret = :secret and algorithm = :algorithm and digits = :digits and period = :period limit 1")
+    suspend fun getByUniqueIdentifier(secret: String, algorithm: String, digits: Int, period: Int): OtpToken?
+
     @Query("delete from otp_tokens where id = :id")
     suspend fun deleteById(id: Long): Void
 

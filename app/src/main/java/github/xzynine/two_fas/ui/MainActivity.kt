@@ -135,6 +135,7 @@ fun MainScreen() {
                     2 -> {
                         // 设置页面
                         SettingsScreen(
+                            viewModel = tokenViewModel,
                             onWebDavConfigClick = { showWebDavDialog = true },
                             onAddSampleDataClick = { addSampleData(context) }
                         )
