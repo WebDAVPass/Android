@@ -1,5 +1,6 @@
 package github.xzynine.two_fas
 
+import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -14,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.dp
 import github.xzynine.two_fas.theme.AppTheme
+import github.xzynine.two_fas.ui.TokenListScreen
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -23,7 +25,7 @@ import top.yukonga.miuix.kmp.icon.icons.useful.Save
 import top.yukonga.miuix.kmp.icon.icons.useful.Move
 
 class MainActivity : ComponentActivity() {
-    override fun onCreate(savedInstanceState: android.os.Bundle?) {
+    override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         this.setContent {
             AppTheme {
@@ -72,19 +74,7 @@ fun MainScreen() {
             ) {
                 when (selectedIndex) {
                     0 -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(it)
-                                .padding(top = 16.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "2FA 管理器主界面",
-                                fontSize = 18.sp,
-                                color = MiuixTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
+                        TokenListScreen()
                     }
                     1 -> {
                         // 文件浏览器页面
