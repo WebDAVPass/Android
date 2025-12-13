@@ -1,4 +1,4 @@
-package github.xzynine.two_fas.viewmodel
+package github.xzynine.two_fas.ui.ViewModel
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -6,24 +6,26 @@ import androidx.lifecycle.viewModelScope
 import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
-import github.xzynine.two_fas.data.OtpToken
 import github.xzynine.two_fas.data.AppDatabase
+import github.xzynine.two_fas.data.OtpToken
 import github.xzynine.two_fas.data.TokenCode
 import github.xzynine.two_fas.data.WebDavConfig
 import github.xzynine.two_fas.util.TokenCodeUtil
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 /**
  * 令牌视图模型
  */
 class TokenViewModel(private val context: Context) : ViewModel() {
-    
+
     companion object {
         @Volatile
         private var INSTANCE: AppDatabase? = null
-        
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val MIGRATION_1_2 = object : Migration(1, 2) {
@@ -52,9 +54,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             }
         }
     }
-    
+
     private val database: AppDatabase = getDatabase(context)
-    
+
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
 
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())
@@ -102,7 +104,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             refreshTokenList()
         }
     }
-    
+
     /**
      * 刷新令牌列表，确保立即更新UI
      * 在当前协程中同步执行
@@ -112,10 +114,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         try {
             // 只获取一次初始数据
             var tokenList = database.otpTokenDao().getAllOnce()
-            
+
             // 检查并处理重复数据
             tokenList = processDuplicateTokens(tokenList)
-            
+
             _tokens.value = tokenList
             // 为每个令牌创建代码流
             tokenList.forEach { token ->
@@ -130,7 +132,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             _isLoading.value = false
         }
     }
-    
+
     /**
      * 处理重复令牌，删除重复项，保留最新的（id最大的）
      * 重复判断基于：secret + algorithm + digits + period
@@ -138,7 +140,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private fun processDuplicateTokens(tokens: List<OtpToken>): List<OtpToken> {
         // 使用密钥+算法+位数+周期作为键，值为令牌列表
         val tokenMap = mutableMapOf<String, MutableList<OtpToken>>()
-        
+
         // 将令牌分组
         tokens.forEach { token ->
             // 创建分组键：密钥+算法+位数+周期
@@ -148,16 +150,16 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             }
             tokenMap[key]?.add(token)
         }
-        
+
         val uniqueTokens = mutableListOf<OtpToken>()
-        
+
         // 处理每个分组
         tokenMap.forEach { (_, tokenList) ->
             if (tokenList.size > 1) {
                 // 有重复，保留id最大的（最新的）
                 val uniqueToken = tokenList.maxByOrNull { it.id }!!
                 uniqueTokens.add(uniqueToken)
-                
+
                 // 删除重复项（id不是最大的）
                 viewModelScope.launch {
                     val tokensToDelete = tokenList.filter { it.id != uniqueToken.id }
@@ -170,7 +172,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 uniqueTokens.add(tokenList[0])
             }
         }
-        
+
         return uniqueTokens
     }
 
@@ -203,7 +205,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         _tokens.value.forEach { token ->
             val currentCode = _tokenCodes[token.id]?.value
             val newCode = tokenCodeUtil.generateTokenCode(token)
-            
+
             // 只有当代码发生变化时才更新
             if (currentCode?.code != newCode.code) {
                 _tokenCodes[token.id]?.value = newCode
@@ -227,7 +229,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             // 密钥+算法+位数+周期已存在，不允许添加
             return false
         }
-        
+
         // 密钥+算法+位数+周期不存在，可以添加
         database.otpTokenDao().insert(token)
         // 刷新令牌列表，确保立即更新UI
@@ -278,7 +280,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         // 设置排序号
         val lastSortNumber = database.webDavConfigDao().getLastSortNumber()
         config.sortNumber = (lastSortNumber ?: 0) + 1
-        
+
         val id = database.webDavConfigDao().insert(config)
         refreshWebDavConfigList()
         return id

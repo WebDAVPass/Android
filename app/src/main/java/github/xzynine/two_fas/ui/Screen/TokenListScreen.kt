@@ -36,7 +36,7 @@ import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import github.xzynine.two_fas.data.OtpToken
-import github.xzynine.two_fas.viewmodel.TokenViewModel
+import github.xzynine.two_fas.ui.ViewModel.TokenViewModel
 import kotlinx.coroutines.delay
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card

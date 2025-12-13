@@ -25,7 +25,7 @@ import github.xzynine.two_fas.theme.AppTheme
 import github.xzynine.two_fas.ui.Screen.ScanTokenScreen
 import github.xzynine.two_fas.ui.Screen.TokenListScreen
 import github.xzynine.two_fas.util.SampleData
-import github.xzynine.two_fas.viewmodel.TokenViewModel
+import github.xzynine.two_fas.ui.ViewModel.TokenViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

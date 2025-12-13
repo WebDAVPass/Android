@@ -59,7 +59,7 @@ import github.xzynine.two_fas.ui.Dialog.ConfirmationDialog
 import github.xzynine.two_fas.ui.Dialog.TokenDialog
 import github.xzynine.two_fas.data.OtpTokenFactory
 import github.xzynine.two_fas.util.TokenQRCodeDecoder
-import github.xzynine.two_fas.viewmodel.TokenViewModel
+import github.xzynine.two_fas.ui.ViewModel.TokenViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
