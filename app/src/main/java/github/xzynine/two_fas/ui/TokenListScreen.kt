@@ -24,6 +24,7 @@ import github.xzynine.two_fas.viewmodel.TokenViewModel
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
@@ -309,35 +310,81 @@ fun TokenItem(token: OtpToken, tokenViewModel: TokenViewModel, onLongClick: () -
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column {
-            Text(
-                text = token.issuer ?: token.label,
-                fontSize = 16.sp
+        // 左侧：图标、发行者、标签和6位码区域
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            // 图标（暂时使用编辑图标占位）
+            Icon(
+                imageVector = MiuixIcons.Useful.Edit,
+                contentDescription = "令牌图标",
+                tint = MiuixTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
             )
-            if (token.issuer != null) {
+            
+            Column(
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                // 发行者（如果有）
+                if (token.issuer != null) {
+                    Text(
+                        text = token.issuer,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onSurface
+                    )
+                }
+                
+                // 标签
                 Text(
                     text = token.label,
                     fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.outline
+                    color = MiuixTheme.colorScheme.outline,
+                    fontWeight = FontWeight.Normal
                 )
+                
+                // 6位码
+                tokenCode?.let { code ->
+                    val remainingTime = maxOf(0, (code.end - currentTime) / 1000)
+                    Text(
+                        text = code.code,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
+                    )
+                }
             }
         }
         
+        // 右侧：倒计时区域（包裹在环形进度条中）
         tokenCode?.let { code ->
-            Column(
-                horizontalAlignment = Alignment.End
+            val remainingTime = maxOf(0, (code.end - currentTime) / 1000)
+            val progress = remainingTime.toFloat() / 30f // 30秒总时间
+            
+            Box(
+                modifier = Modifier.size(56.dp),
+                contentAlignment = Alignment.Center // 容器级别设置居中对齐
             ) {
-                Text(
-                    text = code.code,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.Bold
+                // 环形进度条 - 向右下角偏移使其右下角与文本中心对齐
+                CircularProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier
+                        .size(56.dp)
+                        .offset(x = 14.dp, y = 14.dp), // 向右下角偏移自身尺寸的四分之一
+                    strokeWidth = 4.dp,
+                    colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                        foregroundColor = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
+                        backgroundColor = MiuixTheme.colorScheme.outline.copy(alpha = 0.1f)
+                    )
                 )
-                // 显示剩余时间，使用实时更新的时间状态
-                val remainingTime = maxOf(0, (code.end - currentTime) / 1000)
+                
+                // 倒计时文本 - 继承Box的居中对齐
                 Text(
                     text = "${remainingTime}s",
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.outline
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
                 )
             }
         }
