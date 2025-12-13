@@ -7,7 +7,7 @@ import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import github.xzynine.two_fas.data.OtpToken
-import github.xzynine.two_fas.data.OtpTokenDatabase
+import github.xzynine.two_fas.data.AppDatabase
 import github.xzynine.two_fas.data.TokenCode
 import github.xzynine.two_fas.data.WebDavConfig
 import github.xzynine.two_fas.util.TokenCodeUtil
@@ -22,14 +22,14 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     
     companion object {
         @Volatile
-        private var INSTANCE: OtpTokenDatabase? = null
+        private var INSTANCE: AppDatabase? = null
         
-        fun getDatabase(context: Context): OtpTokenDatabase {
+        fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val MIGRATION_1_2 = object : Migration(1, 2) {
-                    override fun migrate(database: SupportSQLiteDatabase) {
+                    override fun migrate(db: SupportSQLiteDatabase) {
                         // 创建 webdav_configs 表以兼容从 v1 升级到 v2
-                        database.execSQL("""
+                        db.execSQL("""
                             CREATE TABLE IF NOT EXISTS `webdav_configs` (
                                 `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
                                 `name` TEXT NOT NULL,
@@ -44,7 +44,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
-                    OtpTokenDatabase::class.java,
+                    AppDatabase::class.java,
                     "otp_token_database"
                 ).addMigrations(MIGRATION_1_2).build()
                 INSTANCE = instance
@@ -53,7 +53,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         }
     }
     
-    private val database: OtpTokenDatabase = getDatabase(context)
+    private val database: AppDatabase = getDatabase(context)
     
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
 

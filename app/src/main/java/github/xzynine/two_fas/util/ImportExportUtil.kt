@@ -4,7 +4,7 @@ import android.content.Context
 import android.net.Uri
 import com.google.gson.Gson
 import github.xzynine.two_fas.data.OtpToken
-import github.xzynine.two_fas.data.OtpTokenDatabase
+import github.xzynine.two_fas.data.AppDatabase
 import github.xzynine.two_fas.data.legacy.SavedTokens
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -20,7 +20,7 @@ class ImportExportUtil(
     private val context: Context,
     private val migrationUtil: MigrationUtil,
     private val gson: Gson,
-    private val otpTokenDatabase: OtpTokenDatabase
+    private val appDatabase: AppDatabase
 ) {
     
     /**
@@ -34,7 +34,7 @@ class ImportExportUtil(
             } .let {
                 val savedTokens = gson.fromJson(it, SavedTokens::class.java)
                 val newTokens = migrationUtil.convertLegacySavedTokensToOtpTokens(savedTokens)
-                otpTokenDatabase.otpTokenDao().insertAll(newTokens)
+                appDatabase.otpTokenDao().insertAll(newTokens)
             }
         }
     }
@@ -45,7 +45,7 @@ class ImportExportUtil(
     suspend fun exportJsonFile(uri: Uri) {
         withContext(Dispatchers.IO) {
             context.contentResolver.openOutputStream(uri, "w").use { outputStream ->
-                val otpTokens = otpTokenDatabase.otpTokenDao().getAll().first()
+                val otpTokens = appDatabase.otpTokenDao().getAll().first()
 
                 val legacyTokens = migrationUtil.convertOtpTokensToLegacyTokens(otpTokens)
                 val tokenOrder = otpTokens.map {
@@ -68,7 +68,7 @@ class ImportExportUtil(
      */
     suspend fun importKeyUriFile(fileUri: Uri) {
         withContext(Dispatchers.IO) {
-            val currentLastOrdinal = otpTokenDatabase.otpTokenDao().getLastOrdinal() ?: 0
+            val currentLastOrdinal = appDatabase.otpTokenDao().getLastOrdinal() ?: 0
 
             context.contentResolver.openInputStream(fileUri)?.reader()?.use { reader ->
                 reader.readLines().filter {
@@ -78,7 +78,7 @@ class ImportExportUtil(
                     createBasicTokenFromUri(line.trim(), currentLastOrdinal + index + 1)
                 }
             } ?.let { tokens ->
-                otpTokenDatabase.otpTokenDao().insertAll(tokens)
+                appDatabase.otpTokenDao().insertAll(tokens)
             }
         }
     }
@@ -90,7 +90,7 @@ class ImportExportUtil(
         withContext(Dispatchers.IO) {
             context.contentResolver.openOutputStream(fileUri, "w")?.use { outputStream ->
                 PrintWriter(outputStream).use { printWriter ->
-                    val tokens = otpTokenDatabase.otpTokenDao().getAll().first()
+                    val tokens = appDatabase.otpTokenDao().getAll().first()
                     for (token in tokens) {
                         printWriter.println(toUri(token).toString())
                     }
