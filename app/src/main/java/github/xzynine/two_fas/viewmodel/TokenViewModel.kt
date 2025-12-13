@@ -129,6 +129,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             database.otpTokenDao().deleteById(tokenId)
             _tokenCodes.remove(tokenId)
+            // 重新加载令牌列表
+            loadTokens()
         }
     }
 
@@ -140,6 +142,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             database.otpTokenDao().update(token)
             // 刷新代码
             _tokenCodes[token.id]?.value = tokenCodeUtil.generateTokenCode(token)
+            // 重新加载令牌列表
+            loadTokens()
         }
     }
 
