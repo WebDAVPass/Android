@@ -54,6 +54,10 @@ import github.xzynine.two_fas.ui.Dialog.ConfirmationDialog
 import github.xzynine.two_fas.ui.Dialog.TokenDialog
 import org.liberty.android.freeotp.token_images.TokenImage
 import org.liberty.android.freeotp.token_images.matchToken
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.viewinterop.AndroidView
+import android.widget.ImageView
+import com.amulyakhare.textdrawable.TextDrawable
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
@@ -224,21 +228,18 @@ fun TokenItem(token: OtpToken, tokenViewModel: TokenViewModel, onLongClick: () -
                         modifier = Modifier.Companion.size(32.dp)
                     )
                 } else {
-                    // 简单首字母占位，后续可升级为 text-drawable 渲染
-                    Card(
+                    // 使用 text-drawable 生成圆形首字母图标占位
+                    val letter = (token.issuer ?: token.label).firstOrNull()?.uppercase() ?: "?"
+                    val colorInt = MiuixTheme.colorScheme.primary.toArgb()
+                    AndroidView(
                         modifier = Modifier.Companion.size(32.dp),
-                        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.primary.copy(alpha = 0.12f))
-                    ) {
-                        Box(contentAlignment = Alignment.Companion.Center) {
-                            Text(
-                                text = (token.issuer ?: token.label).firstOrNull()?.uppercase() ?: "?",
-                                fontSize = 14.sp,
-                                color = MiuixTheme.colorScheme.primary,
-                                fontWeight = FontWeight.Companion.Bold,
-                                modifier = Modifier.Companion.align(Alignment.Companion.Center)
-                            )
+                        factory = { context ->
+                            ImageView(context).apply {
+                                val drawable = TextDrawable.builder().buildRound(letter, colorInt)
+                                setImageDrawable(drawable)
+                            }
                         }
-                    }
+                    )
                 }
 
                 Column(
