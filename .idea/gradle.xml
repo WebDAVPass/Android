@@ -13,6 +13,7 @@
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/text-drawable" />
             <option value="$PROJECT_DIR$/token-images" />
+            <option value="$PROJECT_DIR$/webdav" />
           </set>
         </option>
       </GradleProjectSettings>
