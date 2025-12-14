@@ -266,15 +266,19 @@ enum class TokenImage(val resource: Int,
     Zoom(R.drawable.token_image_zoom);
 }
 
-fun TokenImage.matchToken(issuer: String?, label: String?): Boolean {
-    val issuerToMatch = this.issuer ?: this.name
+private fun normalize(text: String): String {
+    // 统一大小写并去除非字母数字字符（空格、下划线、连字符等）
+    return text.lowercase(Locale.getDefault()).filter { it.isLetterOrDigit() }
+}
 
-    val issuerMatched = issuer?.lowercase(Locale.getDefault())
-            ?.contains(issuerToMatch.lowercase(Locale.getDefault())) ?: false
+fun TokenImage.matchToken(issuer: String?, label: String?): Boolean {
+    val targetRaw = this.issuer ?: this.name
+    val target = normalize(targetRaw)
+
+    val issuerMatched = issuer?.let { normalize(it).contains(target) } ?: false
 
     return if (!issuerMatched && this.alsoMatchLabel) {
-        label?.lowercase(Locale.getDefault())
-                ?.contains(issuerToMatch.lowercase(Locale.getDefault())) ?: false
+        label?.let { normalize(it).contains(target) } ?: false
     } else {
         issuerMatched
     }
