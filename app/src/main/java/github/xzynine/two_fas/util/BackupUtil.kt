@@ -492,33 +492,43 @@ object BackupUtil {
                 val uniqueId = entry.key
                 val tokenMetadata = entry.value
                 
-                // 下载并解密核心文件
-                val coreToken = downloadCoreFile(webDav, uniqueId, password)
-                
-                // 验证内容哈希
-                val tokenPath = buildPath(webDav.path, BackupConstants.TOKEN_DIR, "$uniqueId.token")
-                val tokenWebDav = WebDav(tokenPath, webDav.authorization)
-                val encryptedData = tokenWebDav.download()
-                val actualHash = calculateContentHash(encryptedData)
-                
-                if (actualHash != tokenMetadata.contentHash) {
-                    throw Exception("哈希不匹配，恢复失败")
+                try {
+                    // 下载并解密核心文件
+                    val coreToken = downloadCoreFile(webDav, uniqueId, password)
+                    
+                    // 验证内容哈希
+                    val tokenPath = buildPath(webDav.path, BackupConstants.TOKEN_DIR, "$uniqueId.token")
+                    val tokenWebDav = WebDav(tokenPath, webDav.authorization)
+                    val encryptedData = tokenWebDav.download()
+                    val actualHash = calculateContentHash(encryptedData)
+                    
+                    if (actualHash != tokenMetadata.contentHash) {
+                        throw Exception("哈希不匹配，恢复失败")
+                    }
+                    
+                    // 下载图标文件（如果有）
+                    // 暂时不处理图标文件，因为需要上下文
+                    var localImagePath: String? = null
+                    
+                    // 创建OtpToken对象
+                    val otpToken = coreToken.toOtpToken(tokenMetadata)
+                    restoredTokens.add(otpToken)
+                } catch (e: Exception) {
+                    // 如果单个令牌恢复失败，跳过并继续处理其他令牌
+                    e.printStackTrace()
+                } finally {
+                    // 更新进度
+                    val progress = 20 + (index + 1) * 70 / tokenCount
+                    onProgress?.invoke(progress)
                 }
-                
-                // 下载图标文件（如果有）
-                // 暂时不处理图标文件，因为需要上下文
-                var localImagePath: String? = null
-                
-                // 创建OtpToken对象
-                val otpToken = coreToken.toOtpToken(tokenMetadata)
-                restoredTokens.add(otpToken)
-                
-                // 更新进度
-                val progress = 20 + (index + 1) * 70 / tokenCount
-                onProgress?.invoke(progress)
             }
             
             onProgress?.invoke(100)
+            
+            // 如果没有恢复任何令牌，抛出异常
+            if (restoredTokens.isEmpty()) {
+                throw Exception("没有恢复到任何令牌，可能是密码错误或所有令牌恢复失败")
+            }
             
             return@withContext restoredTokens
         }

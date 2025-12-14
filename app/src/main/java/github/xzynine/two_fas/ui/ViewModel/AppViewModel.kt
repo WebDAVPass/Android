@@ -522,9 +522,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     
     /**
      * 手动恢复令牌
-     * @param password 恢复密码
      */
-    fun manualRestoreTokens(password: String) {
+    fun manualRestoreTokens() {
         viewModelScope.launch {
             try {
                 _isRestoreInProgress.value = true
@@ -532,6 +531,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 _backupStatus.value = "正在手动恢复..."
                 
                 val webDavConfig = getFirstWebDavConfig() ?: throw Exception("未配置WebDAV")
+                val password = webDavConfig.password
                 
                 val restoreResult = restoreTokensWithPassword(webDavConfig, password)
                 when (restoreResult) {

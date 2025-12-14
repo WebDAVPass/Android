@@ -137,7 +137,6 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.Companion.height(8.dp))
 
             // 手动恢复按钮
-            val showRestorePasswordDialog = remember { mutableStateOf(false) }
             BasicComponent(
                 title = if (isRestoreInProgress.value) "恢复中..." else "手动恢复",
                 summary = if (isRestoreInProgress.value) "正在从WebDAV服务器恢复... ${restoreProgress.value}%" else "点击开始手动恢复",
@@ -156,7 +155,7 @@ fun SettingsScreen(
                 },
                 onClick = {
                     if (!isRestoreInProgress.value) {
-                        showRestorePasswordDialog.value = true
+                        viewModel.manualRestoreTokens()
                     }
                 },
                 modifier = Modifier.Companion
@@ -186,18 +185,6 @@ fun SettingsScreen(
                         Color.Companion.LightGray,
                         androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius)
                     )
-            )
-
-            // 恢复密码对话框
-            PasswordDialog(
-                title = "手动恢复",
-                summary = "请输入备份加密密码（WebDAV密码）",
-                show = showRestorePasswordDialog.value,
-                onDismiss = { showRestorePasswordDialog.value = false },
-                onConfirm = {
-                    viewModel.manualRestoreTokens(it)
-                    showRestorePasswordDialog.value = false
-                }
             )
         }
     }
