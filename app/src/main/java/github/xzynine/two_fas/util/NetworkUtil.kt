@@ -3,7 +3,7 @@ package github.xzynine.two_fas.util
 import java.net.URL
 
 @Suppress("unused", "MemberVisibilityCanBePrivate")
-object NetworkUtils {
+object NetworkUtil {
 
     /**
      * 获取绝对地址
