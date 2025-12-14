@@ -3,9 +3,14 @@ package github.xzynine.webdav
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
 
+private fun Element.childrenByTagName(tagName: String): List<Element> {
+    // 使用 getElementsByTag 确保包含冒号的标签名不会触发 CSS 解析错误
+    return getElementsByTag(tagName)
+}
+
 internal fun Document.findNS(tag: String, nsPrefix: String?): List<Element> {
-    val selector = if (nsPrefix.isNullOrBlank()) tag else "$nsPrefix:$tag"
-    return select(selector)
+    val tagName = if (nsPrefix.isNullOrBlank()) tag else "$nsPrefix:$tag"
+    return childrenByTagName(tagName)
 }
 
 internal fun Document.findNSPrefix(nsUri: String): String? {
@@ -17,6 +22,6 @@ internal fun Document.findNSPrefix(nsUri: String): String? {
 }
 
 internal fun Element.findNS(tag: String, nsPrefix: String?): List<Element> {
-    val selector = if (nsPrefix.isNullOrBlank()) tag else "$nsPrefix:$tag"
-    return select(selector)
+    val tagName = if (nsPrefix.isNullOrBlank()) tag else "$nsPrefix:$tag"
+    return childrenByTagName(tagName)
 }

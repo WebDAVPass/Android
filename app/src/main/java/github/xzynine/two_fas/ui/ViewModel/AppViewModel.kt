@@ -11,8 +11,8 @@ import github.xzynine.two_fas.data.OtpToken
 import github.xzynine.two_fas.data.SyncState
 import github.xzynine.two_fas.data.TokenCode
 import github.xzynine.two_fas.data.WebDavConfig
-import github.xzynine.two_fas.lib.webdav.WebDav
-import github.xzynine.two_fas.lib.webdav.Authorization
+import github.xzynine.webdav.WebDav
+import github.xzynine.webdav.Authorization
 import github.xzynine.two_fas.util.BackupUtil
 import github.xzynine.two_fas.util.UniqueIdGenerator
 import github.xzynine.two_fas.util.TokenCodeUtil

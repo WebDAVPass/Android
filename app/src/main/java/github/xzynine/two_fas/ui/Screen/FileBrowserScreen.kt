@@ -29,9 +29,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import github.xzynine.two_fas.lib.webdav.Authorization
-import github.xzynine.two_fas.lib.webdav.WebDav
-import github.xzynine.two_fas.lib.webdav.WebDavFile
+import github.xzynine.webdav.Authorization
+import github.xzynine.webdav.WebDav
+import github.xzynine.webdav.WebDavFile
 import github.xzynine.two_fas.theme.AppTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch

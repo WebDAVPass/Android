@@ -2,8 +2,8 @@ package github.xzynine.two_fas.util
 
 import com.google.gson.Gson
 import github.xzynine.two_fas.data.*
-import github.xzynine.two_fas.lib.webdav.WebDav
-import github.xzynine.two_fas.lib.webdav.WebDavException
+import github.xzynine.webdav.WebDav
+import github.xzynine.webdav.WebDavException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
