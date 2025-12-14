@@ -15,11 +15,6 @@ object BackupConstants {
     const val TOKEN_DIR = "token"
     
     /**
-     * 图标文件存储目录
-     */
-    const val ICON_DIR = "icon"
-    
-    /**
      * 元数据文件名
      */
     const val METADATA_FILE = "metadata.json"

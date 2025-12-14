@@ -227,60 +227,6 @@ object BackupUtil {
         }
     }
     
-    /**
-     * 上传图标文件
-     * @param webDav WebDav客户端
-     * @param uniqueId 唯一标识符
-     * @param imageFile 图标文件
-     */
-    suspend fun uploadIconFile(webDav: WebDav, uniqueId: String, imageFile: File) {
-        withContext(Dispatchers.IO) {
-            val iconDir = buildPath(webDav.path, BackupConstants.ICON_DIR)
-            val iconWebDavDir = WebDav(iconDir, webDav.authorization)
-            iconWebDavDir.makeAsDir()
-            
-            val iconPath = buildPath(iconDir, "$uniqueId.png")
-            val iconWebDav = WebDav(iconPath, webDav.authorization)
-            iconWebDav.upload(imageFile, "image/png")
-        }
-    }
-    
-    /**
-     * 下载图标文件
-     * @param webDav WebDav客户端
-     * @param uniqueId 唯一标识符
-     * @return 图标文件的字节数组
-     */
-    suspend fun downloadIconFile(webDav: WebDav, uniqueId: String): ByteArray? {
-        return withContext(Dispatchers.IO) {
-            val iconPath = buildPath(webDav.path, BackupConstants.ICON_DIR, "$uniqueId.png")
-            val iconWebDav = WebDav(iconPath, webDav.authorization)
-            
-            return@withContext if (iconWebDav.exists()) {
-                iconWebDav.download()
-            } else {
-                null
-            }
-        }
-    }
-    
-    /**
-     * 保存图标到本地
-     * @param uniqueId 唯一标识符
-     * @param iconData 图标数据
-     * @return 本地文件路径
-     */
-    suspend fun saveIconToLocal(uniqueId: String, iconData: ByteArray, context: android.content.Context): String {
-        return withContext(Dispatchers.IO) {
-            val iconDir = File(context.filesDir, "icons")
-            iconDir.mkdirs()
-            
-            val iconFile = File(iconDir, "$uniqueId.png")
-            iconFile.writeBytes(iconData)
-            
-            return@withContext iconFile.absolutePath
-        }
-    }
     
     /**
      * 删除核心文件
@@ -297,20 +243,7 @@ object BackupUtil {
         }
     }
     
-    /**
-     * 删除图标文件
-     * @param webDav WebDav客户端
-     * @param uniqueId 唯一标识符
-     */
-    private suspend fun deleteIconFile(webDav: WebDav, uniqueId: String) {
-        withContext(Dispatchers.IO) {
-            val iconPath = buildPath(webDav.path, BackupConstants.ICON_DIR, "$uniqueId.png")
-            val iconWebDav = WebDav(iconPath, webDav.authorization)
-            if (iconWebDav.exists()) {
-                iconWebDav.delete()
-            }
-        }
-    }
+    // 图标相关的上传/下载/保存/删除功能已移除
     
     /**
      * 备份令牌到WebDAV
@@ -326,7 +259,6 @@ object BackupUtil {
             // 创建必要的目录
             webDav.makeAsDir()
             WebDav(buildPath(webDav.path, BackupConstants.TOKEN_DIR), webDav.authorization).makeAsDir()
-            WebDav(buildPath(webDav.path, BackupConstants.ICON_DIR), webDav.authorization).makeAsDir()
             
             onProgress?.invoke(10)
             
@@ -354,21 +286,14 @@ object BackupUtil {
                 val existingMetadata = metadata.tokens[uniqueId]
                 
                 if (existingMetadata == null) {
-                    // 新增令牌：上传核心文件和图标
+                    // 新增令牌：仅上传核心文件（不备份图标）
                     val coreToken = token.toCoreToken()
                     
                     // 上传核心文件
                     val contentHash = uploadCoreFile(webDav, uniqueId, coreToken, encryptionPassword)
                     
-                    // 上传图标文件（如果有）
-                    var imagePath: String? = null
-                    if (token.imagePath != null) {
-                        val imageFile = File(token.imagePath!!)
-                        if (imageFile.exists()) {
-                            uploadIconFile(webDav, uniqueId, imageFile)
-                            imagePath = "/${BackupConstants.ICON_DIR}/$uniqueId.png"
-                        }
-                    }
+                    // 不再上传图标文件
+                    val imagePath: String? = null
                     
                     // 添加到元数据
                     metadata.tokens[uniqueId] = TokenMetadata(
@@ -382,7 +307,7 @@ object BackupUtil {
                     
                     hasChanges = true
                 } else {
-                    // 现有令牌：只更新元数据和图标（如果需要）
+                    // 现有令牌：只更新元数据（不处理图标）
                     var needsUpdate = false
                     
                     // 检查元数据是否有变化
@@ -397,24 +322,7 @@ object BackupUtil {
                         needsUpdate = true
                     }
                     
-                    // 检查图标是否需要更新
-                    val hasLocalImage = token.imagePath != null && File(token.imagePath!!).exists()
-                    val hasRemoteImage = existingMetadata.imagePath != null
-                    
-                    if (hasLocalImage && (!hasRemoteImage || existingMetadata.imagePath != "/${BackupConstants.ICON_DIR}/$uniqueId.png")) {
-                        // 上传新图标
-                        val imageFile = File(token.imagePath!!)
-                        uploadIconFile(webDav, uniqueId, imageFile)
-                        existingMetadata.imagePath = "/${BackupConstants.ICON_DIR}/$uniqueId.png"
-                        existingMetadata.updatedAt = now
-                        needsUpdate = true
-                    } else if (!hasLocalImage && hasRemoteImage) {
-                        // 删除旧图标
-                        deleteIconFile(webDav, uniqueId)
-                        existingMetadata.imagePath = null
-                        existingMetadata.updatedAt = now
-                        needsUpdate = true
-                    }
+                    // 不再检查或同步图标状态
                     
                     // 如果没有任何变化，跳过
                     if (!needsUpdate) {
@@ -438,8 +346,7 @@ object BackupUtil {
                     // 删除核心文件
                     deleteCoreFile(webDav, uniqueId)
                     
-                    // 删除图标文件
-                    deleteIconFile(webDav, uniqueId)
+                    // 不再删除图标文件
                     
                     // 从元数据中移除
                     metadata.tokens.remove(uniqueId)
