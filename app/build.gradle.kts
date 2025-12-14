@@ -55,6 +55,8 @@ dependencies {
     implementation(libs.okhttp) // OkHttp3 网络库
     implementation(libs.jsoup) // Jsoup XML解析库
     implementation(libs.hutool.core) // Hutool工具库
+    // 复用 WebDAV 库
+    implementation(project(":webdav"))
     implementation("com.google.code.gson:gson:2.10.1") // Gson JSON解析库
     // 接入令牌图标系统模块
     implementation(project(":text-drawable"))
