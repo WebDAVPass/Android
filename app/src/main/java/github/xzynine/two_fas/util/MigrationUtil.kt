@@ -36,15 +36,22 @@ class MigrationUtil {
     }
 
     private fun convertLegacyTokenToOtpToken(legacyToken: LegacyToken, ordinal: Long): OtpToken {
+        // 生成唯一标识符
+        val uniqueId = UniqueIdGenerator.generate(
+            legacyToken.secret, 
+            legacyToken.algo, 
+            legacyToken.digits, 
+            legacyToken.period
+        )
+        
         return OtpToken(
             id = legacyToken.id.toLong(),
-            ordinal = ordinal,
+            ordinal = legacyToken.id.toLong(),
             issuer = legacyToken.issuer,
             label = legacyToken.label,
             imagePath = legacyToken.image,
             tokenType = when (legacyToken.type) {
                 "hotp" -> OtpTokenType.HOTP
-                "totp" -> OtpTokenType.TOTP
                 else -> OtpTokenType.TOTP
             },
             algorithm = legacyToken.algo,
@@ -52,7 +59,8 @@ class MigrationUtil {
             digits = legacyToken.digits,
             counter = legacyToken.counter,
             period = legacyToken.period,
-            encryptionType = EncryptionType.NONE
+            encryptionType = EncryptionType.NONE,
+            uniqueId = uniqueId
         )
     }
 

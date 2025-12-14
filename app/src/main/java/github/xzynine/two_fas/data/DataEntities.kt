@@ -2,12 +2,15 @@ package github.xzynine.two_fas.data
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
  * OTP令牌实体类
  */
-@Entity(tableName = "otp_tokens")
+@Entity(tableName = "otp_tokens", indices = [
+    Index(value = ["uniqueId"], unique = true)
+])
 data class OtpToken (
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
     val ordinal: Long,
@@ -20,7 +23,8 @@ data class OtpToken (
     val digits: Int,
     val counter: Long,
     val period: Int,
-    val encryptionType: EncryptionType
+    val encryptionType: EncryptionType,
+    val uniqueId: String
 )
 
 /**

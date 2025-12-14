@@ -68,6 +68,9 @@ object BackupUtil {
      * @return OtpToken对象
      */
     fun CoreToken.toOtpToken(metadata: TokenMetadata): OtpToken {
+        // 生成唯一标识符
+        val uniqueId = UniqueIdGenerator.generate(this.secret, this.algorithm, this.digits, this.period)
+        
         return OtpToken(
             id = 0, // 新插入的令牌ID会自动生成
             ordinal = metadata.sort,
@@ -80,7 +83,8 @@ object BackupUtil {
             digits = this.digits,
             counter = this.counter,
             period = this.period,
-            encryptionType = EncryptionType.NONE
+            encryptionType = EncryptionType.NONE,
+            uniqueId = uniqueId
         )
     }
     
@@ -259,7 +263,7 @@ object BackupUtil {
             
             // 处理每个令牌
             for ((index, token) in tokens.withIndex()) {
-                val uniqueId = UniqueIdGenerator.generate(token.secret, token.algorithm, token.digits, token.period)
+                val uniqueId = token.uniqueId // 直接使用数据库中已存储的uniqueId，无需重新生成
                 val coreToken = token.toCoreToken()
                 
                 // 上传核心文件

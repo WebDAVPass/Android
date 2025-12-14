@@ -13,6 +13,7 @@ import github.xzynine.two_fas.data.WebDavConfig
 import github.xzynine.two_fas.lib.webdav.WebDav
 import github.xzynine.two_fas.lib.webdav.Authorization
 import github.xzynine.two_fas.util.BackupUtil
+import github.xzynine.two_fas.util.UniqueIdGenerator
 import github.xzynine.two_fas.util.TokenCodeUtil
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -47,11 +48,53 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     }
                 }
 
+                val MIGRATION_2_3 = object : Migration(2, 3) {
+                    override fun migrate(db: SupportSQLiteDatabase) {
+                        // 为旧数据补充 uniqueId 列（非空，默认空串便于后续回填），再建立唯一索引
+                        db.execSQL("ALTER TABLE otp_tokens ADD COLUMN uniqueId TEXT NOT NULL DEFAULT ''")
+
+                        val cursor = db.query("select id, secret, algorithm, digits, period from otp_tokens")
+                        val latestById = mutableMapOf<String, Long>()
+                        val idsToDelete = mutableListOf<Long>()
+
+                        cursor.use {
+                            while (it.moveToNext()) {
+                                val id = it.getLong(0)
+                                val secret = it.getString(1)
+                                val algorithm = it.getString(2)
+                                val digits = it.getInt(3)
+                                val period = it.getInt(4)
+
+                                val uniqueId = UniqueIdGenerator.generate(secret, algorithm, digits, period)
+                                val keptId = latestById[uniqueId]
+
+                                if (keptId == null || id > keptId) {
+                                    keptId?.let { oldId -> idsToDelete.add(oldId) }
+                                    latestById[uniqueId] = id
+                                    db.execSQL("update otp_tokens set uniqueId = ? where id = ?", arrayOf(uniqueId, id))
+                                } else {
+                                    idsToDelete.add(id)
+                                }
+                            }
+                        }
+
+                        if (idsToDelete.isNotEmpty()) {
+                            val idList = idsToDelete.joinToString(",")
+                            db.execSQL("delete from otp_tokens where id in ($idList)")
+                        }
+
+                        db.execSQL("""
+                            CREATE UNIQUE INDEX IF NOT EXISTS `index_otp_tokens_uniqueId`
+                            ON `otp_tokens` (`uniqueId`)
+                        """.trimIndent())
+                    }
+                }
+
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "otp_token_database"
-                ).addMigrations(MIGRATION_1_2).build()
+                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
                 INSTANCE = instance
                 instance
             }
@@ -158,16 +201,16 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
     /**
      * 处理重复令牌，删除重复项，保留最新的（id最大的）
-     * 重复判断基于：secret + algorithm + digits + period
+     * 重复判断基于：uniqueId字段
      */
     private fun processDuplicateTokens(tokens: List<OtpToken>): List<OtpToken> {
-        // 使用密钥+算法+位数+周期作为键，值为令牌列表
+        // 使用uniqueId作为键，值为令牌列表
         val tokenMap = mutableMapOf<String, MutableList<OtpToken>>()
 
         // 将令牌分组
         tokens.forEach { token ->
-            // 创建分组键：密钥+算法+位数+周期
-            val key = "${token.secret}_${token.algorithm}_${token.digits}_${token.period}"
+            // 使用uniqueId作为分组键
+            val key = token.uniqueId
             if (!tokenMap.containsKey(key)) {
                 tokenMap[key] = mutableListOf()
             }
@@ -254,7 +297,20 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         }
 
         // 密钥+算法+位数+周期不存在，可以添加
-        database.otpTokenDao().insert(token)
+        // 如果token对象没有uniqueId，则生成一个
+        val tokenWithId = if (token.uniqueId.isBlank()) {
+            val uniqueId = github.xzynine.two_fas.util.UniqueIdGenerator.generate(
+                token.secret,
+                token.algorithm,
+                token.digits,
+                token.period
+            )
+            token.copy(uniqueId = uniqueId)
+        } else {
+            token
+        }
+        
+        database.otpTokenDao().insert(tokenWithId)
         // 刷新令牌列表，确保立即更新UI
         refreshTokenList()
         
@@ -463,12 +519,24 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             val restoredTokens = BackupUtil.restoreTokens(webDav, password, deviceId) { progress ->
                 _restoreProgress.value = progress
             }
-            if (restoredTokens.isNotEmpty()) {
-                // 插入或更新恢复的令牌
-                database.otpTokenDao().insertAll(restoredTokens)
+            
+            val tokensToInsert = mutableListOf<OtpToken>()
+            for (token in restoredTokens) {
+                // 检查本地是否已存在该令牌
+                val existingToken = database.otpTokenDao().getByUniqueId(token.uniqueId)
+                if (existingToken == null) {
+                    // 本地不存在，添加到插入列表
+                    tokensToInsert.add(token)
+                }
+            }
+            
+            if (tokensToInsert.isNotEmpty()) {
+                // 只插入本地不存在的令牌
+                database.otpTokenDao().insertAll(tokensToInsert)
                 refreshTokenList()
                 true
             } else {
+                // 所有令牌都已存在本地
                 false
             }
         } catch (e: Exception) {

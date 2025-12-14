@@ -26,7 +26,8 @@ object SampleData {
                 digits = 6,
                 counter = 0,
                 period = 30,
-                encryptionType = EncryptionType.NONE
+                encryptionType = EncryptionType.NONE,
+                uniqueId = UniqueIdGenerator.generate("JBSWY3DPEHPK3PXP", "SHA1", 6, 30)
             ),
             OtpToken(
                 id = 2,
@@ -40,7 +41,8 @@ object SampleData {
                 digits = 6,
                 counter = 0,
                 period = 30,
-                encryptionType = EncryptionType.NONE
+                encryptionType = EncryptionType.NONE,
+                uniqueId = UniqueIdGenerator.generate("GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ", "SHA1", 6, 30)
             ),
             OtpToken(
                 id = 3,
@@ -54,7 +56,8 @@ object SampleData {
                 digits = 6,
                 counter = 0,
                 period = 30,
-                encryptionType = EncryptionType.NONE
+                encryptionType = EncryptionType.NONE,
+                uniqueId = UniqueIdGenerator.generate("ONXW2ZJLVNRSWS3TPO5TW4EQGE4WA4ZU", "SHA1", 6, 30)
             )
         )
     }

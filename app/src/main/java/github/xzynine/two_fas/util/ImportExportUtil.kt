@@ -124,9 +124,12 @@ class ImportExportUtil(
             github.xzynine.two_fas.data.OtpTokenType.HOTP
         }
 
-        return OtpToken(
+        // 生成唯一标识符
+        val uniqueId = UniqueIdGenerator.generate(secret, algorithm, digits, period)
+        
+        return github.xzynine.two_fas.data.OtpToken(
             id = 0,
-            ordinal = ordinal,
+            ordinal = 0,
             issuer = issuer,
             label = label,
             imagePath = null,
@@ -136,7 +139,8 @@ class ImportExportUtil(
             digits = digits,
             counter = 0,
             period = period,
-            encryptionType = github.xzynine.two_fas.data.EncryptionType.NONE
+            encryptionType = github.xzynine.two_fas.data.EncryptionType.NONE,
+            uniqueId = uniqueId
         )
     }
 

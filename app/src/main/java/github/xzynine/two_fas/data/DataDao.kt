@@ -43,6 +43,9 @@ interface OtpTokenDao {
      */
     @Query("select * from otp_tokens where secret = :secret and algorithm = :algorithm and digits = :digits and period = :period limit 1")
     suspend fun getByUniqueIdentifier(secret: String, algorithm: String, digits: Int, period: Int): OtpToken?
+    
+    @Query("select * from otp_tokens where uniqueId = :uniqueId limit 1")
+    suspend fun getByUniqueId(uniqueId: String): OtpToken?
 
     @Query("delete from otp_tokens where id = :id")
     suspend fun deleteById(id: Long): Void

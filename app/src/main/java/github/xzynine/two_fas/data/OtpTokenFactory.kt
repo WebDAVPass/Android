@@ -1,6 +1,7 @@
 package github.xzynine.two_fas.data
 
 import android.net.Uri
+import github.xzynine.two_fas.util.UniqueIdGenerator
 import java.util.*
 import javax.crypto.Mac
 
@@ -86,6 +87,9 @@ object OtpTokenFactory {
         // 解析图像路径
         val image = uri.getQueryParameter("image")
 
+        // 生成唯一标识符
+        val uniqueId = UniqueIdGenerator.generate(secret, algo, digits, period)
+        
         // 创建并返回OtpToken对象
         return OtpToken (
             id = 0,
@@ -99,7 +103,8 @@ object OtpTokenFactory {
             digits = digits,
             counter = counter,
             period = period,
-            encryptionType = EncryptionType.NONE // 使用NONE加密类型
+            encryptionType = EncryptionType.NONE, // 使用NONE加密类型
+            uniqueId = uniqueId
         )
     }
 }
