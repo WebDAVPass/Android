@@ -150,13 +150,14 @@ object BackupUtil {
             
             // 更新设备同步时间
             val deviceInfo = metadata.devices.getOrPut(deviceId) { DeviceInfo(now) }
+            val oldLastSyncAt = deviceInfo.lastSyncAt
             deviceInfo.lastSyncAt = now
             
-            // 更新元数据的最后更新时间
-            metadata.lastUpdated = now
-            
-            // 上传更新后的元数据
-            uploadMetadata(webDav, metadata)
+            // 只有当设备同步时间发生变化时，才上传更新后的元数据
+            // 不更新元数据的最后更新时间，避免影响其他设备
+            if (oldLastSyncAt != now) {
+                uploadMetadata(webDav, metadata)
+            }
         }
     }
     
@@ -339,6 +340,9 @@ object BackupUtil {
             val deviceInfo = metadata.devices.getOrPut(deviceId) { DeviceInfo(now) }
             deviceInfo.lastSyncAt = now
             
+            // 标志：是否有数据变化
+            var hasChanges = false
+            
             // 获取本地令牌的唯一标识符集合
             val localUniqueIds = tokens.map { it.uniqueId }.toSet()
             
@@ -375,6 +379,8 @@ object BackupUtil {
                         contentHash = contentHash,
                         updatedAt = now
                     )
+                    
+                    hasChanges = true
                 } else {
                     // 现有令牌：只更新元数据和图标（如果需要）
                     var needsUpdate = false
@@ -414,6 +420,8 @@ object BackupUtil {
                     if (!needsUpdate) {
                         continue
                     }
+                    
+                    hasChanges = true
                 }
                 
                 // 更新进度
@@ -425,22 +433,25 @@ object BackupUtil {
             val remoteUniqueIds = metadata.tokens.keys
             val deletedUniqueIds = remoteUniqueIds - localUniqueIds
             
-            for (uniqueId in deletedUniqueIds) {
-                // 删除核心文件
-                deleteCoreFile(webDav, uniqueId)
-                
-                // 删除图标文件
-                deleteIconFile(webDav, uniqueId)
-                
-                // 从元数据中移除
-                metadata.tokens.remove(uniqueId)
+            if (deletedUniqueIds.isNotEmpty()) {
+                for (uniqueId in deletedUniqueIds) {
+                    // 删除核心文件
+                    deleteCoreFile(webDav, uniqueId)
+                    
+                    // 删除图标文件
+                    deleteIconFile(webDav, uniqueId)
+                    
+                    // 从元数据中移除
+                    metadata.tokens.remove(uniqueId)
+                }
+                hasChanges = true
             }
             
-            // 更新元数据的最后更新时间
-            metadata.lastUpdated = now
-            
-            // 上传更新后的元数据
-            uploadMetadata(webDav, metadata)
+            // 只有当有数据变化时，才更新元数据的最后更新时间并上传
+            if (hasChanges) {
+                metadata.lastUpdated = now
+                uploadMetadata(webDav, metadata)
+            }
             
             onProgress?.invoke(90)
             
@@ -465,13 +476,8 @@ object BackupUtil {
             
             // 下载元数据
             val metadata = downloadMetadata(webDav)
-            val now = Instant.now().toString()
             
             onProgress?.invoke(10)
-            
-            // 更新设备同步时间
-            val deviceInfo = metadata.devices.getOrPut(deviceId) { DeviceInfo(now) }
-            deviceInfo.lastSyncAt = now
             
             val tokenCount = metadata.tokens.size
             if (tokenCount == 0) {
@@ -483,41 +489,34 @@ object BackupUtil {
             val tokenEntries = metadata.tokens.entries.toList()
             for (index in tokenEntries.indices) {
                 val entry = tokenEntries[index]
-                try {
-                    val uniqueId = entry.key
-                    val tokenMetadata = entry.value
-                    
-                    // 下载并解密核心文件
-                    val coreToken = downloadCoreFile(webDav, uniqueId, password)
-                    
-                    // 验证内容哈希
-                    val tokenPath = buildPath(webDav.path, BackupConstants.TOKEN_DIR, "$uniqueId.token")
-                    val tokenWebDav = WebDav(tokenPath, webDav.authorization)
-                    val encryptedData = tokenWebDav.download()
-                    val actualHash = calculateContentHash(encryptedData)
-                    
-                    if (actualHash == tokenMetadata.contentHash) {
-                        // 下载图标文件（如果有）
-                        // 暂时不处理图标文件，因为需要上下文
-                        var localImagePath: String? = null
-                        
-                        // 创建OtpToken对象
-                        val otpToken = coreToken.toOtpToken(tokenMetadata)
-                        restoredTokens.add(otpToken)
-                    }
-                } catch (e: Exception) {
-                    // 跳过恢复失败的令牌
-                    e.printStackTrace()
-                } finally {
-                    // 更新进度
-                    val progress = 20 + (index + 1) * 70 / tokenCount
-                    onProgress?.invoke(progress)
+                val uniqueId = entry.key
+                val tokenMetadata = entry.value
+                
+                // 下载并解密核心文件
+                val coreToken = downloadCoreFile(webDav, uniqueId, password)
+                
+                // 验证内容哈希
+                val tokenPath = buildPath(webDav.path, BackupConstants.TOKEN_DIR, "$uniqueId.token")
+                val tokenWebDav = WebDav(tokenPath, webDav.authorization)
+                val encryptedData = tokenWebDav.download()
+                val actualHash = calculateContentHash(encryptedData)
+                
+                if (actualHash != tokenMetadata.contentHash) {
+                    throw Exception("哈希不匹配，恢复失败")
                 }
+                
+                // 下载图标文件（如果有）
+                // 暂时不处理图标文件，因为需要上下文
+                var localImagePath: String? = null
+                
+                // 创建OtpToken对象
+                val otpToken = coreToken.toOtpToken(tokenMetadata)
+                restoredTokens.add(otpToken)
+                
+                // 更新进度
+                val progress = 20 + (index + 1) * 70 / tokenCount
+                onProgress?.invoke(progress)
             }
-            
-            // 更新元数据的最后更新时间
-            metadata.lastUpdated = now
-            uploadMetadata(webDav, metadata)
             
             onProgress?.invoke(100)
             

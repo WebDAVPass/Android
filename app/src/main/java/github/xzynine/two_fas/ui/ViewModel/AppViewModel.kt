@@ -485,10 +485,16 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 if (needRestore) {
                     // 需要恢复，执行恢复操作
                     val restoreResult = restoreTokensWithPassword(webDavConfig, password)
-                    if (restoreResult) {
-                        _backupStatus.value = "自动恢复成功"
-                    } else {
-                        _backupStatus.value = "数据已最新，无需执行操作"
+                    when (restoreResult) {
+                        RestoreResult.SUCCESS -> {
+                            _backupStatus.value = "自动恢复成功"
+                        }
+                        RestoreResult.NO_UPDATES -> {
+                            _backupStatus.value = "数据已最新，无需执行操作"
+                        }
+                        RestoreResult.FAILURE -> {
+                            _backupStatus.value = "自动恢复失败：密码错误或哈希不匹配"
+                        }
                     }
                 } else {
                     // 不需要恢复，只更新元数据
@@ -528,10 +534,16 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 val webDavConfig = getFirstWebDavConfig() ?: throw Exception("未配置WebDAV")
                 
                 val restoreResult = restoreTokensWithPassword(webDavConfig, password)
-                if (restoreResult) {
-                    _backupStatus.value = "手动恢复成功"
-                } else {
-                    _backupStatus.value = "手动恢复失败：密码错误"
+                when (restoreResult) {
+                    RestoreResult.SUCCESS -> {
+                        _backupStatus.value = "手动恢复成功"
+                    }
+                    RestoreResult.NO_UPDATES -> {
+                        _backupStatus.value = "数据已最新，无需执行操作"
+                    }
+                    RestoreResult.FAILURE -> {
+                        _backupStatus.value = "手动恢复失败：密码错误或哈希不匹配"
+                    }
                 }
             } catch (ex: Exception) {
                 _backupStatus.value = "手动恢复失败：${ex.message}"
@@ -546,9 +558,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 使用指定密码恢复令牌
      * @param webDavConfig WebDAV配置
      * @param password 恢复密码
-     * @return 是否恢复成功
+     * @return 恢复结果枚举，包含成功、没有更新、失败三种情况
      */
-    private suspend fun restoreTokensWithPassword(webDavConfig: WebDavConfig, password: String): Boolean {
+    private suspend fun restoreTokensWithPassword(webDavConfig: WebDavConfig, password: String): RestoreResult {
         return try {
             val webDav = WebDav(webDavConfig.url, Authorization(webDavConfig.username, webDavConfig.password))
             val deviceId = getDeviceId()
@@ -598,13 +610,24 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             
             if (hasChanges) {
                 refreshTokenList()
+                RestoreResult.SUCCESS
+            } else {
+                // 没有新令牌插入或更新
+                RestoreResult.NO_UPDATES
             }
-            
-            // 恢复过程成功，无论是否有新令牌插入或现有令牌更新
-            true
         } catch (ex: Exception) {
-            false
+            // 捕获到异常，恢复失败（密码错误或哈希不匹配）
+            RestoreResult.FAILURE
         }
+    }
+    
+    /**
+     * 恢复结果枚举
+     */
+    private enum class RestoreResult {
+        SUCCESS,     // 恢复成功，有新令牌插入或更新
+        NO_UPDATES,  // 没有新令牌插入或更新
+        FAILURE      // 恢复失败，密码错误或哈希不匹配
     }
     
     /**
