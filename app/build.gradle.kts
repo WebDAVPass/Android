@@ -56,6 +56,9 @@ dependencies {
     implementation(libs.jsoup) // Jsoup XML解析库
     implementation(libs.hutool.core) // Hutool工具库
     implementation("com.google.code.gson:gson:2.10.1") // Gson JSON解析库
+    // 接入令牌图标系统模块
+    implementation(project(":text-drawable"))
+    implementation(project(":token-images"))
     
     // CameraX 核心库
     implementation("androidx.camera:camera-core:1.3.3")
