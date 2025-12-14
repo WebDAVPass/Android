@@ -236,24 +236,29 @@ object BackupUtil {
      * @param encryptionPassword 加密密码
      * @param deviceId 设备ID
      * @param context Android上下文，用于访问资源文件
+     * @param onProgress 进度回调，范围0-100
      */
-    suspend fun backupTokens(webDav: WebDav, tokens: List<OtpToken>, encryptionPassword: String, deviceId: String, context: android.content.Context) {
+    suspend fun backupTokens(webDav: WebDav, tokens: List<OtpToken>, encryptionPassword: String, deviceId: String, context: android.content.Context, onProgress: ((Int) -> Unit)? = null) {
         withContext(Dispatchers.IO) {
             // 创建必要的目录
             webDav.makeAsDir()
             WebDav(buildPath(webDav.path, BackupConstants.TOKEN_DIR), webDav.authorization).makeAsDir()
             WebDav(buildPath(webDav.path, BackupConstants.ICON_DIR), webDav.authorization).makeAsDir()
             
+            onProgress?.invoke(10)
+            
             // 下载现有元数据
             val metadata = downloadMetadata(webDav)
             val now = Instant.now().toString()
+            
+            onProgress?.invoke(20)
             
             // 更新设备信息
             val deviceInfo = metadata.devices.getOrPut(deviceId) { DeviceInfo(now) }
             deviceInfo.lastSyncAt = now
             
             // 处理每个令牌
-            for (token in tokens) {
+            for ((index, token) in tokens.withIndex()) {
                 val uniqueId = UniqueIdGenerator.generate(token.secret, token.algorithm, token.digits, token.period)
                 val coreToken = token.toCoreToken()
                 
@@ -285,6 +290,10 @@ object BackupUtil {
                 tokenMetadata.sort = token.ordinal
                 tokenMetadata.contentHash = contentHash
                 tokenMetadata.updatedAt = now
+                
+                // 更新进度
+                val progress = 30 + (index + 1) * 50 / tokens.size
+                onProgress?.invoke(progress)
             }
             
             // 更新元数据的最后更新时间
@@ -293,8 +302,12 @@ object BackupUtil {
             // 上传更新后的元数据
             uploadMetadata(webDav, metadata)
             
+            onProgress?.invoke(90)
+            
             // 上传解密脚本
             uploadDecryptionScript(webDav, context)
+            
+            onProgress?.invoke(100)
         }
     }
     
@@ -303,9 +316,10 @@ object BackupUtil {
      * @param webDav WebDav客户端
      * @param password 解密密码
      * @param deviceId 设备ID
+     * @param onProgress 进度回调，范围0-100
      * @return 恢复的令牌列表
      */
-    suspend fun restoreTokens(webDav: WebDav, password: String, deviceId: String): List<OtpToken> {
+    suspend fun restoreTokens(webDav: WebDav, password: String, deviceId: String, onProgress: ((Int) -> Unit)? = null): List<OtpToken> {
         return withContext(Dispatchers.IO) {
             val restoredTokens = mutableListOf<OtpToken>()
             
@@ -313,13 +327,26 @@ object BackupUtil {
             val metadata = downloadMetadata(webDav)
             val now = Instant.now().toString()
             
+            onProgress?.invoke(10)
+            
             // 更新设备同步时间
             val deviceInfo = metadata.devices.getOrPut(deviceId) { DeviceInfo(now) }
             deviceInfo.lastSyncAt = now
             
+            val tokenCount = metadata.tokens.size
+            if (tokenCount == 0) {
+                onProgress?.invoke(100)
+                return@withContext restoredTokens
+            }
+            
             // 处理每个令牌
-            for ((uniqueId, tokenMetadata) in metadata.tokens) {
+            val tokenEntries = metadata.tokens.entries.toList()
+            for (index in tokenEntries.indices) {
+                val entry = tokenEntries[index]
                 try {
+                    val uniqueId = entry.key
+                    val tokenMetadata = entry.value
+                    
                     // 下载并解密核心文件
                     val coreToken = downloadCoreFile(webDav, uniqueId, password)
                     
@@ -341,12 +368,18 @@ object BackupUtil {
                 } catch (e: Exception) {
                     // 跳过恢复失败的令牌
                     e.printStackTrace()
+                } finally {
+                    // 更新进度
+                    val progress = 20 + (index + 1) * 70 / tokenCount
+                    onProgress?.invoke(progress)
                 }
             }
             
             // 更新元数据的最后更新时间
             metadata.lastUpdated = now
             uploadMetadata(webDav, metadata)
+            
+            onProgress?.invoke(100)
             
             return@withContext restoredTokens
         }

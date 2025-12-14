@@ -102,13 +102,19 @@ fun SettingsScreen(
             // 备份按钮
             BasicComponent(
                 title = if (viewModel.isBackupInProgress.value) "备份中..." else "备份令牌",
-                summary = if (viewModel.isBackupInProgress.value) "正在备份到WebDAV服务器..." else "点击开始备份",
+                summary = if (viewModel.isBackupInProgress.value) "正在备份到WebDAV服务器... ${viewModel.backupProgress.value}%" else "点击开始备份",
                 leftAction = {
-                    Icon(
-                        modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.Useful.Personal,
-                        contentDescription = "备份令牌",
-                    )
+                    if (viewModel.isBackupInProgress.value) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.Companion.padding(end = 16.dp)
+                        )
+                    } else {
+                        Icon(
+                            modifier = Modifier.Companion.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Useful.Personal,
+                            contentDescription = "备份令牌",
+                        )
+                    }
                 },
                 onClick = {
                     if (!viewModel.isBackupInProgress.value) {
@@ -126,13 +132,19 @@ fun SettingsScreen(
             val showRestorePasswordDialog = remember { mutableStateOf(false) }
             BasicComponent(
                 title = if (viewModel.isRestoreInProgress.value) "恢复中..." else "手动恢复",
-                summary = if (viewModel.isRestoreInProgress.value) "正在从WebDAV服务器恢复..." else "点击开始手动恢复",
+                summary = if (viewModel.isRestoreInProgress.value) "正在从WebDAV服务器恢复... ${viewModel.restoreProgress.value}%" else "点击开始手动恢复",
                 leftAction = {
-                    Icon(
-                        modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.Useful.Personal,
-                        contentDescription = "手动恢复",
-                    )
+                    if (viewModel.isRestoreInProgress.value) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.Companion.padding(end = 16.dp)
+                        )
+                    } else {
+                        Icon(
+                            modifier = Modifier.Companion.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Useful.Personal,
+                            contentDescription = "手动恢复",
+                        )
+                    }
                 },
                 onClick = {
                     if (!viewModel.isRestoreInProgress.value) {

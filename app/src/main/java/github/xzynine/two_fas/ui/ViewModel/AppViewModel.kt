@@ -84,6 +84,12 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val _backupStatus = MutableStateFlow("")
     val backupStatus: StateFlow<String> = _backupStatus.asStateFlow()
     
+    private val _backupProgress = MutableStateFlow(0)
+    val backupProgress: StateFlow<Int> = _backupProgress.asStateFlow()
+    
+    private val _restoreProgress = MutableStateFlow(0)
+    val restoreProgress: StateFlow<Int> = _restoreProgress.asStateFlow()
+    
     private val _customEncryptionPassword = MutableStateFlow<String?>(null)
     val customEncryptionPassword: StateFlow<String?> = _customEncryptionPassword.asStateFlow()
     
@@ -394,6 +400,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             try {
                 _isRestoreInProgress.value = true
+                _restoreProgress.value = 0
                 _backupStatus.value = "正在尝试自动恢复..."
                 
                 val webDavConfig = getFirstWebDavConfig() ?: return@launch
@@ -409,6 +416,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 _backupStatus.value = "自动恢复失败：${e.message}"
             } finally {
                 _isRestoreInProgress.value = false
+                _restoreProgress.value = 0
             }
         }
     }
@@ -421,6 +429,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             try {
                 _isRestoreInProgress.value = true
+                _restoreProgress.value = 0
                 _backupStatus.value = "正在手动恢复..."
                 
                 val webDavConfig = getFirstWebDavConfig() ?: throw Exception("未配置WebDAV")
@@ -435,6 +444,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 _backupStatus.value = "手动恢复失败：${e.message}"
             } finally {
                 _isRestoreInProgress.value = false
+                _restoreProgress.value = 0
             }
         }
     }
@@ -450,7 +460,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             val webDav = WebDav(webDavConfig.url, Authorization(webDavConfig.username, webDavConfig.password))
             val deviceId = getDeviceId()
             
-            val restoredTokens = BackupUtil.restoreTokens(webDav, password, deviceId)
+            val restoredTokens = BackupUtil.restoreTokens(webDav, password, deviceId) { progress ->
+                _restoreProgress.value = progress
+            }
             if (restoredTokens.isNotEmpty()) {
                 // 插入或更新恢复的令牌
                 database.otpTokenDao().insertAll(restoredTokens)
@@ -472,6 +484,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             try {
                 _isBackupInProgress.value = true
                 _backupStatus.value = "正在备份..."
+                _backupProgress.value = 0
                 
                 val webDavConfig = getFirstWebDavConfig() ?: throw Exception("未配置WebDAV")
                 val encryptionPassword = getEncryptionPassword()
@@ -480,12 +493,15 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 val webDav = WebDav(webDavConfig.url, Authorization(webDavConfig.username, webDavConfig.password))
                 val deviceId = getDeviceId()
                 
-                BackupUtil.backupTokens(webDav, tokens, encryptionPassword, deviceId, context)
+                BackupUtil.backupTokens(webDav, tokens, encryptionPassword, deviceId, context) {
+                    _backupProgress.value = it
+                }
                 _backupStatus.value = "备份成功"
             } catch (e: Exception) {
                 _backupStatus.value = "备份失败：${e.message}"
             } finally {
                 _isBackupInProgress.value = false
+                _backupProgress.value = 0
             }
         }
     }
