@@ -43,7 +43,8 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
-import top.yukonga.miuix.kmp.basic.Icon
+import androidx.compose.foundation.Image
+import androidx.compose.ui.res.painterResource
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -51,8 +52,8 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.extra.SuperDialog
 import github.xzynine.two_fas.ui.Dialog.ConfirmationDialog
 import github.xzynine.two_fas.ui.Dialog.TokenDialog
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.useful.Edit
+import org.liberty.android.freeotp.token_images.TokenImage
+import org.liberty.android.freeotp.token_images.matchToken
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 
@@ -210,13 +211,35 @@ fun TokenItem(token: OtpToken, tokenViewModel: TokenViewModel, onLongClick: () -
                 verticalAlignment = Alignment.Companion.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 图标（暂时使用编辑图标占位）
-                Icon(
-                    imageVector = MiuixIcons.Useful.Edit,
-                    contentDescription = "令牌图标",
-                    tint = MiuixTheme.colorScheme.primary,
-                    modifier = Modifier.Companion.size(32.dp)
-                )
+                // 图标：优先匹配品牌图标，否则显示首字母占位
+                val matchedRes: Int? = remember(token.issuer, token.label) {
+                    TokenImage.values().firstOrNull {
+                        it.matchToken(token.issuer, token.label)
+                    }?.resource
+                }
+                if (matchedRes != null) {
+                    Image(
+                        painter = painterResource(id = matchedRes),
+                        contentDescription = "令牌图标",
+                        modifier = Modifier.Companion.size(32.dp)
+                    )
+                } else {
+                    // 简单首字母占位，后续可升级为 text-drawable 渲染
+                    Card(
+                        modifier = Modifier.Companion.size(32.dp),
+                        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.primary.copy(alpha = 0.12f))
+                    ) {
+                        Box(contentAlignment = Alignment.Companion.Center) {
+                            Text(
+                                text = (token.issuer ?: token.label).firstOrNull()?.uppercase() ?: "?",
+                                fontSize = 14.sp,
+                                color = MiuixTheme.colorScheme.primary,
+                                fontWeight = FontWeight.Companion.Bold,
+                                modifier = Modifier.Companion.align(Alignment.Companion.Center)
+                            )
+                        }
+                    }
+                }
 
                 Column(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
