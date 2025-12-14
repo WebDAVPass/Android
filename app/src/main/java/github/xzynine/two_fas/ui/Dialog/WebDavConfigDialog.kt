@@ -22,8 +22,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import github.xzynine.two_fas.data.WebDavConfig
-import github.xzynine.two_fas.lib.webdav.Authorization
-import github.xzynine.two_fas.lib.webdav.WebDav
+import github.xzynine.webdav.Authorization
+import github.xzynine.webdav.WebDav
 import github.xzynine.two_fas.theme.getAppRoundedCorner
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
