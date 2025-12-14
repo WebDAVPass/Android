@@ -8,6 +8,7 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import github.xzynine.two_fas.data.AppDatabase
 import github.xzynine.two_fas.data.OtpToken
+import github.xzynine.two_fas.data.SyncState
 import github.xzynine.two_fas.data.TokenCode
 import github.xzynine.two_fas.data.WebDavConfig
 import github.xzynine.two_fas.lib.webdav.WebDav
@@ -32,7 +33,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val MIGRATION_1_2 = object : Migration(1, 2) {
+                val migration1_2 = object : Migration(1, 2) {
                     override fun migrate(db: SupportSQLiteDatabase) {
                         // 创建 webdav_configs 表以兼容从 v1 升级到 v2
                         db.execSQL("""
@@ -48,7 +49,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     }
                 }
 
-                val MIGRATION_2_3 = object : Migration(2, 3) {
+                val migration2_3 = object : Migration(2, 3) {
                     override fun migrate(db: SupportSQLiteDatabase) {
                         // 为旧数据补充 uniqueId 列（非空，默认空串便于后续回填），再建立唯一索引
                         db.execSQL("ALTER TABLE otp_tokens ADD COLUMN uniqueId TEXT NOT NULL DEFAULT ''")
@@ -90,11 +91,28 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     }
                 }
 
+                val migration3_4 = object : Migration(3, 4) {
+                    override fun migrate(db: SupportSQLiteDatabase) {
+                        // 创建同步状态表
+                        db.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `sync_state` (
+                                `id` INTEGER PRIMARY KEY NOT NULL,
+                                `last_sync_time` INTEGER NOT NULL,
+                                `remote_last_updated` TEXT
+                            )
+                        """.trimIndent())
+                        
+                        // 插入初始同步状态记录
+                        db.execSQL("INSERT INTO sync_state (id, last_sync_time, remote_last_updated) VALUES (1, ?, NULL)", 
+                            arrayOf(System.currentTimeMillis()))
+                    }
+                }
+
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "otp_token_database"
-                ).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
+                ).addMigrations(migration1_2, migration2_3, migration3_4).build()
                 INSTANCE = instance
                 instance
             }
@@ -104,6 +122,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val database: AppDatabase = getDatabase(context)
 
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
+    
+    // 同步状态数据访问对象
+    private val syncStateDao = database.syncStateDao()
 
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())
     val tokens: StateFlow<List<OtpToken>> = _tokens.asStateFlow()
@@ -133,8 +154,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val _restoreProgress = MutableStateFlow(0)
     val restoreProgress: StateFlow<Int> = _restoreProgress.asStateFlow()
     
-    private val _customEncryptionPassword = MutableStateFlow<String?>(null)
-    val customEncryptionPassword: StateFlow<String?> = _customEncryptionPassword.asStateFlow()
+    
     
     init {
         loadTokens()
@@ -148,8 +168,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     private fun loadWebDavConfigs() {
         viewModelScope.launch {
-            database.webDavConfigDao().getAll().collect { configs ->
-                _webDavConfigs.value = configs
+            database.webDavConfigDao().getAll().collect {
+                _webDavConfigs.value = it
             }
         }
     }
@@ -186,12 +206,12 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
             _tokens.value = tokenList
             // 为每个令牌创建代码流
-            tokenList.forEach { token ->
-                if (!_tokenCodes.containsKey(token.id)) {
-                    _tokenCodes[token.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(token))
+            tokenList.forEach {
+                if (!_tokenCodes.containsKey(it.id)) {
+                    _tokenCodes[it.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(it))
                 }
             }
-        } catch (e: Exception) {
+        } catch (ex: Exception) {
             // 如果出现异常，确保加载状态结束
             _tokens.value = emptyList()
         } finally {
@@ -208,13 +228,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         val tokenMap = mutableMapOf<String, MutableList<OtpToken>>()
 
         // 将令牌分组
-        tokens.forEach { token ->
+        tokens.forEach {
             // 使用uniqueId作为分组键
-            val key = token.uniqueId
+            val key = it.uniqueId
             if (!tokenMap.containsKey(key)) {
                 tokenMap[key] = mutableListOf()
             }
-            tokenMap[key]?.add(token)
+            tokenMap[key]?.add(it)
         }
 
         val uniqueTokens = mutableListOf<OtpToken>()
@@ -268,13 +288,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 刷新所有令牌代码
      */
     private fun refreshTokenCodes() {
-        _tokens.value.forEach { token ->
-            val currentCode = _tokenCodes[token.id]?.value
-            val newCode = tokenCodeUtil.generateTokenCode(token)
+        _tokens.value.forEach {
+            val currentCode = _tokenCodes[it.id]?.value
+            val newCode = tokenCodeUtil.generateTokenCode(it)
 
             // 只有当代码发生变化时才更新
             if (currentCode?.code != newCode.code) {
-                _tokenCodes[token.id]?.value = newCode
+                _tokenCodes[it.id]?.value = newCode
             }
         }
     }
@@ -299,7 +319,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         // 密钥+算法+位数+周期不存在，可以添加
         // 如果token对象没有uniqueId，则生成一个
         val tokenWithId = if (token.uniqueId.isBlank()) {
-            val uniqueId = github.xzynine.two_fas.util.UniqueIdGenerator.generate(
+            val uniqueId = UniqueIdGenerator.generate(
                 token.secret,
                 token.algorithm,
                 token.digits,
@@ -439,14 +459,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 获取加密密码
      */
     private suspend fun getEncryptionPassword(): String {
-        return _customEncryptionPassword.value ?: getFirstWebDavConfig()?.password ?: ""
-    }
-    
-    /**
-     * 设置自定义加密密码
-     */
-    fun setCustomEncryptionPassword(password: String?) {
-        _customEncryptionPassword.value = password
+        return getFirstWebDavConfig()?.password ?: ""
     }
     
     /**
@@ -462,14 +475,38 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 val webDavConfig = getFirstWebDavConfig() ?: return@launch
                 val password = webDavConfig.password
                 
-                val restoreResult = restoreTokensWithPassword(webDavConfig, password)
-                if (restoreResult) {
-                    _backupStatus.value = "自动恢复成功"
+                // 获取当前同步状态
+                val currentSyncState = syncStateDao.getSyncState()
+                
+                // 检查是否需要恢复
+                val webDav = WebDav(webDavConfig.url, Authorization(webDavConfig.username, webDavConfig.password))
+                val needRestore = BackupUtil.needRestore(webDav, currentSyncState?.remoteLastUpdated)
+                
+                if (needRestore) {
+                    // 需要恢复，执行恢复操作
+                    val restoreResult = restoreTokensWithPassword(webDavConfig, password)
+                    if (restoreResult) {
+                        _backupStatus.value = "自动恢复成功"
+                    } else {
+                        _backupStatus.value = "数据已最新，无需执行操作"
+                    }
                 } else {
-                    _backupStatus.value = "自动恢复失败，需要手动输入密码"
+                    // 不需要恢复，只更新元数据
+                    BackupUtil.updateMetadataOnly(webDav, getDeviceId())
+                    _backupStatus.value = "数据已最新，无需执行操作"
                 }
-            } catch (e: Exception) {
-                _backupStatus.value = "自动恢复失败：${e.message}"
+                
+                // 更新同步状态
+                val now = System.currentTimeMillis()
+                val metadata = BackupUtil.downloadMetadata(webDav)
+                val updatedSyncState = SyncState(
+                    id = 1,
+                    lastSyncTime = now,
+                    remoteLastUpdated = metadata.lastUpdated
+                )
+                syncStateDao.insertOrUpdate(updatedSyncState)
+            } catch (ex: Exception) {
+                _backupStatus.value = "自动恢复失败：${ex.message}"
             } finally {
                 _isRestoreInProgress.value = false
                 _restoreProgress.value = 0
@@ -496,8 +533,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 } else {
                     _backupStatus.value = "手动恢复失败：密码错误"
                 }
-            } catch (e: Exception) {
-                _backupStatus.value = "手动恢复失败：${e.message}"
+            } catch (ex: Exception) {
+                _backupStatus.value = "手动恢复失败：${ex.message}"
             } finally {
                 _isRestoreInProgress.value = false
                 _restoreProgress.value = 0
@@ -521,25 +558,51 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             }
             
             val tokensToInsert = mutableListOf<OtpToken>()
+            val tokensToUpdate = mutableListOf<OtpToken>()
+            
             for (token in restoredTokens) {
                 // 检查本地是否已存在该令牌
                 val existingToken = database.otpTokenDao().getByUniqueId(token.uniqueId)
                 if (existingToken == null) {
                     // 本地不存在，添加到插入列表
                     tokensToInsert.add(token)
+                } else {
+                    // 本地存在，检查元数据是否有变化
+                    if (existingToken.issuer != token.issuer ||
+                        existingToken.label != token.label ||
+                        existingToken.ordinal != token.ordinal) {
+                        // 元数据有变化，更新本地令牌
+                        val updatedToken = existingToken.copy(
+                            issuer = token.issuer,
+                            label = token.label,
+                            ordinal = token.ordinal
+                        )
+                        tokensToUpdate.add(updatedToken)
+                    }
                 }
             }
+            
+            var hasChanges = false
             
             if (tokensToInsert.isNotEmpty()) {
                 // 只插入本地不存在的令牌
                 database.otpTokenDao().insertAll(tokensToInsert)
-                refreshTokenList()
-                true
-            } else {
-                // 所有令牌都已存在本地
-                false
+                hasChanges = true
             }
-        } catch (e: Exception) {
+            
+            if (tokensToUpdate.isNotEmpty()) {
+                // 更新现有令牌的元数据
+                database.otpTokenDao().insertAll(tokensToUpdate)
+                hasChanges = true
+            }
+            
+            if (hasChanges) {
+                refreshTokenList()
+            }
+            
+            // 恢复过程成功，无论是否有新令牌插入或现有令牌更新
+            true
+        } catch (ex: Exception) {
             false
         }
     }
@@ -565,8 +628,18 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     _backupProgress.value = it
                 }
                 _backupStatus.value = "备份成功"
-            } catch (e: Exception) {
-                _backupStatus.value = "备份失败：${e.message}"
+                
+                // 备份成功后更新同步状态
+                val now = System.currentTimeMillis()
+                val metadata = BackupUtil.downloadMetadata(webDav)
+                val updatedSyncState = SyncState(
+                    id = 1,
+                    lastSyncTime = now,
+                    remoteLastUpdated = metadata.lastUpdated
+                )
+                syncStateDao.insertOrUpdate(updatedSyncState)
+            } catch (ex: Exception) {
+                _backupStatus.value = "备份失败：${ex.message}"
             } finally {
                 _isBackupInProgress.value = false
                 _backupProgress.value = 0

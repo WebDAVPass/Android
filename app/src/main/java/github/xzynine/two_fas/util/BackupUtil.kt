@@ -113,6 +113,54 @@ object BackupUtil {
     }
     
     /**
+     * 检查是否需要恢复令牌
+     * @param webDav WebDav客户端
+     * @param lastRemoteUpdated 上次同步的远程元数据最后更新时间
+     * @return 是否需要恢复
+     */
+    suspend fun needRestore(webDav: WebDav, lastRemoteUpdated: String?): Boolean {
+        return withContext(Dispatchers.IO) {
+            val metadataPath = buildPath(webDav.path, BackupConstants.METADATA_FILE)
+            val metadataWebDav = WebDav(metadataPath, webDav.authorization)
+            
+            if (!metadataWebDav.exists()) {
+                // 远程没有元数据，不需要恢复
+                return@withContext false
+            }
+            
+            // 下载远程元数据
+            val metadataJson = String(metadataWebDav.download(), Charsets.UTF_8)
+            val metadata = gson.fromJson(metadataJson, Metadata::class.java)
+            
+            // 如果本地没有上次同步记录，或者远程元数据更新了，需要恢复
+            return@withContext lastRemoteUpdated == null || metadata.lastUpdated > lastRemoteUpdated
+        }
+    }
+    
+    /**
+     * 下载元数据并更新设备同步时间，但不恢复令牌
+     * @param webDav WebDav客户端
+     * @param deviceId 设备ID
+     */
+    suspend fun updateMetadataOnly(webDav: WebDav, deviceId: String) {
+        withContext(Dispatchers.IO) {
+            // 下载元数据
+            val metadata = downloadMetadata(webDav)
+            val now = Instant.now().toString()
+            
+            // 更新设备同步时间
+            val deviceInfo = metadata.devices.getOrPut(deviceId) { DeviceInfo(now) }
+            deviceInfo.lastSyncAt = now
+            
+            // 更新元数据的最后更新时间
+            metadata.lastUpdated = now
+            
+            // 上传更新后的元数据
+            uploadMetadata(webDav, metadata)
+        }
+    }
+    
+    /**
      * 上传元数据
      * @param webDav WebDav客户端
      * @param metadata 元数据对象
@@ -234,6 +282,36 @@ object BackupUtil {
     }
     
     /**
+     * 删除核心文件
+     * @param webDav WebDav客户端
+     * @param uniqueId 唯一标识符
+     */
+    private suspend fun deleteCoreFile(webDav: WebDav, uniqueId: String) {
+        withContext(Dispatchers.IO) {
+            val corePath = buildPath(webDav.path, BackupConstants.TOKEN_DIR, "$uniqueId.token")
+            val coreWebDav = WebDav(corePath, webDav.authorization)
+            if (coreWebDav.exists()) {
+                coreWebDav.delete()
+            }
+        }
+    }
+    
+    /**
+     * 删除图标文件
+     * @param webDav WebDav客户端
+     * @param uniqueId 唯一标识符
+     */
+    private suspend fun deleteIconFile(webDav: WebDav, uniqueId: String) {
+        withContext(Dispatchers.IO) {
+            val iconPath = buildPath(webDav.path, BackupConstants.ICON_DIR, "$uniqueId.png")
+            val iconWebDav = WebDav(iconPath, webDav.authorization)
+            if (iconWebDav.exists()) {
+                iconWebDav.delete()
+            }
+        }
+    }
+    
+    /**
      * 备份令牌到WebDAV
      * @param webDav WebDav客户端
      * @param tokens 要备份的令牌列表
@@ -261,43 +339,101 @@ object BackupUtil {
             val deviceInfo = metadata.devices.getOrPut(deviceId) { DeviceInfo(now) }
             deviceInfo.lastSyncAt = now
             
+            // 获取本地令牌的唯一标识符集合
+            val localUniqueIds = tokens.map { it.uniqueId }.toSet()
+            
             // 处理每个令牌
             for ((index, token) in tokens.withIndex()) {
                 val uniqueId = token.uniqueId // 直接使用数据库中已存储的uniqueId，无需重新生成
-                val coreToken = token.toCoreToken()
                 
-                // 上传核心文件
-                val contentHash = uploadCoreFile(webDav, uniqueId, coreToken, encryptionPassword)
+                // 检查令牌是否已存在于元数据中
+                val existingMetadata = metadata.tokens[uniqueId]
                 
-                // 上传图标文件（如果有）
-                if (token.imagePath != null) {
-                    val imageFile = File(token.imagePath!!)
-                    if (imageFile.exists()) {
-                        uploadIconFile(webDav, uniqueId, imageFile)
+                if (existingMetadata == null) {
+                    // 新增令牌：上传核心文件和图标
+                    val coreToken = token.toCoreToken()
+                    
+                    // 上传核心文件
+                    val contentHash = uploadCoreFile(webDav, uniqueId, coreToken, encryptionPassword)
+                    
+                    // 上传图标文件（如果有）
+                    var imagePath: String? = null
+                    if (token.imagePath != null) {
+                        val imageFile = File(token.imagePath!!)
+                        if (imageFile.exists()) {
+                            uploadIconFile(webDav, uniqueId, imageFile)
+                            imagePath = "/${BackupConstants.ICON_DIR}/$uniqueId.png"
+                        }
                     }
-                }
-                
-                // 更新元数据
-                val tokenMetadata = metadata.tokens.getOrPut(uniqueId) {
-                    TokenMetadata(
+                    
+                    // 添加到元数据
+                    metadata.tokens[uniqueId] = TokenMetadata(
                         issuer = token.issuer,
                         label = token.label,
                         sort = token.ordinal,
-                        imagePath = token.imagePath?.let { "/${BackupConstants.ICON_DIR}/$uniqueId.png" },
+                        imagePath = imagePath,
                         contentHash = contentHash,
                         updatedAt = now
                     )
+                } else {
+                    // 现有令牌：只更新元数据和图标（如果需要）
+                    var needsUpdate = false
+                    
+                    // 检查元数据是否有变化
+                    if (existingMetadata.issuer != token.issuer ||
+                        existingMetadata.label != token.label ||
+                        existingMetadata.sort != token.ordinal) {
+                        // 更新元数据
+                        existingMetadata.issuer = token.issuer
+                        existingMetadata.label = token.label
+                        existingMetadata.sort = token.ordinal
+                        existingMetadata.updatedAt = now
+                        needsUpdate = true
+                    }
+                    
+                    // 检查图标是否需要更新
+                    val hasLocalImage = token.imagePath != null && File(token.imagePath!!).exists()
+                    val hasRemoteImage = existingMetadata.imagePath != null
+                    
+                    if (hasLocalImage && (!hasRemoteImage || existingMetadata.imagePath != "/${BackupConstants.ICON_DIR}/$uniqueId.png")) {
+                        // 上传新图标
+                        val imageFile = File(token.imagePath!!)
+                        uploadIconFile(webDav, uniqueId, imageFile)
+                        existingMetadata.imagePath = "/${BackupConstants.ICON_DIR}/$uniqueId.png"
+                        existingMetadata.updatedAt = now
+                        needsUpdate = true
+                    } else if (!hasLocalImage && hasRemoteImage) {
+                        // 删除旧图标
+                        deleteIconFile(webDav, uniqueId)
+                        existingMetadata.imagePath = null
+                        existingMetadata.updatedAt = now
+                        needsUpdate = true
+                    }
+                    
+                    // 如果没有任何变化，跳过
+                    if (!needsUpdate) {
+                        continue
+                    }
                 }
-                
-                tokenMetadata.issuer = token.issuer
-                tokenMetadata.label = token.label
-                tokenMetadata.sort = token.ordinal
-                tokenMetadata.contentHash = contentHash
-                tokenMetadata.updatedAt = now
                 
                 // 更新进度
                 val progress = 30 + (index + 1) * 50 / tokens.size
                 onProgress?.invoke(progress)
+            }
+            
+            // 处理已删除的令牌：从元数据中移除并删除相关文件
+            val remoteUniqueIds = metadata.tokens.keys
+            val deletedUniqueIds = remoteUniqueIds - localUniqueIds
+            
+            for (uniqueId in deletedUniqueIds) {
+                // 删除核心文件
+                deleteCoreFile(webDav, uniqueId)
+                
+                // 删除图标文件
+                deleteIconFile(webDav, uniqueId)
+                
+                // 从元数据中移除
+                metadata.tokens.remove(uniqueId)
             }
             
             // 更新元数据的最后更新时间

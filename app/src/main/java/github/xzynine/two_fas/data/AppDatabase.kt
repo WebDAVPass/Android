@@ -6,8 +6,9 @@ import androidx.room.RoomDatabase
 /**
  * OTP令牌数据库
  */
-@Database(entities = [OtpToken::class, WebDavConfig::class], version = 3, exportSchema = false)
+@Database(entities = [OtpToken::class, WebDavConfig::class, SyncState::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun otpTokenDao(): OtpTokenDao
     abstract fun webDavConfigDao(): WebDavConfigDao
+    abstract fun syncStateDao(): SyncStateDao
 }

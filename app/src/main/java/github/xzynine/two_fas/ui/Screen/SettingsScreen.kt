@@ -11,6 +11,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -40,6 +41,13 @@ fun SettingsScreen(
 ) {
     // 获取统一的圆角半径
     val cornerRadius = getAppRoundedCorner()
+    
+    // 收集状态流
+    val backupStatus = viewModel.backupStatus.collectAsState()
+    val isBackupInProgress = viewModel.isBackupInProgress.collectAsState()
+    val backupProgress = viewModel.backupProgress.collectAsState()
+    val isRestoreInProgress = viewModel.isRestoreInProgress.collectAsState()
+    val restoreProgress = viewModel.restoreProgress.collectAsState()
 
     Scaffold(
         topBar = {
@@ -84,7 +92,7 @@ fun SettingsScreen(
             // 备份状态显示
             BasicComponent(
                 title = "备份状态",
-                summary = viewModel.backupStatus.value,
+                summary = backupStatus.value,
                 leftAction = {
                     Icon(
                         modifier = Modifier.Companion.padding(end = 16.dp),
@@ -101,10 +109,10 @@ fun SettingsScreen(
 
             // 备份按钮
             BasicComponent(
-                title = if (viewModel.isBackupInProgress.value) "备份中..." else "备份令牌",
-                summary = if (viewModel.isBackupInProgress.value) "正在备份到WebDAV服务器... ${viewModel.backupProgress.value}%" else "点击开始备份",
+                title = if (isBackupInProgress.value) "备份中..." else "备份令牌",
+                summary = if (isBackupInProgress.value) "正在备份到WebDAV服务器... ${backupProgress.value}%" else "点击开始备份",
                 leftAction = {
-                    if (viewModel.isBackupInProgress.value) {
+                    if (isBackupInProgress.value) {
                         CircularProgressIndicator(
                             modifier = Modifier.Companion.padding(end = 16.dp)
                         )
@@ -117,7 +125,7 @@ fun SettingsScreen(
                     }
                 },
                 onClick = {
-                    if (!viewModel.isBackupInProgress.value) {
+                    if (!isBackupInProgress.value) {
                         viewModel.backupTokens()
                     }
                 },
@@ -131,10 +139,10 @@ fun SettingsScreen(
             // 手动恢复按钮
             val showRestorePasswordDialog = remember { mutableStateOf(false) }
             BasicComponent(
-                title = if (viewModel.isRestoreInProgress.value) "恢复中..." else "手动恢复",
-                summary = if (viewModel.isRestoreInProgress.value) "正在从WebDAV服务器恢复... ${viewModel.restoreProgress.value}%" else "点击开始手动恢复",
+                title = if (isRestoreInProgress.value) "恢复中..." else "手动恢复",
+                summary = if (isRestoreInProgress.value) "正在从WebDAV服务器恢复... ${restoreProgress.value}%" else "点击开始手动恢复",
                 leftAction = {
-                    if (viewModel.isRestoreInProgress.value) {
+                    if (isRestoreInProgress.value) {
                         CircularProgressIndicator(
                             modifier = Modifier.Companion.padding(end = 16.dp)
                         )
@@ -147,7 +155,7 @@ fun SettingsScreen(
                     }
                 },
                 onClick = {
-                    if (!viewModel.isRestoreInProgress.value) {
+                    if (!isRestoreInProgress.value) {
                         showRestorePasswordDialog.value = true
                     }
                 },
@@ -157,26 +165,6 @@ fun SettingsScreen(
             )
 
             Spacer(modifier = Modifier.Companion.height(8.dp))
-
-            // 自定义加密密码设置
-            val showCustomPasswordDialog = remember { mutableStateOf(false) }
-            BasicComponent(
-                title = "自定义加密密码",
-                summary = if (viewModel.customEncryptionPassword.value != null) "已设置" else "未设置",
-                leftAction = {
-                    Icon(
-                        modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.Useful.Personal,
-                        contentDescription = "自定义加密密码",
-                    )
-                },
-                onClick = {
-                    showCustomPasswordDialog.value = true
-                },
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-                    .border(1.dp, Color.Companion.LightGray, RoundedCornerShape(cornerRadius))
-            )
 
             Spacer(modifier = Modifier.Companion.height(16.dp))
 
@@ -203,24 +191,12 @@ fun SettingsScreen(
             // 恢复密码对话框
             PasswordDialog(
                 title = "手动恢复",
-                summary = "请输入备份加密密码",
+                summary = "请输入备份加密密码（WebDAV密码）",
                 show = showRestorePasswordDialog.value,
                 onDismiss = { showRestorePasswordDialog.value = false },
                 onConfirm = {
                     viewModel.manualRestoreTokens(it)
                     showRestorePasswordDialog.value = false
-                }
-            )
-
-            // 自定义加密密码对话框
-            PasswordDialog(
-                title = "设置自定义加密密码",
-                summary = "请输入自定义加密密码，留空则使用WebDAV密码",
-                show = showCustomPasswordDialog.value,
-                onDismiss = { showCustomPasswordDialog.value = false },
-                onConfirm = {
-                    viewModel.setCustomEncryptionPassword(if (it.isBlank()) null else it)
-                    showCustomPasswordDialog.value = false
                 }
             )
         }
