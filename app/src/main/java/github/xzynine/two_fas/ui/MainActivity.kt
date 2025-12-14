@@ -24,7 +24,6 @@ import github.xzynine.two_fas.ui.Dialog.WebDavConfigDialog
 import github.xzynine.two_fas.theme.AppTheme
 import github.xzynine.two_fas.ui.Screen.ScanTokenScreen
 import github.xzynine.two_fas.ui.Screen.TokenListScreen
-import github.xzynine.two_fas.util.SampleData
 import github.xzynine.two_fas.ui.ViewModel.TokenViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -136,8 +135,7 @@ fun MainScreen() {
                         // 设置页面
                         SettingsScreen(
                             viewModel = tokenViewModel,
-                            onWebDavConfigClick = { showWebDavDialog = true },
-                            onAddSampleDataClick = { addSampleData(context) }
+                            onWebDavConfigClick = { showWebDavDialog = true }
                         )
                     }
                 }
@@ -201,20 +199,3 @@ fun MainScreen() {
     )
 }
 
-/**
- * 添加示例数据到数据库
- */
-private fun addSampleData(context: Context) {
-    CoroutineScope(Dispatchers.IO).launch {
-        try {
-            val tokenViewModel = TokenViewModel(context)
-            val sampleTokens = SampleData.generateSampleTokens()
-
-            sampleTokens.forEach { token ->
-                tokenViewModel.addToken(token)
-            }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-    }
-}

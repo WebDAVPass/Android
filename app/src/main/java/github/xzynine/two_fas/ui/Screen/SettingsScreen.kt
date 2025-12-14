@@ -31,13 +31,11 @@ import top.yukonga.miuix.kmp.icon.icons.useful.Personal
  * 设置界面组件
  * @param viewModel TokenViewModel实例
  * @param onWebDavConfigClick 点击WebDAV配置的回调
- * @param onAddSampleDataClick 点击添加示例数据的回调
  */
 @Composable
 fun SettingsScreen(
     viewModel: TokenViewModel,
-    onWebDavConfigClick: () -> Unit,
-    onAddSampleDataClick: () -> Unit
+    onWebDavConfigClick: () -> Unit
 ) {
     // 获取统一的圆角半径
     val cornerRadius = getAppRoundedCorner()
@@ -164,28 +162,6 @@ fun SettingsScreen(
             )
 
             Spacer(modifier = Modifier.Companion.height(8.dp))
-
-            Spacer(modifier = Modifier.Companion.height(16.dp))
-
-            // 示例数据按钮（主要用于调试）
-            BasicComponent(
-                title = "添加示例数据",
-                leftAction = {
-                    Icon(
-                        modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.Useful.Personal,
-                        contentDescription = "添加示例数据",
-                    )
-                },
-                onClick = onAddSampleDataClick,
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-                    .border(
-                        1.dp,
-                        Color.Companion.LightGray,
-                        androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius)
-                    )
-            )
         }
     }
 }
