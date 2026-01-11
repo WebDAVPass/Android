@@ -1,13 +1,11 @@
 package github.xzynine.two_fas.ui.Dialog
 
 import android.widget.Toast
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
@@ -20,7 +18,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.unit.DpSize
 import github.xzynine.two_fas.data.WebDavConfig
 import github.xzynine.webdav.Authorization
 import github.xzynine.webdav.WebDav
@@ -31,7 +29,6 @@ import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.Surface
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -41,6 +38,7 @@ import top.yukonga.miuix.kmp.icon.icons.useful.AddSecret
 import top.yukonga.miuix.kmp.icon.icons.useful.Info
 import top.yukonga.miuix.kmp.icon.icons.useful.Personal
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.extra.SuperDialog
 
 /**
  * WebDAV配置内容组件，用于在弹窗中显示
@@ -293,53 +291,19 @@ fun WebDavConfigDialog(
     onConfigSaved: (config: WebDavConfig) -> Unit = { _ -> },
     existingConfig: WebDavConfig? = null
 ) {
-    // WebDAV配置弹窗
-    if (showDialog) {
-        // 获取统一的圆角半径
-        val cornerRadius = getAppRoundedCorner()
-
-        Dialog(
-            onDismissRequest = onDismissRequest
-        ) {
-            Surface(
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-                    .padding(16.dp)
-                    .border(1.dp, MiuixTheme.colorScheme.outline, RoundedCornerShape(cornerRadius)),
-                color = MiuixTheme.colorScheme.surface,
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(cornerRadius)
-            ) {
-                Column(
-                    modifier = Modifier.Companion
-                        .padding(16.dp)
-                ) {
-                    // 标题
-                    Text(
-                        text = if (existingConfig != null) "编辑 WebDAV 配置" else "WebDAV 配置",
-                        fontSize = 20.sp,
-                        modifier = Modifier.Companion.padding(bottom = 16.dp)
-                    )
-
-                    // 配置内容
-                    WebDavConfigContent(
-                        onDismiss = onDismissRequest,
-                        onConfigSaved = onConfigSaved,
-                        existingConfig = existingConfig
-                    )
-
-                    // 关闭按钮
-                    Row(
-                        modifier = Modifier.Companion
-                            .fillMaxWidth()
-                            .padding(top = 16.dp),
-                        horizontalArrangement = Arrangement.End
-                    ) {
-                        Button(onClick = onDismissRequest) {
-                            Text(text = "关闭")
-                        }
-                    }
-                }
-            }
-        }
+    SuperDialog(
+        title = if (existingConfig != null) "编辑 WebDAV 配置" else "WebDAV 配置",
+        summary = if (existingConfig != null) "修改您的 WebDAV 服务器设置" else "配置 WebDAV 服务器以同步令牌",
+        show = remember { mutableStateOf(showDialog) },
+        onDismissRequest = onDismissRequest,
+        defaultWindowInsetsPadding = true,
+        insideMargin = DpSize(16.dp, 16.dp)
+    ) {
+        // 配置内容
+        WebDavConfigContent(
+            onDismiss = onDismissRequest,
+            onConfigSaved = onConfigSaved,
+            existingConfig = existingConfig
+        )
     }
 }

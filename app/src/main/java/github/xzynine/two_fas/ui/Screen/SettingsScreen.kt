@@ -48,6 +48,7 @@ fun SettingsScreen(
     val restoreProgress = viewModel.restoreProgress.collectAsState()
 
     Scaffold(
+        popupHost = { },
         topBar = {
             TopAppBar(
                 title = "设置",

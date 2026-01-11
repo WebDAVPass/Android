@@ -37,6 +37,7 @@ import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.extra.SuperBottomSheet
+import top.yukonga.miuix.kmp.basic.MiuixPopupHost
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.icons.useful.Move
 import top.yukonga.miuix.kmp.icon.icons.useful.Save
@@ -84,6 +85,7 @@ fun MainScreen() {
 
     // 基于Miuix Scaffold的主界面
     Scaffold(
+        popupHost = { MiuixPopupHost() },
         topBar = {
             // 只有在首页时显示标题
             if (selectedIndex == 0) {

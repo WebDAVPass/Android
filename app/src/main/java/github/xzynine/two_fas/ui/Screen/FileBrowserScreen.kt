@@ -144,6 +144,7 @@ fun FileBrowserScreen(
     }
 
     Scaffold(
+        popupHost = { },
         topBar = {
             TopAppBar(
                 title = "WebDAV 文件浏览器",
