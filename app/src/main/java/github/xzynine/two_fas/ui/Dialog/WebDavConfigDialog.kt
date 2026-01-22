@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -291,10 +292,20 @@ fun WebDavConfigDialog(
     onConfigSaved: (config: WebDavConfig) -> Unit = { _ -> },
     existingConfig: WebDavConfig? = null
 ) {
+    // 使用可变状态来控制弹窗显示，直接使用外部传入的 showDialog 值
+    val isVisible = remember {
+        mutableStateOf(showDialog)
+    }
+    
+    // 当外部 showDialog 变化时，更新内部状态
+    LaunchedEffect(showDialog) {
+        isVisible.value = showDialog
+    }
+    
     SuperDialog(
         title = if (existingConfig != null) "编辑 WebDAV 配置" else "WebDAV 配置",
         summary = if (existingConfig != null) "修改您的 WebDAV 服务器设置" else "配置 WebDAV 服务器以同步令牌",
-        show = remember { mutableStateOf(showDialog) },
+        show = isVisible,
         onDismissRequest = onDismissRequest,
         defaultWindowInsetsPadding = true,
         insideMargin = DpSize(16.dp, 16.dp)

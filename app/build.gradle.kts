@@ -35,8 +35,10 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
+    kotlin {
+        compilerOptions {
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+        }
     }
     
     // Compose 配置
@@ -45,6 +47,13 @@ android {
     }
     composeOptions {
         kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get()
+    }
+    
+    // 配置 16KB 页面大小 LOAD 段对齐
+    packaging {
+        jniLibs {
+            useLegacyPackaging = false
+        }
     }
 }
 
