@@ -4,6 +4,9 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.widget.Toast
+import androidx.compose.animation.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +31,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +42,7 @@ import androidx.compose.ui.unit.sp
 import github.xzynine.two_fas.data.OtpToken
 import github.xzynine.two_fas.ui.ViewModel.TokenViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -57,6 +62,9 @@ import org.liberty.android.freeotp.token_images.matchToken
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import android.widget.ImageView
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.unit.IntOffset
 import com.amulyakhare.textdrawable.TextDrawable
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
@@ -180,6 +188,8 @@ fun TokenItem(token: OtpToken, tokenViewModel: TokenViewModel, onLongClick: () -
 
     // 上下文
     val context = LocalContext.current
+    // 协程作用域，用于动画
+    val coroutineScope = rememberCoroutineScope()
 
     // 复制到剪贴板功能
     fun copyToClipboard(code: String) {
@@ -263,16 +273,60 @@ fun TokenItem(token: OtpToken, tokenViewModel: TokenViewModel, onLongClick: () -
                         fontWeight = FontWeight.Companion.Normal
                     )
 
-                    // 6位码
+                    // 6位码 - 添加下一个令牌显示和动画
                     tokenCode?.let { code ->
-                        val remainingTime =
+                        val remainingTime = 
                             kotlin.comparisons.maxOf(0, (code.end - currentTime) / 1000)
-                        Text(
-                            text = code.code,
-                            fontSize = 24.sp,
-                            fontWeight = FontWeight.Companion.Bold,
-                            color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
+                        val isLast5Seconds = remainingTime <= 5
+                        val isLast1Second = remainingTime <= 1
+                        
+                        // 动画：透明度控制
+                        val nextCodeAlpha by animateFloatAsState(
+                            targetValue = if (isLast5Seconds && code.next != null) 1f else 0f,
+                            animationSpec = tween(500),
+                            label = "alpha"
                         )
+                        
+                        // 当前令牌在最后1秒时淡出
+                        val currentCodeAlpha by animateFloatAsState(
+                            targetValue = if (isLast1Second) 0.3f else 1f,
+                            animationSpec = tween(300),
+                            label = "currentAlpha"
+                        )
+                        
+                        // 下一个令牌偏移
+                        val nextCodeOffset by animateFloatAsState(
+                            targetValue = if (isLast5Seconds && code.next != null) 0f else 20f,
+                            animationSpec = tween(500),
+                            label = "offset"
+                        )
+                        
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // 当前令牌
+                            Text(
+                                text = code.code,
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Companion.Bold,
+                                color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
+                                modifier = Modifier.alpha(currentCodeAlpha)
+                            )
+                            
+                            // 下一个令牌：最后5秒显示
+                            code.next?.let {
+                                Text(
+                                    text = it.code,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Companion.Medium,
+                                    color = MiuixTheme.colorScheme.primary,
+                                    modifier = Modifier
+                                        .padding(start = 8.dp)
+                                        .alpha(nextCodeAlpha * 0.9f)
+                                        .offset { IntOffset(nextCodeOffset.toInt(), 0) }
+                                )
+                            }
+                        }
                     }
                 }
             }
