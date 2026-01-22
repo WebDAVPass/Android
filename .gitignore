@@ -15,5 +15,6 @@
 local.properties
 app/debug/
 
-.trae/
+.trae/documents
 .idea/inspectionProfiles/Project_Default.xml
+.gitignore
