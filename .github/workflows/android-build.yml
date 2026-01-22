@@ -5,10 +5,13 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  # 前置作业：准备环境和获取版本信息
+  prepare:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -51,6 +54,38 @@ jobs:
             exit 1
           fi
 
+      - name: Upload keystore artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: keystore
+          path: app/keystore.jks
+          retention-days: 1
+
+  # 并行构建作业：构建 debug APK
+  build-debug:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download keystore artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: keystore
+          path: app
+
       - name: Build debug APK
         run: ./gradlew assembleDebug
         env:
@@ -64,6 +99,32 @@ jobs:
         with:
           name: universal-debug-signed-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 1
+
+  # 并行构建作业：构建 release APKs
+  build-release:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Download keystore artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: keystore
+          path: app
 
       - name: Build release APKs (split by ABI)
         run: ./gradlew assembleRelease
@@ -78,12 +139,38 @@ jobs:
         with:
           name: release-signed-apks
           path: app/build/outputs/apk/release/*-release.apk
+          retention-days: 1
+
+  # 最终作业：创建 GitHub Pre-release
+  release:
+    needs: [prepare, build-debug, build-release]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Download debug APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: universal-debug-signed-apk
+          path: app/build/outputs/apk/debug
+
+      - name: Download release APKs artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: release-signed-apks
+          path: app/build/outputs/apk/release
 
       - name: Create GitHub Pre-release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.version.outputs.version }}
-          name: ${{ steps.version.outputs.version }}
+          tag_name: v${{ needs.prepare.outputs.version }}
+          name: ${{ needs.prepare.outputs.version }}
           prerelease: true
           files: |
             app/build/outputs/apk/release/*-release.apk
