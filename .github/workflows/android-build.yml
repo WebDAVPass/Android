@@ -53,13 +53,7 @@ jobs:
             echo "Version does not match expected pattern (major.minor.patch)" >&2
             exit 1
           fi
-
-      - name: Upload keystore artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: keystore
-          path: app/keystore.jks
-          retention-days: 1
+          echo "::notice::版本验证通过，当前版本: ${{ steps.version.outputs.version }}"
 
   # 并行构建作业：构建 debug APK
   build-debug:
@@ -80,14 +74,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Download keystore artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: keystore
-          path: app
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Decode keystore into app module
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
       - name: Build debug APK
-        run: ./gradlew assembleDebug
+        run: |
+          echo "::notice::开始构建 Debug APK..."
+          ./gradlew assembleDebug
+          echo "::notice::Debug APK 构建完成！"
         env:
           KEYSTORE_PATH: keystore.jks
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -100,6 +100,8 @@ jobs:
           name: universal-debug-signed-apk
           path: app/build/outputs/apk/debug/app-debug.apk
           retention-days: 1
+      - name: Debug APK 上传完成
+        run: echo "::notice::Debug APK 已成功上传到 Artifacts！"
 
   # 并行构建作业：构建 release APKs
   build-release:
@@ -120,14 +122,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Download keystore artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: keystore
-          path: app
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Decode keystore into app module
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
       - name: Build release APKs (split by ABI)
-        run: ./gradlew assembleRelease
+        run: |
+          echo "::notice::开始构建 Release APKs..."
+          ./gradlew assembleRelease
+          echo "::notice::Release APKs 构建完成！"
         env:
           KEYSTORE_PATH: keystore.jks
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
@@ -140,6 +148,8 @@ jobs:
           name: release-signed-apks
           path: app/build/outputs/apk/release/*-release.apk
           retention-days: 1
+      - name: Release APKs 上传完成
+        run: echo "::notice::Release APKs 已成功上传到 Artifacts！"
 
   # 最终作业：创建 GitHub Pre-release
   release:
@@ -167,6 +177,7 @@ jobs:
           path: app/build/outputs/apk/release
 
       - name: Create GitHub Pre-release
+        id: create-release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ needs.prepare.outputs.version }}
@@ -177,3 +188,11 @@ jobs:
             app/build/outputs/apk/debug/app-debug.apk
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 输出 Release 地址
+        run: |
+          RELEASE_URL="https://github.com/${{ github.repository }}/releases/tag/v${{ needs.prepare.outputs.version }}"
+          echo "::notice::Release 已成功创建！"
+          echo "::notice::Release 地址: $RELEASE_URL"
+          echo "RELEASE_URL=$RELEASE_URL" >> $GITHUB_OUTPUT
+        id: release-output
