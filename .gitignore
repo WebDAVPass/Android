@@ -12,3 +12,4 @@ app/debug/
 /buildSrc/build
 
 /.idea
+.kotlin/
