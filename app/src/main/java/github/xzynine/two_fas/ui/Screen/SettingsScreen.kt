@@ -1,5 +1,8 @@
 package github.xzynine.two_fas.ui.Screen
 
+import android.content.ComponentName
+import android.content.Intent
+import android.provider.Settings
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -14,7 +17,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.collectAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import github.xzynine.two_fas.service.TwoFasAutofillService
 import github.xzynine.two_fas.theme.getAppRoundedCorner
 import github.xzynine.two_fas.ui.Dialog.PasswordDialog
 import github.xzynine.two_fas.ui.ViewModel.TokenViewModel
@@ -46,6 +51,7 @@ fun SettingsScreen(
     val backupProgress = viewModel.backupProgress.collectAsState()
     val isRestoreInProgress = viewModel.isRestoreInProgress.collectAsState()
     val restoreProgress = viewModel.restoreProgress.collectAsState()
+    val context = LocalContext.current
 
     Scaffold(
         popupHost = { },
@@ -64,6 +70,54 @@ fun SettingsScreen(
                 .padding(it)
                 .padding(16.dp)
         ) {
+            Text(
+                text = "系统设置",
+                modifier = Modifier.padding(8.dp)
+            )
+
+            BasicComponent(
+                title = "设置为自动填充器",
+                summary = "跳转到系统自动填充设置",
+                leftAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Useful.Personal,
+                        contentDescription = "设置为自动填充器",
+                    )
+                },
+                onClick = {
+                    val autofillServiceExtra = "android.provider.extra.AUTOFILL_SERVICE"
+                    val autofillSettingsAction = "android.settings.AUTOFILL_SETTINGS"
+                    val requestIntent = Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
+                        putExtra(
+                            autofillServiceExtra,
+                            ComponentName(context, TwoFasAutofillService::class.java)
+                        )
+                    }
+                    val credentialsPickerIntent = Intent().apply {
+                        component = ComponentName(
+                            "com.android.settings",
+                            "com.android.settings.applications.credentials.CredentialsPickerActivity"
+                        )
+                    }
+                    val fallbackIntent = Intent(autofillSettingsAction)
+                    val intent = when {
+                        requestIntent.resolveActivity(context.packageManager) != null -> requestIntent
+                        credentialsPickerIntent.resolveActivity(context.packageManager) != null -> credentialsPickerIntent
+                        fallbackIntent.resolveActivity(context.packageManager) != null -> fallbackIntent
+                        else -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                            data = android.net.Uri.fromParts("package", context.packageName, null)
+                        }
+                    }
+                    context.startActivity(intent)
+                },
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+                    .border(1.dp, Color.Companion.LightGray, RoundedCornerShape(cornerRadius))
+            )
+
+            Spacer(modifier = Modifier.Companion.height(16.dp))
+
             // WebDAV配置
             BasicComponent(
                 title = "WebDAV 配置",
