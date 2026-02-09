@@ -1,4 +1,3 @@
-# Copilot Instructions
 ## ai的agent要求
 - 要求修改时直接修改不二次征求同意
 - 尽量最小化改动以避免无法预料的错误
