@@ -73,6 +73,7 @@ object BackupUtil {
             ordinal = metadata.sort,
             issuer = metadata.issuer,
             label = metadata.label,
+            description = metadata.description,
             imagePath = metadata.imagePath,
             tokenType = OtpTokenType.valueOf(this.tokenType),
             algorithm = this.algorithm,
@@ -296,6 +297,7 @@ object BackupUtil {
                     metadata.tokens[uniqueId] = TokenMetadata(
                         issuer = token.issuer,
                         label = token.label,
+                        description = token.description,
                         sort = token.ordinal,
                         imagePath = imagePath,
                         contentHash = contentHash,
@@ -310,10 +312,12 @@ object BackupUtil {
                     // 检查元数据是否有变化
                     if (existingMetadata.issuer != token.issuer ||
                         existingMetadata.label != token.label ||
+                        existingMetadata.description != token.description ||
                         existingMetadata.sort != token.ordinal) {
                         // 更新元数据
                         existingMetadata.issuer = token.issuer
                         existingMetadata.label = token.label
+                        existingMetadata.description = token.description
                         existingMetadata.sort = token.ordinal
                         existingMetadata.updatedAt = now
                         needsUpdate = true

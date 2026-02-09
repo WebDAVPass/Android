@@ -175,7 +175,12 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
  * 单个令牌项组件
  */
 @Composable
-fun TokenItem(token: OtpToken, tokenViewModel: TokenViewModel, onLongClick: () -> Unit) {
+fun TokenItem(
+    token: OtpToken,
+    tokenViewModel: TokenViewModel,
+    onLongClick: () -> Unit,
+    onTokenClick: ((String) -> Unit)? = null
+) {
     val tokenCode by tokenViewModel.getTokenCode(token.id).collectAsState(null)
 
     // 实时更新的时间状态，用于倒计时显示
@@ -209,7 +214,13 @@ fun TokenItem(token: OtpToken, tokenViewModel: TokenViewModel, onLongClick: () -
         pressFeedbackType = PressFeedbackType.Sink,
         showIndication = true,
         onClick = {
-            tokenCode?.let { copyToClipboard(it.code) }
+            tokenCode?.let {
+                if (onTokenClick != null) {
+                    onTokenClick(it.code)
+                } else {
+                    copyToClipboard(it.code)
+                }
+            }
         },
         onLongPress = onLongClick
     ) {

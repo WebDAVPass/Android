@@ -41,6 +41,11 @@
                 android:resource="@xml/autofill_service" />
         </service>
 
+        <activity
+            android:name=".ui.AutofillPickerActivity"
+            android:exported="false"
+            android:theme="@style/Theme._2FASxzy" />
+
     </application>
 
 </manifest>

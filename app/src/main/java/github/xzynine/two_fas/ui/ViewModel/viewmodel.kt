@@ -108,11 +108,17 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     }
                 }
 
+                val migration4_5 = object : Migration(4, 5) {
+                    override fun migrate(db: SupportSQLiteDatabase) {
+                        db.execSQL("ALTER TABLE otp_tokens ADD COLUMN description TEXT")
+                    }
+                }
+
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
                     "otp_token_database"
-                ).addMigrations(migration1_2, migration2_3, migration3_4).build()
+                ).addMigrations(migration1_2, migration2_3, migration3_4, migration4_5).build()
                 INSTANCE = instance
                 instance
             }
@@ -582,11 +588,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     // 本地存在，检查元数据是否有变化
                     if (existingToken.issuer != token.issuer ||
                         existingToken.label != token.label ||
+                        existingToken.description != token.description ||
                         existingToken.ordinal != token.ordinal) {
                         // 元数据有变化，更新本地令牌
                         val updatedToken = existingToken.copy(
                             issuer = token.issuer,
                             label = token.label,
+                            description = token.description,
                             ordinal = token.ordinal
                         )
                         tokensToUpdate.add(updatedToken)

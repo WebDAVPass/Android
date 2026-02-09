@@ -49,6 +49,7 @@ fun TokenDialog(
 ) {
     var issuer by remember { mutableStateOf(token?.issuer ?: "") }
     var label by remember { mutableStateOf(token?.label ?: "") }
+    var description by remember { mutableStateOf(token?.description ?: "") }
     var secret by remember { mutableStateOf(token?.secret ?: "") }
     var secretVisible by remember { mutableStateOf(false) }
     val isEditMode = token != null
@@ -85,6 +86,14 @@ fun TokenDialog(
                     value = label,
                     onValueChange = { label = it },
                     label = "标签",
+                    modifier = Modifier.Companion.fillMaxWidth(),
+                    singleLine = true
+                )
+
+                TextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = "描述（包名或备注）",
                     modifier = Modifier.Companion.fillMaxWidth(),
                     singleLine = true
                 )
@@ -133,6 +142,7 @@ fun TokenDialog(
                             token.copy(
                                 issuer = if (issuer.isBlank()) null else issuer,
                                 label = label,
+                                description = description.ifBlank { null },
                                 secret = secret
                             )
                         } else {
@@ -157,6 +167,7 @@ fun TokenDialog(
                                 Uri.parse("otpauth://totp/${issuerPart}${finalLabel}?secret=${secret}&algorithm=SHA1&digits=6&period=30")
                             }
                             github.xzynine.two_fas.data.OtpTokenFactory.createFromUri(uri)
+                                .copy(description = description.ifBlank { null })
                         }
                         onSave(finalToken)
                     }

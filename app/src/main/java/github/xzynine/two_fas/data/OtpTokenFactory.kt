@@ -86,6 +86,7 @@ object OtpTokenFactory {
         val secret = uri.getQueryParameter("secret") ?: throw IllegalArgumentException("密钥不能为空")
         // 解析图像路径
         val image = uri.getQueryParameter("image")
+        val description = uri.getQueryParameter("description")?.takeIf { it.isNotBlank() }
 
         // 生成唯一标识符
         val uniqueId = UniqueIdGenerator.generate(secret, algo, digits, period)
@@ -96,6 +97,7 @@ object OtpTokenFactory {
             ordinal = -System.currentTimeMillis(), // 使新令牌出现在列表顶部
             issuer = issuer,
             label = label,
+            description = description,
             imagePath = image,
             tokenType = type,
             algorithm = algo,

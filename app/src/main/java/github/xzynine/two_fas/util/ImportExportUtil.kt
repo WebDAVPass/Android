@@ -110,6 +110,7 @@ class ImportExportUtil(
         // 解析发行商和标签
         val issuer = uri.getQueryParameter("issuer")
         val label = path.substringAfterLast("/")
+        val description = uri.getQueryParameter("description")
         
         // 解析其他参数
         val secret = uri.getQueryParameter("secret") ?: ""
@@ -132,6 +133,7 @@ class ImportExportUtil(
             ordinal = 0,
             issuer = issuer,
             label = label,
+            description = description,
             imagePath = null,
             tokenType = tokenType,
             algorithm = algorithm,
@@ -160,6 +162,7 @@ class ImportExportUtil(
             .appendQueryParameter("digits", token.digits.toString())
 
         token.issuer?.let { builder.appendQueryParameter("issuer", it) }
+        token.description?.let { builder.appendQueryParameter("description", it) }
         
         if (token.tokenType == github.xzynine.two_fas.data.OtpTokenType.TOTP) {
             builder.appendQueryParameter("period", token.period.toString())
