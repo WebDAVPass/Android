@@ -81,7 +81,7 @@ android {
             // 只在包含 Release 任务时启用分包，否则只生成 universal APK
             isEnable = gradle.startParameter.taskNames.any { it.contains("Release") }
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
             isUniversalApk = true
         }
     }
