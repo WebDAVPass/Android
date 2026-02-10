@@ -34,7 +34,7 @@ android {
     }
 
     defaultConfig {
-        applicationId = "github.xzynine.two_fas"
+        applicationId = "xzynine.webdavpass"
         minSdk = 29
         targetSdk = 36
         // 使用自动计算的版本号
