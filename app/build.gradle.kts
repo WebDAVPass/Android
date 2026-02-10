@@ -28,7 +28,7 @@ val computedVersionName = versionInfo.versionName
 val computedVersionCode = versionInfo.versionCode
 
 android {
-    namespace = "github.xzynine.two_fas"
+    namespace = "xzynine.WebDAVPass.Android"
     compileSdk {
         version = release(36)
     }
