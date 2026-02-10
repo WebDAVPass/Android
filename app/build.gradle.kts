@@ -33,6 +33,23 @@ android {
         version = release(36)
     }
 
+    // 从 local.properties 读取签名信息
+    val localProperties = Properties()
+    val localPropertiesFile = File(rootProject.projectDir, "local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { localProperties.load(it) }
+    }
+
+    // 签名配置
+    signingConfigs {
+        create("release") {
+            keyAlias = localProperties.getProperty("KEY_ALIAS", System.getenv("KEY_ALIAS"))
+            keyPassword = localProperties.getProperty("KEY_PASSWORD", System.getenv("KEY_PASSWORD"))
+            storeFile = file("../PublicHub")
+            storePassword = localProperties.getProperty("STORE_PASSWORD", System.getenv("STORE_PASSWORD"))
+        }
+    }
+
     defaultConfig {
         applicationId = "xzynine.webdavpass"
         minSdk = 29
@@ -44,35 +61,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    signingConfigs {
-        // 直接使用PublicHub文件进行签名（同时适用于工作流和本地开发）
-        val keystoreFile = File(rootProject.projectDir, "PublicHub")
-        val storePass = System.getenv("STORE_PASSWORD") ?: project.findProperty("STORE_PASSWORD") as? String ?: "226948"
-        val keyAliasValue = System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") as? String ?: "key0"
-        val keyPass = System.getenv("KEY_PASSWORD") ?: project.findProperty("KEY_PASSWORD") as? String ?: "226948"
-
-        // 创建release签名配置
-        create("release") {
-            storeFile = keystoreFile
-            storePassword = storePass
-            keyAlias = keyAliasValue
-            keyPassword = keyPass
-        }
-    }
-
-    val releaseSigning = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
-
     buildTypes {
         getByName("debug") {
-            signingConfig = releaseSigning
+            signingConfig = signingConfigs.getByName("release")
         }
         getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = releaseSigning
         }
     }
     
