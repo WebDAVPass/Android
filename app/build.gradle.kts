@@ -45,42 +45,18 @@ android {
     }
 
     signingConfigs {
-        val keystorePath = System.getenv("KEYSTORE_PATH") ?: project.findProperty("KEYSTORE_PATH") as? String
-        val signingStorePassword = System.getenv("STORE_PASSWORD") ?: project.findProperty("STORE_PASSWORD") as? String
-        val signingKeyPassword = System.getenv("KEY_PASSWORD") ?: project.findProperty("KEY_PASSWORD") as? String
-        val signingKeyAlias = System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") as? String
+        // 直接使用PublicHub文件进行签名（同时适用于工作流和本地开发）
+        val keystoreFile = File(rootProject.projectDir, "PublicHub")
+        val storePass = System.getenv("STORE_PASSWORD") ?: project.findProperty("STORE_PASSWORD") as? String ?: "226948"
+        val keyAliasValue = System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") as? String ?: "key0"
+        val keyPass = System.getenv("KEY_PASSWORD") ?: project.findProperty("KEY_PASSWORD") as? String ?: "226948"
 
-        // Local-only fallback (not committed): read optional properties from two locations, otherwise pick first .jks in PublicHub
-        val publicHubPath = "D:/xzy/nas-Sync/androidKey/2fa-xzy/PublicHub"
-        val publicHubFile = File(publicHubPath)
-        val localPropFiles = listOf(
-            File("D:/xzy/nas-Sync/androidKey/2fa-xzy/signing.local.properties")
-        )
-        val localProps = Properties().apply {
-            localPropFiles.filter { it.isFile }.forEach { file ->
-                file.inputStream().use { load(it) }
-            }
-        }
-        val localKeystore = if (publicHubFile.exists()) {
-            publicHubFile
-        } else {
-            null
-        }
-
-        val resolvedKeystore = keystorePath
-            ?: localProps.getProperty("KEYSTORE_PATH")
-            ?: localKeystore?.absolutePath
-        val resolvedStorePassword = signingStorePassword ?: localProps.getProperty("STORE_PASSWORD")
-        val resolvedKeyPassword = signingKeyPassword ?: localProps.getProperty("KEY_PASSWORD")
-        val resolvedKeyAlias = signingKeyAlias ?: localProps.getProperty("KEY_ALIAS")
-
-        if (!resolvedKeystore.isNullOrBlank() && !resolvedStorePassword.isNullOrBlank() && !resolvedKeyPassword.isNullOrBlank() && !resolvedKeyAlias.isNullOrBlank()) {
-            create("release") {
-                storeFile = file(resolvedKeystore)
-                storePassword = resolvedStorePassword
-                keyAlias = resolvedKeyAlias
-                keyPassword = resolvedKeyPassword
-            }
+        // 创建release签名配置
+        create("release") {
+            storeFile = keystoreFile
+            storePassword = storePass
+            keyAlias = keyAliasValue
+            keyPassword = keyPass
         }
     }
 

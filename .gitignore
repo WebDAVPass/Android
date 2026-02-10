@@ -1,15 +1,27 @@
+# IDE相关文件
 *.iml
+/.idea
+.kotlin/
+
+# 构建系统文件
 .gradle
-/local.properties
-.DS_Store
 /build
+/buildSrc/build
+
+# 本地配置文件
+/local.properties
+
+# 签名文件
+PublicHub
+
+# 系统文件
+.DS_Store
+
+# 构建输出
 /captures
 .externalNativeBuild
 .cxx
 app/debug/
 
+# 其他文件
 .trae/documents
-/buildSrc/build
-
-/.idea
-.kotlin/

@@ -30,7 +30,7 @@ jobs:
 
       - name: Decode keystore into app module
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > PublicHub
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
@@ -79,7 +79,7 @@ jobs:
 
       - name: Decode keystore into app module
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > PublicHub
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
@@ -89,7 +89,6 @@ jobs:
           ./gradlew assembleDebug
           echo "::notice::Debug APK 构建完成！"
         env:
-          KEYSTORE_PATH: keystore.jks
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
@@ -127,7 +126,7 @@ jobs:
 
       - name: Decode keystore into app module
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > app/keystore.jks
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > PublicHub
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
@@ -137,7 +136,6 @@ jobs:
           ./gradlew assembleRelease
           echo "::notice::Release APKs 构建完成！"
         env:
-          KEYSTORE_PATH: keystore.jks
           KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
