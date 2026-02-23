@@ -31,13 +31,13 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.basic.ArrowRight
-import top.yukonga.miuix.kmp.icon.icons.basic.Check
-import top.yukonga.miuix.kmp.icon.icons.useful.AddSecret
-import top.yukonga.miuix.kmp.icon.icons.useful.Info
-import top.yukonga.miuix.kmp.icon.icons.useful.Personal
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.icon.basic.ArrowRight
+import top.yukonga.miuix.kmp.icon.basic.Check
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Contacts
+import top.yukonga.miuix.kmp.icon.extended.Info
 
 /**
  * WebDAV配置内容组件，用于在弹窗中显示
@@ -97,7 +97,7 @@ fun WebDavConfigContent(
             singleLine = true,
             leadingIcon = {
                 Icon(
-                    imageVector = MiuixIcons.Useful.Info,
+                    imageVector = MiuixIcons.Info,
                     contentDescription = "服务器地址",
                     modifier = Modifier.Companion.padding(horizontal = 12.dp)
                 )
@@ -125,9 +125,9 @@ fun WebDavConfigContent(
             singleLine = true,
             leadingIcon = {
                 Icon(
-                    imageVector = MiuixIcons.Useful.Personal,
+                    imageVector = MiuixIcons.Contacts,
                     contentDescription = "用户名",
-                    modifier = Modifier.Companion.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp)
                 )
             }
         )
@@ -143,7 +143,7 @@ fun WebDavConfigContent(
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             leadingIcon = {
                 Icon(
-                    imageVector = MiuixIcons.Useful.AddSecret,
+                    imageVector = MiuixIcons.Back,
                     contentDescription = "密码",
                     modifier = Modifier.Companion.padding(horizontal = 12.dp)
                 )

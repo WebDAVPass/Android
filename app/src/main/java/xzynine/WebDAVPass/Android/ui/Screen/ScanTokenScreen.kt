@@ -60,11 +60,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Scan
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.Executors
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.icon.icons.useful.AddSecret
-import top.yukonga.miuix.kmp.icon.icons.useful.Scan
 
 /**
  * 扫描二维码界面
@@ -319,7 +319,7 @@ fun ScanTokenScreen(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Button(onClick = { showManualInput = true }) {
-                    Icon(imageVector = MiuixIcons.Useful.AddSecret, contentDescription = "手动输入")
+                    Icon(imageVector = MiuixIcons.Back, contentDescription = "手动输入")
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(text = "手动输入密钥")
                 }
@@ -327,7 +327,7 @@ fun ScanTokenScreen(
                     // 选择图片（图片/*），解析二维码并尝试添加
                     imagePickerLauncher.launch(arrayOf("image/*"))
                 }) {
-                    Icon(imageVector = MiuixIcons.Useful.Scan, contentDescription = "上传图片")
+                    Icon(imageVector = MiuixIcons.Scan, contentDescription = "上传图片")
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(text = "上传带有二维码的截图")
                 }

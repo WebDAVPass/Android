@@ -27,7 +27,11 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.useful.Personal
+import top.yukonga.miuix.kmp.icon.extended.Backup
+import top.yukonga.miuix.kmp.icon.extended.CloudFill
+import top.yukonga.miuix.kmp.icon.extended.FileDownloads
+import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.MoveFile
 
 /**
  * 设置界面组件
@@ -75,10 +79,10 @@ fun SettingsScreen(
             BasicComponent(
                 title = "设置为自动填充器",
                 summary = "跳转到系统自动填充设置",
-                leftAction = {
+                startAction = {
                     Icon(
                         modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.Useful.Personal,
+                        imageVector = MiuixIcons.GridView,
                         contentDescription = "设置为自动填充器",
                     )
                 },
@@ -118,17 +122,17 @@ fun SettingsScreen(
             // WebDAV配置
             BasicComponent(
                 title = "WebDAV 配置",
-                leftAction = {
+                startAction = {
                     Icon(
                         modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.Useful.Personal,
+                        imageVector = MiuixIcons.CloudFill,
                         contentDescription = "WebDAV 配置",
                     )
                 },
                 onClick = onWebDavConfigClick,
                 modifier = Modifier.Companion
                     .fillMaxWidth()
-                    .border(1.dp, Color.Companion.LightGray, RoundedCornerShape(cornerRadius))
+                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
             )
 
             Spacer(modifier = Modifier.Companion.height(16.dp))
@@ -143,10 +147,10 @@ fun SettingsScreen(
             BasicComponent(
                 title = "备份状态",
                 summary = backupStatus.value,
-                leftAction = {
+                startAction = {
                     Icon(
                         modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.Useful.Personal,
+                        imageVector = MiuixIcons.Backup,
                         contentDescription = "备份状态",
                     )
                 },
@@ -161,15 +165,15 @@ fun SettingsScreen(
             BasicComponent(
                 title = if (isBackupInProgress.value) "备份中..." else "备份令牌",
                 summary = if (isBackupInProgress.value) "正在备份到WebDAV服务器... ${backupProgress.value}%" else "点击开始备份",
-                leftAction = {
+                startAction = {
                     if (isBackupInProgress.value) {
                         CircularProgressIndicator(
-                            modifier = Modifier.Companion.padding(end = 16.dp)
+                            modifier = Modifier.padding(end = 16.dp)
                         )
                     } else {
                         Icon(
-                            modifier = Modifier.Companion.padding(end = 16.dp),
-                            imageVector = MiuixIcons.Useful.Personal,
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.MoveFile,
                             contentDescription = "备份令牌",
                         )
                     }
@@ -181,24 +185,24 @@ fun SettingsScreen(
                 },
                 modifier = Modifier.Companion
                     .fillMaxWidth()
-                    .border(1.dp, Color.Companion.LightGray, RoundedCornerShape(cornerRadius))
+                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
             )
 
-            Spacer(modifier = Modifier.Companion.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // 手动恢复按钮
             BasicComponent(
                 title = if (isRestoreInProgress.value) "恢复中..." else "手动恢复",
                 summary = if (isRestoreInProgress.value) "正在从WebDAV服务器恢复... ${restoreProgress.value}%" else "点击开始手动恢复",
-                leftAction = {
+                startAction = {
                     if (isRestoreInProgress.value) {
                         CircularProgressIndicator(
-                            modifier = Modifier.Companion.padding(end = 16.dp)
+                            modifier = Modifier.padding(end = 16.dp)
                         )
                     } else {
                         Icon(
-                            modifier = Modifier.Companion.padding(end = 16.dp),
-                            imageVector = MiuixIcons.Useful.Personal,
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.FileDownloads,
                             contentDescription = "手动恢复",
                         )
                     }
@@ -208,12 +212,12 @@ fun SettingsScreen(
                         viewModel.manualRestoreTokens()
                     }
                 },
-                modifier = Modifier.Companion
+                modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, Color.Companion.LightGray, RoundedCornerShape(cornerRadius))
+                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
             )
 
-            Spacer(modifier = Modifier.Companion.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
         }
     }
 }

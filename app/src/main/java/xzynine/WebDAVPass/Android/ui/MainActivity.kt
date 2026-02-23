@@ -17,7 +17,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-
 import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
 import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
 import xzynine.WebDAVPass.Android.theme.AppTheme
@@ -37,10 +36,12 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.useful.Move
-import top.yukonga.miuix.kmp.icon.icons.useful.Save
-import top.yukonga.miuix.kmp.icon.icons.useful.Scan
-import top.yukonga.miuix.kmp.icon.icons.useful.Settings
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.unit.dp
+import top.yukonga.miuix.kmp.basic.NavigationBarItem
+import top.yukonga.miuix.kmp.icon.extended.Months
+import top.yukonga.miuix.kmp.icon.extended.Scan
+import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 
 class MainActivity : ComponentActivity() {
@@ -69,8 +70,8 @@ fun MainScreen() {
 
     // 导航项配置
     val navigationItems = listOf(
-        NavigationItem("首页", MiuixIcons.Useful.Save),
-        NavigationItem("设置", MiuixIcons.Useful.Settings)
+        NavigationItem("首页", MiuixIcons.Months),
+        NavigationItem("设置", MiuixIcons.Settings)
     )
 
     // 控制扫描界面的显示与隐藏
@@ -100,7 +101,7 @@ fun MainScreen() {
                     }
                 ) {
                     Icon(
-                        imageVector = MiuixIcons.Useful.Scan,
+                        imageVector = MiuixIcons.Scan,
                         contentDescription = "扫描二维码"
                     )
                 }
@@ -131,11 +132,16 @@ fun MainScreen() {
         },
         bottomBar = {
             // 底部导航栏
-            NavigationBar(
-                items = navigationItems,
-                selected = selectedIndex,
-                onClick = { selectedIndex = it }
-            )
+            NavigationBar {
+                navigationItems.forEachIndexed { index, item ->
+                    NavigationBarItem(
+                        selected = selectedIndex == index,
+                        onClick = { selectedIndex = index },
+                        icon = item.icon,
+                        label = item.label
+                    )
+                }
+            }
         }
     )
 
