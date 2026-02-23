@@ -17,7 +17,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import xzynine.WebDAVPass.Android.ui.Screen.FileBrowserScreen
+
 import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
 import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
 import xzynine.WebDAVPass.Android.theme.AppTheme
@@ -70,17 +70,13 @@ fun MainScreen() {
     // 导航项配置
     val navigationItems = listOf(
         NavigationItem("首页", MiuixIcons.Useful.Save),
-        NavigationItem("文件", MiuixIcons.Useful.Move),
         NavigationItem("设置", MiuixIcons.Useful.Settings)
     )
 
     // 控制扫描界面的显示与隐藏
     val showScanBottomSheet = remember { mutableStateOf(false) }
 
-    // 获取WebDAV配置列表
-    val webDavConfigs by tokenViewModel.webDavConfigs.collectAsState()
-    // 使用第一个配置（如果存在）作为当前配置
-    val currentWebDavConfig = webDavConfigs.firstOrNull()
+
 
     // 基于Miuix Scaffold的主界面
     Scaffold(
@@ -124,15 +120,6 @@ fun MainScreen() {
                     }
 
                     1 -> {
-                        // 文件浏览器页面
-                        FileBrowserScreen(
-                            serverUrl = currentWebDavConfig?.url ?: "https://dav.jianguoyun.com/dav/2fas_xzy/",
-                            username = currentWebDavConfig?.username ?: "",
-                            password = currentWebDavConfig?.password ?: ""
-                        )
-                    }
-
-                    2 -> {
                         // 设置页面
                         SettingsScreen(
                             viewModel = tokenViewModel,
@@ -168,7 +155,7 @@ fun MainScreen() {
                 }
             }
         },
-        existingConfig = currentWebDavConfig
+        existingConfig = null
     )
 
     // 扫描二维码底部抽屉
