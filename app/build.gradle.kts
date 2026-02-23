@@ -132,6 +132,8 @@ dependencies {
     // 接入令牌图标系统模块
     implementation(project(":text-drawable"))
     implementation(project(":token-images"))
+    // 检查更新模块
+    implementation(project(":checkupdates"))
     
     // CameraX 核心库
     implementation("androidx.camera:camera-core:1.3.3")

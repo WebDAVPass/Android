@@ -29,3 +29,5 @@ include(":app")
 include(":text-drawable")
 include(":token-images")
 include(":webdav")
+// 检查更新模块
+include(":checkupdates")
