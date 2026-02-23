@@ -28,13 +28,30 @@ val computedVersionName = versionInfo.versionName
 val computedVersionCode = versionInfo.versionCode
 
 android {
-    namespace = "github.xzynine.two_fas"
+    namespace = "xzynine.WebDAVPass.Android"
     compileSdk {
         version = release(36)
     }
 
+    // 从 local.properties 读取签名信息
+    val localProperties = Properties()
+    val localPropertiesFile = File(rootProject.projectDir, "local.properties")
+    if (localPropertiesFile.exists()) {
+        localPropertiesFile.inputStream().use { localProperties.load(it) }
+    }
+
+    // 签名配置
+    signingConfigs {
+        create("release") {
+            keyAlias = localProperties.getProperty("KEY_ALIAS", System.getenv("KEY_ALIAS"))
+            keyPassword = localProperties.getProperty("KEY_PASSWORD", System.getenv("KEY_PASSWORD"))
+            storeFile = file("../PublicHub")
+            storePassword = localProperties.getProperty("STORE_PASSWORD", System.getenv("STORE_PASSWORD"))
+        }
+    }
+
     defaultConfig {
-        applicationId = "github.xzynine.two_fas"
+        applicationId = "xzynine.webdavpass"
         minSdk = 29
         targetSdk = 36
         // 使用自动计算的版本号
@@ -44,59 +61,17 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    signingConfigs {
-        val keystorePath = System.getenv("KEYSTORE_PATH") ?: project.findProperty("KEYSTORE_PATH") as? String
-        val signingStorePassword = System.getenv("STORE_PASSWORD") ?: project.findProperty("STORE_PASSWORD") as? String
-        val signingKeyPassword = System.getenv("KEY_PASSWORD") ?: project.findProperty("KEY_PASSWORD") as? String
-        val signingKeyAlias = System.getenv("KEY_ALIAS") ?: project.findProperty("KEY_ALIAS") as? String
-
-        // Local-only fallback (not committed): read optional properties from two locations, otherwise pick first .jks in PublicHub
-        val publicHubPath = "D:/xzy/nas-Sync/androidKey/2fa-xzy/PublicHub"
-        val publicHubFile = File(publicHubPath)
-        val localPropFiles = listOf(
-            File("D:/xzy/nas-Sync/androidKey/2fa-xzy/signing.local.properties")
-        )
-        val localProps = Properties().apply {
-            localPropFiles.filter { it.isFile }.forEach { file ->
-                file.inputStream().use { load(it) }
-            }
-        }
-        val localKeystore = if (publicHubFile.exists()) {
-            publicHubFile
-        } else {
-            null
-        }
-
-        val resolvedKeystore = keystorePath
-            ?: localProps.getProperty("KEYSTORE_PATH")
-            ?: localKeystore?.absolutePath
-        val resolvedStorePassword = signingStorePassword ?: localProps.getProperty("STORE_PASSWORD")
-        val resolvedKeyPassword = signingKeyPassword ?: localProps.getProperty("KEY_PASSWORD")
-        val resolvedKeyAlias = signingKeyAlias ?: localProps.getProperty("KEY_ALIAS")
-
-        if (!resolvedKeystore.isNullOrBlank() && !resolvedStorePassword.isNullOrBlank() && !resolvedKeyPassword.isNullOrBlank() && !resolvedKeyAlias.isNullOrBlank()) {
-            create("release") {
-                storeFile = file(resolvedKeystore)
-                storePassword = resolvedStorePassword
-                keyAlias = resolvedKeyAlias
-                keyPassword = resolvedKeyPassword
-            }
-        }
-    }
-
-    val releaseSigning = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
-
     buildTypes {
         getByName("debug") {
-            signingConfig = releaseSigning
+            signingConfig = signingConfigs.getByName("release")
         }
         getByName("release") {
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = releaseSigning
         }
     }
     
@@ -106,7 +81,7 @@ android {
             // 只在包含 Release 任务时启用分包，否则只生成 universal APK
             isEnable = gradle.startParameter.taskNames.any { it.contains("Release") }
             reset()
-            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
             isUniversalApk = true
         }
     }
@@ -157,6 +132,8 @@ dependencies {
     // 接入令牌图标系统模块
     implementation(project(":text-drawable"))
     implementation(project(":token-images"))
+    // 检查更新模块
+    implementation(project(":checkupdates"))
     
     // CameraX 核心库
     implementation("androidx.camera:camera-core:1.3.3")

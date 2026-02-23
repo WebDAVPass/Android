@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "github.xzynine.webdav"
+    namespace = "xzynine.WebDAVPass.webdav"
     compileSdk {
         version = release(36)
     }
