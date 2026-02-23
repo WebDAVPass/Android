@@ -21,7 +21,7 @@ import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
 import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.ui.Screen.ScanTokenScreen
-import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
+import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -117,7 +117,10 @@ fun MainScreen() {
             ) {
                 when (selectedIndex) {
                     0 -> {
-                        TokenListScreen(tokenViewModel = tokenViewModel)
+                        HomeScreen(
+                            tokenViewModel = tokenViewModel,
+                            onScanClick = { showScanBottomSheet.value = true }
+                        )
                     }
 
                     1 -> {

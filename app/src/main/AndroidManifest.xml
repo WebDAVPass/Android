@@ -46,6 +46,11 @@
             android:exported="false"
             android:theme="@style/Theme.WebDAVPass" />
 
+        <activity
+            android:name=".ui.activity.TokenDetailActivity"
+            android:exported="false"
+            android:theme="@style/Theme.WebDAVPass" />
+
     </application>
 
 </manifest>

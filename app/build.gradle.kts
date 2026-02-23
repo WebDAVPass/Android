@@ -148,11 +148,14 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
     implementation(libs.compose.ui.tooling)
+    implementation(libs.androidx.navigationevent.compose)
     debugImplementation(libs.compose.ui.tooling.preview)
     implementation(libs.activity.compose)
     implementation(libs.compose.runtime)
     implementation(libs.compose.foundation)
     implementation(libs.compose.runtime.livedata)
+    // 导航库依赖
+    implementation("androidx.navigation:navigation-compose:2.8.0")
     
     // Coroutines 相关依赖
     implementation(libs.kotlinx.coroutines.core)
