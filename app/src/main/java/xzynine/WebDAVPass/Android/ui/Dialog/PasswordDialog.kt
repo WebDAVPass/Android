@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -16,27 +17,21 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.WindowDialog
 
 /**
  * 密码输入对话框
- * @param title 对话框标题
- * @param summary 对话框摘要（可选）
- * @param show 是否显示对话框
- * @param onDismiss 取消回调
- * @param onConfirm 确认回调，返回输入的密码
- * @param confirmButtonText 确认按钮文本
- * @param dismissButtonText 取消按钮文本
  */
 @Composable
 fun PasswordDialog(
     title: String,
     summary: String? = null,
-    show: Boolean,
+    show: MutableState<Boolean>,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
     confirmButtonText: String = "确认",
@@ -45,14 +40,21 @@ fun PasswordDialog(
     val password = remember { mutableStateOf("") }
     val isPasswordVisible = remember { mutableStateOf(false) }
     
-    SuperDialog(
+    WindowDialog(
         title = title,
         summary = summary,
-        show = remember { mutableStateOf(show) },
-        onDismissRequest = onDismiss
+        show = show,
+        onDismissRequest = {
+            password.value = ""
+            onDismiss()
+        }
     ) {
+        BackHandler(enabled = true) {
+            password.value = ""
+            onDismiss()
+        }
+        
         Column {
-            // 密码输入框
             TextField(
                 value = password.value,
                 onValueChange = { password.value = it },
@@ -71,25 +73,25 @@ fun PasswordDialog(
             
             Spacer(modifier = Modifier.height(16.dp))
             
-            // 按钮行
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 取消按钮
                 TextButton(
                     text = dismissButtonText,
-                    onClick = onDismiss,
+                    onClick = {
+                        password.value = ""
+                        onDismiss()
+                    },
                     modifier = Modifier.weight(1f)
                 )
 
                 Spacer(modifier = Modifier.width(16.dp))
 
-                // 确认按钮
                 Button(
                     onClick = {
                         onConfirm(password.value)
-                        password.value = "" // 清空密码
+                        password.value = ""
                     },
                     modifier = Modifier.weight(1f)
                 ) {

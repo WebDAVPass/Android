@@ -50,11 +50,16 @@ import org.liberty.android.freeotp.token_images.matchToken
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import android.widget.ImageView
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.IntOffset
 import com.amulyakhare.textdrawable.TextDrawable
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
+import xzynine.WebDAVPass.Android.data.TokenCode
 
 /**
  * 弹窗状态枚举
@@ -73,6 +78,16 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
     // 长按功能状态管理 - 使用枚举确保单例
     var dialogState by remember { mutableStateOf(DialogState.NONE) }
     var selectedToken by remember { mutableStateOf<OtpToken?>(null) }
+    
+    // 对话框显示状态
+    val showEditDialog = remember { mutableStateOf(dialogState == DialogState.EDIT) }
+    val showDeleteDialog = remember { mutableStateOf(dialogState == DialogState.DELETE) }
+    
+    // 当 dialogState 变化时，更新对话框显示状态
+    LaunchedEffect(dialogState) {
+        showEditDialog.value = dialogState == DialogState.EDIT
+        showDeleteDialog.value = dialogState == DialogState.DELETE
+    }
 
     if (isLoading) {
         Box(
@@ -86,14 +101,17 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
             modifier = Modifier.Companion.fillMaxSize(),
             contentAlignment = Alignment.Companion.Center
         ) {
-            Text(text = "暂无令牌，请添加新的2FA令牌")
+            Text(
+                text = "暂无令牌，请添加新的2FA令牌",
+                color = MiuixTheme.colorScheme.onSurface
+            )
         }
     } else {
         LazyColumn(
             modifier = Modifier.Companion.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            items(tokens) { token ->
+            items(tokens, key = { it.id }) { token ->
                 TokenItem(
                     token = token,
                     tokenViewModel = tokenViewModel,
@@ -109,47 +127,44 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
             }
         }
 
-        // 根据状态显示对应的弹窗
-        when (dialogState) {
-            DialogState.EDIT -> selectedToken?.let { token ->
-                    TokenDialog(
-                        token = token,
-                        show = true,
-                        onDismiss = {
-                            dialogState = DialogState.NONE
-                            selectedToken = null
-                        },
-                        onDelete = {
-                            dialogState = DialogState.DELETE
-                        },
-                        onSave = { updatedToken ->
-                            tokenViewModel.updateToken(updatedToken)
-                            dialogState = DialogState.NONE
-                            selectedToken = null
-                        }
-                    )
+        // 编辑令牌对话框
+        selectedToken?.let {
+            TokenDialog(
+                token = it,
+                show = showEditDialog,
+                onDismiss = {
+                    dialogState = DialogState.NONE
+                    selectedToken = null
+                },
+                onDelete = {
+                    dialogState = DialogState.DELETE
+                },
+                onSave = { updatedToken ->
+                    tokenViewModel.updateToken(updatedToken)
+                    dialogState = DialogState.NONE
+                    selectedToken = null
                 }
+            )
+        }
 
-            DialogState.DELETE -> selectedToken?.let {
-                ConfirmationDialog(
-                    title = "确认删除",
-                    summary = "确定要删除令牌 \"${it.issuer ?: it.label}\" 吗？此操作无法撤销。",
-                    show = true,
-                    onDismiss = {
-                        dialogState = DialogState.NONE
-                        selectedToken = null
-                    },
-                    confirmButtonText = "删除",
-                    isDestructive = true,
-                    onConfirm = {
-                        tokenViewModel.deleteToken(it.id)
-                        dialogState = DialogState.NONE
-                        selectedToken = null
-                    }
-                )
-            }
-
-            DialogState.NONE -> { /* 不显示任何弹窗 */ }
+        // 删除令牌对话框
+        selectedToken?.let {
+            ConfirmationDialog(
+                title = "确认删除",
+                summary = "确定要删除令牌 \"${it.issuer ?: it.label}\" 吗？此操作无法撤销。",
+                show = showDeleteDialog,
+                onDismiss = {
+                    dialogState = DialogState.NONE
+                    selectedToken = null
+                },
+                confirmButtonText = "删除",
+                isDestructive = true,
+                onConfirm = {
+                    tokenViewModel.deleteToken(it.id)
+                    dialogState = DialogState.NONE
+                    selectedToken = null
+                }
+            )
         }
     }
 }
@@ -170,25 +185,17 @@ fun TokenItem(
 ) {
     val tokenCode by tokenViewModel.getTokenCode(token.id).collectAsState(null)
 
-    // 实时更新的时间状态，用于倒计时显示
-    val currentTime by produceState(initialValue = System.currentTimeMillis()) {
-        while (true) {
-            delay(1000)
-            value = System.currentTimeMillis()
-        }
-    }
-
     // 上下文
     val context = LocalContext.current
-    // 协程作用域，用于动画
-    val coroutineScope = rememberCoroutineScope()
 
     // 复制到剪贴板功能
-    fun copyToClipboard(code: String) {
-        val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clipData = ClipData.newPlainText("2FA Token", code)
-        clipboardManager.setPrimaryClip(clipData)
-        Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+    val copyToClipboard: (String) -> Unit = remember {
+        { code ->
+            val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+            val clipData = ClipData.newPlainText("2FA Token", code)
+            clipboardManager.setPrimaryClip(clipData)
+            Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+        }
     }
 
     Card(
@@ -237,7 +244,9 @@ fun TokenItem(
                     )
                 } else {
                     // 使用 text-drawable 生成圆形首字母图标占位
-                    val letter = (token.issuer ?: token.label).firstOrNull()?.uppercase() ?: "?"
+                    val letter = remember(token.issuer, token.label) {
+                        (token.issuer ?: token.label).firstOrNull()?.uppercase() ?: "?"
+                    }
                     val colorInt = MiuixTheme.colorScheme.primary.toArgb()
                     AndroidView(
                         modifier = Modifier.Companion.size(32.dp),
@@ -267,99 +276,131 @@ fun TokenItem(
                     Text(
                         text = token.label,
                         fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.outline,
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
                         fontWeight = FontWeight.Companion.Normal
                     )
 
                     // 6位码 - 添加下一个令牌显示和动画
                     tokenCode?.let { code ->
-                        val remainingTime = 
-                            kotlin.comparisons.maxOf(0, (code.end - currentTime) / 1000)
-                        val isLast5Seconds = remainingTime <= 5
-                        val isLast1Second = remainingTime <= 1
-                        
-                        // 动画：透明度控制
-                        val nextCodeAlpha by animateFloatAsState(
-                            targetValue = if (isLast5Seconds && code.next != null) 1f else 0f,
-                            animationSpec = tween(500),
-                            label = "alpha"
-                        )
-                        
-                        // 当前令牌在最后1秒时淡出
-                        val currentCodeAlpha by animateFloatAsState(
-                            targetValue = if (isLast1Second) 0.3f else 1f,
-                            animationSpec = tween(300),
-                            label = "currentAlpha"
-                        )
-                        
-                        // 下一个令牌偏移
-                        val nextCodeOffset by animateFloatAsState(
-                            targetValue = if (isLast5Seconds && code.next != null) 0f else 20f,
-                            animationSpec = tween(500),
-                            label = "offset"
-                        )
-                        
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            // 当前令牌
-                            Text(
-                                text = code.code,
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Companion.Bold,
-                                color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
-                                modifier = Modifier.alpha(currentCodeAlpha)
-                            )
-                            
-                            // 下一个令牌：最后5秒显示
-                            code.next?.let {
-                                Text(
-                                    text = it.code,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Companion.Medium,
-                                    color = MiuixTheme.colorScheme.primary,
-                                    modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .alpha(nextCodeAlpha * 0.9f)
-                                        .offset { IntOffset(nextCodeOffset.toInt(), 0) }
-                                )
-                            }
-                        }
+                        TokenCodeDisplay(code = code)
                     }
                 }
             }
 
             // 右侧：倒计时区域（包裹在环形进度条中）
             tokenCode?.let { code ->
-                val remainingTime = kotlin.comparisons.maxOf(0, (code.end - currentTime) / 1000)
-                val progress = remainingTime.toFloat() / 30f // 30秒总时间
-
-                Box(
-                    modifier = Modifier.Companion.size(56.dp),
-                    contentAlignment = Alignment.Companion.Center // 容器级别设置居中对齐
-                ) {
-                    // 环形进度条 - 向右下角偏移使其右下角与文本中心对齐
-                    CircularProgressIndicator(
-                        progress = progress,
-                        modifier = Modifier.Companion
-                            .size(56.dp)
-                            .offset(x = 14.dp, y = 14.dp), // 向右下角偏移自身尺寸的四分之一
-                        strokeWidth = 4.dp,
-                        colors = ProgressIndicatorDefaults.progressIndicatorColors(
-                            foregroundColor = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
-                            backgroundColor = MiuixTheme.colorScheme.outline.copy(alpha = 0.1f)
-                        )
-                    )
-
-                    // 倒计时文本 - 继承Box的居中对齐
-                    Text(
-                        text = "${remainingTime}s",
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Companion.SemiBold,
-                        color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
-                    )
-                }
+                CountdownDisplay(code = code)
             }
         }
+    }
+}
+
+/**
+ * 令牌代码显示组件
+ */
+@Composable
+fun TokenCodeDisplay(code: TokenCode) {
+    // 实时更新的时间状态，用于倒计时显示
+    val currentTime by produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            delay(1000)
+            value = System.currentTimeMillis()
+        }
+    }
+
+    val remainingTime = kotlin.comparisons.maxOf(0, (code.end - currentTime) / 1000)
+    val isLast5Seconds = remainingTime <= 5
+    val isLast1Second = remainingTime <= 1
+    
+    // 动画：透明度控制
+    val nextCodeAlpha by animateFloatAsState(
+        targetValue = if (isLast5Seconds && code.next != null) 1f else 0f,
+        animationSpec = tween(500),
+        label = "alpha"
+    )
+    
+    // 当前令牌在最后1秒时淡出
+    val currentCodeAlpha by animateFloatAsState(
+        targetValue = if (isLast1Second) 0.3f else 1f,
+        animationSpec = tween(300),
+        label = "currentAlpha"
+    )
+    
+    // 下一个令牌偏移
+    val nextCodeOffset by animateFloatAsState(
+        targetValue = if (isLast5Seconds && code.next != null) 0f else 20f,
+        animationSpec = tween(500),
+        label = "offset"
+    )
+    
+    Row(
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        // 当前令牌
+        Text(
+            text = code.code,
+            fontSize = 24.sp,
+            fontWeight = FontWeight.Companion.Bold,
+            color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
+            modifier = Modifier.alpha(currentCodeAlpha)
+        )
+        
+        // 下一个令牌：最后5秒显示
+        code.next?.let {
+            Text(
+                text = it.code,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Companion.Medium,
+                color = MiuixTheme.colorScheme.primary,
+                modifier = Modifier
+                    .padding(start = 8.dp)
+                    .alpha(nextCodeAlpha * 0.9f)
+                    .offset { IntOffset(nextCodeOffset.toInt(), 0) }
+            )
+        }
+    }
+}
+
+/**
+ * 倒计时显示组件
+ */
+@Composable
+fun CountdownDisplay(code: TokenCode) {
+    // 实时更新的时间状态，用于倒计时显示
+    val currentTime by produceState(initialValue = System.currentTimeMillis()) {
+        while (true) {
+            delay(1000)
+            value = System.currentTimeMillis()
+        }
+    }
+
+    val remainingTime = kotlin.comparisons.maxOf(0, (code.end - currentTime) / 1000)
+    val actualPeriod = (code.end - code.start) / 1000 // 计算实际周期（秒）
+    val progress = remainingTime.toFloat() / actualPeriod.toFloat() // 使用实际周期计算进度
+
+    Box(
+        modifier = Modifier.Companion.size(56.dp),
+        contentAlignment = Alignment.Companion.Center // 容器级别设置居中对齐
+    ) {
+        // 环形进度条 - 向右下角偏移使其右下角与文本中心对齐
+        CircularProgressIndicator(
+            progress = progress,
+            modifier = Modifier.Companion
+                .size(56.dp)
+                .offset(x = 14.dp, y = 14.dp), // 向右下角偏移自身尺寸的四分之一
+            strokeWidth = 4.dp,
+            colors = ProgressIndicatorDefaults.progressIndicatorColors(
+                foregroundColor = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
+                backgroundColor = MiuixTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.1f)
+            )
+        )
+
+        // 倒计时文本 - 继承Box的居中对齐
+        Text(
+            text = "${remainingTime}s",
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Companion.SemiBold,
+            color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
+        )
     }
 }

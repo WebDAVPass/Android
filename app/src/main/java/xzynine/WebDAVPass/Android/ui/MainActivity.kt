@@ -9,46 +9,58 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-
-import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
-import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
-import xzynine.WebDAVPass.Android.theme.AppTheme
-import xzynine.WebDAVPass.Android.ui.Screen.ScanTokenScreen
-import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigationevent.NavigationEventDispatcher
+import androidx.navigationevent.NavigationEventDispatcherOwner
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.collectAsState
 import top.yukonga.miuix.kmp.basic.FabPosition
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.icons.useful.Move
-import top.yukonga.miuix.kmp.icon.icons.useful.Save
-import top.yukonga.miuix.kmp.icon.icons.useful.Scan
-import top.yukonga.miuix.kmp.icon.icons.useful.Settings
+import top.yukonga.miuix.kmp.icon.extended.Months
+import top.yukonga.miuix.kmp.icon.extended.Scan
+import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
+import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
+import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
+import xzynine.WebDAVPass.Android.theme.AppTheme
+import xzynine.WebDAVPass.Android.theme.SetupSystemBars
+import xzynine.WebDAVPass.Android.ui.Screen.ScanTokenScreen
+import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
+import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         this.setContent {
-            AppTheme {
-                MainScreen()
+            NavigationEventDispatcherProvider {
+                AppTheme {
+                    // 设置系统栏外观
+                    SetupSystemBars()
+                    MainScreen()
+                }
             }
         }
     }
@@ -58,19 +70,26 @@ class MainActivity : ComponentActivity() {
 fun MainScreen() {
     val context = LocalContext.current
     // 在顶层创建并共享一个 TokenViewModel，传递给各子界面
-    val appContext = context.applicationContext
-    val tokenViewModel = remember { TokenViewModel(appContext) }
+    val tokenViewModel: TokenViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return TokenViewModel(context.applicationContext) as T
+            }
+        }
+    )
 
     // 控制WebDAV配置弹窗的显示与隐藏
-    var showWebDavDialog by remember { mutableStateOf(false) }
+    val showWebDavDialog = remember { mutableStateOf(false) }
+    // 当前选中的WebDAV配置
+    val selectedWebDavConfig = remember { mutableStateOf<xzynine.WebDAVPass.Android.data.WebDavConfig?>(null) }
 
     // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
 
     // 导航项配置
     val navigationItems = listOf(
-        NavigationItem("首页", MiuixIcons.Useful.Save),
-        NavigationItem("设置", MiuixIcons.Useful.Settings)
+        NavigationItem("首页", MiuixIcons.Months),
+        NavigationItem("设置", MiuixIcons.Settings)
     )
 
     // 控制扫描界面的显示与隐藏
@@ -79,84 +98,113 @@ fun MainScreen() {
 
 
     // 基于Miuix Scaffold的主界面
-    Scaffold(
-        popupHost = { MiuixPopupHost() },
-        topBar = {
-            // 只有在首页时显示标题
-            if (selectedIndex == 0) {
-                TopAppBar(
-                    title = "2FA 管理器",
-                    navigationIcon = {},
-                    actions = {}
-                )
-            }
-        },
-        floatingActionButton = {
-            // 只有在首页时显示悬浮扫描按钮
-            if (selectedIndex == 0) {
-                FloatingActionButton(
-                    onClick = {
-                        showScanBottomSheet.value = true
-                    }
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Useful.Scan,
-                        contentDescription = "扫描二维码"
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            popupHost = {},
+            topBar = {
+                // 只有在首页时显示标题
+                if (selectedIndex == 0) {
+                    TopAppBar(
+                        title = "WebDAVPass",
+                        navigationIcon = {},
+                        actions = {}
                     )
                 }
-            }
-        },
-        floatingActionButtonPosition = FabPosition.Companion.End,
-        content = { paddingValues ->
-            // 主界面内容区域，根据选中的导航项显示不同内容
-            Box(
-                modifier = Modifier.Companion
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                when (selectedIndex) {
-                    0 -> {
-                        TokenListScreen(tokenViewModel = tokenViewModel)
+            },
+            floatingActionButton = {
+                // 只有在首页时显示悬浮扫描按钮
+                if (selectedIndex == 0) {
+                    FloatingActionButton(
+                        onClick = {
+                            showScanBottomSheet.value = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Scan,
+                            contentDescription = "扫描二维码"
+                        )
                     }
+                }
+            },
+            floatingActionButtonPosition = FabPosition.Companion.End,
+            content = { paddingValues ->
+                // 主界面内容区域，根据选中的导航项显示不同内容
+                Box(
+                    modifier = Modifier.Companion
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                ) {
+                    when (selectedIndex) {
+                        0 -> {
+                            HomeScreen(
+                                tokenViewModel = tokenViewModel
+                            )
+                        }
 
-                    1 -> {
-                        // 设置页面
-                        SettingsScreen(
-                            viewModel = tokenViewModel,
-                            onWebDavConfigClick = { showWebDavDialog = true }
+                        1 -> {
+                            // 设置页面
+                            SettingsScreen(
+                                viewModel = tokenViewModel,
+                                onWebDavConfigClick = {
+                                    // 加载第一个WebDAV配置（如果存在）
+                                    tokenViewModel.viewModelScope.launch {
+                                        val firstConfig = tokenViewModel.getFirstWebDavConfig()
+                                        selectedWebDavConfig.value = firstConfig
+                                        showWebDavDialog.value = true
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            },
+            bottomBar = {
+                // 底部导航栏
+                NavigationBar {
+                    navigationItems.forEachIndexed { index, item ->
+                        NavigationBarItem(
+                            selected = selectedIndex == index,
+                            onClick = { selectedIndex = index },
+                            icon = item.icon,
+                            label = item.label
                         )
                     }
                 }
             }
-        },
-        bottomBar = {
-            // 底部导航栏
-            NavigationBar(
-                items = navigationItems,
-                selected = selectedIndex,
-                onClick = { selectedIndex = it }
-            )
-        }
-    )
+        )
+        // 在 Scaffold 外部放置 MiuixPopupHost
+        MiuixPopupHost()
+    }
 
     // 使用外部文件中的WebDAV配置弹窗组件
-    WebDavConfigDialog(
-        showDialog = showWebDavDialog,
-        onDismissRequest = { showWebDavDialog = false },
-        onConfigSaved = { config ->
-            // 在协程中保存配置到数据库
-            CoroutineScope(Dispatchers.IO).launch {
-                if (config.id == 0L) {
-                    // 新配置，插入数据库
-                    tokenViewModel.addWebDavConfig(config)
-                } else {
-                    // 现有配置，更新数据库
-                    tokenViewModel.updateWebDavConfig(config)
+        WebDavConfigDialog(
+            showDialog = showWebDavDialog,
+            onDismissRequest = { 
+                showWebDavDialog.value = false
+                // 重置选中的配置
+                selectedWebDavConfig.value = null
+            },
+            onConfigSaved = { config ->
+                // 使用 ViewModel 的 viewModelScope 来管理协程，确保生命周期安全
+                tokenViewModel.viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        if (config.id == 0L) {
+                            // 新配置，插入数据库
+                            tokenViewModel.addWebDavConfig(config)
+                        } else {
+                            // 现有配置，更新数据库
+                            tokenViewModel.updateWebDavConfig(config)
+                        }
+                    } catch (e: Exception) {
+                        // 错误处理
+                        e.printStackTrace()
+                    }
                 }
-            }
-        },
-        existingConfig = null
-    )
+                // 重置选中的配置
+                selectedWebDavConfig.value = null
+            },
+            existingConfig = selectedWebDavConfig.value
+        )
 
     // 扫描二维码底部抽屉
     SuperBottomSheet(

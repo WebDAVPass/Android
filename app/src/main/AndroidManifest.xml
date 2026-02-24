@@ -8,6 +8,8 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 添加相机权限 -->
     <uses-permission android:name="android.permission.CAMERA" />
+    <!-- 声明相机硬件特性，但非必需 -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
 
     <application
         android:allowBackup="true"
@@ -17,11 +19,10 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.WebDAVPass">
+        android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
         <activity
             android:name=".ui.MainActivity"
-            android:exported="true"
-            android:label="@string/app_name">
+            android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -43,8 +44,11 @@
 
         <activity
             android:name=".ui.AutofillPickerActivity"
-            android:exported="false"
-            android:theme="@style/Theme.WebDAVPass" />
+            android:exported="false" />
+
+        <activity
+            android:name=".ui.activity.TokenDetailActivity"
+            android:exported="false" />
 
     </application>
 

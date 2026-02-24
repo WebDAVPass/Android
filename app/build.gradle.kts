@@ -121,8 +121,9 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation(libs.material) // Material 组件库
+        implementation(libs.material) // Material 组件库
     implementation(libs.miuix.android) // Miuix UI 库
+    implementation(libs.miuix.icons)
     implementation(libs.okhttp) // OkHttp3 网络库
     implementation(libs.jsoup) // Jsoup XML解析库
     implementation(libs.hutool.core) // Hutool工具库
@@ -152,6 +153,9 @@ dependencies {
     implementation(libs.compose.runtime)
     implementation(libs.compose.foundation)
     implementation(libs.compose.runtime.livedata)
+    // 导航库依赖
+    implementation("androidx.navigation:navigation-compose:2.8.0")
+    implementation(libs.jetbrains.androidx.navigationevent) // Miuix 弹窗组件需要的导航事件库
     
     // Coroutines 相关依赖
     implementation(libs.kotlinx.coroutines.core)

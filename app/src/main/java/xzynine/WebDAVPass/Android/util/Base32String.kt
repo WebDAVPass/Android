@@ -31,7 +31,11 @@ object Base32String {
         var bitsLeft = 0
         
         for (c in clean) {
-            val value = BASE_32_VALUES[c.code]
+            val charCode = c.code
+            if (charCode >= BASE_32_VALUES.size) {
+                throw IllegalArgumentException("Invalid Base32 character: $c")
+            }
+            val value = BASE_32_VALUES[charCode]
             if (value < 0) {
                 throw IllegalArgumentException("Invalid Base32 character: $c")
             }
@@ -75,5 +79,14 @@ object Base32String {
         }
         
         return result.toString()
+    }
+
+    /**
+     * 验证字符串是否为有效的 Base32 格式
+     */
+    fun isValidBase32(input: String): Boolean {
+        // Base32 字符集：A-Z, 2-7
+        val base32Pattern = "^[A-Z2-7]+".toRegex()
+        return base32Pattern.matches(input.uppercase())
     }
 }

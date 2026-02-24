@@ -6,15 +6,17 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.WindowDialog
 
 /**
  * 通用确认对话框
@@ -31,24 +33,27 @@ import top.yukonga.miuix.kmp.extra.SuperDialog
 fun ConfirmationDialog(
     title: String,
     summary: String? = null,
-    show: Boolean,
+    show: MutableState<Boolean>,
     onDismiss: () -> Unit,
     confirmButtonText: String,
     isDestructive: Boolean = false,
     onConfirm: () -> Unit,
     dismissButtonText: String = "取消"
 ) {
-    SuperDialog(
+    WindowDialog(
         title = title,
         summary = summary,
-        show = remember { mutableStateOf(show) },
+        show = show,
         onDismissRequest = onDismiss
     ) {
+        BackHandler(enabled = true) {
+            onDismiss()
+        }
+        
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // 取消按钮
             TextButton(
                 text = dismissButtonText,
                 onClick = onDismiss,
@@ -57,9 +62,7 @@ fun ConfirmationDialog(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // 确认按钮
             if (isDestructive) {
-                // 破坏性操作使用带主色调的TextButton
                 TextButton(
                     text = confirmButtonText,
                     onClick = onConfirm,
@@ -67,7 +70,6 @@ fun ConfirmationDialog(
                     colors = ButtonDefaults.textButtonColorsPrimary()
                 )
             } else {
-                // 普通操作使用默认样式的Button
                 Button(
                     onClick = onConfirm,
                     modifier = Modifier.weight(1f)

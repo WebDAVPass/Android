@@ -86,6 +86,12 @@ class TokenCodeUtil {
             e.printStackTrace()
         } catch (e: NoSuchAlgorithmException) {
             e.printStackTrace()
+        } catch (e: IllegalArgumentException) {
+            // 捕获 Base32 解码异常
+            e.printStackTrace()
+        } catch (e: ArrayIndexOutOfBoundsException) {
+            // 捕获数组越界异常
+            e.printStackTrace()
         }
         return ""
     }

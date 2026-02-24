@@ -7,7 +7,7 @@ junitVersion = "1.1.5"
 espressoCore = "3.5.1"
 appcompat = "1.6.1"
 material = "1.10.0"
-miuix = "0.7.1"
+miuix = "0.8.4"
 okhttp = "4.12.0"
 jsoup = "1.17.2"
 hutool = "5.8.27"
@@ -28,6 +28,9 @@ composeRuntimeLivedata = "1.8.1"
 kotlinxCoroutinesCore = "1.7.2"
 kotlinxCoroutinesAndroid = "1.7.2"
 kotlinxCoroutinesCompose = "1.7.2"
+
+# Navigation 相关版本
+jetbrainsAndroidxNavigationevent = "1.0.1"
 
 # Room 数据库相关版本
 room = "2.8.2"
@@ -57,7 +60,10 @@ activity-compose = { group = "androidx.activity", name = "activity-compose", ver
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "composeRuntime" }
 compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "composeFoundation" }
 compose-runtime-livedata = { group = "androidx.compose.runtime", name = "runtime-livedata", version.ref = "composeRuntimeLivedata" }
+miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons", version.ref = "miuix" }
 
+# Navigation 相关库
+jetbrains-androidx-navigationevent = { group = "org.jetbrains.androidx.navigationevent", name = "navigationevent-compose", version.ref = "jetbrainsAndroidxNavigationevent" }
 # Room 数据库相关库
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }

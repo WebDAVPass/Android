@@ -433,11 +433,8 @@ object BackupUtil {
             
             onProgress?.invoke(100)
             
-            // 如果没有恢复任何令牌，抛出异常
-            if (restoredTokens.isEmpty()) {
-                throw Exception("没有恢复到任何令牌，可能是密码错误或所有令牌恢复失败")
-            }
-            
+            // 即使没有恢复任何令牌，也不抛出异常，而是返回空列表
+            // 这样可以避免因为恢复失败导致整个应用状态异常
             return@withContext restoredTokens
         }
     }

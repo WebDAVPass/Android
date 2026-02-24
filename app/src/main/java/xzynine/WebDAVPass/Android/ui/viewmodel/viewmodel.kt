@@ -14,13 +14,17 @@ import xzynine.WebDAVPass.Android.data.WebDavConfig
 import xzynine.WebDAVPass.webdav.WebDav
 import xzynine.WebDAVPass.webdav.Authorization
 import xzynine.WebDAVPass.Android.util.BackupUtil
+import xzynine.WebDAVPass.Android.util.Base32String
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
+import java.util.regex.Pattern
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+
 
 /**
  * 令牌视图模型
@@ -192,36 +196,37 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 加载所有令牌，并检查和处理重复数据
      */
     private fun loadTokens() {
-        viewModelScope.launch {
-            refreshTokenList()
-        }
-    }
-
-    /**
-     * 刷新令牌列表，确保立即更新UI
-     * 在当前协程中同步执行
-     */
-    private suspend fun refreshTokenList() {
+        // 立即设置加载状态，避免短暂显示"暂无令牌"
         _isLoading.value = true
-        try {
-            // 只获取一次初始数据
-            var tokenList = database.otpTokenDao().getAllOnce()
+        
+        viewModelScope.launch {
+            database.otpTokenDao().getAll().collect {tokenList ->
+                try {
+                    // 检查并处理重复数据，同时过滤掉无效的令牌
+                    val validTokens = tokenList.filter { Base32String.isValidBase32(it.secret) }
+                    val processedTokens = processDuplicateTokens(validTokens)
 
-            // 检查并处理重复数据
-            tokenList = processDuplicateTokens(tokenList)
-
-            _tokens.value = tokenList
-            // 为每个令牌创建代码流
-            tokenList.forEach {
-                if (!_tokenCodes.containsKey(it.id)) {
-                    _tokenCodes[it.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(it))
+                    _tokens.value = processedTokens
+                    // 为每个令牌创建代码流
+                    processedTokens.forEach {
+                        if (!_tokenCodes.containsKey(it.id)) {
+                            // 只为新令牌生成初始代码
+                            _tokenCodes[it.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(it))
+                        }
+                        // 对于已有令牌，跳过代码更新
+                        // 因为 refreshTokenCodes() 会每秒刷新一次代码，并且只在需要时更新
+                    }
+                    // 移除已删除令牌的代码流
+                    _tokenCodes.keys.retainAll(processedTokens.map { it.id }.toSet())
+                } catch (ex: Exception) {
+                    // 如果出现异常，确保加载状态结束，但不要清空令牌列表
+                    // 保留上次加载的令牌数据
+                    ex.printStackTrace()
+                } finally {
+                    // 完成后设置加载状态为 false
+                    _isLoading.value = false
                 }
             }
-        } catch (ex: Exception) {
-            // 如果出现异常，确保加载状态结束
-            _tokens.value = emptyList()
-        } finally {
-            _isLoading.value = false
         }
     }
 
@@ -229,7 +234,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 处理重复令牌，删除重复项，保留最新的（id最大的）
      * 重复判断基于：uniqueId字段
      */
-    private fun processDuplicateTokens(tokens: List<OtpToken>): List<OtpToken> {
+    private suspend fun processDuplicateTokens(tokens: List<OtpToken>): List<OtpToken> {
         // 使用uniqueId作为键，值为令牌列表
         val tokenMap = mutableMapOf<String, MutableList<OtpToken>>()
 
@@ -252,12 +257,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 val uniqueToken = tokenList.maxByOrNull { it.id }!!
                 uniqueTokens.add(uniqueToken)
 
-                // 删除重复项（id不是最大的）
-                viewModelScope.launch {
-                    val tokensToDelete = tokenList.filter { it.id != uniqueToken.id }
-                    tokensToDelete.forEach {
-                        database.otpTokenDao().deleteById(it.id)
-                    }
+                // 删除重复项（id不是最大的）- 直接在挂起函数中执行
+                val tokensToDelete = tokenList.filter { it.id != uniqueToken.id }
+                tokensToDelete.forEach {
+                    database.otpTokenDao().deleteById(it.id)
                 }
             } else {
                 // 没有重复，直接添加
@@ -337,8 +340,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         }
         
         database.otpTokenDao().insert(tokenWithId)
-        // 刷新令牌列表，确保立即更新UI
-        refreshTokenList()
         
         // 自动备份
         backupTokens()
@@ -353,8 +354,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             database.otpTokenDao().deleteById(tokenId)
             _tokenCodes.remove(tokenId)
-            // 刷新令牌列表，确保立即更新UI
-            refreshTokenList()
             
             // 自动备份
             backupTokens()
@@ -369,8 +368,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             database.otpTokenDao().update(token)
             // 刷新代码
             _tokenCodes[token.id]?.value = tokenCodeUtil.generateTokenCode(token)
-            // 刷新令牌列表，确保立即更新UI
-            refreshTokenList()
             
             // 自动备份
             backupTokens()
@@ -575,49 +572,68 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 _restoreProgress.value = progress
             }
             
+            // 检查是否成功恢复到令牌
+            if (restoredTokens.isEmpty()) {
+                return RestoreResult.NO_UPDATES
+            }
+            
             val tokensToInsert = mutableListOf<OtpToken>()
             val tokensToUpdate = mutableListOf<OtpToken>()
             
             for (token in restoredTokens) {
-                // 检查本地是否已存在该令牌
-                val existingToken = database.otpTokenDao().getByUniqueId(token.uniqueId)
-                if (existingToken == null) {
-                    // 本地不存在，添加到插入列表
-                    tokensToInsert.add(token)
-                } else {
-                    // 本地存在，检查元数据是否有变化
-                    if (existingToken.issuer != token.issuer ||
-                        existingToken.label != token.label ||
-                        existingToken.description != token.description ||
-                        existingToken.ordinal != token.ordinal) {
-                        // 元数据有变化，更新本地令牌
-                        val updatedToken = existingToken.copy(
-                            issuer = token.issuer,
-                            label = token.label,
-                            description = token.description,
-                            ordinal = token.ordinal
-                        )
-                        tokensToUpdate.add(updatedToken)
+                try {
+                    // 检查本地是否已存在该令牌
+                    val existingToken = database.otpTokenDao().getByUniqueId(token.uniqueId)
+                    if (existingToken == null) {
+                        // 本地不存在，添加到插入列表
+                        tokensToInsert.add(token)
+                    } else {
+                        // 本地存在，检查元数据是否有变化
+                        if (existingToken.issuer != token.issuer ||
+                            existingToken.label != token.label ||
+                            existingToken.description != token.description ||
+                            existingToken.ordinal != token.ordinal) {
+                            // 元数据有变化，更新本地令牌
+                            val updatedToken = existingToken.copy(
+                                issuer = token.issuer,
+                                label = token.label,
+                                description = token.description,
+                                ordinal = token.ordinal
+                            )
+                            tokensToUpdate.add(updatedToken)
+                        }
                     }
+                } catch (e: Exception) {
+                    // 处理单个令牌的异常，继续处理其他令牌
+                    e.printStackTrace()
                 }
             }
             
             var hasChanges = false
             
             if (tokensToInsert.isNotEmpty()) {
-                // 只插入本地不存在的令牌
-                database.otpTokenDao().insertAll(tokensToInsert)
-                hasChanges = true
+                try {
+                    // 只插入本地不存在的令牌
+                    database.otpTokenDao().insertAll(tokensToInsert)
+                    hasChanges = true
+                } catch (e: Exception) {
+                    // 处理插入异常
+                    e.printStackTrace()
+                }
             }
             
             if (tokensToUpdate.isNotEmpty()) {
-                // 更新现有令牌的元数据
-                database.otpTokenDao().insertAll(tokensToUpdate)
-                hasChanges = true
+                try {
+                    // 更新现有令牌的元数据
+                    database.otpTokenDao().insertAll(tokensToUpdate)
+                    hasChanges = true
+                } catch (e: Exception) {
+                    // 处理更新异常
+                    e.printStackTrace()
+                }
             }
             
             if (hasChanges) {
-                refreshTokenList()
                 RestoreResult.SUCCESS
             } else {
                 // 没有新令牌插入或更新
@@ -625,6 +641,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             }
         } catch (ex: Exception) {
             // 捕获到异常，恢复失败（密码错误或哈希不匹配）
+            ex.printStackTrace()
             RestoreResult.FAILURE
         }
     }
