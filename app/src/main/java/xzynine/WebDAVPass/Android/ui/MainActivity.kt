@@ -80,6 +80,8 @@ fun MainScreen() {
 
     // 控制WebDAV配置弹窗的显示与隐藏
     val showWebDavDialog = remember { mutableStateOf(false) }
+    // 当前选中的WebDAV配置
+    val selectedWebDavConfig = remember { mutableStateOf<xzynine.WebDAVPass.Android.data.WebDavConfig?>(null) }
 
     // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
@@ -143,7 +145,14 @@ fun MainScreen() {
                             // 设置页面
                             SettingsScreen(
                                 viewModel = tokenViewModel,
-                                onWebDavConfigClick = { showWebDavDialog.value = true }
+                                onWebDavConfigClick = {
+                                    // 加载第一个WebDAV配置（如果存在）
+                                    tokenViewModel.viewModelScope.launch {
+                                        val firstConfig = tokenViewModel.getFirstWebDavConfig()
+                                        selectedWebDavConfig.value = firstConfig
+                                        showWebDavDialog.value = true
+                                    }
+                                }
                             )
                         }
                     }
@@ -170,7 +179,11 @@ fun MainScreen() {
     // 使用外部文件中的WebDAV配置弹窗组件
         WebDavConfigDialog(
             showDialog = showWebDavDialog,
-            onDismissRequest = { showWebDavDialog.value = false },
+            onDismissRequest = { 
+                showWebDavDialog.value = false
+                // 重置选中的配置
+                selectedWebDavConfig.value = null
+            },
             onConfigSaved = { config ->
                 // 使用 ViewModel 的 viewModelScope 来管理协程，确保生命周期安全
                 tokenViewModel.viewModelScope.launch(Dispatchers.IO) {
@@ -187,8 +200,10 @@ fun MainScreen() {
                         e.printStackTrace()
                     }
                 }
+                // 重置选中的配置
+                selectedWebDavConfig.value = null
             },
-            existingConfig = null
+            existingConfig = selectedWebDavConfig.value
         )
 
     // 扫描二维码底部抽屉

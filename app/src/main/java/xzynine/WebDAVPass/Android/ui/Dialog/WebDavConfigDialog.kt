@@ -66,7 +66,8 @@ fun WebDavConfigContent(
     var username by remember { mutableStateOf(existingConfig?.username ?: "") }
     var password by remember { mutableStateOf("") }
     var isTesting by remember { mutableStateOf(false) }
-    var passwordVisible by remember { mutableStateOf(false) }
+    // 密码默认隐藏，并且不可解除隐藏
+    val passwordVisible = false
     var urlError by remember { mutableStateOf<String?>(null) }
     val isExistingConfig = existingConfig != null
     val coroutineScope = rememberCoroutineScope()
@@ -133,21 +134,13 @@ fun WebDavConfigContent(
             label = if (isExistingConfig) "密码（留空则保持原密码）" else "密码",
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            visualTransformation = PasswordVisualTransformation(),
             leadingIcon = {
                 Icon(
                     imageVector = MiuixIcons.Lock,
                     contentDescription = "密码",
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
-            },
-            trailingIcon = {
-                IconButton(onClick = { passwordVisible = !passwordVisible }) {
-                    Icon(
-                        imageVector = if (passwordVisible) MiuixIcons.Hide else MiuixIcons.Show,
-                        contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
-                    )
-                }
             }
         )
 

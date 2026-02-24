@@ -31,7 +31,11 @@ object Base32String {
         var bitsLeft = 0
         
         for (c in clean) {
-            val value = BASE_32_VALUES[c.code]
+            val charCode = c.code
+            if (charCode >= BASE_32_VALUES.size) {
+                throw IllegalArgumentException("Invalid Base32 character: $c")
+            }
+            val value = BASE_32_VALUES[charCode]
             if (value < 0) {
                 throw IllegalArgumentException("Invalid Base32 character: $c")
             }
