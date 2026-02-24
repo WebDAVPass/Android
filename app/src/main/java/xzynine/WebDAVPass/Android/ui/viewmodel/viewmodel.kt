@@ -14,6 +14,7 @@ import xzynine.WebDAVPass.Android.data.WebDavConfig
 import xzynine.WebDAVPass.webdav.WebDav
 import xzynine.WebDAVPass.webdav.Authorization
 import xzynine.WebDAVPass.Android.util.BackupUtil
+import xzynine.WebDAVPass.Android.util.Base32String
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
 import java.util.regex.Pattern
@@ -23,14 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/**
- * 验证字符串是否为有效的 Base32 格式
- */
-private fun isValidBase32(input: String): Boolean {
-    // Base32 字符集：A-Z, 2-7
-    val base32Pattern = Pattern.compile("^[A-Z2-7]+")
-    return base32Pattern.matcher(input.uppercase()).matches()
-}
+
 
 /**
  * 令牌视图模型
@@ -198,22 +192,18 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         _webDavConfigs.value = configList
     }
 
-    // 标记是否为首次加载
-    private var isFirstLoad = true
-
     /**
      * 加载所有令牌，并检查和处理重复数据
      */
     private fun loadTokens() {
+        // 立即设置加载状态，避免短暂显示"暂无令牌"
+        _isLoading.value = true
+        
         viewModelScope.launch {
             database.otpTokenDao().getAll().collect {tokenList ->
-                // 只在首次加载时设置 loading 状态，避免 UI 闪烁
-                if (isFirstLoad) {
-                    _isLoading.value = true
-                }
                 try {
                     // 检查并处理重复数据，同时过滤掉无效的令牌
-                    val validTokens = tokenList.filter { isValidBase32(it.secret) }
+                    val validTokens = tokenList.filter { Base32String.isValidBase32(it.secret) }
                     val processedTokens = processDuplicateTokens(validTokens)
 
                     _tokens.value = processedTokens
@@ -233,11 +223,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     // 保留上次加载的令牌数据
                     ex.printStackTrace()
                 } finally {
-                    if (isFirstLoad) {
-                        _isLoading.value = false
-                        // 首次加载完成后设置为 false
-                        isFirstLoad = false
-                    }
+                    // 完成后设置加载状态为 false
+                    _isLoading.value = false
                 }
             }
         }

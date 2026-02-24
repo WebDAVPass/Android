@@ -80,4 +80,13 @@ object Base32String {
         
         return result.toString()
     }
+
+    /**
+     * 验证字符串是否为有效的 Base32 格式
+     */
+    fun isValidBase32(input: String): Boolean {
+        // Base32 字符集：A-Z, 2-7
+        val base32Pattern = "^[A-Z2-7]+".toRegex()
+        return base32Pattern.matches(input.uppercase())
+    }
 }

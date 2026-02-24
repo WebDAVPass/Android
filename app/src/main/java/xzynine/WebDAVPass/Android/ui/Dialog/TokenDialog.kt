@@ -33,15 +33,9 @@ import top.yukonga.miuix.kmp.extra.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.basic.Check
+import xzynine.WebDAVPass.Android.util.Base32String
 
-/**
- * 验证字符串是否为有效的 Base32 格式
- */
-private fun isValidBase32(input: String): Boolean {
-    // Base32 字符集：A-Z, 2-7
-    val base32Regex = Regex("^[A-Z2-7]+")
-    return base32Regex.matches(input.uppercase())
-}
+
 
 /**
  * 令牌对话框，用于编辑令牌或手动输入密钥
@@ -162,19 +156,19 @@ private fun isValidBase32(input: String): Boolean {
                                     if (parsedUri.scheme != null) {
                                         // URL 格式，验证其中的 secret 参数是否为有效的 Base32 格式
                                         val secretParam = parsedUri.getQueryParameter("secret")
-                                        if (secretParam != null && !isValidBase32(secretParam)) {
+                                        if (secretParam != null && !Base32String.isValidBase32(secretParam)) {
                                             throw IllegalArgumentException("无效的密钥格式，请输入有效的 Base32 字符")
                                         }
                                         parsedUri
                                     } else {
                                         // 纯密钥，验证是否为有效的 Base32 格式
-                                        if (!isValidBase32(secret)) {
+                                        if (!Base32String.isValidBase32(secret)) {
                                             throw IllegalArgumentException("无效的密钥格式，请输入有效的 Base32 字符")
                                         }
                                         // 构建默认的 otpauth URI
                                         val finalIssuer = if (issuer.isBlank()) null else issuer
                                         val finalLabel = if (label.isBlank()) "Manual" else label
-                                        val issuerPart = if (finalIssuer != null) "${finalIssuer}: %20" else ""
+                                        val issuerPart = if (finalIssuer != null) "${finalIssuer}:%20" else ""
                                         Uri.parse("otpauth://totp/${issuerPart}${finalLabel}?secret=${secret}&algorithm=SHA1&digits=6&period=30")
                                     }
                                 }
