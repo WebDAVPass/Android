@@ -9,6 +9,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
@@ -22,8 +24,13 @@ class TokenDetailActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         this.setContent {
             val context = LocalContext.current
-            val appContext = context.applicationContext
-            val tokenViewModel = remember { TokenViewModel(appContext) }
+            val tokenViewModel: TokenViewModel = viewModel(
+                factory = object : ViewModelProvider.Factory {
+                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                        return TokenViewModel(context.applicationContext) as T
+                    }
+                }
+            )
             
             // 配置 NavigationEventDispatcher，使 miuix 弹窗组件能够正常工作
             val navigationEventDispatcher = remember { NavigationEventDispatcher() }

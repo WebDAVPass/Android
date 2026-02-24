@@ -135,8 +135,7 @@ fun MainScreen() {
                     when (selectedIndex) {
                         0 -> {
                             HomeScreen(
-                                tokenViewModel = tokenViewModel,
-                                onScanClick = { showScanBottomSheet.value = true }
+                                tokenViewModel = tokenViewModel
                             )
                         }
 

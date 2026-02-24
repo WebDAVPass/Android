@@ -3,7 +3,6 @@ package xzynine.WebDAVPass.Android.ui.Screen
 import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,7 +17,6 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Search
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.activity.TokenDetailActivity
 
@@ -26,7 +24,7 @@ import xzynine.WebDAVPass.Android.ui.activity.TokenDetailActivity
  * 首页块状布局界面
  */
 @Composable
-fun HomeScreen(tokenViewModel: TokenViewModel, onScanClick: () -> Unit) {
+fun HomeScreen(tokenViewModel: TokenViewModel) {
     val context = LocalContext.current
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val tokenCount = tokens.size
@@ -40,34 +38,6 @@ fun HomeScreen(tokenViewModel: TokenViewModel, onScanClick: () -> Unit) {
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 搜索框
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = CardDefaults.defaultColors(
-                        color = MiuixTheme.colorScheme.surfaceVariant
-                    ),
-                    pressFeedbackType = PressFeedbackType.Sink
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Basic.Search,
-                            contentDescription = "搜索",
-                            tint = MiuixTheme.colorScheme.outline
-                        )
-                        Text(
-                            text = "搜索令牌",
-                            fontSize = 14.sp,
-                            color = MiuixTheme.colorScheme.outline
-                        )
-                    }
-                }
-            }
-
             // 功能块
             item {
                 Row(
@@ -78,9 +48,12 @@ fun HomeScreen(tokenViewModel: TokenViewModel, onScanClick: () -> Unit) {
                     Card(
                         modifier = Modifier.weight(1f).height(100.dp),
                         colors = CardDefaults.defaultColors(
-                            color = MiuixTheme.colorScheme.surface
+                            color = MiuixTheme.colorScheme.surfaceContainerHighest
                         ),
-                        pressFeedbackType = PressFeedbackType.Sink,
+                        cornerRadius = CardDefaults.CornerRadius,
+                        insideMargin = CardDefaults.InsideMargin,
+                        pressFeedbackType = PressFeedbackType.Tilt,
+                        showIndication = true,
                         onClick = {
                             //TODO 后续开发功能
                         }
@@ -106,9 +79,12 @@ fun HomeScreen(tokenViewModel: TokenViewModel, onScanClick: () -> Unit) {
                     Card(
                         modifier = Modifier.weight(1f).height(100.dp),
                         colors = CardDefaults.defaultColors(
-                            color = MiuixTheme.colorScheme.surface
+                            color = MiuixTheme.colorScheme.surfaceContainerHighest
                         ),
-                        pressFeedbackType = PressFeedbackType.Sink,
+                        cornerRadius = CardDefaults.CornerRadius,
+                        insideMargin = CardDefaults.InsideMargin,
+                        pressFeedbackType = PressFeedbackType.Tilt,
+                        showIndication = true,
                         onClick = {
                             // 跳转到令牌列表
                             val intent = Intent(context, TokenDetailActivity::class.java)
@@ -144,9 +120,15 @@ fun HomeScreen(tokenViewModel: TokenViewModel, onScanClick: () -> Unit) {
                     Card(
                         modifier = Modifier.weight(1f).height(100.dp),
                         colors = CardDefaults.defaultColors(
-                            color = MiuixTheme.colorScheme.surface
+                            color = MiuixTheme.colorScheme.surfaceContainerHighest
                         ),
-                        pressFeedbackType = PressFeedbackType.Sink
+                        cornerRadius = CardDefaults.CornerRadius,
+                        insideMargin = CardDefaults.InsideMargin,
+                        pressFeedbackType = PressFeedbackType.Tilt,
+                        showIndication = true,
+                        onClick = {
+                            // TODO: tos提示待开发
+                        }
                     ) {
                         Column(
                             modifier = Modifier.fillMaxSize().padding(16.dp),
@@ -169,9 +151,15 @@ fun HomeScreen(tokenViewModel: TokenViewModel, onScanClick: () -> Unit) {
                     Card(
                         modifier = Modifier.weight(1f).height(100.dp),
                         colors = CardDefaults.defaultColors(
-                            color = MiuixTheme.colorScheme.surface
+                            color = MiuixTheme.colorScheme.surfaceContainerHighest
                         ),
-                        pressFeedbackType = PressFeedbackType.Sink
+                        cornerRadius = CardDefaults.CornerRadius,
+                        insideMargin = CardDefaults.InsideMargin,
+                        pressFeedbackType = PressFeedbackType.Tilt,
+                        showIndication = true,
+                        onClick = {
+                            // TODO: tos提示待开发
+                        }
                     ) {
                         Column(
                             modifier = Modifier.fillMaxSize().padding(16.dp),
