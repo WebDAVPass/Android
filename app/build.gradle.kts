@@ -121,7 +121,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation(libs.material) // Material 组件库
+        implementation(libs.material) // Material 组件库
     implementation(libs.miuix.android) // Miuix UI 库
     implementation(libs.miuix.icons)
     implementation(libs.okhttp) // OkHttp3 网络库

@@ -15,8 +15,10 @@ import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import xzynine.WebDAVPass.Android.theme.AppTheme
+import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 
 class TokenDetailActivity : ComponentActivity() {
@@ -43,6 +45,8 @@ class TokenDetailActivity : ComponentActivity() {
                 LocalNavigationEventDispatcherOwner provides navigationEventDispatcherOwner
             ) {
                 AppTheme {
+                    // 设置系统栏外观
+                    SetupSystemBars()
                     // 使用 Box 包裹，并在外部放置 MiuixPopupHost
                     Box(modifier = Modifier.fillMaxSize()) {
                         TokenListScreen(tokenViewModel = tokenViewModel)

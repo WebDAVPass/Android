@@ -10,46 +10,42 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
-import androidx.navigationevent.NavigationEventInfo
-import androidx.navigationevent.compose.NavigationBackHandler
-import androidx.navigationevent.compose.rememberNavigationEventState
-import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
-import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
-import xzynine.WebDAVPass.Android.theme.AppTheme
-import xzynine.WebDAVPass.Android.ui.Screen.ScanTokenScreen
-import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import androidx.compose.runtime.collectAsState
 import top.yukonga.miuix.kmp.basic.FabPosition
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.NavigationBar
+import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.basic.NavigationItem
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.NavigationBarItem
 import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
+import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
+import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
+import xzynine.WebDAVPass.Android.theme.AppTheme
+import xzynine.WebDAVPass.Android.theme.SetupSystemBars
+import xzynine.WebDAVPass.Android.ui.Screen.ScanTokenScreen
+import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
+import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,6 +60,8 @@ class MainActivity : ComponentActivity() {
                 LocalNavigationEventDispatcherOwner provides navigationEventDispatcherOwner
             ) {
                 AppTheme {
+                    // 设置系统栏外观
+                    SetupSystemBars()
                     MainScreen()
                 }
             }
@@ -103,7 +101,7 @@ fun MainScreen() {
                 // 只有在首页时显示标题
                 if (selectedIndex == 0) {
                     TopAppBar(
-                        title = "2FA 管理器",
+                        title = "WebDAVPass",
                         navigationIcon = {},
                         actions = {}
                     )

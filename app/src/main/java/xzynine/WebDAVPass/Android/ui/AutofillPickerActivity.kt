@@ -31,10 +31,12 @@ import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.theme.AppTheme
+import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.Screen.TokenItem
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class AutofillPickerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -61,6 +63,8 @@ class AutofillPickerActivity : ComponentActivity() {
                 LocalNavigationEventDispatcherOwner provides navigationEventDispatcherOwner
             ) {
                 AppTheme {
+                    // 设置系统栏外观
+                    SetupSystemBars()
                     AutofillPickerScreen(
                         autofillId = autofillId,
                         targetPackage = targetPackage

@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Search
+import xzynine.WebDAVPass.Android.theme.AppTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
@@ -44,7 +45,7 @@ fun HomeScreen(tokenViewModel: TokenViewModel) {
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // 全部密码
+                    // 密码
                     Card(
                         modifier = Modifier.weight(1f).height(100.dp),
                         colors = CardDefaults.defaultColors(
@@ -63,7 +64,7 @@ fun HomeScreen(tokenViewModel: TokenViewModel) {
                             verticalArrangement = Arrangement.SpaceBetween
                         ) {
                             Text(
-                                text = "全部密码",
+                                text = "密码",
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium
                             )
