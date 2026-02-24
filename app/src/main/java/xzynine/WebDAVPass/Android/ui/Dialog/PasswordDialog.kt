@@ -44,9 +44,13 @@ fun PasswordDialog(
         title = title,
         summary = summary,
         show = show,
-        onDismissRequest = onDismiss
+        onDismissRequest = {
+            password.value = ""
+            onDismiss()
+        }
     ) {
         BackHandler(enabled = true) {
+            password.value = ""
             onDismiss()
         }
         
@@ -75,7 +79,10 @@ fun PasswordDialog(
             ) {
                 TextButton(
                     text = dismissButtonText,
-                    onClick = onDismiss,
+                    onClick = {
+                        password.value = ""
+                        onDismiss()
+                    },
                     modifier = Modifier.weight(1f)
                 )
 
