@@ -22,6 +22,46 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.activity.TokenDetailActivity
 
 /**
+ * 功能卡片组件
+ */
+@Composable
+fun FeatureCard(
+    title: String,
+    value: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .height(100.dp),
+        colors = CardDefaults.defaultColors(
+            color = MiuixTheme.colorScheme.surfaceContainerHighest
+        ),
+        cornerRadius = CardDefaults.CornerRadius,
+        insideMargin = CardDefaults.InsideMargin,
+        pressFeedbackType = PressFeedbackType.Tilt,
+        showIndication = true,
+        onClick = onClick
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = title,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Text(
+                text = value,
+                fontSize = 20.sp,
+                fontWeight = FontWeight.Bold
+            )
+        }
+    }
+}
+
+/**
  * 首页块状布局界面
  */
 @Composable
@@ -46,68 +86,26 @@ fun HomeScreen(tokenViewModel: TokenViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // 密码
-                    Card(
-                        modifier = Modifier.weight(1f).height(100.dp),
-                        colors = CardDefaults.defaultColors(
-                            color = MiuixTheme.colorScheme.surfaceContainerHighest
-                        ),
-                        cornerRadius = CardDefaults.CornerRadius,
-                        insideMargin = CardDefaults.InsideMargin,
-                        pressFeedbackType = PressFeedbackType.Tilt,
-                        showIndication = true,
+                    FeatureCard(
+                        title = "密码",
+                        value = "0",
                         onClick = {
                             //TODO 后续开发功能
-                        }
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "密码",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = "0",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
 
                     // 动态令牌
-                    Card(
-                        modifier = Modifier.weight(1f).height(100.dp),
-                        colors = CardDefaults.defaultColors(
-                            color = MiuixTheme.colorScheme.surfaceContainerHighest
-                        ),
-                        cornerRadius = CardDefaults.CornerRadius,
-                        insideMargin = CardDefaults.InsideMargin,
-                        pressFeedbackType = PressFeedbackType.Tilt,
-                        showIndication = true,
+                    FeatureCard(
+                        title = "动态令牌",
+                        value = "$tokenCount",
                         onClick = {
                             // 跳转到令牌列表
                             val intent = Intent(context, TokenDetailActivity::class.java)
                             context.startActivity(intent)
-                        }
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "动态令牌",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = "$tokenCount",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
 
@@ -118,66 +116,24 @@ fun HomeScreen(tokenViewModel: TokenViewModel) {
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     // 安全性
-                    Card(
-                        modifier = Modifier.weight(1f).height(100.dp),
-                        colors = CardDefaults.defaultColors(
-                            color = MiuixTheme.colorScheme.surfaceContainerHighest
-                        ),
-                        cornerRadius = CardDefaults.CornerRadius,
-                        insideMargin = CardDefaults.InsideMargin,
-                        pressFeedbackType = PressFeedbackType.Tilt,
-                        showIndication = true,
+                    FeatureCard(
+                        title = "安全性",
+                        value = "0",
                         onClick = {
                             // TODO: tos提示待开发
-                        }
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "安全性",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = "0",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
 
                     // 最近删除
-                    Card(
-                        modifier = Modifier.weight(1f).height(100.dp),
-                        colors = CardDefaults.defaultColors(
-                            color = MiuixTheme.colorScheme.surfaceContainerHighest
-                        ),
-                        cornerRadius = CardDefaults.CornerRadius,
-                        insideMargin = CardDefaults.InsideMargin,
-                        pressFeedbackType = PressFeedbackType.Tilt,
-                        showIndication = true,
+                    FeatureCard(
+                        title = "最近删除",
+                        value = "0",
                         onClick = {
                             // TODO: tos提示待开发
-                        }
-                    ) {
-                        Column(
-                            modifier = Modifier.fillMaxSize().padding(16.dp),
-                            verticalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Text(
-                                text = "最近删除",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Text(
-                                text = "0",
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
-                    }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
                 }
             }
         }

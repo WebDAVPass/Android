@@ -29,9 +29,9 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
-import top.yukonga.miuix.kmp.icon.extended.FileDownloads
+import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.GridView
-import top.yukonga.miuix.kmp.icon.extended.MoveFile
+import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 
 /**
  * 设置界面组件
@@ -173,7 +173,7 @@ fun SettingsScreen(
                     } else {
                         Icon(
                             modifier = Modifier.padding(end = 16.dp),
-                            imageVector = MiuixIcons.MoveFile,
+                            imageVector = MiuixIcons.UploadCloud,
                             contentDescription = "备份令牌",
                         )
                     }
@@ -202,7 +202,7 @@ fun SettingsScreen(
                     } else {
                         Icon(
                             modifier = Modifier.padding(end = 16.dp),
-                            imageVector = MiuixIcons.FileDownloads,
+                            imageVector = MiuixIcons.Download,
                             contentDescription = "手动恢复",
                         )
                     }

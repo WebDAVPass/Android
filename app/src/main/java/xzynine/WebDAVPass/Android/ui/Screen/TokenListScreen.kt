@@ -79,25 +79,13 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
     var selectedToken by remember { mutableStateOf<OtpToken?>(null) }
     
     // 对话框显示状态
-    val showEditDialog = remember { mutableStateOf(false) }
-    val showDeleteDialog = remember { mutableStateOf(false) }
-
-    // 处理对话框状态变化
+    val showEditDialog = remember { mutableStateOf(dialogState == DialogState.EDIT) }
+    val showDeleteDialog = remember { mutableStateOf(dialogState == DialogState.DELETE) }
+    
+    // 当 dialogState 变化时，更新对话框显示状态
     LaunchedEffect(dialogState) {
-        when (dialogState) {
-            DialogState.EDIT -> {
-                showEditDialog.value = true
-                showDeleteDialog.value = false
-            }
-            DialogState.DELETE -> {
-                showEditDialog.value = false
-                showDeleteDialog.value = true
-            }
-            DialogState.NONE -> {
-                showEditDialog.value = false
-                showDeleteDialog.value = false
-            }
-        }
+        showEditDialog.value = dialogState == DialogState.EDIT
+        showDeleteDialog.value = dialogState == DialogState.DELETE
     }
 
     if (isLoading) {

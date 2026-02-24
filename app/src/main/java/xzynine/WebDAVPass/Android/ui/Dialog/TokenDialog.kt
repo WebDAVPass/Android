@@ -143,7 +143,7 @@ fun TokenDialog(
                                 secret = secret
                             )
                         } else {
-                            val uri = try {
+                            val uri = run {
                                 val parsedUri = Uri.parse(secret)
                                 if (parsedUri.scheme != null) {
                                     parsedUri
@@ -153,11 +153,6 @@ fun TokenDialog(
                                     val issuerPart = if (finalIssuer != null) "${finalIssuer}:%20" else ""
                                     Uri.parse("otpauth://totp/${issuerPart}${finalLabel}?secret=${secret}&algorithm=SHA1&digits=6&period=30")
                                 }
-                            } catch (e: Exception) {
-                                val finalIssuer = if (issuer.isBlank()) null else issuer
-                                val finalLabel = if (label.isBlank()) "Manual" else label
-                                val issuerPart = if (finalIssuer != null) "${finalIssuer}:%20" else ""
-                                Uri.parse("otpauth://totp/${issuerPart}${finalLabel}?secret=${secret}&algorithm=SHA1&digits=6&period=30")
                             }
                             xzynine.WebDAVPass.Android.data.OtpTokenFactory.createFromUri(uri)
                                 .copy(description = description.ifBlank { null })

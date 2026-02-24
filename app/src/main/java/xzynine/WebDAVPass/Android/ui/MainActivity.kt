@@ -48,20 +48,14 @@ import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.Screen.ScanTokenScreen
 import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         this.setContent {
-            val navigationEventDispatcher = remember { NavigationEventDispatcher() }
-            val navigationEventDispatcherOwner = object : NavigationEventDispatcherOwner {
-                override val navigationEventDispatcher: NavigationEventDispatcher
-                    get() = navigationEventDispatcher
-            }
-            CompositionLocalProvider(
-                LocalNavigationEventDispatcherOwner provides navigationEventDispatcherOwner
-            ) {
+            NavigationEventDispatcherProvider {
                 AppTheme {
                     // 设置系统栏外观
                     SetupSystemBars()

@@ -39,7 +39,10 @@ import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.basic.Check
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Contacts
+import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Lock
+import top.yukonga.miuix.kmp.icon.extended.Show
 
 /**
  * WebDAV配置内容组件
@@ -133,7 +136,7 @@ fun WebDavConfigContent(
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             leadingIcon = {
                 Icon(
-                    imageVector = MiuixIcons.Back,
+                    imageVector = MiuixIcons.Lock,
                     contentDescription = "密码",
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
@@ -141,7 +144,7 @@ fun WebDavConfigContent(
             trailingIcon = {
                 IconButton(onClick = { passwordVisible = !passwordVisible }) {
                     Icon(
-                        imageVector = if (passwordVisible) MiuixIcons.Basic.Check else MiuixIcons.Basic.ArrowRight,
+                        imageVector = if (passwordVisible) MiuixIcons.Hide else MiuixIcons.Show,
                         contentDescription = if (passwordVisible) "隐藏密码" else "显示密码"
                     )
                 }

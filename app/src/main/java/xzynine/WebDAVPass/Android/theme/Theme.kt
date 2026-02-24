@@ -10,6 +10,7 @@ import top.yukonga.miuix.kmp.utils.*
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import android.app.Activity
 import android.os.Build
 import android.view.Window
@@ -36,10 +37,11 @@ fun AppTheme(content: @Composable () -> Unit) {
 @Composable
 fun SetupSystemBars() {
     val context = LocalContext.current
+    val configuration = LocalConfiguration.current
     val colorScheme = MiuixTheme.colorScheme
     val barColor = colorScheme.background.toArgb()
-    // 使用系统设置来判断当前是否为深色主题
-    val isDarkTheme = context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
+    // 使用 LocalConfiguration.current 来判断当前是否为深色主题
+    val isDarkTheme = configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK == android.content.res.Configuration.UI_MODE_NIGHT_YES
     
     SideEffect {
         val activity = context as? Activity ?: return@SideEffect

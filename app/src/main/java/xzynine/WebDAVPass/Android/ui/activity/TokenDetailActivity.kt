@@ -18,6 +18,7 @@ import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 
@@ -33,16 +34,7 @@ class TokenDetailActivity : ComponentActivity() {
                 }
             )
             
-            // 配置 NavigationEventDispatcher，使 miuix 弹窗组件能够正常工作
-            val navigationEventDispatcher = remember { NavigationEventDispatcher() }
-            val navigationEventDispatcherOwner = object : NavigationEventDispatcherOwner {
-                override val navigationEventDispatcher: NavigationEventDispatcher
-                    get() = navigationEventDispatcher
-            }
-            
-            CompositionLocalProvider(
-                LocalNavigationEventDispatcherOwner provides navigationEventDispatcherOwner
-            ) {
+            NavigationEventDispatcherProvider {
                 AppTheme {
                     // 设置系统栏外观
                     SetupSystemBars()
