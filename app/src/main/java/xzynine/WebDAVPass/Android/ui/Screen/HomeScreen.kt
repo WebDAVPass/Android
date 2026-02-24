@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -68,7 +70,11 @@ fun FeatureCard(
 fun HomeScreen(tokenViewModel: TokenViewModel) {
     val context = LocalContext.current
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
-    val tokenCount = tokens.size
+    val tokenCount by remember {
+        derivedStateOf {
+            tokens.size
+        }
+    }
 
     Box(
         modifier = Modifier.fillMaxSize(),
