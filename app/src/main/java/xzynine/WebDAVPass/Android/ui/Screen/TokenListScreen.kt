@@ -50,11 +50,15 @@ import org.liberty.android.freeotp.token_images.matchToken
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.viewinterop.AndroidView
 import android.widget.ImageView
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.unit.IntOffset
 import com.amulyakhare.textdrawable.TextDrawable
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 
 /**
  * 弹窗状态枚举
@@ -73,6 +77,28 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
     // 长按功能状态管理 - 使用枚举确保单例
     var dialogState by remember { mutableStateOf(DialogState.NONE) }
     var selectedToken by remember { mutableStateOf<OtpToken?>(null) }
+    
+    // 对话框显示状态
+    val showEditDialog = remember { mutableStateOf(false) }
+    val showDeleteDialog = remember { mutableStateOf(false) }
+
+    // 处理对话框状态变化
+    LaunchedEffect(dialogState) {
+        when (dialogState) {
+            DialogState.EDIT -> {
+                showEditDialog.value = true
+                showDeleteDialog.value = false
+            }
+            DialogState.DELETE -> {
+                showEditDialog.value = false
+                showDeleteDialog.value = true
+            }
+            DialogState.NONE -> {
+                showEditDialog.value = false
+                showDeleteDialog.value = false
+            }
+        }
+    }
 
     if (isLoading) {
         Box(
@@ -109,47 +135,44 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
             }
         }
 
-        // 根据状态显示对应的弹窗
-        when (dialogState) {
-            DialogState.EDIT -> selectedToken?.let { token ->
-                    TokenDialog(
-                        token = token,
-                        show = true,
-                        onDismiss = {
-                            dialogState = DialogState.NONE
-                            selectedToken = null
-                        },
-                        onDelete = {
-                            dialogState = DialogState.DELETE
-                        },
-                        onSave = { updatedToken ->
-                            tokenViewModel.updateToken(updatedToken)
-                            dialogState = DialogState.NONE
-                            selectedToken = null
-                        }
-                    )
+        // 编辑令牌对话框
+        selectedToken?.let {
+            TokenDialog(
+                token = it,
+                show = showEditDialog,
+                onDismiss = {
+                    dialogState = DialogState.NONE
+                    selectedToken = null
+                },
+                onDelete = {
+                    dialogState = DialogState.DELETE
+                },
+                onSave = { updatedToken ->
+                    tokenViewModel.updateToken(updatedToken)
+                    dialogState = DialogState.NONE
+                    selectedToken = null
                 }
+            )
+        }
 
-            DialogState.DELETE -> selectedToken?.let {
-                ConfirmationDialog(
-                    title = "确认删除",
-                    summary = "确定要删除令牌 \"${it.issuer ?: it.label}\" 吗？此操作无法撤销。",
-                    show = true,
-                    onDismiss = {
-                        dialogState = DialogState.NONE
-                        selectedToken = null
-                    },
-                    confirmButtonText = "删除",
-                    isDestructive = true,
-                    onConfirm = {
-                        tokenViewModel.deleteToken(it.id)
-                        dialogState = DialogState.NONE
-                        selectedToken = null
-                    }
-                )
-            }
-
-            DialogState.NONE -> { /* 不显示任何弹窗 */ }
+        // 删除令牌对话框
+        selectedToken?.let {
+            ConfirmationDialog(
+                title = "确认删除",
+                summary = "确定要删除令牌 \"${it.issuer ?: it.label}\" 吗？此操作无法撤销。",
+                show = showDeleteDialog,
+                onDismiss = {
+                    dialogState = DialogState.NONE
+                    selectedToken = null
+                },
+                confirmButtonText = "删除",
+                isDestructive = true,
+                onConfirm = {
+                    tokenViewModel.deleteToken(it.id)
+                    dialogState = DialogState.NONE
+                    selectedToken = null
+                }
+            )
         }
     }
 }

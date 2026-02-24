@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import xzynine.WebDAVPass.Android.data.OtpToken
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
@@ -41,7 +43,7 @@ import top.yukonga.miuix.kmp.icon.basic.Check
 @Composable
 fun TokenDialog(
     token: OtpToken?,
-    show: Boolean,
+    show: MutableState<Boolean>,
     onDismiss: () -> Unit,
     onDelete: (() -> Unit)? = null,
     onSave: (OtpToken) -> Unit
@@ -52,18 +54,19 @@ fun TokenDialog(
     var secret by remember { mutableStateOf(token?.secret ?: "") }
     var secretVisible by remember { mutableStateOf(false) }
     val isEditMode = token != null
-    
-    val showState = remember { mutableStateOf(show) }
-    showState.value = show
 
     WindowDialog(
         title = if (isEditMode) "编辑令牌" else "手动输入密钥/otpauth URI",
         summary = if (isEditMode) "修改令牌信息" else "请输入密钥或 otpauth URI",
-        show = showState,
+        show = show,
         onDismissRequest = onDismiss,
         defaultWindowInsetsPadding = true,
         insideMargin = DpSize(16.dp, 16.dp)
     ) {
+        BackHandler(enabled = true) {
+            onDismiss()
+        }
+        
         Column(
             modifier = Modifier
                 .fillMaxWidth()

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -16,6 +17,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
@@ -29,7 +31,7 @@ import top.yukonga.miuix.kmp.extra.WindowDialog
 fun PasswordDialog(
     title: String,
     summary: String? = null,
-    show: Boolean,
+    show: MutableState<Boolean>,
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
     confirmButtonText: String = "确认",
@@ -37,15 +39,17 @@ fun PasswordDialog(
 ) {
     val password = remember { mutableStateOf("") }
     val isPasswordVisible = remember { mutableStateOf(false) }
-    val showState = remember { mutableStateOf(show) }
-    showState.value = show
     
     WindowDialog(
         title = title,
         summary = summary,
-        show = showState,
+        show = show,
         onDismissRequest = onDismiss
     ) {
+        BackHandler(enabled = true) {
+            onDismiss()
+        }
+        
         Column {
             TextField(
                 value = password.value,

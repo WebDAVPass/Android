@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -19,6 +20,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.DpSize
+import androidx.activity.compose.BackHandler
 import xzynine.WebDAVPass.Android.data.WebDavConfig
 import xzynine.WebDAVPass.webdav.Authorization
 import xzynine.WebDAVPass.webdav.WebDav
@@ -40,7 +42,8 @@ import top.yukonga.miuix.kmp.icon.extended.Contacts
 import top.yukonga.miuix.kmp.icon.extended.Info
 
 /**
- * WebDAV配置内容组件， */
+ * WebDAV配置内容组件
+ */
 @Composable
 fun WebDavConfigContent(
     onDismiss: () -> Unit,
@@ -55,7 +58,7 @@ fun WebDavConfigContent(
             it
         }
     } ?: "https://dav.jianguoyun.com/dav/"
-    
+
     var serverUrl by remember { mutableStateOf(originalUrl) }
     var username by remember { mutableStateOf(existingConfig?.username ?: "") }
     var password by remember { mutableStateOf("") }
@@ -72,7 +75,7 @@ fun WebDavConfigContent(
     }
 
     Column(
-        modifier = Modifier.Companion
+        modifier = Modifier
             .fillMaxWidth()
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -84,13 +87,13 @@ fun WebDavConfigContent(
                 urlError = validateUrl(it)
             },
             label = "服务器地址",
-            modifier = Modifier.Companion.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             leadingIcon = {
                 Icon(
                     imageVector = MiuixIcons.Info,
                     contentDescription = "服务器地址",
-                    modifier = Modifier.Companion.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp)
                 )
             }
         )
@@ -100,7 +103,7 @@ fun WebDavConfigContent(
                 text = urlError!!,
                 color = MiuixTheme.colorScheme.error,
                 fontSize = 12.sp,
-                modifier = Modifier.Companion
+                modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 16.dp, top = 4.dp)
             )
@@ -110,7 +113,7 @@ fun WebDavConfigContent(
             value = username,
             onValueChange = { username = it },
             label = "用户名",
-            modifier = Modifier.Companion.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             leadingIcon = {
                 Icon(
@@ -125,14 +128,14 @@ fun WebDavConfigContent(
             value = password,
             onValueChange = { password = it },
             label = if (isExistingConfig) "密码（留空则保持原密码）" else "密码",
-            modifier = Modifier.Companion.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             leadingIcon = {
                 Icon(
                     imageVector = MiuixIcons.Back,
                     contentDescription = "密码",
-                    modifier = Modifier.Companion.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp)
                 )
             },
             trailingIcon = {
@@ -155,18 +158,18 @@ fun WebDavConfigContent(
                     Toast.makeText(context, urlError, Toast.LENGTH_SHORT).show()
                     return@Button
                 }
-                
+
                 val testPassword = if (password.isEmpty() && isExistingConfig) {
                     existingConfig!!.password
                 } else {
                     password
                 }
-                
+
                 if (testPassword.isEmpty()) {
                     Toast.makeText(context, "请输入密码", Toast.LENGTH_SHORT).show()
                     return@Button
                 }
-                
+
                 isTesting = true
                 Toast.makeText(context, "正在测试连接...", Toast.LENGTH_SHORT).show()
 
@@ -192,7 +195,7 @@ fun WebDavConfigContent(
                     }
                 }
             },
-            modifier = Modifier.Companion.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             enabled = !isTesting
         ) {
             Text(text = if (isTesting) "测试中..." else "测试连接")
@@ -214,7 +217,7 @@ fun WebDavConfigContent(
                 } else {
                     password
                 }
-                
+
                 if (finalPassword.isEmpty()) {
                     Toast.makeText(context, "请输入密码", Toast.LENGTH_SHORT).show()
                     return@Button
@@ -245,7 +248,7 @@ fun WebDavConfigContent(
                 onConfigSaved(config)
                 onDismiss()
             },
-            modifier = Modifier.Companion.fillMaxWidth(),
+            modifier = Modifier.fillMaxWidth(),
             enabled = !isTesting
         ) {
             Text(text = "保存配置")
@@ -258,27 +261,23 @@ fun WebDavConfigContent(
  */
 @Composable
 fun WebDavConfigDialog(
-    showDialog: Boolean,
+    showDialog: MutableState<Boolean>,
     onDismissRequest: () -> Unit,
     onConfigSaved: (config: WebDavConfig) -> Unit = { _ -> },
     existingConfig: WebDavConfig? = null
 ) {
-    val isVisible = remember {
-        mutableStateOf(showDialog)
-    }
-    
-    LaunchedEffect(showDialog) {
-        isVisible.value = showDialog
-    }
-    
     WindowDialog(
         title = if (existingConfig != null) "编辑 WebDAV 配置" else "WebDAV 配置",
         summary = if (existingConfig != null) "修改您的 WebDAV 服务器设置" else "配置 WebDAV 服务器以同步令牌",
-        show = isVisible,
+        show = showDialog,
         onDismissRequest = onDismissRequest,
         defaultWindowInsetsPadding = true,
         insideMargin = DpSize(16.dp, 16.dp)
     ) {
+        BackHandler(enabled = true) {
+            onDismissRequest()
+        }
+
         WebDavConfigContent(
             onDismiss = onDismissRequest,
             onConfigSaved = onConfigSaved,

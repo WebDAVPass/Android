@@ -65,6 +65,9 @@ import top.yukonga.miuix.kmp.icon.extended.Scan
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.Executors
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 
 /**
  * 扫描二维码界面
@@ -180,7 +183,7 @@ fun ScanTokenScreen(
     }
 
     // 底部操作面板状态（手动输入）
-    var showManualInput by remember { mutableStateOf(false) }
+    val showManualInput = remember { mutableStateOf(false) }
     var manualInputText by remember { mutableStateOf("") }
 
     MiuixTheme {
@@ -318,7 +321,7 @@ fun ScanTokenScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Button(onClick = { showManualInput = true }) {
+                Button(onClick = { showManualInput.value = true }) {
                     Icon(imageVector = MiuixIcons.Back, contentDescription = "手动输入")
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(text = "手动输入密钥")
@@ -334,17 +337,17 @@ fun ScanTokenScreen(
             }
         }
             // 手动输入密钥弹窗
-            if (showManualInput) {
+            if (showManualInput.value) {
                 TokenDialog(
                     token = null,
-                    show = true,
-                    onDismiss = { showManualInput = false }
+                    show = showManualInput,
+                    onDismiss = { showManualInput.value = false }
                 ) {
                     coroutineScope.launch(Dispatchers.Main) {
                         val added = tokenViewModel.addToken(it)
                         if (added) {
                             Toast.makeText(context, "令牌添加成功", Toast.LENGTH_SHORT).show()
-                            showManualInput = false
+                            showManualInput.value = false
                             onTokenScanned()
                         } else {
                             Toast.makeText(context, "该令牌已存在", Toast.LENGTH_SHORT).show()
@@ -356,14 +359,23 @@ fun ScanTokenScreen(
     }
 
     // 当识别到二维码错误或令牌规则错误时，使用 ConfirmationDialog 提示更换图片后重试
-    if (pickedImageError != null) {
+    val showErrorDialog = remember { mutableStateOf(pickedImageError != null) }
+    LaunchedEffect(pickedImageError) {
+        showErrorDialog.value = pickedImageError != null
+    }
+    
+    if (showErrorDialog.value) {
         ConfirmationDialog(
             title = pickedImageError ?: "解析失败",
-            show = true,
-            onDismiss = { pickedImageError = null },
+            show = showErrorDialog,
+            onDismiss = { 
+                pickedImageError = null 
+                showErrorDialog.value = false
+            },
             confirmButtonText = "更换图片重试",
             onConfirm = { 
                 pickedImageError = null 
+                showErrorDialog.value = false
                 imagePickerLauncher.launch(arrayOf("image/*")) 
             }
         )

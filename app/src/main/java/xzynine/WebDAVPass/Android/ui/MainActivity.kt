@@ -21,6 +21,9 @@ import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
 import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
 import xzynine.WebDAVPass.Android.theme.AppTheme
@@ -76,7 +79,7 @@ fun MainScreen() {
     val tokenViewModel = remember { TokenViewModel(appContext) }
 
     // 控制WebDAV配置弹窗的显示与隐藏
-    var showWebDavDialog by remember { mutableStateOf(false) }
+    val showWebDavDialog = remember { mutableStateOf(false) }
 
     // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
@@ -141,7 +144,7 @@ fun MainScreen() {
                             // 设置页面
                             SettingsScreen(
                                 viewModel = tokenViewModel,
-                                onWebDavConfigClick = { showWebDavDialog = true }
+                                onWebDavConfigClick = { showWebDavDialog.value = true }
                             )
                         }
                     }
@@ -168,7 +171,7 @@ fun MainScreen() {
     // 使用外部文件中的WebDAV配置弹窗组件
     WebDavConfigDialog(
         showDialog = showWebDavDialog,
-        onDismissRequest = { showWebDavDialog = false },
+        onDismissRequest = { showWebDavDialog.value = false },
         onConfigSaved = { config ->
             // 在协程中保存配置到数据库
             CoroutineScope(Dispatchers.IO).launch {
