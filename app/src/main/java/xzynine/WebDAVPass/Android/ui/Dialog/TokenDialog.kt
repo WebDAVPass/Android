@@ -1,6 +1,8 @@
 package xzynine.WebDAVPass.Android.ui.Dialog
 
+import android.graphics.Bitmap
 import android.net.Uri
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -8,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
@@ -23,6 +26,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
+import androidx.compose.ui.viewinterop.AndroidView
 import xzynine.WebDAVPass.Android.data.OtpToken
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
@@ -33,7 +37,9 @@ import top.yukonga.miuix.kmp.extra.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.basic.Check
+import top.yukonga.miuix.kmp.icon.extended.Notes
 import xzynine.WebDAVPass.Android.util.Base32String
+import xzynine.WebDAVPass.Android.util.QrCodeUtil
 
 
 
@@ -59,6 +65,7 @@ import xzynine.WebDAVPass.Android.util.Base32String
         var description by remember { mutableStateOf(token?.description ?: "") }
         var secret by remember { mutableStateOf(token?.secret ?: "") }
         var secretVisible by remember { mutableStateOf(false) }
+        var showQrCode by remember { mutableStateOf(false) }
         val isEditMode = token != null
 
     WindowDialog(
@@ -115,16 +122,43 @@ import xzynine.WebDAVPass.Android.util.Base32String
                     singleLine = true,
                     visualTransformation = if (secretVisible || !isEditMode) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = if (isEditMode) {
-                        { IconButton(onClick = { secretVisible = !secretVisible }) {
-                            Icon(
-                                imageVector = if (secretVisible) MiuixIcons.Basic.Check else MiuixIcons.Basic.ArrowRight,
-                                contentDescription = if (secretVisible) "隐藏密钥" else "显示密钥"
-                            )
+                        { Row {
+                            IconButton(onClick = { showQrCode = !showQrCode }) {
+                                Icon(
+                                    imageVector = MiuixIcons.Notes,
+                                    contentDescription = "显示二维码"
+                                )
+                            }
+                            IconButton(onClick = { secretVisible = !secretVisible }) {
+                                Icon(
+                                    imageVector = if (secretVisible) MiuixIcons.Basic.Check else MiuixIcons.Basic.ArrowRight,
+                                    contentDescription = if (secretVisible) "隐藏密钥" else "显示密钥"
+                                )
+                            }
                         }}
                     } else {
                         null
                     }
                 )
+
+                // 二维码显示区域
+                if (isEditMode && showQrCode && token != null) {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(text = "扫描二维码添加到其他设备:")
+                    Spacer(modifier = Modifier.height(8.dp))
+                    AndroidView(
+                        modifier = Modifier.size(200.dp),
+                        factory = { context ->
+                            ImageView(context).apply {
+                                scaleType = ImageView.ScaleType.FIT_CENTER
+                            }
+                        },
+                        update = { imageView ->
+                            val bitmap = QrCodeUtil.generateQrCodeFromToken(token)
+                            imageView.setImageBitmap(bitmap)
+                        }
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(24.dp))
