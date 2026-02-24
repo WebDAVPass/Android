@@ -25,11 +25,10 @@ class TokenDetailActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         this.setContent {
-            val context = LocalContext.current
             val tokenViewModel: TokenViewModel = viewModel(
                 factory = object : ViewModelProvider.Factory {
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        return TokenViewModel(context.applicationContext) as T
+                        return TokenViewModel(application) as T
                     }
                 }
             )

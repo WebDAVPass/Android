@@ -25,6 +25,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
@@ -83,8 +85,13 @@ class AutofillPickerActivity : ComponentActivity() {
 @Composable
 private fun AutofillPickerScreen(autofillId: AutofillId, targetPackage: String) {
     val context = LocalContext.current
-    val appContext = context.applicationContext
-    val tokenViewModel = remember { TokenViewModel(appContext) }
+    val tokenViewModel: TokenViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return TokenViewModel(context.applicationContext) as T
+            }
+        }
+    )
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
 
     val likelyMatches = remember(tokens, targetPackage) {

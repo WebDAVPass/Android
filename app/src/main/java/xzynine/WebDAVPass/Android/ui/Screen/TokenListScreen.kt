@@ -112,7 +112,10 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
             modifier = Modifier.Companion.fillMaxSize(),
             contentAlignment = Alignment.Companion.Center
         ) {
-            Text(text = "暂无令牌，请添加新的2FA令牌")
+            Text(
+                text = "暂无令牌，请添加新的2FA令牌",
+                color = MiuixTheme.colorScheme.onSurface
+            )
         }
     } else {
         LazyColumn(
@@ -290,7 +293,7 @@ fun TokenItem(
                     Text(
                         text = token.label,
                         fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.outline,
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
                         fontWeight = FontWeight.Companion.Normal
                     )
 
@@ -370,7 +373,7 @@ fun TokenItem(
                         strokeWidth = 4.dp,
                         colors = ProgressIndicatorDefaults.progressIndicatorColors(
                             foregroundColor = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
-                            backgroundColor = MiuixTheme.colorScheme.outline.copy(alpha = 0.1f)
+                            backgroundColor = MiuixTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.1f)
                         )
                     )
 

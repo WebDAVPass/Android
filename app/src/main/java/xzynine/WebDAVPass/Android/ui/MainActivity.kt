@@ -18,6 +18,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
@@ -73,8 +75,13 @@ class MainActivity : ComponentActivity() {
 fun MainScreen() {
     val context = LocalContext.current
     // 在顶层创建并共享一个 TokenViewModel，传递给各子界面
-    val appContext = context.applicationContext
-    val tokenViewModel = remember { TokenViewModel(appContext) }
+    val tokenViewModel: TokenViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+                return TokenViewModel(context.applicationContext) as T
+            }
+        }
+    )
 
     // 控制WebDAV配置弹窗的显示与隐藏
     val showWebDavDialog = remember { mutableStateOf(false) }
