@@ -25,7 +25,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.basic.Check
@@ -52,26 +52,27 @@ fun TokenDialog(
     var secret by remember { mutableStateOf(token?.secret ?: "") }
     var secretVisible by remember { mutableStateOf(false) }
     val isEditMode = token != null
+    
+    val showState = remember { mutableStateOf(show) }
+    showState.value = show
 
-    SuperDialog(
+    WindowDialog(
         title = if (isEditMode) "编辑令牌" else "手动输入密钥/otpauth URI",
         summary = if (isEditMode) "修改令牌信息" else "请输入密钥或 otpauth URI",
-        show = remember { mutableStateOf(show) },
+        show = showState,
         onDismissRequest = onDismiss,
-        defaultWindowInsetsPadding = true, // 启用默认窗口插入内边距，正确处理输入法
-        insideMargin = DpSize(16.dp, 16.dp) // 设置内部边距
+        defaultWindowInsetsPadding = true,
+        insideMargin = DpSize(16.dp, 16.dp)
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
-            // 编辑区域
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // 发行者输入框
                 TextField(
                     value = issuer,
                     onValueChange = { issuer = it },
@@ -80,7 +81,6 @@ fun TokenDialog(
                     singleLine = true
                 )
 
-                // 标签输入框
                 TextField(
                     value = label,
                     onValueChange = { label = it },
@@ -97,13 +97,12 @@ fun TokenDialog(
                     singleLine = true
                 )
 
-                // 密钥输入框
                 TextField(
                     value = secret,
                     onValueChange = { secret = it },
                     label = "密钥/URI",
                     modifier = Modifier.Companion.fillMaxWidth(),
-                    readOnly = isEditMode, // 编辑模式下密钥不可修改
+                    readOnly = isEditMode,
                     singleLine = true,
                     visualTransformation = if (secretVisible || !isEditMode) VisualTransformation.None else PasswordVisualTransformation(),
                     trailingIcon = if (isEditMode) {
@@ -121,23 +120,19 @@ fun TokenDialog(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            // 操作按钮区域
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                // 左侧按钮：编辑模式显示"删除"，手动输入模式显示"取消"
                 Button(
                     onClick = if (isEditMode && onDelete != null) onDelete else onDismiss
                 ) {
                     Text(text = if (isEditMode) "删除" else "取消")
                 }
 
-                // 右侧按钮：编辑模式显示"保存"，手动输入模式显示"添加"
                 Button(
                     onClick = {
                         val finalToken = if (isEditMode) {
-                            // 编辑现有令牌
                             token.copy(
                                 issuer = if (issuer.isBlank()) null else issuer,
                                 label = label,
@@ -145,21 +140,17 @@ fun TokenDialog(
                                 secret = secret
                             )
                         } else {
-                            // 手动输入新令牌，需要通过 OtpTokenFactory 创建
-                            // 注意：这里需要根据 secret 内容判断是 URI 还是纯密钥
                             val uri = try {
                                 val parsedUri = Uri.parse(secret)
                                 if (parsedUri.scheme != null) {
                                     parsedUri
                                 } else {
-                                    // 纯密钥，构建默认的 otpauth URI
                                     val finalIssuer = if (issuer.isBlank()) null else issuer
                                     val finalLabel = if (label.isBlank()) "Manual" else label
                                     val issuerPart = if (finalIssuer != null) "${finalIssuer}:%20" else ""
                                     Uri.parse("otpauth://totp/${issuerPart}${finalLabel}?secret=${secret}&algorithm=SHA1&digits=6&period=30")
                                 }
                             } catch (e: Exception) {
-                                // 解析失败，构建默认的 otpauth URI
                                 val finalIssuer = if (issuer.isBlank()) null else issuer
                                 val finalLabel = if (label.isBlank()) "Manual" else label
                                 val issuerPart = if (finalIssuer != null) "${finalIssuer}:%20" else ""

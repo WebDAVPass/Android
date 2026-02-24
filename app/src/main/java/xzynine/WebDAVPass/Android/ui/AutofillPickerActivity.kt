@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -24,6 +25,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.navigationevent.NavigationEventDispatcher
+import androidx.navigationevent.NavigationEventDispatcherOwner
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.theme.AppTheme
@@ -46,11 +50,22 @@ class AutofillPickerActivity : ComponentActivity() {
         val targetPackage = intent.getStringExtra(EXTRA_PACKAGE_NAME).orEmpty()
 
         setContent {
-            AppTheme {
-                AutofillPickerScreen(
-                    autofillId = autofillId,
-                    targetPackage = targetPackage
-                )
+            // 配置 NavigationEventDispatcher，使 miuix 弹窗组件能够正常工作
+            val navigationEventDispatcher = remember { NavigationEventDispatcher() }
+            val navigationEventDispatcherOwner = object : NavigationEventDispatcherOwner {
+                override val navigationEventDispatcher: NavigationEventDispatcher
+                    get() = navigationEventDispatcher
+            }
+            
+            CompositionLocalProvider(
+                LocalNavigationEventDispatcherOwner provides navigationEventDispatcherOwner
+            ) {
+                AppTheme {
+                    AutofillPickerScreen(
+                        autofillId = autofillId,
+                        targetPackage = targetPackage
+                    )
+                }
             }
         }
     }

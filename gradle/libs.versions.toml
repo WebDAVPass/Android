@@ -29,6 +29,9 @@ kotlinxCoroutinesCore = "1.7.2"
 kotlinxCoroutinesAndroid = "1.7.2"
 kotlinxCoroutinesCompose = "1.7.2"
 
+# Navigation 相关版本
+jetbrainsAndroidxNavigationevent = "1.0.1"
+
 # Room 数据库相关版本
 room = "2.8.2"
 
@@ -58,6 +61,9 @@ compose-runtime = { group = "androidx.compose.runtime", name = "runtime", versio
 compose-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "composeFoundation" }
 compose-runtime-livedata = { group = "androidx.compose.runtime", name = "runtime-livedata", version.ref = "composeRuntimeLivedata" }
 miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons", version.ref = "miuix" }
+
+# Navigation 相关库
+jetbrains-androidx-navigationevent = { group = "org.jetbrains.androidx.navigationevent", name = "navigationevent-compose", version.ref = "jetbrainsAndroidxNavigationevent" }
 # Room 数据库相关库
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }

@@ -6,15 +6,15 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.WindowDialog
 
 /**
  * 通用确认对话框
@@ -38,17 +38,19 @@ fun ConfirmationDialog(
     onConfirm: () -> Unit,
     dismissButtonText: String = "取消"
 ) {
-    SuperDialog(
+    val showState = remember { mutableStateOf(show) }
+    showState.value = show
+
+    WindowDialog(
         title = title,
         summary = summary,
-        show = remember { mutableStateOf(show) },
+        show = showState,
         onDismissRequest = onDismiss
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // 取消按钮
             TextButton(
                 text = dismissButtonText,
                 onClick = onDismiss,
@@ -57,9 +59,7 @@ fun ConfirmationDialog(
 
             Spacer(modifier = Modifier.width(16.dp))
 
-            // 确认按钮
             if (isDestructive) {
-                // 破坏性操作使用带主色调的TextButton
                 TextButton(
                     text = confirmButtonText,
                     onClick = onConfirm,
@@ -67,7 +67,6 @@ fun ConfirmationDialog(
                     colors = ButtonDefaults.textButtonColorsPrimary()
                 )
             } else {
-                // 普通操作使用默认样式的Button
                 Button(
                     onClick = onConfirm,
                     modifier = Modifier.weight(1f)

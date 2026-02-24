@@ -155,6 +155,7 @@ dependencies {
     implementation(libs.compose.runtime.livedata)
     // 导航库依赖
     implementation("androidx.navigation:navigation-compose:2.8.0")
+    implementation(libs.jetbrains.androidx.navigationevent) // Miuix 弹窗组件需要的导航事件库
     
     // Coroutines 相关依赖
     implementation(libs.kotlinx.coroutines.core)

@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
@@ -17,6 +18,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.navigationevent.NavigationEventDispatcher
+import androidx.navigationevent.NavigationEventDispatcherOwner
+import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
 import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
 import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
 import xzynine.WebDAVPass.Android.theme.AppTheme
@@ -48,8 +52,17 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         this.setContent {
-            AppTheme {
-                MainScreen()
+            val navigationEventDispatcher = remember { NavigationEventDispatcher() }
+            val navigationEventDispatcherOwner = object : NavigationEventDispatcherOwner {
+                override val navigationEventDispatcher: NavigationEventDispatcher
+                    get() = navigationEventDispatcher
+            }
+            CompositionLocalProvider(
+                LocalNavigationEventDispatcherOwner provides navigationEventDispatcherOwner
+            ) {
+                AppTheme {
+                    MainScreen()
+                }
             }
         }
     }
@@ -80,73 +93,77 @@ fun MainScreen() {
 
 
     // 基于Miuix Scaffold的主界面
-    Scaffold(
-        popupHost = { MiuixPopupHost() },
-        topBar = {
-            // 只有在首页时显示标题
-            if (selectedIndex == 0) {
-                TopAppBar(
-                    title = "2FA 管理器",
-                    navigationIcon = {},
-                    actions = {}
-                )
-            }
-        },
-        floatingActionButton = {
-            // 只有在首页时显示悬浮扫描按钮
-            if (selectedIndex == 0) {
-                FloatingActionButton(
-                    onClick = {
-                        showScanBottomSheet.value = true
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            popupHost = {},
+            topBar = {
+                // 只有在首页时显示标题
+                if (selectedIndex == 0) {
+                    TopAppBar(
+                        title = "2FA 管理器",
+                        navigationIcon = {},
+                        actions = {}
+                    )
+                }
+            },
+            floatingActionButton = {
+                // 只有在首页时显示悬浮扫描按钮
+                if (selectedIndex == 0) {
+                    FloatingActionButton(
+                        onClick = {
+                            showScanBottomSheet.value = true
+                        }
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Scan,
+                            contentDescription = "扫描二维码"
+                        )
                     }
+                }
+            },
+            floatingActionButtonPosition = FabPosition.Companion.End,
+            content = { paddingValues ->
+                // 主界面内容区域，根据选中的导航项显示不同内容
+                Box(
+                    modifier = Modifier.Companion
+                        .fillMaxSize()
+                        .padding(paddingValues)
                 ) {
-                    Icon(
-                        imageVector = MiuixIcons.Scan,
-                        contentDescription = "扫描二维码"
-                    )
-                }
-            }
-        },
-        floatingActionButtonPosition = FabPosition.Companion.End,
-        content = { paddingValues ->
-            // 主界面内容区域，根据选中的导航项显示不同内容
-            Box(
-                modifier = Modifier.Companion
-                    .fillMaxSize()
-                    .padding(paddingValues)
-            ) {
-                when (selectedIndex) {
-                    0 -> {
-                        HomeScreen(
-                            tokenViewModel = tokenViewModel,
-                            onScanClick = { showScanBottomSheet.value = true }
-                        )
-                    }
+                    when (selectedIndex) {
+                        0 -> {
+                            HomeScreen(
+                                tokenViewModel = tokenViewModel,
+                                onScanClick = { showScanBottomSheet.value = true }
+                            )
+                        }
 
-                    1 -> {
-                        // 设置页面
-                        SettingsScreen(
-                            viewModel = tokenViewModel,
-                            onWebDavConfigClick = { showWebDavDialog = true }
+                        1 -> {
+                            // 设置页面
+                            SettingsScreen(
+                                viewModel = tokenViewModel,
+                                onWebDavConfigClick = { showWebDavDialog = true }
+                            )
+                        }
+                    }
+                }
+            },
+            bottomBar = {
+                // 底部导航栏
+                NavigationBar {
+                    navigationItems.forEachIndexed { index, item ->
+                        NavigationBarItem(
+                            selected = selectedIndex == index,
+                            onClick = { selectedIndex = index },
+                            icon = item.icon,
+                            label = item.label
                         )
                     }
                 }
             }
-        },
-        bottomBar = {
-            // 底部导航栏
-            NavigationBar {
-                navigationItems.forEachIndexed { index, item ->
-                    NavigationBarItem(
-                        selected = selectedIndex == index,
-                        onClick = { selectedIndex = index },
-                        icon = item.icon,
-                        label = item.label
-                    )
-                }
-            }
-        }
-    )
+        )
+        // 在 Scaffold 外部放置 MiuixPopupHost
+        MiuixPopupHost()
+    }
 
     // 使用外部文件中的WebDAV配置弹窗组件
     WebDavConfigDialog(
