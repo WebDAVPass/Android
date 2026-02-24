@@ -198,13 +198,19 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         _webDavConfigs.value = configList
     }
 
+    // 标记是否为首次加载
+    private var isFirstLoad = true
+
     /**
      * 加载所有令牌，并检查和处理重复数据
      */
     private fun loadTokens() {
         viewModelScope.launch {
             database.otpTokenDao().getAll().collect {tokenList ->
-                _isLoading.value = true
+                // 只在首次加载时设置 loading 状态，避免 UI 闪烁
+                if (isFirstLoad) {
+                    _isLoading.value = true
+                }
                 try {
                     // 检查并处理重复数据，同时过滤掉无效的令牌
                     val validTokens = tokenList.filter { isValidBase32(it.secret) }
@@ -214,11 +220,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     // 为每个令牌创建代码流
                     processedTokens.forEach {
                         if (!_tokenCodes.containsKey(it.id)) {
+                            // 只为新令牌生成初始代码
                             _tokenCodes[it.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(it))
-                        } else {
-                            // 更新现有令牌的代码
-                            _tokenCodes[it.id]?.value = tokenCodeUtil.generateTokenCode(it)
                         }
+                        // 对于已有令牌，跳过代码更新
+                        // 因为 refreshTokenCodes() 会每秒刷新一次代码，并且只在需要时更新
                     }
                     // 移除已删除令牌的代码流
                     _tokenCodes.keys.retainAll(processedTokens.map { it.id }.toSet())
@@ -227,7 +233,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     // 保留上次加载的令牌数据
                     ex.printStackTrace()
                 } finally {
-                    _isLoading.value = false
+                    if (isFirstLoad) {
+                        _isLoading.value = false
+                        // 首次加载完成后设置为 false
+                        isFirstLoad = false
+                    }
                 }
             }
         }
@@ -237,7 +247,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 处理重复令牌，删除重复项，保留最新的（id最大的）
      * 重复判断基于：uniqueId字段
      */
-    private fun processDuplicateTokens(tokens: List<OtpToken>): List<OtpToken> {
+    private suspend fun processDuplicateTokens(tokens: List<OtpToken>): List<OtpToken> {
         // 使用uniqueId作为键，值为令牌列表
         val tokenMap = mutableMapOf<String, MutableList<OtpToken>>()
 
@@ -260,12 +270,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 val uniqueToken = tokenList.maxByOrNull { it.id }!!
                 uniqueTokens.add(uniqueToken)
 
-                // 删除重复项（id不是最大的）
-                viewModelScope.launch {
-                    val tokensToDelete = tokenList.filter { it.id != uniqueToken.id }
-                    tokensToDelete.forEach {
-                        database.otpTokenDao().deleteById(it.id)
-                    }
+                // 删除重复项（id不是最大的）- 直接在挂起函数中执行
+                val tokensToDelete = tokenList.filter { it.id != uniqueToken.id }
+                tokensToDelete.forEach {
+                    database.otpTokenDao().deleteById(it.id)
                 }
             } else {
                 // 没有重复，直接添加
@@ -646,6 +654,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             }
         } catch (ex: Exception) {
             // 捕获到异常，恢复失败（密码错误或哈希不匹配）
+            ex.printStackTrace()
             RestoreResult.FAILURE
         }
     }
