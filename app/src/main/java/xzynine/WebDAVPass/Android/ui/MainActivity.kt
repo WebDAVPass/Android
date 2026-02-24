@@ -19,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
@@ -173,23 +174,28 @@ fun MainScreen() {
     }
 
     // 使用外部文件中的WebDAV配置弹窗组件
-    WebDavConfigDialog(
-        showDialog = showWebDavDialog,
-        onDismissRequest = { showWebDavDialog.value = false },
-        onConfigSaved = { config ->
-            // 在协程中保存配置到数据库
-            CoroutineScope(Dispatchers.IO).launch {
-                if (config.id == 0L) {
-                    // 新配置，插入数据库
-                    tokenViewModel.addWebDavConfig(config)
-                } else {
-                    // 现有配置，更新数据库
-                    tokenViewModel.updateWebDavConfig(config)
+        WebDavConfigDialog(
+            showDialog = showWebDavDialog,
+            onDismissRequest = { showWebDavDialog.value = false },
+            onConfigSaved = { config ->
+                // 使用 ViewModel 的 viewModelScope 来管理协程，确保生命周期安全
+                tokenViewModel.viewModelScope.launch(Dispatchers.IO) {
+                    try {
+                        if (config.id == 0L) {
+                            // 新配置，插入数据库
+                            tokenViewModel.addWebDavConfig(config)
+                        } else {
+                            // 现有配置，更新数据库
+                            tokenViewModel.updateWebDavConfig(config)
+                        }
+                    } catch (e: Exception) {
+                        // 错误处理
+                        e.printStackTrace()
+                    }
                 }
-            }
-        },
-        existingConfig = null
-    )
+            },
+            existingConfig = null
+        )
 
     // 扫描二维码底部抽屉
     SuperBottomSheet(

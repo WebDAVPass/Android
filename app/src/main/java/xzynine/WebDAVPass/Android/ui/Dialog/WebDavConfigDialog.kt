@@ -173,7 +173,7 @@ fun WebDavConfigContent(
                 isTesting = true
                 Toast.makeText(context, "正在测试连接...", Toast.LENGTH_SHORT).show()
 
-                coroutineScope.launch {
+                coroutineScope.launch(Dispatchers.IO) {
                     try {
                         val webDav = WebDav(serverUrl, Authorization(username, testPassword))
                         val success = webDav.check()
