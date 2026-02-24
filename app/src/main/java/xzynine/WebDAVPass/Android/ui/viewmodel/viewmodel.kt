@@ -193,35 +193,31 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     private fun loadTokens() {
         viewModelScope.launch {
-            refreshTokenList()
-        }
-    }
+            database.otpTokenDao().getAll().collect {tokenList ->
+                _isLoading.value = true
+                try {
+                    // 检查并处理重复数据
+                    val processedTokens = processDuplicateTokens(tokenList)
 
-    /**
-     * 刷新令牌列表，确保立即更新UI
-     * 在当前协程中同步执行
-     */
-    private suspend fun refreshTokenList() {
-        _isLoading.value = true
-        try {
-            // 只获取一次初始数据
-            var tokenList = database.otpTokenDao().getAllOnce()
-
-            // 检查并处理重复数据
-            tokenList = processDuplicateTokens(tokenList)
-
-            _tokens.value = tokenList
-            // 为每个令牌创建代码流
-            tokenList.forEach {
-                if (!_tokenCodes.containsKey(it.id)) {
-                    _tokenCodes[it.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(it))
+                    _tokens.value = processedTokens
+                    // 为每个令牌创建代码流
+                    processedTokens.forEach {
+                        if (!_tokenCodes.containsKey(it.id)) {
+                            _tokenCodes[it.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(it))
+                        } else {
+                            // 更新现有令牌的代码
+                            _tokenCodes[it.id]?.value = tokenCodeUtil.generateTokenCode(it)
+                        }
+                    }
+                    // 移除已删除令牌的代码流
+                    _tokenCodes.keys.retainAll(processedTokens.map { it.id }.toSet())
+                } catch (ex: Exception) {
+                    // 如果出现异常，确保加载状态结束
+                    _tokens.value = emptyList()
+                } finally {
+                    _isLoading.value = false
                 }
             }
-        } catch (ex: Exception) {
-            // 如果出现异常，确保加载状态结束
-            _tokens.value = emptyList()
-        } finally {
-            _isLoading.value = false
         }
     }
 
@@ -337,8 +333,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         }
         
         database.otpTokenDao().insert(tokenWithId)
-        // 刷新令牌列表，确保立即更新UI
-        refreshTokenList()
         
         // 自动备份
         backupTokens()
@@ -353,8 +347,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             database.otpTokenDao().deleteById(tokenId)
             _tokenCodes.remove(tokenId)
-            // 刷新令牌列表，确保立即更新UI
-            refreshTokenList()
             
             // 自动备份
             backupTokens()
@@ -369,8 +361,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             database.otpTokenDao().update(token)
             // 刷新代码
             _tokenCodes[token.id]?.value = tokenCodeUtil.generateTokenCode(token)
-            // 刷新令牌列表，确保立即更新UI
-            refreshTokenList()
             
             // 自动备份
             backupTokens()
@@ -617,7 +607,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             }
             
             if (hasChanges) {
-                refreshTokenList()
                 RestoreResult.SUCCESS
             } else {
                 // 没有新令牌插入或更新
