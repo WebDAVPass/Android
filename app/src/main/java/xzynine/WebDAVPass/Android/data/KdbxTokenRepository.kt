@@ -2,6 +2,8 @@ package xzynine.WebDAVPass.Android.data
 
 import android.util.Log
 import org.linguafranca.pwdb.kdbx.KdbxCreds
+import org.linguafranca.pwdb.kdbx.KdbxHeader
+import org.linguafranca.pwdb.kdbx.KdbxSerializer
 import org.linguafranca.pwdb.kdbx.dom.DomDatabaseWrapper
 import org.linguafranca.pwdb.kdbx.dom.DomEntryWrapper
 import org.linguafranca.pwdb.kdbx.dom.DomGroupWrapper
@@ -51,7 +53,21 @@ class KdbxTokenRepository {
     fun validatePassword(localPath: String, masterPassword: String): Boolean {
         lastUnlockErrorMessage = null
         return runCatching {
-            withDatabase(localPath, masterPassword, saveAfter = false) { }
+            val file = File(localPath)
+            if (!file.exists() || file.length() == 0L) {
+                initializeDatabase(localPath, masterPassword)
+            }
+
+            val creds = KdbxCreds(masterPassword.toByteArray(Charsets.UTF_8))
+            file.inputStream().use { encryptedInput ->
+                val header = KdbxHeader()
+                KdbxSerializer.createUnencryptedInputStream(creds, header, encryptedInput).use { decryptedInput ->
+                    val buffer = ByteArray(DEFAULT_BUFFER_SIZE)
+                    while (decryptedInput.read(buffer) != -1) {
+                        // consume stream to force full decrypt/auth validation
+                    }
+                }
+            }
             true
         }.onFailure {
             val file = File(localPath)
