@@ -3,6 +3,7 @@ package xzynine.WebDAVPass.Android.ui.Screen
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -100,18 +101,28 @@ private fun PasswordEntryCard(item: PasswordEntry, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             EntryIcon(
-                primary = item.account,
-                secondary = item.title,
+                primary = item.title,
+                secondary = item.account,
                 modifier = Modifier.size(32.dp),
                 contentDescription = "账号图标"
             )
 
-            Text(
-                text = item.account,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onSurface
-            )
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = item.title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onSurface
+                )
+
+                if (item.account.isNotBlank()) {
+                    Text(
+                        text = item.account,
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                    )
+                }
+            }
         }
     }
 }

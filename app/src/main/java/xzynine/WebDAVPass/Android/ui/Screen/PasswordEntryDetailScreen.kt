@@ -51,7 +51,7 @@ fun PasswordEntryDetailScreen(
         popupHost = {},
         topBar = {
             TopAppBar(
-                title = selectedEntry?.account ?: "条目详情",
+                title = selectedEntry?.title ?: "条目详情",
                 navigationIcon = {},
                 actions = {},
                 defaultWindowInsetsPadding = true
@@ -92,16 +92,18 @@ fun PasswordEntryDetailScreen(
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                            text = selectedEntry.account,
+                            text = selectedEntry.title,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onSurface
                         )
-                        Text(
-                            text = selectedEntry.title,
-                            fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
-                        )
+                        if (selectedEntry.account.isNotBlank()) {
+                            Text(
+                                text = selectedEntry.account,
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            )
+                        }
                     }
                 }
             }

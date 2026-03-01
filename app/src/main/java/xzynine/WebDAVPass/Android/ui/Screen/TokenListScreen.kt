@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -82,7 +83,7 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
     } else {
         LazyColumn(
             modifier = Modifier.Companion.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
+            contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             items(tokens, key = { it.id }) { token ->
                 val tokenCode by tokenViewModel.getTokenCode(token.id).collectAsState(null)
@@ -101,7 +102,10 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
                     onLongClick = {
                         selectedToken = token
                         dialogState = DialogState.EDIT
-                    }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp)
                 )
                 HorizontalDivider(
                     modifier = Modifier.Companion.padding(horizontal = 16.dp),

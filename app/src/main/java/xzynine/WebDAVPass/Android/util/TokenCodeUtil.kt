@@ -19,20 +19,21 @@ class TokenCodeUtil {
      */
     fun generateTokenCode(otpToken: OtpToken): TokenCode {
         val cur = System.currentTimeMillis()
+        val period = otpToken.period.coerceAtLeast(1)
 
         when (otpToken.tokenType) {
             OtpTokenType.HOTP ->
-                return TokenCode(getHOTP(otpToken, otpToken.counter), cur, cur + otpToken.period * 1000)
+                return TokenCode(getHOTP(otpToken, otpToken.counter), cur, cur + period * 1000)
             OtpTokenType.TOTP -> {
-                val counter: Long = cur / 1000 / otpToken.period
+                val counter: Long = cur / 1000 / period
                 return TokenCode(
                     getHOTP(otpToken, counter + 0),
-                    (counter + 0) * otpToken.period * 1000,
-                    (counter + 1) * otpToken.period * 1000,
+                    (counter + 0) * period * 1000,
+                    (counter + 1) * period * 1000,
                     TokenCode(
                         getHOTP(otpToken, counter + 1),
-                        (counter + 1) * otpToken.period * 1000,
-                        (counter + 2) * otpToken.period * 1000
+                        (counter + 1) * period * 1000,
+                        (counter + 2) * period * 1000
                     )
                 )
             }

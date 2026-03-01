@@ -396,7 +396,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             while (true) {
                 delay(1000) // 每秒刷新一次
-                refreshTokenCodes()
+                runCatching {
+                    refreshTokenCodes()
+                }.onFailure {
+                    it.printStackTrace()
+                }
             }
         }
     }

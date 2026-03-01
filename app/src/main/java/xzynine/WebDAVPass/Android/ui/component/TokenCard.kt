@@ -7,6 +7,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -101,6 +102,7 @@ fun TokenCard(
     ) {
         Row(
             modifier = Modifier
+                .fillMaxWidth()
                 .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
@@ -212,7 +214,7 @@ private fun CountdownDisplay(code: TokenCode) {
 
     val remainingTime = kotlin.comparisons.maxOf(0, (code.end - currentTime) / 1000)
     val actualPeriod = kotlin.comparisons.maxOf(1, (code.end - code.start) / 1000)
-    val progress = remainingTime.toFloat() / actualPeriod.toFloat()
+    val progress = (remainingTime.toFloat() / actualPeriod.toFloat()).coerceIn(0f, 1f)
 
     Box(
         modifier = Modifier.size(56.dp),

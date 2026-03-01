@@ -108,8 +108,12 @@ class KdbxTokenRepository {
             val result = mutableListOf<PasswordEntry>()
             val entries = collectEntries(db.rootGroup)
             entries.forEach { entry ->
-                val title = entry.title.takeIf { it.isNotBlank() } ?: "未命名条目"
-                val account = entry.username.takeIf { it.isNotBlank() } ?: title
+                val title = entry.title
+                    .takeIf { it.isNotBlank() }
+                    ?: entry.url.takeIf { it.isNotBlank() }
+                    ?: entry.username.takeIf { it.isNotBlank() }
+                    ?: toStableId(entry).toString()
+                val account = entry.username.takeIf { it.isNotBlank() } ?: ""
                 val values = mutableListOf<RemainingKeyValue>()
 
                 appendStandardField(values, "UserName", entry.username)
@@ -142,8 +146,8 @@ class KdbxTokenRepository {
             }
 
             result.sortedWith(
-                compareBy<PasswordEntry> { it.account.lowercase() }
-                    .thenBy { it.title.lowercase() }
+                compareBy<PasswordEntry> { it.title.lowercase() }
+                    .thenBy { it.account.lowercase() }
             )
         }
     }
