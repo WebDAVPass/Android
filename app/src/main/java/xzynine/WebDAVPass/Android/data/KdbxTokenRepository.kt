@@ -1,16 +1,22 @@
 package xzynine.WebDAVPass.Android.data
 
+import android.util.Log
 import org.linguafranca.pwdb.kdbx.KdbxCreds
-import org.linguafranca.pwdb.kdbx.simple.SimpleDatabase
-import org.linguafranca.pwdb.kdbx.simple.SimpleEntry
-import org.linguafranca.pwdb.kdbx.simple.SimpleGroup
+import org.linguafranca.pwdb.kdbx.dom.DomDatabaseWrapper
+import org.linguafranca.pwdb.kdbx.dom.DomEntryWrapper
+import org.linguafranca.pwdb.kdbx.dom.DomGroupWrapper
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.util.UUID
 import kotlin.math.abs
 
 class KdbxTokenRepository {
 
+    @Volatile
+    private var lastUnlockErrorMessage: String? = null
+
     companion object {
+        private const val LOG_TAG = "tag:解锁"
         private const val PROP_UNIQUE_ID = "WDP_UNIQUE_ID"
         private const val PROP_ISSUER = "WDP_ISSUER"
         private const val PROP_IMAGE_PATH = "WDP_IMAGE_PATH"
@@ -29,19 +35,34 @@ class KdbxTokenRepository {
         if (file.exists() && file.length() > 0) {
             return
         }
-        val db = SimpleDatabase()
+        file.writeBytes(createDatabaseBytes(masterPassword))
+    }
+
+    fun createDatabaseBytes(masterPassword: String): ByteArray {
+        val db = DomDatabaseWrapper()
         db.setName("WebDavPass")
         val creds = KdbxCreds(masterPassword.toByteArray(Charsets.UTF_8))
-        file.outputStream().use { out ->
+        return ByteArrayOutputStream().use { out ->
             db.save(creds, out)
+            out.toByteArray()
         }
     }
 
     fun validatePassword(localPath: String, masterPassword: String): Boolean {
+        lastUnlockErrorMessage = null
         return runCatching {
             withDatabase(localPath, masterPassword, saveAfter = false) { }
             true
+        }.onFailure {
+            val file = File(localPath)
+            val hint = buildFileHint(file)
+            lastUnlockErrorMessage = "${it.javaClass.simpleName}: ${it.message ?: "unknown"} | $hint"
+            Log.e(LOG_TAG, "validatePassword failed, path=$localPath, hint=$hint, message=${it.message}", it)
         }.getOrDefault(false)
+    }
+
+    fun getLastUnlockErrorMessage(): String? {
+        return lastUnlockErrorMessage
     }
 
     fun loadTokens(localPath: String, masterPassword: String): List<OtpToken> {
@@ -65,7 +86,7 @@ class KdbxTokenRepository {
                 return@withDatabase false
             }
 
-            val entry = db.newEntry(token.label)
+            val entry = db.newEntry().apply { setTitle(token.label) }
             applyTokenToEntry(entry, token)
             db.getRootGroup().addEntry(entry)
             true
@@ -97,7 +118,7 @@ class KdbxTokenRepository {
         }
     }
 
-    private fun findEntryByToken(db: SimpleDatabase, token: OtpToken): SimpleEntry? {
+    private fun findEntryByToken(db: DomDatabaseWrapper, token: OtpToken): DomEntryWrapper? {
         return collectEntries(db.getRootGroup()).firstOrNull {
             val idProp = it.getProperty(PROP_UNIQUE_ID)
             val uniqueMatch = !idProp.isNullOrBlank() && idProp == token.uniqueId
@@ -105,11 +126,11 @@ class KdbxTokenRepository {
         }
     }
 
-    private fun findEntryById(db: SimpleDatabase, tokenId: Long): SimpleEntry? {
+    private fun findEntryById(db: DomDatabaseWrapper, tokenId: Long): DomEntryWrapper? {
         return collectEntries(db.getRootGroup()).firstOrNull { toStableId(it.getUuid()) == tokenId }
     }
 
-    private fun toToken(entry: SimpleEntry): OtpToken? {
+    private fun toToken(entry: DomEntryWrapper): OtpToken? {
         val secret = entry.getPassword()?.takeIf { it.isNotBlank() } ?: return null
         val algorithm = (entry.getProperty(PROP_ALGORITHM) ?: "SHA1").uppercase()
         val digits = entry.getProperty(PROP_DIGITS)?.toIntOrNull() ?: 6
@@ -152,7 +173,7 @@ class KdbxTokenRepository {
         )
     }
 
-    private fun applyTokenToEntry(entry: SimpleEntry, token: OtpToken) {
+    private fun applyTokenToEntry(entry: DomEntryWrapper, token: OtpToken) {
         entry.setTitle(token.label)
         entry.setUsername(token.issuer ?: "")
         entry.setPassword(token.secret)
@@ -169,8 +190,8 @@ class KdbxTokenRepository {
         entry.setProperty(PROP_ORDINAL, token.ordinal.toString())
     }
 
-    private fun collectEntries(group: SimpleGroup): List<SimpleEntry> {
-        val list = mutableListOf<SimpleEntry>()
+    private fun collectEntries(group: DomGroupWrapper): List<DomEntryWrapper> {
+        val list = mutableListOf<DomEntryWrapper>()
         list.addAll(group.getEntries())
         group.getGroups().forEach { child ->
             list.addAll(collectEntries(child))
@@ -178,14 +199,14 @@ class KdbxTokenRepository {
         return list
     }
 
-    private fun <T> withDatabase(localPath: String, masterPassword: String, saveAfter: Boolean, block: (SimpleDatabase) -> T): T {
+    private fun <T> withDatabase(localPath: String, masterPassword: String, saveAfter: Boolean, block: (DomDatabaseWrapper) -> T): T {
         val file = File(localPath)
         if (!file.exists() || file.length() == 0L) {
             initializeDatabase(localPath, masterPassword)
         }
         val creds = KdbxCreds(masterPassword.toByteArray(Charsets.UTF_8))
         val db = file.inputStream().use { input ->
-            SimpleDatabase.load(creds, input)
+            DomDatabaseWrapper.load(creds, input)
         }
         val result = block(db)
         if (saveAfter || db.isDirty) {
@@ -194,6 +215,25 @@ class KdbxTokenRepository {
             }
         }
         return result
+    }
+
+    private fun buildFileHint(file: File): String {
+        if (!file.exists()) {
+            return "fileMissing"
+        }
+        val length = file.length()
+        val head = runCatching {
+            file.inputStream().use { input ->
+                val bytes = ByteArray(8)
+                val read = input.read(bytes)
+                if (read <= 0) {
+                    "empty"
+                } else {
+                    bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+                }
+            }
+        }.getOrElse { "readError:${it.javaClass.simpleName}" }
+        return "size=$length, head=$head"
     }
 
     private fun toStableId(uuid: UUID): Long {

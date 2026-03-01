@@ -70,7 +70,7 @@ androidx-room-runtime = { group = "androidx.room", name = "room-runtime", versio
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
 keepassjava2-kdbx = { group = "org.linguafranca.pwdb", name = "KeePassJava2-kdbx", version.ref = "keepassJava2" }
-keepassjava2-simple = { group = "org.linguafranca.pwdb", name = "KeePassJava2-simple", version.ref = "keepassJava2" }
+keepassjava2-dom = { group = "org.linguafranca.pwdb", name = "KeePassJava2-dom", version.ref = "keepassJava2" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
 kotlinx-coroutines-compose = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-compose", version.ref = "kotlinxCoroutinesCompose" }

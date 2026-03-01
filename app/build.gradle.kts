@@ -170,7 +170,7 @@ dependencies {
 
     // KeePass KDBX 读写
     implementation(libs.keepassjava2.kdbx)
-    implementation(libs.keepassjava2.simple)
+    implementation(libs.keepassjava2.dom)
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

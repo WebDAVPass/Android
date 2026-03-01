@@ -18,11 +18,13 @@ import xzynine.WebDAVPass.webdav.Authorization
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
 import java.io.File
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 
 
@@ -52,6 +54,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val libraryContextStore: LibraryContextStore = LibraryContextStore(context)
     private val kdbxTokenRepository: KdbxTokenRepository = KdbxTokenRepository()
     private var currentLibraryMasterPassword: String = ""
+    private var lastUnlockErrorMessage: String? = null
 
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
     
@@ -166,16 +169,24 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun unlockCurrentLibrary(masterPassword: String): Boolean {
         val localPath = _currentLibrary.value?.localPath ?: return false
-        val ok = kdbxTokenRepository.validatePassword(localPath, masterPassword)
+        val ok = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.validatePassword(localPath, masterPassword)
+        }
         if (!ok) {
+            lastUnlockErrorMessage = kdbxTokenRepository.getLastUnlockErrorMessage()
             _isLibraryUnlocked.value = false
             return false
         }
 
+        lastUnlockErrorMessage = null
         currentLibraryMasterPassword = masterPassword
         _isLibraryUnlocked.value = true
         loadTokens()
         return true
+    }
+
+    fun getLastUnlockErrorMessage(): String? {
+        return lastUnlockErrorMessage
     }
 
     /**
@@ -212,16 +223,20 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      *
      * @return 本地私有目录中的绝对路径，失败返回null
      */
-    suspend fun createLocalKdbx(uri: Uri): String? {
+    suspend fun createLocalKdbx(uri: Uri, masterPassword: String): String? {
         return runCatching {
+            val kdbxBytes = kdbxTokenRepository.createDatabaseBytes(masterPassword)
             context.contentResolver.openOutputStream(uri)?.use { out ->
-                out.write(ByteArray(0))
+                out.write(kdbxBytes)
             } ?: return null
 
             val persistedPath = persistKdbxFromUri(uri) ?: return null
-            kdbxTokenRepository.initializeDatabase(persistedPath, "")
             persistedPath
         }.getOrNull()
+    }
+
+    fun createEmptyKdbxBytes(masterPassword: String): ByteArray {
+        return kdbxTokenRepository.createDatabaseBytes(masterPassword)
     }
 
     /**
@@ -258,7 +273,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     return@launch
                 }
 
-                val loadedTokens = kdbxTokenRepository.loadTokens(localPath, currentLibraryMasterPassword)
+                val loadedTokens = withContext(Dispatchers.IO) {
+                    kdbxTokenRepository.loadTokens(localPath, currentLibraryMasterPassword)
+                }
                 _tokens.value = loadedTokens
 
                 loadedTokens.forEach {
