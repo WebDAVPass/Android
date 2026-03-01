@@ -1,23 +1,23 @@
 package xzynine.WebDAVPass.Android.ui.ViewModel
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
-import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 import xzynine.WebDAVPass.Android.data.AppDatabase
+import xzynine.WebDAVPass.Android.data.LibraryContext
+import xzynine.WebDAVPass.Android.data.LibraryContextStore
+import xzynine.WebDAVPass.Android.data.LibrarySourceType
+import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.OtpToken
-import xzynine.WebDAVPass.Android.data.SyncState
 import xzynine.WebDAVPass.Android.data.TokenCode
 import xzynine.WebDAVPass.Android.data.WebDavConfig
 import xzynine.WebDAVPass.webdav.WebDav
 import xzynine.WebDAVPass.webdav.Authorization
-import xzynine.WebDAVPass.Android.util.BackupUtil
-import xzynine.WebDAVPass.Android.util.Base32String
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
-import java.util.regex.Pattern
+import java.io.File
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,92 +37,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
-                val migration1_2 = object : Migration(1, 2) {
-                    override fun migrate(db: SupportSQLiteDatabase) {
-                        // 创建 webdav_configs 表以兼容从 v1 升级到 v2
-                        db.execSQL("""
-                            CREATE TABLE IF NOT EXISTS `webdav_configs` (
-                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-                                `name` TEXT NOT NULL,
-                                `url` TEXT NOT NULL,
-                                `username` TEXT NOT NULL,
-                                `password` TEXT NOT NULL,
-                                `sort_number` INTEGER NOT NULL
-                            )
-                        """.trimIndent())
-                    }
-                }
-
-                val migration2_3 = object : Migration(2, 3) {
-                    override fun migrate(db: SupportSQLiteDatabase) {
-                        // 为旧数据补充 uniqueId 列（非空，默认空串便于后续回填），再建立唯一索引
-                        db.execSQL("ALTER TABLE otp_tokens ADD COLUMN uniqueId TEXT NOT NULL DEFAULT ''")
-
-                        val cursor = db.query("select id, secret, algorithm, digits, period from otp_tokens")
-                        val latestById = mutableMapOf<String, Long>()
-                        val idsToDelete = mutableListOf<Long>()
-
-                        cursor.use {
-                            while (it.moveToNext()) {
-                                val id = it.getLong(0)
-                                val secret = it.getString(1)
-                                val algorithm = it.getString(2)
-                                val digits = it.getInt(3)
-                                val period = it.getInt(4)
-
-                                val uniqueId = UniqueIdGenerator.generate(secret, algorithm, digits, period)
-                                val keptId = latestById[uniqueId]
-
-                                if (keptId == null || id > keptId) {
-                                    keptId?.let { oldId -> idsToDelete.add(oldId) }
-                                    latestById[uniqueId] = id
-                                    db.execSQL("update otp_tokens set uniqueId = ? where id = ?", arrayOf(uniqueId, id))
-                                } else {
-                                    idsToDelete.add(id)
-                                }
-                            }
-                        }
-
-                        if (idsToDelete.isNotEmpty()) {
-                            val idList = idsToDelete.joinToString(",")
-                            db.execSQL("delete from otp_tokens where id in ($idList)")
-                        }
-
-                        db.execSQL("""
-                            CREATE UNIQUE INDEX IF NOT EXISTS `index_otp_tokens_uniqueId`
-                            ON `otp_tokens` (`uniqueId`)
-                        """.trimIndent())
-                    }
-                }
-
-                val migration3_4 = object : Migration(3, 4) {
-                    override fun migrate(db: SupportSQLiteDatabase) {
-                        // 创建同步状态表
-                        db.execSQL("""
-                            CREATE TABLE IF NOT EXISTS `sync_state` (
-                                `id` INTEGER PRIMARY KEY NOT NULL,
-                                `last_sync_time` INTEGER NOT NULL,
-                                `remote_last_updated` TEXT
-                            )
-                        """.trimIndent())
-                        
-                        // 插入初始同步状态记录
-                        db.execSQL("INSERT INTO sync_state (id, last_sync_time, remote_last_updated) VALUES (1, ?, NULL)", 
-                            arrayOf(System.currentTimeMillis()))
-                    }
-                }
-
-                val migration4_5 = object : Migration(4, 5) {
-                    override fun migrate(db: SupportSQLiteDatabase) {
-                        db.execSQL("ALTER TABLE otp_tokens ADD COLUMN description TEXT")
-                    }
-                }
-
                 val instance = Room.databaseBuilder(
                     context.applicationContext,
                     AppDatabase::class.java,
-                    "otp_token_database"
-                ).addMigrations(migration1_2, migration2_3, migration3_4, migration4_5).build()
+                    "webdav_config_database"
+                ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
             }
@@ -130,17 +49,27 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     private val database: AppDatabase = getDatabase(context)
+    private val libraryContextStore: LibraryContextStore = LibraryContextStore(context)
+    private val kdbxTokenRepository: KdbxTokenRepository = KdbxTokenRepository()
+    private var currentLibraryMasterPassword: String = ""
 
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
     
-    // 同步状态数据访问对象
-    private val syncStateDao = database.syncStateDao()
 
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())
     val tokens: StateFlow<List<OtpToken>> = _tokens.asStateFlow()
 
+    private val _libraryHistory = MutableStateFlow<List<LibraryContext>>(emptyList())
+    val libraryHistory: StateFlow<List<LibraryContext>> = _libraryHistory.asStateFlow()
+
+    private val _currentLibrary = MutableStateFlow<LibraryContext?>(null)
+    val currentLibrary: StateFlow<LibraryContext?> = _currentLibrary.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
+    private val _isLibraryUnlocked = MutableStateFlow(false)
+    val isLibraryUnlocked: StateFlow<Boolean> = _isLibraryUnlocked.asStateFlow()
 
     private val _tokenCodes = mutableMapOf<Long, MutableStateFlow<TokenCode?>>()
 
@@ -167,10 +96,132 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     
     
     init {
-        loadTokens()
+        refreshLibraryHistory()
         loadWebDavConfigs()
         startTokenRefreshTimer()
-        autoRestoreTokens()
+    }
+
+    /**
+     * 刷新库历史与当前库状态
+     */
+    private fun refreshLibraryHistory() {
+        _libraryHistory.value = libraryContextStore.getHistory().sortedByDescending { it.lastUsedAt }
+        _currentLibrary.value = libraryContextStore.getCurrentLibrary()
+    }
+
+    /**
+     * 添加或更新历史库并选中
+     */
+    fun upsertAndSelectLibrary(libraryContext: LibraryContext) {
+        val updated = libraryContextStore.upsertAndSelect(libraryContext)
+        _currentLibrary.value = updated
+        currentLibraryMasterPassword = ""
+        _isLibraryUnlocked.value = false
+        _tokens.value = emptyList()
+        _tokenCodes.clear()
+        refreshLibraryHistory()
+    }
+
+    /**
+     * 按ID选中历史库
+     */
+    fun selectLibraryById(libraryId: String) {
+        val selected = libraryContextStore.selectById(libraryId)
+        _currentLibrary.value = selected
+        currentLibraryMasterPassword = ""
+        _isLibraryUnlocked.value = false
+        _tokens.value = emptyList()
+        _tokenCodes.clear()
+        refreshLibraryHistory()
+    }
+
+    /**
+     * 清空当前库选择
+     */
+    fun clearCurrentLibrarySelection() {
+        libraryContextStore.clearCurrentSelection()
+        _currentLibrary.value = null
+        currentLibraryMasterPassword = ""
+        _isLibraryUnlocked.value = false
+        _tokens.value = emptyList()
+        refreshLibraryHistory()
+    }
+
+    /**
+     * 打开并选中库上下文
+     */
+    fun openLibraryContext(libraryContext: LibraryContext) {
+        upsertAndSelectLibrary(libraryContext)
+    }
+
+    /**
+     * 切换已存在库
+     */
+    fun switchLibrary(libraryId: String) {
+        selectLibraryById(libraryId)
+    }
+
+    /**
+     * 解锁当前库（主密码与WebDAV密码分离）
+     */
+    suspend fun unlockCurrentLibrary(masterPassword: String): Boolean {
+        val localPath = _currentLibrary.value?.localPath ?: return false
+        val ok = kdbxTokenRepository.validatePassword(localPath, masterPassword)
+        if (!ok) {
+            _isLibraryUnlocked.value = false
+            return false
+        }
+
+        currentLibraryMasterPassword = masterPassword
+        _isLibraryUnlocked.value = true
+        loadTokens()
+        return true
+    }
+
+    /**
+     * 将Uri指向的kdbx文件持久化到应用私有目录
+     *
+     * @return 持久化后的绝对路径，失败返回null
+     */
+    suspend fun persistKdbxFromUri(uri: Uri): String? {
+        return runCatching {
+            val libraryDir = java.io.File(context.filesDir, "libraries")
+            if (!libraryDir.exists()) {
+                libraryDir.mkdirs()
+            }
+
+            val fileName = buildString {
+                append("import-")
+                append(System.currentTimeMillis())
+                append(".kdbx")
+            }
+
+            val localFile = java.io.File(libraryDir, fileName)
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                localFile.outputStream().use { output ->
+                    input.copyTo(output)
+                }
+            } ?: return null
+
+            localFile.absolutePath
+        }.getOrNull()
+    }
+
+    /**
+     * 通过系统CreateDocument创建本地kdbx文件，并同步保存一份到应用私有目录
+     *
+     * @return 本地私有目录中的绝对路径，失败返回null
+     */
+    suspend fun createLocalKdbx(uri: Uri): String? {
+        return runCatching {
+            context.contentResolver.openOutputStream(uri)?.use { out ->
+                out.write(ByteArray(0))
+            } ?: return null
+
+            val persistedPath = persistKdbxFromUri(uri) ?: return null
+            kdbxTokenRepository.initializeDatabase(persistedPath, "")
+            persistedPath
+        }.getOrNull()
     }
 
     /**
@@ -193,82 +244,40 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 加载所有令牌，并检查和处理重复数据
+     * 从当前库加载令牌
      */
     private fun loadTokens() {
-        // 立即设置加载状态，避免短暂显示"暂无令牌"
         _isLoading.value = true
-        
+
         viewModelScope.launch {
-            database.otpTokenDao().getAll().collect {tokenList ->
-                try {
-                    // 检查并处理重复数据，同时过滤掉无效的令牌
-                    val validTokens = tokenList.filter { Base32String.isValidBase32(it.secret) }
-                    val processedTokens = processDuplicateTokens(validTokens)
+            try {
+                val localPath = _currentLibrary.value?.localPath
+                if (localPath.isNullOrBlank()) {
+                    _tokens.value = emptyList()
+                    _tokenCodes.clear()
+                    return@launch
+                }
 
-                    _tokens.value = processedTokens
-                    // 为每个令牌创建代码流
-                    processedTokens.forEach {
-                        if (!_tokenCodes.containsKey(it.id)) {
-                            // 只为新令牌生成初始代码
-                            _tokenCodes[it.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(it))
-                        }
-                        // 对于已有令牌，跳过代码更新
-                        // 因为 refreshTokenCodes() 会每秒刷新一次代码，并且只在需要时更新
+                val loadedTokens = kdbxTokenRepository.loadTokens(localPath, currentLibraryMasterPassword)
+                _tokens.value = loadedTokens
+
+                loadedTokens.forEach {
+                    if (!_tokenCodes.containsKey(it.id)) {
+                        _tokenCodes[it.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(it))
                     }
-                    // 移除已删除令牌的代码流
-                    _tokenCodes.keys.retainAll(processedTokens.map { it.id }.toSet())
-                } catch (ex: Exception) {
-                    // 如果出现异常，确保加载状态结束，但不要清空令牌列表
-                    // 保留上次加载的令牌数据
-                    ex.printStackTrace()
-                } finally {
-                    // 完成后设置加载状态为 false
-                    _isLoading.value = false
                 }
+                _tokenCodes.keys.retainAll(loadedTokens.map { it.id }.toSet())
+
+                _isLibraryUnlocked.value = true
+            } catch (ex: Exception) {
+                _tokens.value = emptyList()
+                _tokenCodes.clear()
+                _isLibraryUnlocked.value = false
+                ex.printStackTrace()
+            } finally {
+                _isLoading.value = false
             }
         }
-    }
-
-    /**
-     * 处理重复令牌，删除重复项，保留最新的（id最大的）
-     * 重复判断基于：uniqueId字段
-     */
-    private suspend fun processDuplicateTokens(tokens: List<OtpToken>): List<OtpToken> {
-        // 使用uniqueId作为键，值为令牌列表
-        val tokenMap = mutableMapOf<String, MutableList<OtpToken>>()
-
-        // 将令牌分组
-        tokens.forEach {
-            // 使用uniqueId作为分组键
-            val key = it.uniqueId
-            if (!tokenMap.containsKey(key)) {
-                tokenMap[key] = mutableListOf()
-            }
-            tokenMap[key]?.add(it)
-        }
-
-        val uniqueTokens = mutableListOf<OtpToken>()
-
-        // 处理每个分组
-        tokenMap.forEach { (_, tokenList) ->
-            if (tokenList.size > 1) {
-                // 有重复，保留id最大的（最新的）
-                val uniqueToken = tokenList.maxByOrNull { it.id }!!
-                uniqueTokens.add(uniqueToken)
-
-                // 删除重复项（id不是最大的）- 直接在挂起函数中执行
-                val tokensToDelete = tokenList.filter { it.id != uniqueToken.id }
-                tokensToDelete.forEach {
-                    database.otpTokenDao().deleteById(it.id)
-                }
-            } else {
-                // 没有重复，直接添加
-                uniqueTokens.add(tokenList[0])
-            }
-        }
-
-        return uniqueTokens
     }
 
     /**
@@ -313,38 +322,54 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * @return 是否成功添加（如果密钥+算法+位数+周期已存在则返回false）
      */
     suspend fun addToken(token: OtpToken): Boolean {
-        // 检查是否已存在相同密钥+算法+位数+周期的令牌
-        val count = database.otpTokenDao().countBySecretAlgorithmDigitsPeriod(
-            token.secret,
-            token.algorithm,
-            token.digits,
-            token.period
-        )
-        if (count > 0) {
-            // 密钥+算法+位数+周期已存在，不允许添加
-            return false
-        }
+        val localPath = _currentLibrary.value?.localPath ?: return false
 
-        // 密钥+算法+位数+周期不存在，可以添加
-        // 如果token对象没有uniqueId，则生成一个
         val tokenWithId = if (token.uniqueId.isBlank()) {
-            val uniqueId = UniqueIdGenerator.generate(
-                token.secret,
-                token.algorithm,
-                token.digits,
-                token.period
+            token.copy(
+                uniqueId = UniqueIdGenerator.generate(
+                    token.secret,
+                    token.algorithm,
+                    token.digits,
+                    token.period
+                )
             )
-            token.copy(uniqueId = uniqueId)
         } else {
             token
         }
-        
-        database.otpTokenDao().insert(tokenWithId)
-        
-        // 自动备份
-        backupTokens()
-        
-        return true
+
+        val duplicate = kdbxTokenRepository.isDuplicate(
+            localPath,
+            currentLibraryMasterPassword,
+            tokenWithId.secret,
+            tokenWithId.algorithm,
+            tokenWithId.digits,
+            tokenWithId.period
+        )
+        if (duplicate) {
+            return false
+        }
+
+        val added = kdbxTokenRepository.addToken(localPath, currentLibraryMasterPassword, tokenWithId)
+        if (added) {
+            loadTokens()
+            backupTokens()
+        }
+        return added
+    }
+
+    /**
+     * 判断令牌是否重复
+     */
+    suspend fun isTokenDuplicate(secret: String, algorithm: String, digits: Int, period: Int): Boolean {
+        val localPath = _currentLibrary.value?.localPath ?: return false
+        return kdbxTokenRepository.isDuplicate(
+            localPath,
+            currentLibraryMasterPassword,
+            secret,
+            algorithm,
+            digits,
+            period
+        )
     }
 
     /**
@@ -352,11 +377,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     fun deleteToken(tokenId: Long) {
         viewModelScope.launch {
-            database.otpTokenDao().deleteById(tokenId)
-            _tokenCodes.remove(tokenId)
-            
-            // 自动备份
-            backupTokens()
+            val localPath = _currentLibrary.value?.localPath ?: return@launch
+            val deleted = kdbxTokenRepository.deleteToken(localPath, currentLibraryMasterPassword, tokenId)
+            if (deleted) {
+                _tokenCodes.remove(tokenId)
+                loadTokens()
+                backupTokens()
+            }
         }
     }
 
@@ -365,12 +392,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     fun updateToken(token: OtpToken) {
         viewModelScope.launch {
-            database.otpTokenDao().update(token)
-            // 刷新代码
-            _tokenCodes[token.id]?.value = tokenCodeUtil.generateTokenCode(token)
-            
-            // 自动备份
-            backupTokens()
+            val localPath = _currentLibrary.value?.localPath ?: return@launch
+            val updated = kdbxTokenRepository.updateToken(localPath, currentLibraryMasterPassword, token)
+            if (updated) {
+                _tokenCodes[token.id]?.value = tokenCodeUtil.generateTokenCode(token)
+                loadTokens()
+                backupTokens()
+            }
         }
     }
 
@@ -379,7 +407,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     fun incrementCounter(tokenId: Long) {
         viewModelScope.launch {
-            database.otpTokenDao().incrementCounter(tokenId)
+            val localPath = _currentLibrary.value?.localPath ?: return@launch
+            if (kdbxTokenRepository.incrementCounter(localPath, currentLibraryMasterPassword, tokenId)) {
+                loadTokens()
+            }
         }
     }
 
@@ -448,21 +479,57 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
     
     /**
-     * 获取设备ID
+     * 获取当前云端库上下文
      */
-    private fun getDeviceId(): String {
-        // 使用应用上下文的设备ID，或者生成一个唯一ID并存储
-        return android.provider.Settings.Secure.getString(
-            context.contentResolver,
-            android.provider.Settings.Secure.ANDROID_ID
-        ) ?: "unknown_device"
+    private fun getCurrentCloudLibrary(): LibraryContext? {
+        val current = _currentLibrary.value ?: return null
+        if (current.sourceType != LibrarySourceType.CLOUD) {
+            return null
+        }
+        if (current.remoteFilePath.isNullOrBlank() || current.username.isNullOrBlank() || current.password.isNullOrBlank()) {
+            return null
+        }
+        return current
     }
-    
+
     /**
-     * 获取加密密码
+     * 从当前云端库下载到本地
      */
-    private suspend fun getEncryptionPassword(): String {
-        return getFirstWebDavConfig()?.password ?: ""
+    private suspend fun downloadCurrentCloudLibrary(): Boolean {
+        val current = getCurrentCloudLibrary() ?: return false
+        return runCatching {
+            val remote = WebDav(current.remoteFilePath!!, Authorization(current.username!!, current.password!!))
+            if (!remote.exists()) {
+                return false
+            }
+
+            val bytes = remote.download()
+            val localFile = File(current.localPath)
+            localFile.parentFile?.let {
+                if (!it.exists()) {
+                    it.mkdirs()
+                }
+            }
+            localFile.writeBytes(bytes)
+            true
+        }.getOrDefault(false)
+    }
+
+    /**
+     * 将当前本地库上传到云端
+     */
+    private suspend fun uploadCurrentCloudLibrary(): Boolean {
+        val current = getCurrentCloudLibrary() ?: return false
+        return runCatching {
+            val localFile = File(current.localPath)
+            if (!localFile.exists()) {
+                return false
+            }
+
+            val remote = WebDav(current.remoteFilePath!!, Authorization(current.username!!, current.password!!))
+            remote.upload(localFile, "application/octet-stream")
+            true
+        }.getOrDefault(false)
     }
     
     /**
@@ -474,46 +541,15 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 _isRestoreInProgress.value = true
                 _restoreProgress.value = 0
                 _backupStatus.value = "正在尝试自动恢复..."
-                
-                val webDavConfig = getFirstWebDavConfig() ?: return@launch
-                val password = webDavConfig.password
-                
-                // 获取当前同步状态
-                val currentSyncState = syncStateDao.getSyncState()
-                
-                // 检查是否需要恢复
-                val webDav = WebDav(webDavConfig.url, Authorization(webDavConfig.username, webDavConfig.password))
-                val needRestore = BackupUtil.needRestore(webDav, currentSyncState?.remoteLastUpdated)
-                
-                if (needRestore) {
-                    // 需要恢复，执行恢复操作
-                    val restoreResult = restoreTokensWithPassword(webDavConfig, password)
-                    when (restoreResult) {
-                        RestoreResult.SUCCESS -> {
-                            _backupStatus.value = "自动恢复成功"
-                        }
-                        RestoreResult.NO_UPDATES -> {
-                            _backupStatus.value = "数据已最新，无需执行操作"
-                        }
-                        RestoreResult.FAILURE -> {
-                            _backupStatus.value = "自动恢复失败：密码错误或哈希不匹配"
-                        }
-                    }
-                } else {
-                    // 不需要恢复，只更新元数据
-                    BackupUtil.updateMetadataOnly(webDav, getDeviceId())
-                    _backupStatus.value = "数据已最新，无需执行操作"
+
+                val cloudLibrary = getCurrentCloudLibrary()
+                if (cloudLibrary != null) {
+                    val success = downloadCurrentCloudLibrary()
+                    _backupStatus.value = if (success) "云端库自动同步完成" else "云端库自动同步失败"
+                    return@launch
                 }
-                
-                // 更新同步状态
-                val now = System.currentTimeMillis()
-                val metadata = BackupUtil.downloadMetadata(webDav)
-                val updatedSyncState = SyncState(
-                    id = 1,
-                    lastSyncTime = now,
-                    remoteLastUpdated = metadata.lastUpdated
-                )
-                syncStateDao.insertOrUpdate(updatedSyncState)
+
+                _backupStatus.value = "未绑定云端 .kdbx，已跳过自动恢复"
             } catch (ex: Exception) {
                 _backupStatus.value = "自动恢复失败：${ex.message}"
             } finally {
@@ -532,22 +568,15 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 _isRestoreInProgress.value = true
                 _restoreProgress.value = 0
                 _backupStatus.value = "正在手动恢复..."
-                
-                val webDavConfig = getFirstWebDavConfig() ?: throw Exception("未配置WebDAV")
-                val password = webDavConfig.password
-                
-                val restoreResult = restoreTokensWithPassword(webDavConfig, password)
-                when (restoreResult) {
-                    RestoreResult.SUCCESS -> {
-                        _backupStatus.value = "手动恢复成功"
-                    }
-                    RestoreResult.NO_UPDATES -> {
-                        _backupStatus.value = "数据已最新，无需执行操作"
-                    }
-                    RestoreResult.FAILURE -> {
-                        _backupStatus.value = "手动恢复失败：密码错误或哈希不匹配"
-                    }
+
+                val cloudLibrary = getCurrentCloudLibrary()
+                if (cloudLibrary != null) {
+                    val success = downloadCurrentCloudLibrary()
+                    _backupStatus.value = if (success) "云端库恢复成功" else "云端库恢复失败"
+                    return@launch
                 }
+
+                _backupStatus.value = "未绑定云端 .kdbx，无法手动恢复"
             } catch (ex: Exception) {
                 _backupStatus.value = "手动恢复失败：${ex.message}"
             } finally {
@@ -555,104 +584,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 _restoreProgress.value = 0
             }
         }
-    }
-    
-    /**
-     * 使用指定密码恢复令牌
-     * @param webDavConfig WebDAV配置
-     * @param password 恢复密码
-     * @return 恢复结果枚举，包含成功、没有更新、失败三种情况
-     */
-    private suspend fun restoreTokensWithPassword(webDavConfig: WebDavConfig, password: String): RestoreResult {
-        return try {
-            val webDav = WebDav(webDavConfig.url, Authorization(webDavConfig.username, webDavConfig.password))
-            val deviceId = getDeviceId()
-            
-            val restoredTokens = BackupUtil.restoreTokens(webDav, password, deviceId) { progress ->
-                _restoreProgress.value = progress
-            }
-            
-            // 检查是否成功恢复到令牌
-            if (restoredTokens.isEmpty()) {
-                return RestoreResult.NO_UPDATES
-            }
-            
-            val tokensToInsert = mutableListOf<OtpToken>()
-            val tokensToUpdate = mutableListOf<OtpToken>()
-            
-            for (token in restoredTokens) {
-                try {
-                    // 检查本地是否已存在该令牌
-                    val existingToken = database.otpTokenDao().getByUniqueId(token.uniqueId)
-                    if (existingToken == null) {
-                        // 本地不存在，添加到插入列表
-                        tokensToInsert.add(token)
-                    } else {
-                        // 本地存在，检查元数据是否有变化
-                        if (existingToken.issuer != token.issuer ||
-                            existingToken.label != token.label ||
-                            existingToken.description != token.description ||
-                            existingToken.ordinal != token.ordinal) {
-                            // 元数据有变化，更新本地令牌
-                            val updatedToken = existingToken.copy(
-                                issuer = token.issuer,
-                                label = token.label,
-                                description = token.description,
-                                ordinal = token.ordinal
-                            )
-                            tokensToUpdate.add(updatedToken)
-                        }
-                    }
-                } catch (e: Exception) {
-                    // 处理单个令牌的异常，继续处理其他令牌
-                    e.printStackTrace()
-                }
-            }
-            
-            var hasChanges = false
-            
-            if (tokensToInsert.isNotEmpty()) {
-                try {
-                    // 只插入本地不存在的令牌
-                    database.otpTokenDao().insertAll(tokensToInsert)
-                    hasChanges = true
-                } catch (e: Exception) {
-                    // 处理插入异常
-                    e.printStackTrace()
-                }
-            }
-            
-            if (tokensToUpdate.isNotEmpty()) {
-                try {
-                    // 更新现有令牌的元数据
-                    database.otpTokenDao().insertAll(tokensToUpdate)
-                    hasChanges = true
-                } catch (e: Exception) {
-                    // 处理更新异常
-                    e.printStackTrace()
-                }
-            }
-            
-            if (hasChanges) {
-                RestoreResult.SUCCESS
-            } else {
-                // 没有新令牌插入或更新
-                RestoreResult.NO_UPDATES
-            }
-        } catch (ex: Exception) {
-            // 捕获到异常，恢复失败（密码错误或哈希不匹配）
-            ex.printStackTrace()
-            RestoreResult.FAILURE
-        }
-    }
-    
-    /**
-     * 恢复结果枚举
-     */
-    private enum class RestoreResult {
-        SUCCESS,     // 恢复成功，有新令牌插入或更新
-        NO_UPDATES,  // 没有新令牌插入或更新
-        FAILURE      // 恢复失败，密码错误或哈希不匹配
     }
     
     /**
@@ -664,28 +595,15 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 _isBackupInProgress.value = true
                 _backupStatus.value = "正在备份..."
                 _backupProgress.value = 0
-                
-                val webDavConfig = getFirstWebDavConfig() ?: throw Exception("未配置WebDAV")
-                val encryptionPassword = getEncryptionPassword()
-                
-                val tokens = database.otpTokenDao().getAllOnce()
-                val webDav = WebDav(webDavConfig.url, Authorization(webDavConfig.username, webDavConfig.password))
-                val deviceId = getDeviceId()
-                
-                BackupUtil.backupTokens(webDav, tokens, encryptionPassword, deviceId, context) {
-                    _backupProgress.value = it
+
+                val cloudLibrary = getCurrentCloudLibrary()
+                if (cloudLibrary != null) {
+                    val success = uploadCurrentCloudLibrary()
+                    _backupStatus.value = if (success) "云端库同步成功" else "云端库同步失败"
+                    return@launch
                 }
-                _backupStatus.value = "备份成功"
-                
-                // 备份成功后更新同步状态
-                val now = System.currentTimeMillis()
-                val metadata = BackupUtil.downloadMetadata(webDav)
-                val updatedSyncState = SyncState(
-                    id = 1,
-                    lastSyncTime = now,
-                    remoteLastUpdated = metadata.lastUpdated
-                )
-                syncStateDao.insertOrUpdate(updatedSyncState)
+
+                _backupStatus.value = "未绑定云端 .kdbx，无法同步备份"
             } catch (ex: Exception) {
                 _backupStatus.value = "备份失败：${ex.message}"
             } finally {

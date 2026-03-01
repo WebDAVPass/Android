@@ -55,8 +55,8 @@ fun WebDavConfigContent(
 ) {
     val context = LocalContext.current
     val originalUrl = existingConfig?.url?.let {
-        if (it.endsWith("/2fas_xzy/") || it.endsWith("/2fas_xzy")) {
-            it.substringBeforeLast("/2fas_xzy")
+        if (it.endsWith("/WebDavPass/") || it.endsWith("/WebDavPass")) {
+            it.substringBeforeLast("/WebDavPass")
         } else {
             it
         }
@@ -65,6 +65,10 @@ fun WebDavConfigContent(
     var serverUrl by remember { mutableStateOf(originalUrl) }
     var username by remember { mutableStateOf(existingConfig?.username ?: "") }
     var password by remember { mutableStateOf("") }
+    var remoteFolder by remember { mutableStateOf("WebDavPass") }
+    var defaultFileName by remember { mutableStateOf("WebDavPass.kdbx") }
+    var listStatus by remember { mutableStateOf("") }
+    var listing by remember { mutableStateOf<List<String>>(emptyList()) }
     var isTesting by remember { mutableStateOf(false) }
     // 密码默认隐藏，并且不可解除隐藏
     val passwordVisible = false
@@ -76,6 +80,12 @@ fun WebDavConfigContent(
         return if (url.isNotEmpty() && !url.matches(Regex("^https?://.*"))) {
             "请输入有效的HTTP/HTTPS URL"
         } else null
+    }
+
+    fun normalizeBaseUrl(raw: String, folderName: String): String {
+        val base = if (raw.endsWith('/')) raw else "$raw/"
+        val normalizedFolder = folderName.trim('/').ifBlank { "WebDavPass" }
+        return "$base$normalizedFolder/"
     }
 
     Column(
@@ -123,6 +133,36 @@ fun WebDavConfigContent(
                 Icon(
                     imageVector = MiuixIcons.Contacts,
                     contentDescription = "用户名",
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
+        )
+
+        TextField(
+            value = remoteFolder,
+            onValueChange = { remoteFolder = it },
+            label = "远端目录（默认 WebDavPass）",
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            leadingIcon = {
+                Icon(
+                    imageVector = MiuixIcons.Info,
+                    contentDescription = "远端目录",
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+            }
+        )
+
+        TextField(
+            value = defaultFileName,
+            onValueChange = { defaultFileName = it },
+            label = "默认文件名（.kdbx）",
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            leadingIcon = {
+                Icon(
+                    imageVector = MiuixIcons.Info,
+                    contentDescription = "默认文件名",
                     modifier = Modifier.padding(horizontal = 12.dp)
                 )
             }
@@ -199,6 +239,52 @@ fun WebDavConfigContent(
 
         Button(
             onClick = {
+                if (serverUrl.trim().isEmpty() || username.isBlank() || password.isBlank()) {
+                    Toast.makeText(context, "请先填写地址、用户名和密码", Toast.LENGTH_SHORT).show()
+                    return@Button
+                }
+
+                coroutineScope.launch(Dispatchers.IO) {
+                    try {
+                        listStatus = "正在加载 .kdbx 列表..."
+                        val webDav = WebDav(normalizeBaseUrl(serverUrl, remoteFolder), Authorization(username, password))
+                        val files = webDav.listFiles()
+                            .filter { !it.isDir && it.displayName.endsWith(".kdbx", ignoreCase = true) }
+                            .map { it.displayName }
+
+                        withContext(Dispatchers.Main) {
+                            listing = files
+                            listStatus = if (files.isEmpty()) "未找到 .kdbx 文件" else "请选择文件或手动填写"
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            listStatus = "加载失败: ${e.message}"
+                        }
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isTesting
+        ) {
+            Text(text = "浏览远端 .kdbx")
+        }
+
+        if (listStatus.isNotBlank()) {
+            Text(text = listStatus, fontSize = 12.sp)
+        }
+
+        listing.forEach { file ->
+            Button(
+                onClick = { defaultFileName = file },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !isTesting
+            ) {
+                Text(text = file)
+            }
+        }
+
+        Button(
+            onClick = {
                 if (serverUrl.trim().isEmpty()) {
                     Toast.makeText(context, "请输入服务器地址", Toast.LENGTH_SHORT).show()
                     return@Button
@@ -219,10 +305,11 @@ fun WebDavConfigContent(
                     return@Button
                 }
 
+                val normalizedFolder = remoteFolder.trim('/').ifBlank { "WebDavPass" }
                 val webdavUrl = if (serverUrl.endsWith("/")) {
-                    "${serverUrl}2fas_xzy/"
+                    "${serverUrl}${normalizedFolder}/"
                 } else {
-                    "${serverUrl}/2fas_xzy/"
+                    "${serverUrl}/${normalizedFolder}/"
                 }
 
                 val config = if (isExistingConfig) {

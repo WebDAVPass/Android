@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +48,7 @@ import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.Screen.ScanTokenScreen
 import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
+import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -85,6 +87,8 @@ fun MainScreen() {
 
     // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
+    var showWelcome by rememberSaveable { mutableStateOf(true) }
+    val currentLibrary by tokenViewModel.currentLibrary.collectAsState()
 
     // 导航项配置
     val navigationItems = listOf(
@@ -97,15 +101,23 @@ fun MainScreen() {
 
 
 
-    // 基于Miuix Scaffold的主界面
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
+    if (showWelcome) {
+        WelcomeScreen(
+            tokenViewModel = tokenViewModel,
+            onEnterLibrary = {
+                showWelcome = false
+            }
+        )
+    } else {
+        // 基于Miuix Scaffold的主界面
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
             popupHost = {},
             topBar = {
                 // 只有在首页时显示标题
                 if (selectedIndex == 0) {
                     TopAppBar(
-                        title = "WebDAVPass",
+                        title = currentLibrary?.displayName ?: "WebDAVPass",
                         navigationIcon = {},
                         actions = {}
                     )
@@ -152,6 +164,11 @@ fun MainScreen() {
                                         selectedWebDavConfig.value = firstConfig
                                         showWebDavDialog.value = true
                                     }
+                                },
+                                onSwitchLibraryClick = {
+                                    tokenViewModel.clearCurrentLibrarySelection()
+                                    selectedIndex = 0
+                                    showWelcome = true
                                 }
                             )
                         }
@@ -171,9 +188,10 @@ fun MainScreen() {
                     }
                 }
             }
-        )
-        // 在 Scaffold 外部放置 MiuixPopupHost
-        MiuixPopupHost()
+            )
+            // 在 Scaffold 外部放置 MiuixPopupHost
+            MiuixPopupHost()
+        }
     }
 
     // 使用外部文件中的WebDAV配置弹窗组件
@@ -206,32 +224,34 @@ fun MainScreen() {
             existingConfig = selectedWebDavConfig.value
         )
 
-    // 扫描二维码底部抽屉
-    SuperBottomSheet(
-        show = showScanBottomSheet,
-        title = "扫描二维码",
-        onDismissRequest = {
-            showScanBottomSheet.value = false
-        },
-        content = {
-            // 扫描界面内容
-            Box(
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-                    .height(500.dp) // 设置固定高度，避免全屏显示
-            ) {
-                ScanTokenScreen(
-                    tokenViewModel = tokenViewModel,
-                    onTokenScanned = {
-                        // 关闭抽屉，令牌列表将通过同一个 ViewModel 自动刷新
-                        showScanBottomSheet.value = false
-                    },
-                    onDismiss = {
-                        showScanBottomSheet.value = false
-                    }
-                )
+    if (!showWelcome) {
+        // 扫描二维码底部抽屉
+        SuperBottomSheet(
+            show = showScanBottomSheet,
+            title = "扫描二维码",
+            onDismissRequest = {
+                showScanBottomSheet.value = false
+            },
+            content = {
+                // 扫描界面内容
+                Box(
+                    modifier = Modifier.Companion
+                        .fillMaxWidth()
+                        .height(500.dp) // 设置固定高度，避免全屏显示
+                ) {
+                    ScanTokenScreen(
+                        tokenViewModel = tokenViewModel,
+                        onTokenScanned = {
+                            // 关闭抽屉，令牌列表将通过同一个 ViewModel 自动刷新
+                            showScanBottomSheet.value = false
+                        },
+                        onDismiss = {
+                            showScanBottomSheet.value = false
+                        }
+                    )
+                }
             }
-        }
-    )
+        )
+    }
 }
 

@@ -34,6 +34,7 @@ jetbrainsAndroidxNavigationevent = "1.0.1"
 
 # Room 数据库相关版本
 room = "2.8.2"
+keepassJava2 = "2.2.4"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -68,6 +69,8 @@ jetbrains-androidx-navigationevent = { group = "org.jetbrains.androidx.navigatio
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+keepassjava2-kdbx = { group = "org.linguafranca.pwdb", name = "KeePassJava2-kdbx", version.ref = "keepassJava2" }
+keepassjava2-simple = { group = "org.linguafranca.pwdb", name = "KeePassJava2-simple", version.ref = "keepassJava2" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
 kotlinx-coroutines-compose = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-compose", version.ref = "kotlinxCoroutinesCompose" }

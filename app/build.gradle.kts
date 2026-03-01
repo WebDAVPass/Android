@@ -90,6 +90,7 @@ android {
     packaging {
         resources {
             excludes += "META-INF/DEPENDENCIES"
+            excludes += "META-INF/INDEX.LIST"
         }
     }
     compileOptions {
@@ -166,6 +167,10 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
     kapt(libs.androidx.room.compiler)
+
+    // KeePass KDBX 读写
+    implementation(libs.keepassjava2.kdbx)
+    implementation(libs.keepassjava2.simple)
     
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

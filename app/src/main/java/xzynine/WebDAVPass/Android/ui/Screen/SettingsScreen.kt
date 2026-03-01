@@ -31,6 +31,7 @@ import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 
 /**
@@ -41,7 +42,8 @@ import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 @Composable
 fun SettingsScreen(
     viewModel: TokenViewModel,
-    onWebDavConfigClick: () -> Unit
+    onWebDavConfigClick: () -> Unit,
+    onSwitchLibraryClick: () -> Unit
 ) {
     // 获取统一的圆角半径
     val cornerRadius = getAppRoundedCorner()
@@ -130,6 +132,24 @@ fun SettingsScreen(
                     )
                 },
                 onClick = onWebDavConfigClick,
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
+            )
+
+            Spacer(modifier = Modifier.Companion.height(8.dp))
+
+            BasicComponent(
+                title = "切换数据库文件",
+                summary = "返回欢迎页，选择其他 .kdbx",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Months,
+                        contentDescription = "切换数据库文件",
+                    )
+                },
+                onClick = onSwitchLibraryClick,
                 modifier = Modifier.Companion
                     .fillMaxWidth()
                     .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))

@@ -425,14 +425,12 @@ private fun processImageProxy(
 
                     // 检查令牌是否已存在，使用同步方式避免重复处理
                     val isExists = runBlocking {
-                        // 检查数据库中是否已存在相同密钥+算法+位数+周期的令牌
-                        val count = TokenViewModel.Companion.getDatabase(context).otpTokenDao().countBySecretAlgorithmDigitsPeriod(
+                        tokenViewModel.isTokenDuplicate(
                             token.secret,
                             token.algorithm,
                             token.digits,
                             token.period
                         )
-                        count > 0
                     }
 
                     if (isExists) {
