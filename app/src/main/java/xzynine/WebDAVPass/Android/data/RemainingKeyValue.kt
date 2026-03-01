@@ -6,6 +6,7 @@ package xzynine.WebDAVPass.Android.data
 enum class RemainingValueType {
     TEXT,
     PASSWORD,
+    OTP,
     URL,
     EMAIL,
     NUMBER,
@@ -14,18 +15,26 @@ enum class RemainingValueType {
 }
 
 /**
- * 数据库中非双因素键值条目
+ * 条目中的键值项
  *
- * @property entryTitle 所属条目标题
  * @property fieldName 字段名称
  * @property rawValue 原始值
  * @property valueType 推断的值类型
  */
 data class RemainingKeyValue(
-    val entryTitle: String,
     val fieldName: String,
     val rawValue: String,
     val valueType: RemainingValueType
+)
+
+/**
+ * 数据库中的条目摘要及其全部键值。
+ */
+data class PasswordEntry(
+    val entryId: Long,
+    val title: String,
+    val account: String,
+    val keyValues: List<RemainingKeyValue>
 )
 
 /**
@@ -35,6 +44,7 @@ fun RemainingValueType.toDisplayName(): String {
     return when (this) {
         RemainingValueType.TEXT -> "文本"
         RemainingValueType.PASSWORD -> "密码"
+        RemainingValueType.OTP -> "动态令牌"
         RemainingValueType.URL -> "链接"
         RemainingValueType.EMAIL -> "邮箱"
         RemainingValueType.NUMBER -> "数字"

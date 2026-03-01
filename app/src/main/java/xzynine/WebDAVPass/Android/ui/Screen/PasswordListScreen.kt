@@ -2,11 +2,12 @@ package xzynine.WebDAVPass.Android.ui.Screen
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -25,19 +26,22 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import xzynine.WebDAVPass.Android.data.RemainingKeyValue
-import xzynine.WebDAVPass.Android.data.toDisplayName
+import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 
 /**
- * 非双因素键值列表页面
+ * 条目列表页面（仅显示账号和图标）
  */
 @Composable
-fun PasswordListScreen(tokenViewModel: TokenViewModel) {
-    val values by tokenViewModel.remainingKeyValues.collectAsState(emptyList())
+fun PasswordListScreen(
+    tokenViewModel: TokenViewModel,
+    onEntryClick: (Long) -> Unit
+) {
+    val entries by tokenViewModel.passwordEntries.collectAsState(emptyList())
 
     LaunchedEffect(Unit) {
-        tokenViewModel.refreshRemainingKeyValues()
+        tokenViewModel.refreshPasswordEntries()
     }
 
     Scaffold(
@@ -51,14 +55,14 @@ fun PasswordListScreen(tokenViewModel: TokenViewModel) {
             )
         }
     ) {
-        if (values.isEmpty()) {
+        if (entries.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(it),
                 contentAlignment = Alignment.Center
             ) {
-                Text(text = "暂无非双因素键值")
+                Text(text = "暂无条目")
             }
         } else {
             LazyColumn(
@@ -68,8 +72,8 @@ fun PasswordListScreen(tokenViewModel: TokenViewModel) {
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                items(values) { item ->
-                    RemainingKeyValueCard(item = item)
+                items(entries, key = { it.entryId }) { item ->
+                    PasswordEntryCard(item = item, onClick = { onEntryClick(item.entryId) })
                 }
             }
         }
@@ -77,42 +81,35 @@ fun PasswordListScreen(tokenViewModel: TokenViewModel) {
 }
 
 /**
- * 非双因素键值卡片
+ * 条目卡片（账号 + 图标）
  */
 @Composable
-private fun RemainingKeyValueCard(item: RemainingKeyValue) {
+private fun PasswordEntryCard(item: PasswordEntry, onClick: () -> Unit) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-        pressFeedbackType = PressFeedbackType.None,
-        showIndication = false,
-        onClick = {}
+        pressFeedbackType = PressFeedbackType.Sink,
+        showIndication = true,
+        onClick = onClick
     ) {
-        Column(
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            EntryIcon(
+                primary = item.account,
+                secondary = item.title,
+                modifier = Modifier.size(32.dp),
+                contentDescription = "账号图标"
+            )
+
             Text(
-                text = item.entryTitle,
+                text = item.account,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onSurface
-            )
-            Text(
-                text = "字段：${item.fieldName}",
-                fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurfaceSecondary
-            )
-            Text(
-                text = "类型：${item.valueType.toDisplayName()}",
-                fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurfaceSecondary
-            )
-            Text(
-                text = "原始值：${item.rawValue}",
-                fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurface
             )
         }

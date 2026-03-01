@@ -34,8 +34,8 @@ import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
-import xzynine.WebDAVPass.Android.ui.Screen.TokenItem
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.component.TokenCard
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -124,12 +124,15 @@ private fun AutofillPickerScreen(autofillId: AutofillId, targetPackage: String) 
                     )
                 }
                 items(likelyMatches) { token ->
-                    TokenItem(
+                    val tokenCode by tokenViewModel.getTokenCode(token.id).collectAsState(null)
+
+                    TokenCard(
                         token = token,
-                        tokenViewModel = tokenViewModel,
-                        onLongClick = {},
-                        onTokenClick = { code ->
-                            finishAutofill(context, autofillId, token, code)
+                        tokenCode = tokenCode,
+                        onClick = {
+                            tokenCode?.let { code ->
+                                finishAutofill(context, autofillId, token, code.code)
+                            }
                         }
                     )
                     HorizontalDivider(
@@ -147,12 +150,15 @@ private fun AutofillPickerScreen(autofillId: AutofillId, targetPackage: String) 
             }
 
             items(otherTokens) { token ->
-                TokenItem(
+                val tokenCode by tokenViewModel.getTokenCode(token.id).collectAsState(null)
+
+                TokenCard(
                     token = token,
-                    tokenViewModel = tokenViewModel,
-                    onLongClick = {},
-                    onTokenClick = { code ->
-                        finishAutofill(context, autofillId, token, code)
+                    tokenCode = tokenCode,
+                    onClick = {
+                        tokenCode?.let { code ->
+                            finishAutofill(context, autofillId, token, code.code)
+                        }
                     }
                 )
                 HorizontalDivider(

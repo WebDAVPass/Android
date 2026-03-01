@@ -11,7 +11,7 @@ import xzynine.WebDAVPass.Android.data.LibraryContextStore
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.OtpToken
-import xzynine.WebDAVPass.Android.data.RemainingKeyValue
+import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.TokenCode
 import xzynine.WebDAVPass.Android.data.WebDavConfig
 import xzynine.WebDAVPass.webdav.WebDav
@@ -50,7 +50,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "webdav_config_database"
-                ).fallbackToDestructiveMigration().build()
+                ).fallbackToDestructiveMigration(dropAllTables = true).build()
                 INSTANCE = instance
                 instance
             }
@@ -83,8 +83,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())
     val tokens: StateFlow<List<OtpToken>> = _tokens.asStateFlow()
 
-    private val _remainingKeyValues = MutableStateFlow<List<RemainingKeyValue>>(emptyList())
-    val remainingKeyValues: StateFlow<List<RemainingKeyValue>> = _remainingKeyValues.asStateFlow()
+    private val _passwordEntries = MutableStateFlow<List<PasswordEntry>>(emptyList())
+    val passwordEntries: StateFlow<List<PasswordEntry>> = _passwordEntries.asStateFlow()
 
     private val _libraryHistory = MutableStateFlow<List<LibraryContext>>(emptyList())
     val libraryHistory: StateFlow<List<LibraryContext>> = _libraryHistory.asStateFlow()
@@ -145,7 +145,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         currentLibraryMasterPassword = ""
         _isLibraryUnlocked.value = false
         _tokens.value = emptyList()
-        _remainingKeyValues.value = emptyList()
+        _passwordEntries.value = emptyList()
         _tokenCodes.clear()
         refreshLibraryHistory()
     }
@@ -159,7 +159,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         currentLibraryMasterPassword = ""
         _isLibraryUnlocked.value = false
         _tokens.value = emptyList()
-        _remainingKeyValues.value = emptyList()
+        _passwordEntries.value = emptyList()
         _tokenCodes.clear()
         refreshLibraryHistory()
     }
@@ -173,7 +173,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         currentLibraryMasterPassword = ""
         _isLibraryUnlocked.value = false
         _tokens.value = emptyList()
-        _remainingKeyValues.value = emptyList()
+        _passwordEntries.value = emptyList()
         refreshLibraryHistory()
     }
 
@@ -336,14 +336,14 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
             _isLibraryUnlocked.value = true
 
-            val remainingKeyValues = withContext(Dispatchers.IO) {
-                kdbxTokenRepository.loadRemainingKeyValues(localPath, currentLibraryMasterPassword)
+            val passwordEntries = withContext(Dispatchers.IO) {
+                kdbxTokenRepository.loadPasswordEntries(localPath, currentLibraryMasterPassword)
             }
-            _remainingKeyValues.value = remainingKeyValues
+            _passwordEntries.value = passwordEntries
             true
         } catch (ex: Exception) {
             _tokens.value = emptyList()
-            _remainingKeyValues.value = emptyList()
+            _passwordEntries.value = emptyList()
             _tokenCodes.clear()
             _isLibraryUnlocked.value = false
             lastUnlockErrorMessage = "加载失败：${ex.message ?: ex.javaClass.simpleName}"
@@ -365,21 +365,28 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 刷新非双因素键值列表。
+     * 刷新密码条目与键值列表。
      */
-    fun refreshRemainingKeyValues() {
+    fun refreshPasswordEntries() {
         viewModelScope.launch {
             val localPath = _currentLibrary.value?.localPath
             if (!_isLibraryUnlocked.value || localPath.isNullOrBlank() || currentLibraryMasterPassword.isBlank()) {
-                _remainingKeyValues.value = emptyList()
+                _passwordEntries.value = emptyList()
                 return@launch
             }
 
             val values = withContext(Dispatchers.IO) {
-                kdbxTokenRepository.loadRemainingKeyValues(localPath, currentLibraryMasterPassword)
+                kdbxTokenRepository.loadPasswordEntries(localPath, currentLibraryMasterPassword)
             }
-            _remainingKeyValues.value = values
+            _passwordEntries.value = values
         }
+    }
+
+    /**
+     * 兼容旧调用名。
+     */
+    fun refreshRemainingKeyValues() {
+        refreshPasswordEntries()
     }
 
     /**

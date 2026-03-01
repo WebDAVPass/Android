@@ -101,32 +101,28 @@ class KdbxTokenRepository {
     }
 
     /**
-     * 读取数据库中非双因素的剩余键值。
+     * 读取数据库中全部条目与键值（包含 OTP 条目与 OTP 字段）。
      */
-    fun loadRemainingKeyValues(localPath: String, masterPassword: String): List<RemainingKeyValue> {
+    fun loadPasswordEntries(localPath: String, masterPassword: String): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val result = mutableListOf<RemainingKeyValue>()
+            val result = mutableListOf<PasswordEntry>()
             val entries = collectEntries(db.rootGroup)
             entries.forEach { entry ->
-                if (entry.getOtpElement() != null) {
-                    return@forEach
-                }
-
                 val title = entry.title.takeIf { it.isNotBlank() } ?: "未命名条目"
+                val account = entry.username.takeIf { it.isNotBlank() } ?: title
+                val values = mutableListOf<RemainingKeyValue>()
 
-                appendStandardField(result, title, "UserName", entry.username)
-                appendStandardField(result, title, "Password", entry.password, RemainingValueType.PASSWORD)
-                appendStandardField(result, title, "URL", entry.url)
-                appendStandardField(result, title, "Notes", entry.notes)
+                appendStandardField(values, "UserName", entry.username)
+                appendStandardField(values, "Password", entry.password, RemainingValueType.PASSWORD)
+                appendStandardField(values, "URL", entry.url)
+                appendStandardField(values, "Notes", entry.notes)
 
                 entry.getExtraFields()
-                    .filterNot { it.isOTP() }
                     .forEach { field ->
                         val value = field.protectedValue.stringValue
                         if (value.isNotBlank()) {
-                            result.add(
+                            values.add(
                                 RemainingKeyValue(
-                                    entryTitle = title,
                                     fieldName = field.name,
                                     rawValue = value,
                                     valueType = detectValueType(field, value)
@@ -134,11 +130,20 @@ class KdbxTokenRepository {
                             )
                         }
                     }
+
+                result.add(
+                    PasswordEntry(
+                        entryId = toStableId(entry),
+                        title = title,
+                        account = account,
+                        keyValues = values.sortedBy { it.fieldName.lowercase() }
+                    )
+                )
             }
 
             result.sortedWith(
-                compareBy<RemainingKeyValue> { it.entryTitle }
-                    .thenBy { it.fieldName }
+                compareBy<PasswordEntry> { it.account.lowercase() }
+                    .thenBy { it.title.lowercase() }
             )
         }
     }
@@ -321,7 +326,6 @@ class KdbxTokenRepository {
      */
     private fun appendStandardField(
         target: MutableList<RemainingKeyValue>,
-        title: String,
         fieldName: String,
         rawValue: String,
         fixedType: RemainingValueType? = null
@@ -331,7 +335,6 @@ class KdbxTokenRepository {
         }
         target.add(
             RemainingKeyValue(
-                entryTitle = title,
                 fieldName = fieldName,
                 rawValue = rawValue,
                 valueType = fixedType ?: detectValueType(null, rawValue)
@@ -345,6 +348,13 @@ class KdbxTokenRepository {
     private fun detectValueType(field: Field?, rawValue: String): RemainingValueType {
         val normalized = rawValue.trim()
         val fieldName = field?.name?.lowercase() ?: ""
+
+        if (field?.isOTP() == true
+            || fieldName == "otp"
+            || normalized.startsWith("otpauth://", ignoreCase = true)
+        ) {
+            return RemainingValueType.OTP
+        }
 
         if (fieldName.contains("password") || fieldName.contains("密码")) {
             return RemainingValueType.PASSWORD
@@ -441,7 +451,7 @@ class KdbxTokenRepository {
     }
 
     private fun buildCacheDirectory(file: File): File {
-        val parent = file.parentFile ?: File(System.getProperty("java.io.tmpdir"))
+        val parent = file.parentFile ?: File(System.getProperty("java.io.tmpdir") ?: ".")
         val cacheDirectory = File(parent, ".kdbx-cache")
         if (!cacheDirectory.exists()) {
             cacheDirectory.mkdirs()

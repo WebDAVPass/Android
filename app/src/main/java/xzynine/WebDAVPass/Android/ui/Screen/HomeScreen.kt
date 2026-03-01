@@ -71,7 +71,7 @@ fun FeatureCard(
 fun HomeScreen(tokenViewModel: TokenViewModel) {
     val context = LocalContext.current
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
-    val remainingKeyValues by tokenViewModel.remainingKeyValues.collectAsState(emptyList())
+    val passwordEntries by tokenViewModel.passwordEntries.collectAsState(emptyList())
     val tokenCount by remember {
         derivedStateOf {
             tokens.size
@@ -79,7 +79,7 @@ fun HomeScreen(tokenViewModel: TokenViewModel) {
     }
     val passwordCount by remember {
         derivedStateOf {
-            remainingKeyValues.size
+            passwordEntries.size
         }
     }
 

@@ -1,38 +1,42 @@
 package xzynine.WebDAVPass.Android.ui.activity
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigationevent.NavigationEventDispatcher
-import androidx.navigationevent.NavigationEventDispatcherOwner
-import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
+import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.MainActivity
-import xzynine.WebDAVPass.Android.ui.activity.PasswordEntryDetailActivity.Companion.createIntent
-import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
+import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
-import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 
-/**
- * 非双因素键值详情页面
- */
-class PasswordDetailActivity : ComponentActivity() {
+class PasswordEntryDetailActivity : ComponentActivity() {
+
+    companion object {
+        private const val EXTRA_ENTRY_ID = "extra_entry_id"
+
+        fun createIntent(context: Context, entryId: Long): Intent {
+            return Intent(context, PasswordEntryDetailActivity::class.java)
+                .putExtra(EXTRA_ENTRY_ID, entryId)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        this.setContent {
+        val entryId = intent.getLongExtra(EXTRA_ENTRY_ID, -1L)
+
+        setContent {
             val tokenViewModel: TokenViewModel = viewModel(
                 factory = object : ViewModelProvider.Factory {
                     @Suppress("UNCHECKED_CAST")
@@ -45,14 +49,10 @@ class PasswordDetailActivity : ComponentActivity() {
             val isLibraryUnlocked by tokenViewModel.isLibraryUnlocked.collectAsState(false)
             val currentLibrary by tokenViewModel.currentLibrary.collectAsState(null)
 
-            /**
-             * 未解锁兜底：若详情页被直接拉起但当前库未解锁，
-             * 则回到主活动并交由欢迎流重新绑定/解锁。
-             */
-            LaunchedEffect(isLibraryUnlocked, currentLibrary) {
-                if (!isLibraryUnlocked || currentLibrary == null) {
+            LaunchedEffect(isLibraryUnlocked, currentLibrary, entryId) {
+                if (!isLibraryUnlocked || currentLibrary == null || entryId < 0) {
                     startActivity(
-                        Intent(this@PasswordDetailActivity, MainActivity::class.java).apply {
+                        Intent(this@PasswordEntryDetailActivity, MainActivity::class.java).apply {
                             addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                         }
                     )
@@ -64,11 +64,9 @@ class PasswordDetailActivity : ComponentActivity() {
                 AppTheme {
                     SetupSystemBars()
                     Box(modifier = Modifier.fillMaxSize()) {
-                        PasswordListScreen(
+                        PasswordEntryDetailScreen(
                             tokenViewModel = tokenViewModel,
-                            onEntryClick = { entryId ->
-                                startActivity(createIntent(this@PasswordDetailActivity, entryId))
-                            }
+                            entryId = entryId
                         )
                         MiuixPopupHost()
                     }
