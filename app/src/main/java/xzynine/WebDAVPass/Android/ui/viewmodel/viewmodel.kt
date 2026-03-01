@@ -34,6 +34,9 @@ import kotlinx.coroutines.withContext
 class TokenViewModel(private val context: Context) : ViewModel() {
 
     companion object {
+        private const val UNLOCK_LOAD_RETRY_COUNT = 3
+        private const val UNLOCK_LOAD_RETRY_DELAY_MS = 250L
+
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
@@ -190,16 +193,28 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             kdbxTokenRepository.validatePassword(localPath, masterPassword)
         }
         if (!ok) {
-            lastUnlockErrorMessage = kdbxTokenRepository.getLastUnlockErrorMessage()
+            lastUnlockErrorMessage = "解锁失败：主密码不正确或文件无效"
             _isLibraryUnlocked.value = false
             return false
         }
 
         lastUnlockErrorMessage = null
         currentLibraryMasterPassword = masterPassword
-        _isLibraryUnlocked.value = true
-        loadTokens()
-        return true
+
+        repeat(UNLOCK_LOAD_RETRY_COUNT) { attemptIndex ->
+            val loaded = loadTokensInternal()
+            if (loaded) {
+                lastUnlockErrorMessage = null
+                return true
+            }
+
+            if (attemptIndex < UNLOCK_LOAD_RETRY_COUNT - 1) {
+                delay(UNLOCK_LOAD_RETRY_DELAY_MS)
+            }
+        }
+
+        lastUnlockErrorMessage = "加载失败：已重试${UNLOCK_LOAD_RETRY_COUNT}次，请重试"
+        return false
     }
 
     fun getLastUnlockErrorMessage(): String? {
@@ -279,38 +294,50 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 从当前库加载令牌
      */
     private fun loadTokens() {
-        _isLoading.value = true
-
         viewModelScope.launch {
-            try {
-                val localPath = _currentLibrary.value?.localPath
-                if (localPath.isNullOrBlank()) {
-                    _tokens.value = emptyList()
-                    _tokenCodes.clear()
-                    return@launch
-                }
+            loadTokensInternal()
+        }
+    }
 
-                val loadedTokens = withContext(Dispatchers.IO) {
-                    kdbxTokenRepository.loadTokens(localPath, currentLibraryMasterPassword)
-                }
-                _tokens.value = loadedTokens
-
-                loadedTokens.forEach {
-                    if (!_tokenCodes.containsKey(it.id)) {
-                        _tokenCodes[it.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(it))
-                    }
-                }
-                _tokenCodes.keys.retainAll(loadedTokens.map { it.id }.toSet())
-
-                _isLibraryUnlocked.value = true
-            } catch (ex: Exception) {
+    /**
+     * 同步加载当前库令牌。
+     *
+     * @return 加载成功返回 true；失败返回 false。
+     */
+    private suspend fun loadTokensInternal(): Boolean {
+        _isLoading.value = true
+        return try {
+            val localPath = _currentLibrary.value?.localPath
+            if (localPath.isNullOrBlank()) {
                 _tokens.value = emptyList()
                 _tokenCodes.clear()
                 _isLibraryUnlocked.value = false
-                ex.printStackTrace()
-            } finally {
-                _isLoading.value = false
+                return false
             }
+
+            val loadedTokens = withContext(Dispatchers.IO) {
+                kdbxTokenRepository.loadTokens(localPath, currentLibraryMasterPassword)
+            }
+            _tokens.value = loadedTokens
+
+            loadedTokens.forEach {
+                if (!_tokenCodes.containsKey(it.id)) {
+                    _tokenCodes[it.id] = MutableStateFlow(tokenCodeUtil.generateTokenCode(it))
+                }
+            }
+            _tokenCodes.keys.retainAll(loadedTokens.map { it.id }.toSet())
+
+            _isLibraryUnlocked.value = true
+            true
+        } catch (ex: Exception) {
+            _tokens.value = emptyList()
+            _tokenCodes.clear()
+            _isLibraryUnlocked.value = false
+            lastUnlockErrorMessage = "加载失败：${ex.message ?: ex.javaClass.simpleName}"
+            ex.printStackTrace()
+            false
+        } finally {
+            _isLoading.value = false
         }
     }
 
@@ -344,8 +371,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             val currentCode = _tokenCodes[it.id]?.value
             val newCode = tokenCodeUtil.generateTokenCode(it)
 
-            // 只有当代码发生变化时才更新
-            if (currentCode?.code != newCode.code) {
+            // 当令牌结构发生变化时更新（包括 code/start/end/next）
+            if (currentCode != newCode) {
                 _tokenCodes[it.id]?.value = newCode
             }
         }

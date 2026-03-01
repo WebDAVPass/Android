@@ -375,7 +375,7 @@ fun CountdownDisplay(code: TokenCode) {
     }
 
     val remainingTime = kotlin.comparisons.maxOf(0, (code.end - currentTime) / 1000)
-    val actualPeriod = (code.end - code.start) / 1000 // 计算实际周期（秒）
+    val actualPeriod = kotlin.comparisons.maxOf(1, (code.end - code.start) / 1000) // 计算实际周期（秒）
     val progress = remainingTime.toFloat() / actualPeriod.toFloat() // 使用实际周期计算进度
 
     Box(

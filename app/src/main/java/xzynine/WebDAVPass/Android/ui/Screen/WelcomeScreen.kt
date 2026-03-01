@@ -331,7 +331,9 @@ fun WelcomeScreen(
                         pendingUnlockLibrary = null
                         onEnterLibrary()
                     } else {
-                        Toast.makeText(context, "解锁失败：主密码不正确或文件无效", Toast.LENGTH_SHORT).show()
+                        val message = tokenViewModel.getLastUnlockErrorMessage()
+                            ?: "解锁失败：主密码不正确或文件无效"
+                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
                     }
                 }
             },

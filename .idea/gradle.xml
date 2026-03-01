@@ -24,6 +24,8 @@
             <option value="$PROJECT_DIR$/app" />
             <option value="$PROJECT_DIR$/buildSrc" />
             <option value="$PROJECT_DIR$/checkupdates" />
+            <option value="$PROJECT_DIR$/crypto" />
+            <option value="$PROJECT_DIR$/database" />
             <option value="$PROJECT_DIR$/text-drawable" />
             <option value="$PROJECT_DIR$/token-images" />
             <option value="$PROJECT_DIR$/webdav" />
