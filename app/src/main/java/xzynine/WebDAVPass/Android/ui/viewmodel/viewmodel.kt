@@ -409,12 +409,14 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 刷新所有令牌代码
      */
     private fun refreshTokenCodes() {
+        val currentTime = System.currentTimeMillis()
+        
         _tokens.value.forEach {
             val currentCode = _tokenCodes[it.id]?.value
             val newCode = tokenCodeUtil.generateTokenCode(it)
 
-            // 当令牌结构发生变化时更新（包括 code/start/end/next）
-            if (currentCode != newCode) {
+            // 当 currentCode 为 null 或需要刷新令牌时更新
+            if (currentCode == null || newCode.shouldRefreshToken(currentTime)) {
                 _tokenCodes[it.id]?.value = newCode
             }
         }

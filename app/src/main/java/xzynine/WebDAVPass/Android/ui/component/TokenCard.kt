@@ -13,9 +13,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -26,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.amulyakhare.textdrawable.TextDrawable
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import org.liberty.android.freeotp.token_images.TokenImage
 import org.liberty.android.freeotp.token_images.matchToken
@@ -150,14 +153,30 @@ fun TokenCard(
 
 @Composable
 private fun TokenCodeDisplay(code: TokenCode) {
-    val currentTime by produceState(initialValue = System.currentTimeMillis()) {
+    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    
+    LaunchedEffect(code) {
         while (true) {
-            delay(1000)
-            value = System.currentTimeMillis()
+            try {
+                delay(1000)
+                currentTime = System.currentTimeMillis()
+            } catch (e: CancellationException) {
+                // 协程被取消，正常退出循环
+                break
+            } catch (e: Exception) {
+                // 其他异常记录日志，但继续循环
+                e.printStackTrace()
+                // 避免快速循环导致CPU占用过高
+                try {
+                    delay(1000)
+                } catch (_: CancellationException) {
+                    break
+                }
+            }
         }
     }
 
-    val remainingTime = kotlin.comparisons.maxOf(0, (code.end - currentTime) / 1000)
+    val remainingTime = code.getSecondsRemaining(currentTime)
     val isLast5Seconds = remainingTime <= 5
     val isLast1Second = remainingTime <= 1
 
@@ -205,15 +224,31 @@ private fun TokenCodeDisplay(code: TokenCode) {
 
 @Composable
 private fun CountdownDisplay(code: TokenCode) {
-    val currentTime by produceState(initialValue = System.currentTimeMillis()) {
+    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
+    
+    LaunchedEffect(code) {
         while (true) {
-            delay(1000)
-            value = System.currentTimeMillis()
+            try {
+                delay(1000)
+                currentTime = System.currentTimeMillis()
+            } catch (e: CancellationException) {
+                // 协程被取消，正常退出循环
+                break
+            } catch (e: Exception) {
+                // 其他异常记录日志，但继续循环
+                e.printStackTrace()
+                // 避免快速循环导致CPU占用过高
+                try {
+                    delay(1000)
+                } catch (_: CancellationException) {
+                    break
+                }
+            }
         }
     }
 
-    val remainingTime = kotlin.comparisons.maxOf(0, (code.end - currentTime) / 1000)
-    val actualPeriod = kotlin.comparisons.maxOf(1, (code.end - code.start) / 1000)
+    val remainingTime = code.getSecondsRemaining(currentTime)
+    val actualPeriod = code.period
     val progress = (remainingTime.toFloat() / actualPeriod.toFloat()).coerceIn(0f, 1f)
 
     Box(
