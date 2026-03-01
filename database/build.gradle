@@ -50,6 +50,6 @@ dependencies {
     api project(path: ':crypto')
 
     // Tests
-    androidTestImplementation "androidx.test:runner:$android_test_version"
-    testImplementation "androidx.test:runner:$android_test_version"
+    androidTestImplementation "androidx.test:runner:1.5.2"
+    testImplementation "androidx.test:runner:1.5.2"
 }

@@ -130,6 +130,8 @@ dependencies {
     implementation(libs.hutool.core) // Hutool工具库
     // 复用 WebDAV 库
     implementation(project(":webdav"))
+    implementation(project(":crypto"))
+    implementation(project(":database"))
     implementation("com.google.code.gson:gson:2.10.1") // Gson JSON解析库
     // 接入令牌图标系统模块
     implementation(project(":text-drawable"))
@@ -168,10 +170,6 @@ dependencies {
     implementation(libs.androidx.room.ktx)
     kapt(libs.androidx.room.compiler)
 
-    // KeePass KDBX 读写
-    implementation(libs.keepassjava2.kdbx)
-    implementation(libs.keepassjava2.dom)
-    
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

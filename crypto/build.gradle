@@ -47,6 +47,6 @@ dependencies {
     // Crypto
     implementation 'org.bouncycastle:bcpkix-jdk18on:1.81'
 
-    androidTestImplementation "androidx.test:runner:$android_test_version"
-    testImplementation "androidx.test:runner:$android_test_version"
+    androidTestImplementation "androidx.test:runner:1.5.2"
+    testImplementation "androidx.test:runner:1.5.2"
 }

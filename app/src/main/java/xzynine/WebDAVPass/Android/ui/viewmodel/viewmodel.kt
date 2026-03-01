@@ -37,6 +37,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         @Volatile
         private var INSTANCE: AppDatabase? = null
 
+        @Volatile
+        private var SHARED_VIEW_MODEL: TokenViewModel? = null
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -46,6 +49,20 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 ).fallbackToDestructiveMigration().build()
                 INSTANCE = instance
                 instance
+            }
+        }
+
+        /**
+         * 获取跨 Activity 共享的令牌视图模型实例
+         *
+         * 说明：主页与动态令牌详情页需要共享同一份已解锁状态与令牌缓存，
+         * 否则详情页会因新建 ViewModel 导致显示“暂无令牌”。
+         */
+        fun getSharedInstance(context: Context): TokenViewModel {
+            return SHARED_VIEW_MODEL ?: synchronized(this) {
+                SHARED_VIEW_MODEL ?: TokenViewModel(context.applicationContext).also {
+                    SHARED_VIEW_MODEL = it
+                }
             }
         }
     }
@@ -354,19 +371,23 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             token
         }
 
-        val duplicate = kdbxTokenRepository.isDuplicate(
-            localPath,
-            currentLibraryMasterPassword,
-            tokenWithId.secret,
-            tokenWithId.algorithm,
-            tokenWithId.digits,
-            tokenWithId.period
-        )
+        val duplicate = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.isDuplicate(
+                localPath,
+                currentLibraryMasterPassword,
+                tokenWithId.secret,
+                tokenWithId.algorithm,
+                tokenWithId.digits,
+                tokenWithId.period
+            )
+        }
         if (duplicate) {
             return false
         }
 
-        val added = kdbxTokenRepository.addToken(localPath, currentLibraryMasterPassword, tokenWithId)
+        val added = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.addToken(localPath, currentLibraryMasterPassword, tokenWithId)
+        }
         if (added) {
             loadTokens()
             backupTokens()
@@ -379,14 +400,16 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun isTokenDuplicate(secret: String, algorithm: String, digits: Int, period: Int): Boolean {
         val localPath = _currentLibrary.value?.localPath ?: return false
-        return kdbxTokenRepository.isDuplicate(
-            localPath,
-            currentLibraryMasterPassword,
-            secret,
-            algorithm,
-            digits,
-            period
-        )
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.isDuplicate(
+                localPath,
+                currentLibraryMasterPassword,
+                secret,
+                algorithm,
+                digits,
+                period
+            )
+        }
     }
 
     /**
@@ -395,7 +418,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     fun deleteToken(tokenId: Long) {
         viewModelScope.launch {
             val localPath = _currentLibrary.value?.localPath ?: return@launch
-            val deleted = kdbxTokenRepository.deleteToken(localPath, currentLibraryMasterPassword, tokenId)
+            val deleted = withContext(Dispatchers.IO) {
+                kdbxTokenRepository.deleteToken(localPath, currentLibraryMasterPassword, tokenId)
+            }
             if (deleted) {
                 _tokenCodes.remove(tokenId)
                 loadTokens()
@@ -410,7 +435,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     fun updateToken(token: OtpToken) {
         viewModelScope.launch {
             val localPath = _currentLibrary.value?.localPath ?: return@launch
-            val updated = kdbxTokenRepository.updateToken(localPath, currentLibraryMasterPassword, token)
+            val updated = withContext(Dispatchers.IO) {
+                kdbxTokenRepository.updateToken(localPath, currentLibraryMasterPassword, token)
+            }
             if (updated) {
                 _tokenCodes[token.id]?.value = tokenCodeUtil.generateTokenCode(token)
                 loadTokens()
@@ -425,7 +452,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     fun incrementCounter(tokenId: Long) {
         viewModelScope.launch {
             val localPath = _currentLibrary.value?.localPath ?: return@launch
-            if (kdbxTokenRepository.incrementCounter(localPath, currentLibraryMasterPassword, tokenId)) {
+            val incremented = withContext(Dispatchers.IO) {
+                kdbxTokenRepository.incrementCounter(localPath, currentLibraryMasterPassword, tokenId)
+            }
+            if (incremented) {
                 loadTokens()
             }
         }

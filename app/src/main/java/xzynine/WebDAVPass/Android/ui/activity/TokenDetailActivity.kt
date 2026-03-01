@@ -29,7 +29,7 @@ class TokenDetailActivity : ComponentActivity() {
             val tokenViewModel: TokenViewModel = viewModel(
                 factory = object : ViewModelProvider.Factory {
                     override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        return TokenViewModel(application) as T
+                        return TokenViewModel.getSharedInstance(application) as T
                     }
                 }
             )

@@ -75,7 +75,7 @@ fun MainScreen() {
     val tokenViewModel: TokenViewModel = viewModel(
         factory = object : ViewModelProvider.Factory {
             override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return TokenViewModel(context.applicationContext) as T
+                return TokenViewModel.getSharedInstance(context.applicationContext) as T
             }
         }
     )
