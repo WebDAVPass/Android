@@ -50,6 +50,10 @@
             android:name=".ui.activity.TokenDetailActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".ui.activity.PasswordDetailActivity"
+            android:exported="false" />
+
     </application>
 
 </manifest>

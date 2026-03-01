@@ -21,6 +21,7 @@ import xzynine.WebDAVPass.Android.theme.AppTheme
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.activity.PasswordDetailActivity
 import xzynine.WebDAVPass.Android.ui.activity.TokenDetailActivity
 
 /**
@@ -70,9 +71,15 @@ fun FeatureCard(
 fun HomeScreen(tokenViewModel: TokenViewModel) {
     val context = LocalContext.current
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
+    val remainingKeyValues by tokenViewModel.remainingKeyValues.collectAsState(emptyList())
     val tokenCount by remember {
         derivedStateOf {
             tokens.size
+        }
+    }
+    val passwordCount by remember {
+        derivedStateOf {
+            remainingKeyValues.size
         }
     }
 
@@ -94,9 +101,10 @@ fun HomeScreen(tokenViewModel: TokenViewModel) {
                     // 密码
                     FeatureCard(
                         title = "密码",
-                        value = "0",
+                        value = "$passwordCount",
                         onClick = {
-                            //TODO 后续开发功能
+                            val intent = Intent(context, PasswordDetailActivity::class.java)
+                            context.startActivity(intent)
                         },
                         modifier = Modifier.weight(1f)
                     )

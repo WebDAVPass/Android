@@ -3,6 +3,7 @@ package xzynine.WebDAVPass.Android.data
 import android.util.Log
 import com.kunzisoft.keepass.database.element.Database
 import com.kunzisoft.keepass.database.element.Entry
+import com.kunzisoft.keepass.database.element.Field
 import com.kunzisoft.keepass.database.element.Group
 import com.kunzisoft.keepass.database.element.MasterCredential
 import com.kunzisoft.keepass.hardware.HardwareKey
@@ -96,6 +97,49 @@ class KdbxTokenRepository {
             val entries = collectEntries(db.rootGroup)
             entries.mapNotNull { entry -> toToken(entry) }
                 .sortedBy { it.ordinal }
+        }
+    }
+
+    /**
+     * 读取数据库中非双因素的剩余键值。
+     */
+    fun loadRemainingKeyValues(localPath: String, masterPassword: String): List<RemainingKeyValue> {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val result = mutableListOf<RemainingKeyValue>()
+            val entries = collectEntries(db.rootGroup)
+            entries.forEach { entry ->
+                if (entry.getOtpElement() != null) {
+                    return@forEach
+                }
+
+                val title = entry.title.takeIf { it.isNotBlank() } ?: "未命名条目"
+
+                appendStandardField(result, title, "UserName", entry.username)
+                appendStandardField(result, title, "Password", entry.password, RemainingValueType.PASSWORD)
+                appendStandardField(result, title, "URL", entry.url)
+                appendStandardField(result, title, "Notes", entry.notes)
+
+                entry.getExtraFields()
+                    .filterNot { it.isOTP() }
+                    .forEach { field ->
+                        val value = field.protectedValue.stringValue
+                        if (value.isNotBlank()) {
+                            result.add(
+                                RemainingKeyValue(
+                                    entryTitle = title,
+                                    fieldName = field.name,
+                                    rawValue = value,
+                                    valueType = detectValueType(field, value)
+                                )
+                            )
+                        }
+                    }
+            }
+
+            result.sortedWith(
+                compareBy<RemainingKeyValue> { it.entryTitle }
+                    .thenBy { it.fieldName }
+            )
         }
     }
 
@@ -270,6 +314,69 @@ class KdbxTokenRepository {
             customFields = filteredFields
         }
         entry.setEntryInfo(database, entryInfo)
+    }
+
+    /**
+     * 追加标准字段。
+     */
+    private fun appendStandardField(
+        target: MutableList<RemainingKeyValue>,
+        title: String,
+        fieldName: String,
+        rawValue: String,
+        fixedType: RemainingValueType? = null
+    ) {
+        if (rawValue.isBlank()) {
+            return
+        }
+        target.add(
+            RemainingKeyValue(
+                entryTitle = title,
+                fieldName = fieldName,
+                rawValue = rawValue,
+                valueType = fixedType ?: detectValueType(null, rawValue)
+            )
+        )
+    }
+
+    /**
+     * 推断字段值类型，无法识别时返回文本类型。
+     */
+    private fun detectValueType(field: Field?, rawValue: String): RemainingValueType {
+        val normalized = rawValue.trim()
+        val fieldName = field?.name?.lowercase() ?: ""
+
+        if (fieldName.contains("password") || fieldName.contains("密码")) {
+            return RemainingValueType.PASSWORD
+        }
+
+        if (normalized.startsWith("http://", ignoreCase = true)
+            || normalized.startsWith("https://", ignoreCase = true)
+        ) {
+            return RemainingValueType.URL
+        }
+
+        if (normalized.matches(Regex("^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}$"))) {
+            return RemainingValueType.EMAIL
+        }
+
+        if (normalized.equals("true", true)
+            || normalized.equals("false", true)
+            || normalized == "0"
+            || normalized == "1"
+        ) {
+            return RemainingValueType.BOOLEAN
+        }
+
+        if (normalized.matches(Regex("^-?\\d+(\\.\\d+)?$"))) {
+            return RemainingValueType.NUMBER
+        }
+
+        if (normalized.matches(Regex("^\\d{4}[-/]\\d{1,2}[-/]\\d{1,2}([ T]\\d{1,2}:\\d{1,2}(:\\d{1,2})?)?$"))) {
+            return RemainingValueType.DATE_TIME
+        }
+
+        return RemainingValueType.TEXT
     }
 
     private fun collectEntries(group: Group?): List<Entry> {
