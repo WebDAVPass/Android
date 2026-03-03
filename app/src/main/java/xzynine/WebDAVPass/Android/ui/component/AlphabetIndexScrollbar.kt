@@ -1,6 +1,7 @@
 package xzynine.WebDAVPass.Android.ui.component
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -68,12 +69,17 @@ fun AlphabetIndexScrollbar(
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .width(30.dp)
-                .fillMaxHeight()
+                .width(28.dp)
+                .fillMaxHeight(0.82f)
                 .padding(vertical = 8.dp)
+                .border(
+                    width = 1.dp,
+                    color = MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.18f),
+                    shape = RoundedCornerShape(999.dp)
+                )
                 .background(
                     color = MiuixTheme.colorScheme.surface.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(16.dp)
+                    shape = RoundedCornerShape(999.dp)
                 )
                 .onSizeChanged { barHeightPx = it.height }
                 .pointerInput(letters, enabledLetters) {

@@ -226,7 +226,7 @@ fun PasswordListScreen(
                         onLetterSelected = { letter ->
                             headerIndexMap[letter]?.let { targetIndex ->
                                 coroutineScope.launch {
-                                    listState.animateScrollToItem(targetIndex)
+                                    listState.scrollToItem(targetIndex)
                                 }
                             }
                         },
