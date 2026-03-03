@@ -26,3 +26,4 @@ app/debug/
 # 其他文件
 .trae/documents
 .idea/
+app/release/
