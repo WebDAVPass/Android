@@ -1,7 +1,7 @@
 package xzynine.WebDAVPass.Android.data
 
 /**
- * 非双因素键值类型
+ * 密码页键值类型
  */
 enum class RemainingValueType {
     TEXT,
@@ -34,6 +34,8 @@ data class PasswordEntry(
     val entryId: Long,
     val title: String,
     val account: String,
+    val standardIconId: Int,
+    val customIconBytes: ByteArray?,
     val keyValues: List<RemainingKeyValue>
 )
 

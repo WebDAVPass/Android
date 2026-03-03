@@ -1,5 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.component
 
+import android.graphics.BitmapFactory
 import android.widget.ImageView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -21,13 +22,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.amulyakhare.textdrawable.TextDrawable
+import com.kunzisoft.keepass.icon.IconPack
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import org.liberty.android.freeotp.token_images.TokenImage
@@ -44,11 +48,59 @@ import xzynine.WebDAVPass.Android.data.TokenCode
 
 @Composable
 fun EntryIcon(
+    customIconBytes: ByteArray? = null,
+    standardIconId: Int? = null,
     primary: String?,
     secondary: String?,
     modifier: Modifier = Modifier,
     contentDescription: String = "图标"
 ) {
+    val context = LocalContext.current
+
+    /**
+     * 1) 优先渲染 KeePass 自定义图标（二进制）。
+     */
+    val customBitmap = remember(customIconBytes) {
+        customIconBytes?.let { bytes ->
+            runCatching {
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }.getOrNull()
+        }
+    }
+
+    if (customBitmap != null) {
+        Image(
+            bitmap = customBitmap.asImageBitmap(),
+            contentDescription = contentDescription,
+            modifier = modifier
+        )
+        return
+    }
+
+    /**
+     * 2) 渲染 KeePass 标准图标（数据库标准图标ID）。
+     */
+    val keepassIconRes: Int? = remember(standardIconId) {
+        val iconId = standardIconId ?: return@remember null
+        runCatching {
+            val iconPack = IconPack(
+                context.packageName,
+                context.resources,
+                com.kunzisoft.keepass.icon.material.R.string.resource_id
+            )
+            iconPack.iconToResId(iconId)
+        }.getOrNull()?.takeIf { it != com.kunzisoft.keepass.icon.R.drawable.ic_blank_32dp }
+    }
+
+    if (keepassIconRes != null) {
+        Image(
+            painter = painterResource(id = keepassIconRes),
+            contentDescription = contentDescription,
+            modifier = modifier
+        )
+        return
+    }
+
     val matchedRes: Int? = remember(primary, secondary) {
         TokenImage.values().firstOrNull {
             it.matchToken(primary, secondary)
@@ -84,6 +136,8 @@ fun EntryIcon(
 fun TokenCard(
     token: OtpToken,
     tokenCode: TokenCode?,
+    customIconBytes: ByteArray? = null,
+    standardIconId: Int? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -115,6 +169,8 @@ fun TokenCard(
                 horizontalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 EntryIcon(
+                    customIconBytes = customIconBytes,
+                    standardIconId = standardIconId,
                     primary = token.issuer,
                     secondary = token.label,
                     modifier = Modifier.size(32.dp),

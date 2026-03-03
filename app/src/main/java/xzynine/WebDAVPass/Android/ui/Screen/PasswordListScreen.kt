@@ -279,6 +279,8 @@ private fun PasswordEntryCard(item: PasswordEntry, onClick: () -> Unit) {
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             EntryIcon(
+                customIconBytes = item.customIconBytes,
+                standardIconId = item.standardIconId,
                 primary = item.title,
                 secondary = item.account,
                 modifier = Modifier.size(32.dp),

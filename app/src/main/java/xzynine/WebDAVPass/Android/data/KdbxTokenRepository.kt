@@ -6,6 +6,7 @@ import com.kunzisoft.keepass.database.element.Entry
 import com.kunzisoft.keepass.database.element.Field
 import com.kunzisoft.keepass.database.element.Group
 import com.kunzisoft.keepass.database.element.MasterCredential
+import com.kunzisoft.keepass.database.element.database.DatabaseVersioned
 import com.kunzisoft.keepass.hardware.HardwareKey
 import com.kunzisoft.keepass.model.EntryInfo
 import com.kunzisoft.keepass.otp.OtpElement
@@ -140,6 +141,8 @@ class KdbxTokenRepository {
                         entryId = toStableId(entry),
                         title = title,
                         account = account,
+                        standardIconId = entry.icon.standard.id,
+                        customIconBytes = readCustomIconBytes(db, entry),
                         keyValues = values.sortedBy { it.fieldName.lowercase() }
                     )
                 )
@@ -498,5 +501,24 @@ class KdbxTokenRepository {
             TokenCalculator.HashAlgorithm.SHA512.name -> TokenCalculator.HashAlgorithm.SHA512
             else -> TokenCalculator.HashAlgorithm.SHA1
         }
+    }
+
+    /**
+     * 读取条目自定义图标二进制数据。
+     *
+     * 优先从条目的 custom icon UUID 读取数据库中的二进制，读取失败时返回 null。
+     */
+    private fun readCustomIconBytes(database: Database, entry: Entry): ByteArray? {
+        val iconUuid = entry.icon.custom.uuid
+        if (iconUuid == DatabaseVersioned.UUID_ZERO) {
+            return null
+        }
+
+        return runCatching {
+            val binary = database.getBinaryForCustomIcon(iconUuid) ?: return null
+            binary.getUnGzipInputDataStream(database.binaryCache).use { input ->
+                input.readBytes()
+            }
+        }.getOrNull()
     }
 }

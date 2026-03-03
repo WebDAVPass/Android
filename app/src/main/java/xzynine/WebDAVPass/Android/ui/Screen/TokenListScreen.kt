@@ -18,6 +18,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -47,7 +48,15 @@ enum class DialogState { NONE, EDIT, DELETE }
 fun TokenListScreen(tokenViewModel: TokenViewModel) {
     val context = LocalContext.current
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
+    val passwordEntries by tokenViewModel.passwordEntries.collectAsState(emptyList())
     val isLoading by tokenViewModel.isLoading.collectAsState(false)
+
+    /**
+     * 通过稳定 ID 建立条目索引，用于令牌列表复用 KeePass 图标数据。
+     */
+    val entryIconMap by remember(passwordEntries) {
+        derivedStateOf { passwordEntries.associateBy { it.entryId } }
+    }
 
     // 长按功能状态管理 - 使用枚举确保单例
     var dialogState by remember { mutableStateOf(DialogState.NONE) }
@@ -87,10 +96,13 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
         ) {
             items(tokens, key = { it.id }) { token ->
                 val tokenCode by tokenViewModel.getTokenCode(token.id).collectAsState(null)
+                val iconEntry = entryIconMap[token.id]
 
                 TokenCard(
                     token = token,
                     tokenCode = tokenCode,
+                    customIconBytes = iconEntry?.customIconBytes,
+                    standardIconId = iconEntry?.standardIconId,
                     onClick = {
                         tokenCode?.let { code ->
                             val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
