@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -46,10 +45,10 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
@@ -93,7 +92,7 @@ fun PasswordEntryDetailScreen(
                 actions = {
                     IconButton(onClick = {}) {
                         Icon(
-                            imageVector = MiuixIcons.Notes,
+                            imageVector = MiuixIcons.Edit,
                             contentDescription = "编辑"
                         )
                     }
