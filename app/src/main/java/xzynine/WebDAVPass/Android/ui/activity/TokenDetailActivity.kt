@@ -31,13 +31,9 @@ class TokenDetailActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         this.setContent {
-            val tokenViewModel: TokenViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        return TokenViewModel.getSharedInstance(application) as T
-                    }
-                }
-            )
+            val tokenViewModel: TokenViewModel = remember(application) {
+                TokenViewModel.getSharedInstance(application)
+            }
             val isLibraryUnlocked by tokenViewModel.isLibraryUnlocked.collectAsState(false)
             val currentLibrary by tokenViewModel.currentLibrary.collectAsState(null)
 

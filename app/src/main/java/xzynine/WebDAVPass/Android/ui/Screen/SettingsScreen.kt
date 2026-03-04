@@ -20,12 +20,12 @@ import androidx.compose.ui.unit.dp
 import xzynine.WebDAVPass.Android.service.TwoFasAutofillService
 import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
-import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
@@ -78,7 +78,7 @@ fun SettingsScreen(
                 modifier = Modifier.padding(8.dp)
             )
 
-            BasicComponent(
+            SuperArrow(
                 title = "设置为自动填充器",
                 summary = "跳转到系统自动填充设置",
                 startAction = {
@@ -116,13 +116,12 @@ fun SettingsScreen(
                 },
                 modifier = Modifier.Companion
                     .fillMaxWidth()
-                    .border(1.dp, Color.Companion.LightGray, RoundedCornerShape(cornerRadius))
             )
 
             Spacer(modifier = Modifier.Companion.height(16.dp))
 
             // WebDAV配置
-            BasicComponent(
+            SuperArrow(
                 title = "WebDAV 配置",
                 startAction = {
                     Icon(
@@ -134,12 +133,11 @@ fun SettingsScreen(
                 onClick = onWebDavConfigClick,
                 modifier = Modifier.Companion
                     .fillMaxWidth()
-                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
             )
 
             Spacer(modifier = Modifier.Companion.height(8.dp))
 
-            BasicComponent(
+            SuperArrow(
                 title = "切换数据库文件",
                 summary = "返回欢迎页，选择其他 .kdbx",
                 startAction = {
@@ -152,7 +150,6 @@ fun SettingsScreen(
                 onClick = onSwitchLibraryClick,
                 modifier = Modifier.Companion
                     .fillMaxWidth()
-                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
             )
 
             Spacer(modifier = Modifier.Companion.height(16.dp))
@@ -164,7 +161,7 @@ fun SettingsScreen(
             )
 
             // 备份状态显示
-            BasicComponent(
+            SuperArrow(
                 title = "备份状态",
                 summary = backupStatus.value,
                 startAction = {
@@ -176,13 +173,12 @@ fun SettingsScreen(
                 },
                 modifier = Modifier.Companion
                     .fillMaxWidth()
-                    .border(1.dp, Color.Companion.LightGray, RoundedCornerShape(cornerRadius))
             )
 
             Spacer(modifier = Modifier.Companion.height(8.dp))
 
             // 备份按钮
-            BasicComponent(
+            SuperArrow(
                 title = if (isBackupInProgress.value) "备份中..." else "备份令牌",
                 summary = if (isBackupInProgress.value) "正在备份到WebDAV服务器... ${backupProgress.value}%" else "点击开始备份",
                 startAction = {
@@ -205,13 +201,12 @@ fun SettingsScreen(
                 },
                 modifier = Modifier.Companion
                     .fillMaxWidth()
-                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             // 手动恢复按钮
-            BasicComponent(
+            SuperArrow(
                 title = if (isRestoreInProgress.value) "恢复中..." else "手动恢复",
                 summary = if (isRestoreInProgress.value) "正在从WebDAV服务器恢复... ${restoreProgress.value}%" else "点击开始手动恢复",
                 startAction = {
@@ -234,7 +229,6 @@ fun SettingsScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
             )
 
             Spacer(modifier = Modifier.height(8.dp))

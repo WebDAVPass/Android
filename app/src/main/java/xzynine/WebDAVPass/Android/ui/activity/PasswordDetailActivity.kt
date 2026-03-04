@@ -12,8 +12,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigationevent.NavigationEventDispatcher
 import androidx.navigationevent.NavigationEventDispatcherOwner
 import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
@@ -37,14 +35,9 @@ class PasswordDetailActivity : ComponentActivity() {
             refreshPasswordEntries()
         }
         this.setContent {
-            val tokenViewModel: TokenViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        return TokenViewModel.getSharedInstance(application) as T
-                    }
-                }
-            )
+            val tokenViewModel: TokenViewModel = remember(application) {
+                TokenViewModel.getSharedInstance(application)
+            }
 
             val isLibraryUnlocked by tokenViewModel.isLibraryUnlocked.collectAsState(false)
             val currentLibrary by tokenViewModel.currentLibrary.collectAsState(null)

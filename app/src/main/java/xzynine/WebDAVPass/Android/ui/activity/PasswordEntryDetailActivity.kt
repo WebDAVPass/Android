@@ -10,9 +10,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
@@ -37,14 +36,9 @@ class PasswordEntryDetailActivity : ComponentActivity() {
         val entryId = intent.getLongExtra(EXTRA_ENTRY_ID, -1L)
 
         setContent {
-            val tokenViewModel: TokenViewModel = viewModel(
-                factory = object : ViewModelProvider.Factory {
-                    @Suppress("UNCHECKED_CAST")
-                    override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                        return TokenViewModel.getSharedInstance(application) as T
-                    }
-                }
-            )
+            val tokenViewModel: TokenViewModel = remember(application) {
+                TokenViewModel.getSharedInstance(application)
+            }
 
             val isLibraryUnlocked by tokenViewModel.isLibraryUnlocked.collectAsState(false)
             val currentLibrary by tokenViewModel.currentLibrary.collectAsState(null)

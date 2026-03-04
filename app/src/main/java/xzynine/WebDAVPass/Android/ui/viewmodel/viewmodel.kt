@@ -20,6 +20,7 @@ import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
 import java.io.File
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -64,7 +65,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
          */
         fun getSharedInstance(context: Context): TokenViewModel {
             return SHARED_VIEW_MODEL ?: synchronized(this) {
-                SHARED_VIEW_MODEL ?: TokenViewModel(context.applicationContext).also {
+                val existing = SHARED_VIEW_MODEL
+                if (existing != null && existing.isScopeActive()) {
+                    existing.startTokenRefreshTimer()
+                    return existing
+                }
+
+                TokenViewModel(context.applicationContext).also {
                     SHARED_VIEW_MODEL = it
                 }
             }
@@ -78,6 +85,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private var lastUnlockErrorMessage: String? = null
 
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
+    private var tokenRefreshJob: Job? = null
     
 
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())
@@ -472,7 +480,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 启动令牌刷新定时器
      */
     private fun startTokenRefreshTimer() {
-        viewModelScope.launch {
+        if (tokenRefreshJob?.isActive == true) {
+            return
+        }
+
+        tokenRefreshJob = viewModelScope.launch {
             while (true) {
                 delay(1000) // 每秒刷新一次
                 runCatching {
@@ -484,6 +496,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 }
             }
         }
+    }
+
+    /**
+     * 判断当前 ViewModel 协程作用域是否仍处于活跃状态。
+     */
+    private fun isScopeActive(): Boolean {
+        return viewModelScope.coroutineContext[Job]?.isActive == true
     }
 
     /**

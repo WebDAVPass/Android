@@ -34,13 +34,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URLEncoder
-import top.yukonga.miuix.kmp.basic.BasicComponent
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.extra.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
@@ -228,7 +228,7 @@ fun WelcomeScreen(
                 Text(text = "暂无历史记录")
             } else {
                 history.forEach { item ->
-                    BasicComponent(
+                    SuperArrow(
                         title = item.displayName,
                         summary = if (item.sourceType == LibrarySourceType.CLOUD) {
                             item.remoteFilePath ?: item.remoteBaseUrl.orEmpty()
@@ -250,7 +250,6 @@ fun WelcomeScreen(
                         },
                         modifier = Modifier
                             .fillMaxWidth()
-                            .border(1.dp, androidx.compose.ui.graphics.Color.LightGray, RoundedCornerShape(cornerRadius))
                     )
                 }
             }
@@ -627,7 +626,7 @@ private fun CloudLibraryDialog(
                 Text("子目录")
                 directoryListing.forEach { dirPath ->
                     val dirName = dirPath.substringAfterLast('/')
-                    BasicComponent(
+                    SuperArrow(
                         title = "📁 $dirName",
                         summary = dirPath,
                         onClick = {
@@ -652,7 +651,7 @@ private fun CloudLibraryDialog(
 
                 Text("选择远端文件")
                 listing.forEach { filePath ->
-                    BasicComponent(
+                    SuperArrow(
                         title = filePath.substringAfterLast('/'),
                         summary = filePath,
                         onClick = {
