@@ -7,20 +7,10 @@ import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.lifecycleScope
-import androidx.navigationevent.NavigationEventDispatcher
-import androidx.navigationevent.NavigationEventDispatcherOwner
-import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.MainActivity
@@ -28,7 +18,6 @@ import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.activity.PasswordEntryDetailActivity
 import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 
 class TokenDetailActivity : ComponentActivity() {
@@ -65,13 +54,7 @@ class TokenDetailActivity : ComponentActivity() {
                         TokenListScreen(
                             tokenViewModel = tokenViewModel,
                             onEntryClick = { entryId ->
-                                // 先刷新密码条目列表，确保加载所有的密码条目，包括子文件夹中的
-                                tokenViewModel.refreshPasswordEntries(" ") // 传入一个空格作为搜索查询，这样会加载所有的密码条目
-                                // 使用协程处理延迟，避免阻塞 UI 线程
-                                lifecycleScope.launch {
-                                    delay(500)
-                                    startActivity(PasswordEntryDetailActivity.createIntent(this@TokenDetailActivity, entryId))
-                                }
+                                startActivity(PasswordEntryDetailActivity.createIntent(this@TokenDetailActivity, entryId))
                             }
                         )
                         // MiuixPopupHost 作为弹窗宿主

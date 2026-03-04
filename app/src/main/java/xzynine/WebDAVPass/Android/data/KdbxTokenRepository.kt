@@ -103,20 +103,21 @@ class KdbxTokenRepository {
     }
 
     /**
-     * 读取数据库中全部条目与键值（包含 OTP 条目与 OTP 字段）。
+     * 读取数据库中全部条目摘要（不包含键值详情）。
      */
     fun loadPasswordEntries(localPath: String, masterPassword: String): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             buildPasswordEntries(
                 database = db,
                 entries = collectEntriesOutsideRecycleBin(db, db.rootGroup),
-                groups = emptyList()
+                groups = emptyList(),
+                includeFieldDetails = false
             )
         }
     }
 
     /**
-     * 读取数据库中一级分组可见条目（根组直系条目 + 一级子组条目）。
+     * 读取数据库中一级分组可见条目摘要（根组直系条目 + 一级子组条目）。
      */
     fun loadPasswordEntriesByTopLevel(localPath: String, masterPassword: String): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
@@ -124,13 +125,14 @@ class KdbxTokenRepository {
             buildPasswordEntries(
                 database = db,
                 entries = rootGroup?.getChildEntries()?.filterNot { entry -> isEntryInRecycleBin(db, entry) } ?: emptyList(),
-                groups = rootGroup?.getChildGroups()?.filterNot { group -> db.groupIsInRecycleBin(group) } ?: emptyList()
+                groups = rootGroup?.getChildGroups()?.filterNot { group -> db.groupIsInRecycleBin(group) } ?: emptyList(),
+                includeFieldDetails = false
             )
         }
     }
 
     /**
-     * 读取指定分组下的直系条目与子分组。
+     * 读取指定分组下的直系条目与子分组摘要。
      */
     fun loadPasswordEntriesByGroup(localPath: String, masterPassword: String, groupStableId: Long): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
@@ -144,13 +146,14 @@ class KdbxTokenRepository {
             buildPasswordEntries(
                 database = db,
                 entries = targetGroup.getChildEntries().filterNot { entry -> isEntryInRecycleBin(db, entry) },
-                groups = targetGroup.getChildGroups().filterNot { group -> db.groupIsInRecycleBin(group) }
+                groups = targetGroup.getChildGroups().filterNot { group -> db.groupIsInRecycleBin(group) },
+                includeFieldDetails = false
             )
         }
     }
 
     /**
-     * 读取回收站中所有条目（仅条目，不包含文件夹占位）。
+     * 读取回收站中所有条目摘要（仅条目，不包含文件夹占位）。
      */
     fun loadRecentDeletedPasswordEntries(localPath: String, masterPassword: String): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
@@ -158,8 +161,25 @@ class KdbxTokenRepository {
             buildPasswordEntries(
                 database = db,
                 entries = collectEntries(recycleBin),
-                groups = emptyList()
+                groups = emptyList(),
+                includeFieldDetails = false
             )
+        }
+    }
+
+    /**
+     * 按稳定 ID 读取单条密码详情（包含全部键值，支持回收站条目）。
+     */
+    fun loadPasswordEntryById(localPath: String, masterPassword: String, entryId: Long): PasswordEntry? {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
+                ?: return@withDatabase null
+            buildPasswordEntries(
+                database = db,
+                entries = listOf(entry),
+                groups = emptyList(),
+                includeFieldDetails = true
+            ).firstOrNull()
         }
     }
 
@@ -270,7 +290,19 @@ class KdbxTokenRepository {
     }
 
     private fun findEntryById(db: Database, tokenId: Long): Entry? {
-        return collectEntriesOutsideRecycleBin(db, db.rootGroup).firstOrNull { toStableId(it) == tokenId }
+        return findEntryByStableId(db, tokenId, includeRecycleBin = false)
+    }
+
+    /**
+     * 按稳定 ID 查找条目。
+     */
+    private fun findEntryByStableId(db: Database, entryId: Long, includeRecycleBin: Boolean): Entry? {
+        val source = if (includeRecycleBin) {
+            collectEntries(db.rootGroup)
+        } else {
+            collectEntriesOutsideRecycleBin(db, db.rootGroup)
+        }
+        return source.firstOrNull { toStableId(it) == entryId }
     }
 
     private fun toToken(entry: Entry): OtpToken? {
@@ -433,7 +465,8 @@ class KdbxTokenRepository {
     private fun buildPasswordEntries(
         database: Database,
         entries: List<Entry>,
-        groups: List<Group>
+        groups: List<Group>,
+        includeFieldDetails: Boolean
     ): List<PasswordEntry> {
         val result = mutableListOf<PasswordEntry>()
 
@@ -460,24 +493,10 @@ class KdbxTokenRepository {
                 ?: entry.username.takeIf { it.isNotBlank() }
                 ?: toStableId(entry).toString()
             val account = entry.username.takeIf { it.isNotBlank() } ?: ""
-            val values = mutableListOf<RemainingKeyValue>()
-
-            appendStandardField(values, "UserName", entry.username)
-            appendStandardField(values, "Password", entry.password, RemainingValueType.PASSWORD)
-            appendStandardField(values, "URL", entry.url)
-            appendStandardField(values, "Notes", entry.notes)
-
-            entry.getExtraFields().forEach { field ->
-                val value = field.protectedValue.stringValue
-                if (value.isNotBlank()) {
-                    values.add(
-                        RemainingKeyValue(
-                            fieldName = field.name,
-                            rawValue = value,
-                            valueType = detectValueType(field, value)
-                        )
-                    )
-                }
+            val values = if (includeFieldDetails) {
+                buildEntryKeyValues(entry)
+            } else {
+                emptyList()
             }
 
             result.add(
@@ -487,7 +506,7 @@ class KdbxTokenRepository {
                     account = account,
                     standardIconId = entry.icon.standard.id,
                     customIconBytes = readCustomIconBytes(database, entry),
-                    keyValues = values.sortedBy { it.fieldName.lowercase() },
+                    keyValues = values,
                     isFolderGroup = false,
                     isFolderPlaceholder = false
                 )
@@ -499,6 +518,33 @@ class KdbxTokenRepository {
                 .thenBy { it.title.lowercase() }
                 .thenBy { it.account.lowercase() }
         )
+    }
+
+    /**
+     * 构建单条目详情所需的全部键值。
+     */
+    private fun buildEntryKeyValues(entry: Entry): List<RemainingKeyValue> {
+        val values = mutableListOf<RemainingKeyValue>()
+
+        appendStandardField(values, "UserName", entry.username)
+        appendStandardField(values, "Password", entry.password, RemainingValueType.PASSWORD)
+        appendStandardField(values, "URL", entry.url)
+        appendStandardField(values, "Notes", entry.notes)
+
+        entry.getExtraFields().forEach { field ->
+            val value = field.protectedValue.stringValue
+            if (value.isNotBlank()) {
+                values.add(
+                    RemainingKeyValue(
+                        fieldName = field.name,
+                        rawValue = value,
+                        valueType = detectValueType(field, value)
+                    )
+                )
+            }
+        }
+
+        return values.sortedBy { it.fieldName.lowercase() }
     }
 
     private fun collectEntries(group: Group?): List<Entry> {

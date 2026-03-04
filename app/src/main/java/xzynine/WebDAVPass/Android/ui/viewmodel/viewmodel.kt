@@ -527,6 +527,33 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 按稳定 ID 读取单条密码详情。
+     *
+     * 说明：
+     * - 仅用于详情页按需拉取；
+     * - 不依赖列表缓存，避免列表页为详情提前全量加载。
+     */
+    suspend fun loadPasswordEntryDetail(entryId: Long): PasswordEntry? {
+        if (entryId < 0) {
+            return null
+        }
+
+        val access = PasswordDataAccess(
+            isLibraryUnlocked = _isLibraryUnlocked.value,
+            localPath = _currentLibrary.value?.localPath,
+            masterPassword = currentLibraryMasterPassword
+        )
+        if (!access.isReady()) {
+            return null
+        }
+
+        val localPath = access.localPath ?: return null
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.loadPasswordEntryById(localPath, access.masterPassword, entryId)
+        }
+    }
+
+    /**
      * 启动令牌刷新定时器
      */
     private fun startTokenRefreshTimer() {

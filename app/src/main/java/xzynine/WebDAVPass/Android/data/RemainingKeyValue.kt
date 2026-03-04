@@ -28,7 +28,11 @@ data class RemainingKeyValue(
 )
 
 /**
- * 数据库中的条目摘要及其全部键值。
+ * 数据库中的条目摘要。
+ *
+ * 说明：
+ * - 列表场景下 `keyValues` 可能为空以减少加载开销；
+ * - 详情场景下 `keyValues` 包含完整键值。
  */
 data class PasswordEntry(
     val entryId: Long,

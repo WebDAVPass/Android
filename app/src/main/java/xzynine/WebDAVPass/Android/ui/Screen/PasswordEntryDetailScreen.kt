@@ -20,9 +20,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -48,6 +50,7 @@ import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.data.OtpToken
+import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
@@ -61,11 +64,18 @@ fun PasswordEntryDetailScreen(
     entryId: Long
 ) {
     val context = LocalContext.current
-    val entries by tokenViewModel.passwordEntries.collectAsState(emptyList())
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val currentTimeMillis by tokenViewModel.currentTimeMillis.collectAsState(System.currentTimeMillis())
 
-    val selectedEntry = entries.firstOrNull { it.entryId == entryId }
+    var selectedEntry by remember(entryId) { mutableStateOf<PasswordEntry?>(null) }
+    var detailLoaded by rememberSaveable(entryId) { mutableStateOf(false) }
+
+    LaunchedEffect(entryId) {
+        detailLoaded = false
+        selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
+        detailLoaded = true
+    }
+
     val selectedToken = tokens.firstOrNull { it.id == entryId }
     val tokenCode by tokenViewModel.getTokenCode(entryId).collectAsState(null)
     var showOtpSecret by rememberSaveable(entryId) { mutableStateOf(false) }
@@ -92,7 +102,20 @@ fun PasswordEntryDetailScreen(
             )
         }
     ) { paddingValues ->
-        if (selectedEntry == null) {
+        if (!detailLoaded) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(text = "加载中...")
+            }
+            return@Scaffold
+        }
+
+        val entry = selectedEntry
+        if (entry == null) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -104,23 +127,23 @@ fun PasswordEntryDetailScreen(
             return@Scaffold
         }
 
-        val usernameField = selectedEntry.keyValues.firstOrNull { it.fieldName.equals("UserName", ignoreCase = true) }
-        val passwordField = selectedEntry.keyValues.firstOrNull {
+        val usernameField = entry.keyValues.firstOrNull { it.fieldName.equals("UserName", ignoreCase = true) }
+        val passwordField = entry.keyValues.firstOrNull {
             it.fieldName.equals("Password", ignoreCase = true) || it.valueType == RemainingValueType.PASSWORD
         }
-        val urlField = selectedEntry.keyValues.firstOrNull {
+        val urlField = entry.keyValues.firstOrNull {
             it.fieldName.equals("URL", ignoreCase = true) || it.valueType == RemainingValueType.URL
         }
-        val otpFields = selectedEntry.keyValues.filter { isOtpField(it) }
+        val otpFields = entry.keyValues.filter { isOtpField(it) }
         val otpSecretField = otpFields.firstOrNull()
-        val additionalFields = selectedEntry.keyValues.filterNot { item ->
+        val additionalFields = entry.keyValues.filterNot { item ->
             item == usernameField
                 || item == passwordField
                 || item == urlField
             || (selectedToken != null && isOtpField(item))
         }
         val usernameValue = when {
-            selectedEntry.account.isNotBlank() -> selectedEntry.account
+            entry.account.isNotBlank() -> entry.account
             usernameField?.rawValue?.isNotBlank() == true -> usernameField.rawValue
             else -> "--"
         }
@@ -252,10 +275,10 @@ fun PasswordEntryDetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 startAction = {
                                     EntryIcon(
-                                        customIconBytes = selectedEntry.customIconBytes,
-                                        standardIconId = selectedEntry.standardIconId,
-                                        primary = selectedEntry.title,
-                                        secondary = selectedEntry.account,
+                                        customIconBytes = entry.customIconBytes,
+                                        standardIconId = entry.standardIconId,
+                                        primary = entry.title,
+                                        secondary = entry.account,
                                         modifier = Modifier.padding(end = 16.dp),
                                         contentDescription = "条目图标"
                                     )
