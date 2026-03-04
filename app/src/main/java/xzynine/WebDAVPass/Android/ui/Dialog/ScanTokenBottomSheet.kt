@@ -1,4 +1,4 @@
-package xzynine.WebDAVPass.Android.ui.Screen
+package xzynine.WebDAVPass.Android.ui.Dialog
 
 import android.Manifest
 import android.content.Context
@@ -51,8 +51,6 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
-import xzynine.WebDAVPass.Android.ui.Dialog.TokenDialog
 import xzynine.WebDAVPass.Android.data.OtpTokenFactory
 import xzynine.WebDAVPass.Android.util.TokenQRCodeDecoder
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
@@ -65,9 +63,8 @@ import top.yukonga.miuix.kmp.icon.extended.Scan
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.Executors
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import androidx.navigationevent.NavigationEventInfo
-import androidx.navigationevent.compose.NavigationBackHandler
-import androidx.navigationevent.compose.rememberNavigationEventState
+import androidx.activity.compose.BackHandler
+import kotlinx.coroutines.DelicateCoroutinesApi
 
 /**
  * 扫描二维码界面
@@ -187,6 +184,10 @@ fun ScanTokenScreen(
     var manualInputText by remember { mutableStateOf("") }
 
     MiuixTheme {
+        BackHandler(enabled = true) {
+            onDismiss()
+        }
+        
         Column(
             modifier = Modifier.fillMaxSize()
         ) {
@@ -385,7 +386,7 @@ fun ScanTokenScreen(
 /**
  * 处理相机捕获的图像
  */
-@OptIn(kotlinx.coroutines.DelicateCoroutinesApi::class)
+@OptIn(DelicateCoroutinesApi::class)
 private fun processImageProxy(
     context: Context,
     imageProxy: ImageProxy,
