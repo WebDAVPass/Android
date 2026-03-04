@@ -31,6 +31,7 @@ internal class PasswordPagingSubViewModel(
     private val repository: KdbxTokenRepository,
     private val scope: CoroutineScope,
     private val accessProvider: () -> PasswordDataAccess,
+    private val listModeProvider: () -> PasswordListMode,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val pageSectionSize: Int = 4
 ) {
@@ -71,15 +72,25 @@ internal class PasswordPagingSubViewModel(
 
         val localPath = access.localPath ?: return
         val masterPassword = access.masterPassword
+        val listMode = listModeProvider()
 
         val topLevelPasswordEntries = withContext(ioDispatcher) {
-            repository.loadPasswordEntriesByTopLevel(localPath, masterPassword)
+            when (listMode) {
+                PasswordListMode.ALL_PASSWORDS -> repository.loadPasswordEntriesByTopLevel(localPath, masterPassword)
+                PasswordListMode.RECENT_DELETED -> repository.loadRecentDeletedPasswordEntries(localPath, masterPassword)
+            }
         }
         val passwordEntryCount = withContext(ioDispatcher) {
-            repository.countPasswordEntries(localPath, masterPassword)
+            when (listMode) {
+                PasswordListMode.ALL_PASSWORDS -> repository.countPasswordEntries(localPath, masterPassword)
+                PasswordListMode.RECENT_DELETED -> repository.countRecentDeletedPasswordEntries(localPath, masterPassword)
+            }
         }
 
         pagingMutex.withLock {
+            if (listMode == PasswordListMode.RECENT_DELETED) {
+                _passwordGroupStack.value = emptyList()
+            }
             _passwordTotalCount.value = passwordEntryCount
             replaceSourceLocked(topLevelPasswordEntries, "")
         }
@@ -103,17 +114,33 @@ internal class PasswordPagingSubViewModel(
             val localPath = access.localPath ?: return@launch
             val masterPassword = access.masterPassword
             val keyword = searchQuery.trim()
-            val currentGroupId = _passwordGroupStack.value.lastOrNull()
+            val listMode = listModeProvider()
+            val currentGroupId = if (listMode == PasswordListMode.ALL_PASSWORDS) {
+                _passwordGroupStack.value.lastOrNull()
+            } else {
+                null
+            }
+
+            if (listMode == PasswordListMode.RECENT_DELETED && _passwordGroupStack.value.isNotEmpty()) {
+                _passwordGroupStack.value = emptyList()
+            }
 
             val source = withContext(ioDispatcher) {
-                if (keyword.isBlank()) {
-                    if (currentGroupId == null) {
-                        repository.loadPasswordEntriesByTopLevel(localPath, masterPassword)
-                    } else {
-                        repository.loadPasswordEntriesByGroup(localPath, masterPassword, currentGroupId)
+                when (listMode) {
+                    PasswordListMode.ALL_PASSWORDS -> {
+                        if (keyword.isBlank()) {
+                            if (currentGroupId == null) {
+                                repository.loadPasswordEntriesByTopLevel(localPath, masterPassword)
+                            } else {
+                                repository.loadPasswordEntriesByGroup(localPath, masterPassword, currentGroupId)
+                            }
+                        } else {
+                            repository.loadPasswordEntries(localPath, masterPassword)
+                        }
                     }
-                } else {
-                    repository.loadPasswordEntries(localPath, masterPassword)
+                    PasswordListMode.RECENT_DELETED -> {
+                        repository.loadRecentDeletedPasswordEntries(localPath, masterPassword)
+                    }
                 }
             }
 
@@ -165,6 +192,9 @@ internal class PasswordPagingSubViewModel(
     }
 
     fun openPasswordGroup(groupStableId: Long, searchQuery: String = "") {
+        if (listModeProvider() == PasswordListMode.RECENT_DELETED) {
+            return
+        }
         if (_passwordGroupStack.value.lastOrNull() == groupStableId) {
             return
         }
@@ -173,6 +203,9 @@ internal class PasswordPagingSubViewModel(
     }
 
     fun navigateUpPasswordGroup(searchQuery: String = "") {
+        if (listModeProvider() == PasswordListMode.RECENT_DELETED) {
+            return
+        }
         val stack = _passwordGroupStack.value
         if (stack.isEmpty()) {
             return
@@ -183,6 +216,13 @@ internal class PasswordPagingSubViewModel(
     }
 
     fun resetPasswordGroupNavigation(searchQuery: String = "") {
+        if (listModeProvider() == PasswordListMode.RECENT_DELETED) {
+            refreshJob?.cancel()
+            refreshJob = null
+            _passwordGroupStack.value = emptyList()
+            refreshPasswordEntries(searchQuery)
+            return
+        }
         refreshJob?.cancel()
         refreshJob = null
         _passwordGroupStack.value = emptyList()

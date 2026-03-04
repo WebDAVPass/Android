@@ -28,6 +28,7 @@ class KdbxTokenRepository {
         private const val LOG_TAG = "tag:解锁"
         private const val DATABASE_NAME = "WebDavPass"
         private const val ROOT_GROUP_NAME = "WebDavPass"
+        private const val RECYCLE_BIN_FALLBACK_TITLE = "回收站"
     }
 
     private val emptyChallengeResponseRetriever: (HardwareKey, ByteArray?) -> ByteArray = { _, _ ->
@@ -95,7 +96,7 @@ class KdbxTokenRepository {
 
     fun loadTokens(localPath: String, masterPassword: String): List<OtpToken> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val entries = collectEntries(db.rootGroup)
+            val entries = collectEntriesOutsideRecycleBin(db, db.rootGroup)
             entries.mapNotNull { entry -> toToken(entry) }
                 .sortedBy { it.ordinal }
         }
@@ -108,7 +109,7 @@ class KdbxTokenRepository {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             buildPasswordEntries(
                 database = db,
-                entries = collectEntries(db.rootGroup),
+                entries = collectEntriesOutsideRecycleBin(db, db.rootGroup),
                 groups = emptyList()
             )
         }
@@ -122,8 +123,8 @@ class KdbxTokenRepository {
             val rootGroup = db.rootGroup
             buildPasswordEntries(
                 database = db,
-                entries = rootGroup?.getChildEntries() ?: emptyList(),
-                groups = rootGroup?.getChildGroups() ?: emptyList()
+                entries = rootGroup?.getChildEntries()?.filterNot { entry -> isEntryInRecycleBin(db, entry) } ?: emptyList(),
+                groups = rootGroup?.getChildGroups()?.filterNot { group -> db.groupIsInRecycleBin(group) } ?: emptyList()
             )
         }
     }
@@ -136,11 +137,28 @@ class KdbxTokenRepository {
             val rootGroup = db.rootGroup
             val targetGroup = findGroupByStableId(rootGroup, groupStableId)
                 ?: return@withDatabase emptyList()
+            if (db.groupIsInRecycleBin(targetGroup)) {
+                return@withDatabase emptyList()
+            }
 
             buildPasswordEntries(
                 database = db,
-                entries = targetGroup.getChildEntries(),
-                groups = targetGroup.getChildGroups()
+                entries = targetGroup.getChildEntries().filterNot { entry -> isEntryInRecycleBin(db, entry) },
+                groups = targetGroup.getChildGroups().filterNot { group -> db.groupIsInRecycleBin(group) }
+            )
+        }
+    }
+
+    /**
+     * 读取回收站中所有条目（仅条目，不包含文件夹占位）。
+     */
+    fun loadRecentDeletedPasswordEntries(localPath: String, masterPassword: String): List<PasswordEntry> {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val recycleBin = db.recycleBin ?: return@withDatabase emptyList()
+            buildPasswordEntries(
+                database = db,
+                entries = collectEntries(recycleBin),
+                groups = emptyList()
             )
         }
     }
@@ -150,7 +168,17 @@ class KdbxTokenRepository {
      */
     fun countPasswordEntries(localPath: String, masterPassword: String): Int {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            collectEntries(db.rootGroup).size
+            collectEntriesOutsideRecycleBin(db, db.rootGroup).size
+        }
+    }
+
+    /**
+     * 统计回收站中条目数量。
+     */
+    fun countRecentDeletedPasswordEntries(localPath: String, masterPassword: String): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val recycleBin = db.recycleBin ?: return@withDatabase 0
+            collectEntries(recycleBin).size
         }
     }
 
@@ -187,8 +215,12 @@ class KdbxTokenRepository {
     fun deleteToken(localPath: String, masterPassword: String, tokenId: Long): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val entry = findEntryById(db, tokenId) ?: return@withDatabase false
-            val parent = entry.parent ?: return@withDatabase false
-            db.removeEntryFrom(entry, parent)
+            if (db.canRecycle(entry)) {
+                db.recycle(entry, resolveRecycleBinTitle(db))
+            } else {
+                val parent = entry.parent ?: return@withDatabase false
+                db.removeEntryFrom(entry, parent)
+            }
             true
         }
     }
@@ -221,12 +253,12 @@ class KdbxTokenRepository {
     }
 
     private fun findEntryByToken(db: Database, token: OtpToken): Entry? {
-        return collectEntries(db.rootGroup).firstOrNull { entry ->
-            val idMatch = toStableId(entry) == token.id
-            if (idMatch) {
-                return@firstOrNull true
-            }
+        val entries = collectEntriesOutsideRecycleBin(db, db.rootGroup)
 
+        entries.firstOrNull { entry -> toStableId(entry) == token.id }
+            ?.let { return it }
+
+        return entries.firstOrNull { entry ->
             val parsed = toToken(entry) ?: return@firstOrNull false
             parsed.uniqueId == token.uniqueId || (
                 parsed.secret == token.secret &&
@@ -238,7 +270,7 @@ class KdbxTokenRepository {
     }
 
     private fun findEntryById(db: Database, tokenId: Long): Entry? {
-        return collectEntries(db.rootGroup).firstOrNull { toStableId(it) == tokenId }
+        return collectEntriesOutsideRecycleBin(db, db.rootGroup).firstOrNull { toStableId(it) == tokenId }
     }
 
     private fun toToken(entry: Entry): OtpToken? {
@@ -480,6 +512,22 @@ class KdbxTokenRepository {
             list.addAll(collectEntries(child))
         }
         return list
+    }
+
+    /**
+     * 收集非回收站范围内的条目。
+     */
+    private fun collectEntriesOutsideRecycleBin(database: Database, group: Group?): List<Entry> {
+        return collectEntries(group).filterNot { entry -> isEntryInRecycleBin(database, entry) }
+    }
+
+    private fun isEntryInRecycleBin(database: Database, entry: Entry): Boolean {
+        val parent = entry.parent ?: return false
+        return database.groupIsInRecycleBin(parent)
+    }
+
+    private fun resolveRecycleBinTitle(database: Database): String {
+        return database.recycleBin?.title?.takeIf { it.isNotBlank() } ?: RECYCLE_BIN_FALLBACK_TITLE
     }
 
     /**

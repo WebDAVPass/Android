@@ -157,7 +157,7 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
         selectedToken?.let {
             ConfirmationDialog(
                 title = "确认删除",
-                summary = "确定要删除令牌 \"${it.issuer ?: it.label}\" 吗？此操作无法撤销。",
+                summary = "确定要删除令牌 \"${it.issuer ?: it.label}\" 吗？删除后可在最近删除中查看。",
                 show = showDeleteDialog,
                 onDismiss = {
                     dialogState = DialogState.NONE

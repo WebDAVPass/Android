@@ -1,5 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.activity
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -20,6 +21,7 @@ import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.MainActivity
 import xzynine.WebDAVPass.Android.ui.activity.PasswordEntryDetailActivity.Companion.createIntent
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
+import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
@@ -28,11 +30,32 @@ import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
  * 非双因素键值详情页面
  */
 class PasswordDetailActivity : ComponentActivity() {
+
+    companion object {
+        private const val EXTRA_PASSWORD_LIST_MODE = "extra_password_list_mode"
+
+        fun createIntent(context: Context, listMode: PasswordListMode): Intent {
+            return Intent(context, PasswordDetailActivity::class.java)
+                .putExtra(EXTRA_PASSWORD_LIST_MODE, listMode.name)
+        }
+
+        private fun resolveListMode(rawMode: String?): PasswordListMode {
+            return when (rawMode) {
+                PasswordListMode.RECENT_DELETED.name -> PasswordListMode.RECENT_DELETED
+                else -> PasswordListMode.ALL_PASSWORDS
+            }
+        }
+    }
+
+    private var openedListMode: PasswordListMode = PasswordListMode.ALL_PASSWORDS
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        openedListMode = resolveListMode(intent.getStringExtra(EXTRA_PASSWORD_LIST_MODE))
         TokenViewModel.getSharedInstance(application).apply {
-            resetPasswordGroupStackOnly()
-            refreshPasswordEntries()
+            setPasswordListMode(openedListMode, refreshNow = true)
+            refreshRecentDeletedCount()
         }
         this.setContent {
             val tokenViewModel: TokenViewModel = remember(application) {
@@ -63,6 +86,10 @@ class PasswordDetailActivity : ComponentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         PasswordListScreen(
                             tokenViewModel = tokenViewModel,
+                            title = if (openedListMode == PasswordListMode.RECENT_DELETED) "最近删除" else "全部密码",
+                            emptyStateText = if (openedListMode == PasswordListMode.RECENT_DELETED) "暂无最近删除条目" else "暂无条目",
+                            emptySearchStateText = "无匹配条目",
+                            enableGroupNavigation = openedListMode == PasswordListMode.ALL_PASSWORDS,
                             onEntryClick = { entryId ->
                                 startActivity(createIntent(this@PasswordDetailActivity, entryId))
                             }
@@ -75,7 +102,12 @@ class PasswordDetailActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
-        TokenViewModel.getSharedInstance(application).resetPasswordGroupStackOnly()
+        TokenViewModel.getSharedInstance(application).apply {
+            resetPasswordGroupStackOnly()
+            if (openedListMode == PasswordListMode.RECENT_DELETED) {
+                setPasswordListMode(PasswordListMode.ALL_PASSWORDS, refreshNow = true)
+            }
+        }
         super.onDestroy()
     }
 }

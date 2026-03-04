@@ -67,6 +67,10 @@ import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 @Composable
 fun PasswordListScreen(
     tokenViewModel: TokenViewModel,
+    title: String,
+    emptyStateText: String,
+    emptySearchStateText: String,
+    enableGroupNavigation: Boolean,
     onEntryClick: (Long) -> Unit
 ) {
     val focusManager = LocalFocusManager.current
@@ -79,7 +83,7 @@ fun PasswordListScreen(
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    BackHandler(enabled = passwordGroupStack.isNotEmpty()) {
+    BackHandler(enabled = enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
         tokenViewModel.navigateUpPasswordGroup(searchQuery)
     }
 
@@ -172,9 +176,9 @@ fun PasswordListScreen(
         popupHost = {},
         topBar = {
             TopAppBar(
-                title = "全部密码",
+                title = title,
                 navigationIcon = {
-                    if (passwordGroupStack.isNotEmpty()) {
+                    if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
                         IconButton(
                             onClick = {
                                 tokenViewModel.navigateUpPasswordGroup(searchQuery)
@@ -247,7 +251,7 @@ fun PasswordListScreen(
                         .fillMaxHeight(),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(text = if (searchQuery.isBlank()) "暂无条目" else "无匹配条目")
+                    Text(text = if (searchQuery.isBlank()) emptyStateText else emptySearchStateText)
                 }
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -274,7 +278,7 @@ fun PasswordListScreen(
                                 PasswordEntryCard(
                                     item = item,
                                     onClick = {
-                                        if (item.isFolderPlaceholder) {
+                                        if (enableGroupNavigation && item.isFolderPlaceholder) {
                                             tokenViewModel.openPasswordGroup(item.entryId, searchQuery)
                                         } else {
                                             onEntryClick(item.entryId)

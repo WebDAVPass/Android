@@ -110,8 +110,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val _currentTimeMillis = MutableStateFlow(System.currentTimeMillis())
     val currentTimeMillis: StateFlow<Long> = _currentTimeMillis.asStateFlow()
 
-    private val passwordSubViewModel: PasswordPagingSubViewModel by lazy {
-        PasswordPagingSubViewModel(
+    private val passwordListModeSubViewModel: PasswordListModeSubViewModel by lazy {
+        PasswordListModeSubViewModel(
             repository = kdbxTokenRepository,
             scope = viewModelScope,
             accessProvider = {
@@ -124,11 +124,34 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         )
     }
 
+    private val passwordSubViewModel: PasswordPagingSubViewModel by lazy {
+        PasswordPagingSubViewModel(
+            repository = kdbxTokenRepository,
+            scope = viewModelScope,
+            accessProvider = {
+                PasswordDataAccess(
+                    isLibraryUnlocked = _isLibraryUnlocked.value,
+                    localPath = _currentLibrary.value?.localPath,
+                    masterPassword = currentLibraryMasterPassword
+                )
+            },
+            listModeProvider = {
+                passwordListModeSubViewModel.passwordListMode.value
+            }
+        )
+    }
+
     val passwordEntries: StateFlow<List<PasswordEntry>>
         get() = passwordSubViewModel.passwordEntries
 
     val passwordTotalCount: StateFlow<Int>
         get() = passwordSubViewModel.passwordTotalCount
+
+    val passwordListMode: StateFlow<PasswordListMode>
+        get() = passwordListModeSubViewModel.passwordListMode
+
+    val recentDeletedCount: StateFlow<Int>
+        get() = passwordListModeSubViewModel.recentDeletedCount
 
     val passwordGroupStack: StateFlow<List<Long>>
         get() = passwordSubViewModel.passwordGroupStack
@@ -184,6 +207,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         _currentLibrary.value = updated
         currentLibraryMasterPassword = ""
         _isLibraryUnlocked.value = false
+        passwordListModeSubViewModel.resetAllState()
         _tokens.value = emptyList()
         viewModelScope.launch {
             passwordSubViewModel.clearAll(resetTotalCount = true)
@@ -201,6 +225,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         _currentLibrary.value = selected
         currentLibraryMasterPassword = ""
         _isLibraryUnlocked.value = false
+        passwordListModeSubViewModel.resetAllState()
         _tokens.value = emptyList()
         viewModelScope.launch {
             passwordSubViewModel.clearAll(resetTotalCount = true)
@@ -218,6 +243,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         _currentLibrary.value = null
         currentLibraryMasterPassword = ""
         _isLibraryUnlocked.value = false
+        passwordListModeSubViewModel.resetAllState()
         _tokens.value = emptyList()
         viewModelScope.launch {
             passwordSubViewModel.clearAll(resetTotalCount = true)
@@ -387,10 +413,12 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
             _isLibraryUnlocked.value = true
             passwordSubViewModel.reloadInitialPasswordData()
+            passwordListModeSubViewModel.refreshRecentDeletedCount()
             true
         } catch (ex: Exception) {
             _tokens.value = emptyList()
             passwordSubViewModel.clearAll(resetTotalCount = true)
+            passwordListModeSubViewModel.clearRecentDeletedCount()
             _tokenCodes.clear()
             publishTokenCodeSnapshot()
             _isLibraryUnlocked.value = false
@@ -418,6 +446,28 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     fun refreshPasswordEntries(searchQuery: String = "") {
         passwordSubViewModel.refreshPasswordEntries(searchQuery)
+    }
+
+    /**
+     * 设置密码列表模式。
+     */
+    fun setPasswordListMode(
+        mode: PasswordListMode,
+        refreshNow: Boolean = true,
+        searchQuery: String = ""
+    ) {
+        passwordListModeSubViewModel.setPasswordListMode(mode)
+        passwordSubViewModel.resetPasswordGroupStackOnly()
+        if (refreshNow) {
+            passwordSubViewModel.refreshPasswordEntries(searchQuery)
+        }
+    }
+
+    /**
+     * 刷新最近删除数量。
+     */
+    fun refreshRecentDeletedCount() {
+        passwordListModeSubViewModel.refreshRecentDeletedCount()
     }
 
     /**
@@ -608,6 +658,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 _tokenCodes.remove(tokenId)
                 publishTokenCodeSnapshot()
                 loadTokens()
+                passwordListModeSubViewModel.refreshRecentDeletedCount()
                 backupTokens()
             }
         }
