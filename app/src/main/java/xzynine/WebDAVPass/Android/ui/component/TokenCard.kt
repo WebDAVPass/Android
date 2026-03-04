@@ -14,11 +14,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
@@ -32,8 +29,6 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.amulyakhare.textdrawable.TextDrawable
 import com.kunzisoft.keepass.icon.IconPack
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.delay
 import org.liberty.android.freeotp.token_images.TokenImage
 import org.liberty.android.freeotp.token_images.matchToken
 import top.yukonga.miuix.kmp.basic.Card
@@ -136,6 +131,7 @@ fun EntryIcon(
 fun TokenCard(
     token: OtpToken,
     tokenCode: TokenCode?,
+    currentTimeMillis: Long,
     customIconBytes: ByteArray? = null,
     standardIconId: Int? = null,
     onClick: () -> Unit,
@@ -195,44 +191,21 @@ fun TokenCard(
                     )
 
                     tokenCode?.let { code ->
-                        TokenCodeDisplay(code = code)
+                        TokenCodeDisplay(code = code, currentTimeMillis = currentTimeMillis)
                     }
                 }
             }
 
             tokenCode?.let { code ->
-                CountdownDisplay(code = code)
+                CountdownDisplay(code = code, currentTimeMillis = currentTimeMillis)
             }
         }
     }
 }
 
 @Composable
-private fun TokenCodeDisplay(code: TokenCode) {
-    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    
-    LaunchedEffect(code) {
-        while (true) {
-            try {
-                delay(1000)
-                currentTime = System.currentTimeMillis()
-            } catch (e: CancellationException) {
-                // 协程被取消，正常退出循环
-                break
-            } catch (e: Exception) {
-                // 其他异常记录日志，但继续循环
-                e.printStackTrace()
-                // 避免快速循环导致CPU占用过高
-                try {
-                    delay(1000)
-                } catch (_: CancellationException) {
-                    break
-                }
-            }
-        }
-    }
-
-    val remainingTime = code.getSecondsRemaining(currentTime)
+private fun TokenCodeDisplay(code: TokenCode, currentTimeMillis: Long) {
+    val remainingTime = code.getSecondsRemaining(currentTimeMillis)
     val isLast5Seconds = remainingTime <= 5
     val isLast1Second = remainingTime <= 1
 
@@ -279,31 +252,8 @@ private fun TokenCodeDisplay(code: TokenCode) {
 }
 
 @Composable
-private fun CountdownDisplay(code: TokenCode) {
-    var currentTime by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    
-    LaunchedEffect(code) {
-        while (true) {
-            try {
-                delay(1000)
-                currentTime = System.currentTimeMillis()
-            } catch (e: CancellationException) {
-                // 协程被取消，正常退出循环
-                break
-            } catch (e: Exception) {
-                // 其他异常记录日志，但继续循环
-                e.printStackTrace()
-                // 避免快速循环导致CPU占用过高
-                try {
-                    delay(1000)
-                } catch (_: CancellationException) {
-                    break
-                }
-            }
-        }
-    }
-
-    val remainingTime = code.getSecondsRemaining(currentTime)
+private fun CountdownDisplay(code: TokenCode, currentTimeMillis: Long) {
+    val remainingTime = code.getSecondsRemaining(currentTimeMillis)
     val actualPeriod = code.period
     val progress = (remainingTime.toFloat() / actualPeriod.toFloat()).coerceIn(0f, 1f)
 

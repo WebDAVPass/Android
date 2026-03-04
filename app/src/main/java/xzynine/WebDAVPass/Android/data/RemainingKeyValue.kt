@@ -36,7 +36,9 @@ data class PasswordEntry(
     val account: String,
     val standardIconId: Int,
     val customIconBytes: ByteArray?,
-    val keyValues: List<RemainingKeyValue>
+    val keyValues: List<RemainingKeyValue>,
+    val isFolderGroup: Boolean = false,
+    val isFolderPlaceholder: Boolean = false
 )
 
 /**

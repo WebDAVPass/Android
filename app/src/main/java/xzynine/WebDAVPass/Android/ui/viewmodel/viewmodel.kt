@@ -86,6 +86,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val _passwordEntries = MutableStateFlow<List<PasswordEntry>>(emptyList())
     val passwordEntries: StateFlow<List<PasswordEntry>> = _passwordEntries.asStateFlow()
 
+    private val _passwordGroupStack = MutableStateFlow<List<Long>>(emptyList())
+    val passwordGroupStack: StateFlow<List<Long>> = _passwordGroupStack.asStateFlow()
+
     private val _libraryHistory = MutableStateFlow<List<LibraryContext>>(emptyList())
     val libraryHistory: StateFlow<List<LibraryContext>> = _libraryHistory.asStateFlow()
 
@@ -99,6 +102,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     val isLibraryUnlocked: StateFlow<Boolean> = _isLibraryUnlocked.asStateFlow()
 
     private val _tokenCodes = mutableMapOf<Long, MutableStateFlow<TokenCode?>>()
+    private val _tokenCodeSnapshot = MutableStateFlow<Map<Long, TokenCode?>>(emptyMap())
+    val tokenCodeSnapshot: StateFlow<Map<Long, TokenCode?>> = _tokenCodeSnapshot.asStateFlow()
+
+    private val _currentTimeMillis = MutableStateFlow(System.currentTimeMillis())
+    val currentTimeMillis: StateFlow<Long> = _currentTimeMillis.asStateFlow()
 
     // WebDAV配置相关
     private val _webDavConfigs = MutableStateFlow<List<WebDavConfig>>(emptyList())
@@ -146,7 +154,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         _isLibraryUnlocked.value = false
         _tokens.value = emptyList()
         _passwordEntries.value = emptyList()
+        _passwordGroupStack.value = emptyList()
         _tokenCodes.clear()
+        publishTokenCodeSnapshot()
         refreshLibraryHistory()
     }
 
@@ -160,7 +170,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         _isLibraryUnlocked.value = false
         _tokens.value = emptyList()
         _passwordEntries.value = emptyList()
+        _passwordGroupStack.value = emptyList()
         _tokenCodes.clear()
+        publishTokenCodeSnapshot()
         refreshLibraryHistory()
     }
 
@@ -174,6 +186,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         _isLibraryUnlocked.value = false
         _tokens.value = emptyList()
         _passwordEntries.value = emptyList()
+        _passwordGroupStack.value = emptyList()
+        _tokenCodes.clear()
+        publishTokenCodeSnapshot()
         refreshLibraryHistory()
     }
 
@@ -235,7 +250,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun persistKdbxFromUri(uri: Uri): String? {
         return runCatching {
-            val libraryDir = java.io.File(context.filesDir, "libraries")
+            val libraryDir = File(context.filesDir, "libraries")
             if (!libraryDir.exists()) {
                 libraryDir.mkdirs()
             }
@@ -246,7 +261,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 append(".kdbx")
             }
 
-            val localFile = java.io.File(libraryDir, fileName)
+            val localFile = File(libraryDir, fileName)
             context.contentResolver.openInputStream(uri)?.use { input ->
                 localFile.outputStream().use { output ->
                     input.copyTo(output)
@@ -333,6 +348,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 }
             }
             _tokenCodes.keys.retainAll(loadedTokens.map { it.id }.toSet())
+            publishTokenCodeSnapshot()
 
             _isLibraryUnlocked.value = true
 
@@ -345,6 +361,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             _tokens.value = emptyList()
             _passwordEntries.value = emptyList()
             _tokenCodes.clear()
+            publishTokenCodeSnapshot()
             _isLibraryUnlocked.value = false
             lastUnlockErrorMessage = "加载失败：${ex.message ?: ex.javaClass.simpleName}"
             ex.printStackTrace()
@@ -360,6 +377,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     fun getTokenCode(tokenId: Long): StateFlow<TokenCode?> {
         if (!_tokenCodes.containsKey(tokenId)) {
             _tokenCodes[tokenId] = MutableStateFlow(null)
+            publishTokenCodeSnapshot()
         }
         return _tokenCodes[tokenId]!!.asStateFlow()
     }
@@ -367,7 +385,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     /**
      * 刷新密码条目与键值列表。
      */
-    fun refreshPasswordEntries() {
+    fun refreshPasswordEntries(searchQuery: String = "") {
         viewModelScope.launch {
             val localPath = _currentLibrary.value?.localPath
             if (!_isLibraryUnlocked.value || localPath.isNullOrBlank() || currentLibraryMasterPassword.isBlank()) {
@@ -375,11 +393,62 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 return@launch
             }
 
+            val keyword = searchQuery.trim()
+            val currentGroupId = _passwordGroupStack.value.lastOrNull()
             val values = withContext(Dispatchers.IO) {
-                kdbxTokenRepository.loadPasswordEntries(localPath, currentLibraryMasterPassword)
+                val source = if (keyword.isBlank()) {
+                    if (currentGroupId == null) {
+                        kdbxTokenRepository.loadPasswordEntriesByTopLevel(localPath, currentLibraryMasterPassword)
+                    } else {
+                        kdbxTokenRepository.loadPasswordEntriesByGroup(localPath, currentLibraryMasterPassword, currentGroupId)
+                    }
+                } else {
+                    kdbxTokenRepository.loadPasswordEntries(localPath, currentLibraryMasterPassword)
+                }
+
+                source
+                    .asSequence()
+                    .filter { item ->
+                        keyword.isBlank() ||
+                            item.title.contains(keyword, ignoreCase = true) ||
+                            item.account.contains(keyword, ignoreCase = true)
+                    }
+                    .sortedBy { item ->
+                        item.title.ifBlank { item.account }.lowercase()
+                    }
+                    .toList()
             }
             _passwordEntries.value = values
         }
+    }
+
+    /**
+     * 进入密码分组。
+     */
+    fun openPasswordGroup(groupStableId: Long, searchQuery: String = "") {
+        _passwordGroupStack.value = _passwordGroupStack.value + groupStableId
+        refreshPasswordEntries(searchQuery)
+    }
+
+    /**
+     * 返回上一级密码分组。
+     */
+    fun navigateUpPasswordGroup(searchQuery: String = "") {
+        val stack = _passwordGroupStack.value
+        if (stack.isEmpty()) {
+            return
+        }
+
+        _passwordGroupStack.value = stack.dropLast(1)
+        refreshPasswordEntries(searchQuery)
+    }
+
+    /**
+     * 重置密码分组导航到根分组。
+     */
+    fun resetPasswordGroupNavigation(searchQuery: String = "") {
+        _passwordGroupStack.value = emptyList()
+        refreshPasswordEntries(searchQuery)
     }
 
     /**
@@ -397,7 +466,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             while (true) {
                 delay(1000) // 每秒刷新一次
                 runCatching {
-                    refreshTokenCodes()
+                    val now = System.currentTimeMillis()
+                    _currentTimeMillis.value = now
+                    refreshTokenCodes(now)
                 }.onFailure {
                     it.printStackTrace()
                 }
@@ -408,8 +479,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     /**
      * 刷新所有令牌代码
      */
-    private fun refreshTokenCodes() {
-        val currentTime = System.currentTimeMillis()
+    private fun refreshTokenCodes(currentTime: Long) {
+        var hasChanged = false
         
         _tokens.value.forEach {
             val currentCode = _tokenCodes[it.id]?.value
@@ -418,8 +489,20 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             // 当 currentCode 为 null 或需要刷新令牌时更新
             if (currentCode == null || newCode.shouldRefreshToken(currentTime)) {
                 _tokenCodes[it.id]?.value = newCode
+                hasChanged = true
             }
         }
+
+        if (hasChanged) {
+            publishTokenCodeSnapshot()
+        }
+    }
+
+    /**
+     * 发布当前令牌验证码快照，供列表级 UI 统一订阅。
+     */
+    private fun publishTokenCodeSnapshot() {
+        _tokenCodeSnapshot.value = _tokenCodes.mapValues { it.value.value }
     }
 
     /**
@@ -494,6 +577,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             }
             if (deleted) {
                 _tokenCodes.remove(tokenId)
+                publishTokenCodeSnapshot()
                 loadTokens()
                 backupTokens()
             }
@@ -511,6 +595,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             }
             if (updated) {
                 _tokenCodes[token.id]?.value = tokenCodeUtil.generateTokenCode(token)
+                publishTokenCodeSnapshot()
                 loadTokens()
                 backupTokens()
             }

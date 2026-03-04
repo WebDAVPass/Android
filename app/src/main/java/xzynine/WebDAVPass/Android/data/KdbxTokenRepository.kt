@@ -106,51 +106,41 @@ class KdbxTokenRepository {
      */
     fun loadPasswordEntries(localPath: String, masterPassword: String): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val result = mutableListOf<PasswordEntry>()
-            val entries = collectEntries(db.rootGroup)
-            entries.forEach { entry ->
-                val title = entry.title
-                    .takeIf { it.isNotBlank() }
-                    ?: entry.url.takeIf { it.isNotBlank() }
-                    ?: entry.username.takeIf { it.isNotBlank() }
-                    ?: toStableId(entry).toString()
-                val account = entry.username.takeIf { it.isNotBlank() } ?: ""
-                val values = mutableListOf<RemainingKeyValue>()
+            buildPasswordEntries(
+                database = db,
+                entries = collectEntries(db.rootGroup),
+                groups = emptyList()
+            )
+        }
+    }
 
-                appendStandardField(values, "UserName", entry.username)
-                appendStandardField(values, "Password", entry.password, RemainingValueType.PASSWORD)
-                appendStandardField(values, "URL", entry.url)
-                appendStandardField(values, "Notes", entry.notes)
+    /**
+     * 读取数据库中一级分组可见条目（根组直系条目 + 一级子组条目）。
+     */
+    fun loadPasswordEntriesByTopLevel(localPath: String, masterPassword: String): List<PasswordEntry> {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val rootGroup = db.rootGroup
+            buildPasswordEntries(
+                database = db,
+                entries = rootGroup?.getChildEntries() ?: emptyList(),
+                groups = rootGroup?.getChildGroups() ?: emptyList()
+            )
+        }
+    }
 
-                entry.getExtraFields()
-                    .forEach { field ->
-                        val value = field.protectedValue.stringValue
-                        if (value.isNotBlank()) {
-                            values.add(
-                                RemainingKeyValue(
-                                    fieldName = field.name,
-                                    rawValue = value,
-                                    valueType = detectValueType(field, value)
-                                )
-                            )
-                        }
-                    }
+    /**
+     * 读取指定分组下的直系条目与子分组。
+     */
+    fun loadPasswordEntriesByGroup(localPath: String, masterPassword: String, groupStableId: Long): List<PasswordEntry> {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val rootGroup = db.rootGroup
+            val targetGroup = findGroupByStableId(rootGroup, groupStableId)
+                ?: return@withDatabase emptyList()
 
-                result.add(
-                    PasswordEntry(
-                        entryId = toStableId(entry),
-                        title = title,
-                        account = account,
-                        standardIconId = entry.icon.standard.id,
-                        customIconBytes = readCustomIconBytes(db, entry),
-                        keyValues = values.sortedBy { it.fieldName.lowercase() }
-                    )
-                )
-            }
-
-            result.sortedWith(
-                compareBy<PasswordEntry> { it.title.lowercase() }
-                    .thenBy { it.account.lowercase() }
+            buildPasswordEntries(
+                database = db,
+                entries = targetGroup.getChildEntries(),
+                groups = targetGroup.getChildGroups()
             )
         }
     }
@@ -396,6 +386,80 @@ class KdbxTokenRepository {
         return RemainingValueType.TEXT
     }
 
+    /**
+     * 将仓库条目映射为 UI 结构。
+     */
+    private fun buildPasswordEntries(
+        database: Database,
+        entries: List<Entry>,
+        groups: List<Group>
+    ): List<PasswordEntry> {
+        val result = mutableListOf<PasswordEntry>()
+
+        groups.forEach { group ->
+            val groupTitle = group.title.takeIf { it.isNotBlank() } ?: "未命名文件夹"
+            result.add(
+                PasswordEntry(
+                    entryId = toStableGroupId(group),
+                    title = groupTitle,
+                    account = "",
+                    standardIconId = group.icon.standard.id,
+                    customIconBytes = readCustomIconBytes(database, group),
+                    keyValues = emptyList(),
+                    isFolderGroup = true,
+                    isFolderPlaceholder = true
+                )
+            )
+        }
+
+        entries.forEach { entry ->
+            val title = entry.title
+                .takeIf { it.isNotBlank() }
+                ?: entry.url.takeIf { it.isNotBlank() }
+                ?: entry.username.takeIf { it.isNotBlank() }
+                ?: toStableId(entry).toString()
+            val account = entry.username.takeIf { it.isNotBlank() } ?: ""
+            val values = mutableListOf<RemainingKeyValue>()
+
+            appendStandardField(values, "UserName", entry.username)
+            appendStandardField(values, "Password", entry.password, RemainingValueType.PASSWORD)
+            appendStandardField(values, "URL", entry.url)
+            appendStandardField(values, "Notes", entry.notes)
+
+            entry.getExtraFields().forEach { field ->
+                val value = field.protectedValue.stringValue
+                if (value.isNotBlank()) {
+                    values.add(
+                        RemainingKeyValue(
+                            fieldName = field.name,
+                            rawValue = value,
+                            valueType = detectValueType(field, value)
+                        )
+                    )
+                }
+            }
+
+            result.add(
+                PasswordEntry(
+                    entryId = toStableId(entry),
+                    title = title,
+                    account = account,
+                    standardIconId = entry.icon.standard.id,
+                    customIconBytes = readCustomIconBytes(database, entry),
+                    keyValues = values.sortedBy { it.fieldName.lowercase() },
+                    isFolderGroup = false,
+                    isFolderPlaceholder = false
+                )
+            )
+        }
+
+        return result.sortedWith(
+            compareBy<PasswordEntry> { if (it.isFolderGroup) 0 else 1 }
+                .thenBy { it.title.lowercase() }
+                .thenBy { it.account.lowercase() }
+        )
+    }
+
     private fun collectEntries(group: Group?): List<Entry> {
         if (group == null) {
             return emptyList()
@@ -407,6 +471,58 @@ class KdbxTokenRepository {
             list.addAll(collectEntries(child))
         }
         return list
+    }
+
+    /**
+     * 通过稳定ID查找分组。
+     */
+    private fun findGroupByStableId(group: Group?, groupStableId: Long): Group? {
+        if (group == null) {
+            return null
+        }
+
+        group.getChildGroups().forEach { child ->
+            if (toStableGroupId(child) == groupStableId) {
+                return child
+            }
+
+            val matched = findGroupByStableId(child, groupStableId)
+            if (matched != null) {
+                return matched
+            }
+        }
+        return null
+    }
+
+    /**
+     * 读取分组自定义图标二进制数据。
+     */
+    private fun readCustomIconBytes(database: Database, group: Group): ByteArray? {
+        val iconUuid = group.icon.custom.uuid
+        if (iconUuid == DatabaseVersioned.UUID_ZERO) {
+            return null
+        }
+
+        return runCatching {
+            val binary = database.getBinaryForCustomIcon(iconUuid) ?: return null
+            binary.getUnGzipInputDataStream(database.binaryCache).use { input ->
+                input.readBytes()
+            }
+        }.getOrNull()
+    }
+
+    /**
+     * 生成分组稳定ID，使用负值避免和条目ID冲突。
+     */
+    private fun toStableGroupId(group: Group): Long {
+        val uuid = (group.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
+            ?: UUID(0L, 0L)
+        val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits
+        val absolute = when (mixed) {
+            Long.MIN_VALUE -> 0L
+            else -> abs(mixed)
+        }
+        return -(absolute + 1L)
     }
 
     private fun <T> withDatabase(localPath: String, masterPassword: String, saveAfter: Boolean, block: (Database) -> T): T {
@@ -521,4 +637,5 @@ class KdbxTokenRepository {
             }
         }.getOrNull()
     }
+
 }

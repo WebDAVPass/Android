@@ -60,6 +60,10 @@ class PasswordDetailActivity : ComponentActivity() {
                 }
             }
 
+            LaunchedEffect(Unit) {
+                tokenViewModel.resetPasswordGroupNavigation()
+            }
+
             NavigationEventDispatcherProvider {
                 AppTheme {
                     SetupSystemBars()

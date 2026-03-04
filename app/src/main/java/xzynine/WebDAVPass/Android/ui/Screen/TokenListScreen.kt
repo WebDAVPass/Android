@@ -49,6 +49,8 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
     val context = LocalContext.current
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val passwordEntries by tokenViewModel.passwordEntries.collectAsState(emptyList())
+    val tokenCodeMap by tokenViewModel.tokenCodeSnapshot.collectAsState(emptyMap())
+    val currentTimeMillis by tokenViewModel.currentTimeMillis.collectAsState(System.currentTimeMillis())
     val isLoading by tokenViewModel.isLoading.collectAsState(false)
 
     /**
@@ -95,12 +97,13 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             items(tokens, key = { it.id }) { token ->
-                val tokenCode by tokenViewModel.getTokenCode(token.id).collectAsState(null)
+                val tokenCode = tokenCodeMap[token.id]
                 val iconEntry = entryIconMap[token.id]
 
                 TokenCard(
                     token = token,
                     tokenCode = tokenCode,
+                    currentTimeMillis = currentTimeMillis,
                     customIconBytes = iconEntry?.customIconBytes,
                     standardIconId = iconEntry?.standardIconId,
                     onClick = {

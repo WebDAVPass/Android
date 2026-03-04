@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 
@@ -69,9 +70,9 @@ fun AlphabetIndexScrollbar(
         Box(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .width(28.dp)
-                .fillMaxHeight(0.82f)
-                .padding(vertical = 8.dp)
+                .width(30.dp)
+                .fillMaxHeight(0.92f)
+                .padding(vertical = 4.dp)
                 .border(
                     width = 1.dp,
                     color = MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.18f),
@@ -109,9 +110,11 @@ fun AlphabetIndexScrollbar(
             contentAlignment = Alignment.Center
         ) {
             Column(
-                verticalArrangement = Arrangement.Center,
+                verticalArrangement = Arrangement.SpaceEvenly,
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(PaddingValues(vertical = 6.dp))
+                modifier = Modifier
+                    .fillMaxHeight()
+                    .padding(PaddingValues(vertical = 2.dp))
             ) {
                 letters.forEach { letter ->
                     val isEnabled = enabledLetters.contains(letter)
@@ -119,12 +122,12 @@ fun AlphabetIndexScrollbar(
 
                     Text(
                         text = letter,
+                        fontSize = 10.sp,
                         color = when {
                             isHighlighted -> MiuixTheme.colorScheme.primary
                             isEnabled -> MiuixTheme.colorScheme.onSurfaceSecondary
                             else -> MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.45f)
-                        },
-                        modifier = Modifier.padding(vertical = 1.dp)
+                        }
                     )
                 }
             }

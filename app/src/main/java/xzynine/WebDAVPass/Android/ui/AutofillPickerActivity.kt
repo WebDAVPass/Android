@@ -93,6 +93,8 @@ private fun AutofillPickerScreen(autofillId: AutofillId, targetPackage: String) 
         }
     )
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
+    val tokenCodeMap by tokenViewModel.tokenCodeSnapshot.collectAsState(emptyMap())
+    val currentTimeMillis by tokenViewModel.currentTimeMillis.collectAsState(System.currentTimeMillis())
 
     val likelyMatches = remember(tokens, targetPackage) {
         if (targetPackage.isBlank()) {
@@ -124,11 +126,12 @@ private fun AutofillPickerScreen(autofillId: AutofillId, targetPackage: String) 
                     )
                 }
                 items(likelyMatches) { token ->
-                    val tokenCode by tokenViewModel.getTokenCode(token.id).collectAsState(null)
+                    val tokenCode = tokenCodeMap[token.id]
 
                     TokenCard(
                         token = token,
                         tokenCode = tokenCode,
+                        currentTimeMillis = currentTimeMillis,
                         onClick = {
                             tokenCode?.let { code ->
                                 finishAutofill(context, autofillId, token, code.code)
@@ -150,11 +153,12 @@ private fun AutofillPickerScreen(autofillId: AutofillId, targetPackage: String) 
             }
 
             items(otherTokens) { token ->
-                val tokenCode by tokenViewModel.getTokenCode(token.id).collectAsState(null)
+                val tokenCode = tokenCodeMap[token.id]
 
                 TokenCard(
                     token = token,
                     tokenCode = tokenCode,
+                    currentTimeMillis = currentTimeMillis,
                     onClick = {
                         tokenCode?.let { code ->
                             finishAutofill(context, autofillId, token, code.code)

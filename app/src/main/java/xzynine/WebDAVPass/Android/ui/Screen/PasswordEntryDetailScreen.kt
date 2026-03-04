@@ -42,6 +42,7 @@ fun PasswordEntryDetailScreen(
     val context = LocalContext.current
     val entries by tokenViewModel.passwordEntries.collectAsState(emptyList())
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
+    val currentTimeMillis by tokenViewModel.currentTimeMillis.collectAsState(System.currentTimeMillis())
 
     val selectedEntry = entries.firstOrNull { it.entryId == entryId }
     val selectedToken = tokens.firstOrNull { it.id == entryId }
@@ -113,6 +114,7 @@ fun PasswordEntryDetailScreen(
                     TokenCard(
                         token = selectedToken,
                         tokenCode = tokenCode,
+                        currentTimeMillis = currentTimeMillis,
                         onClick = {
                             tokenCode?.let { code ->
                                 val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
