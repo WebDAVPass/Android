@@ -71,15 +71,10 @@ fun FeatureCard(
 fun HomeScreen(tokenViewModel: TokenViewModel) {
     val context = LocalContext.current
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
-    val passwordEntries by tokenViewModel.passwordEntries.collectAsState(emptyList())
+    val passwordTotalCount by tokenViewModel.passwordTotalCount.collectAsState(0)
     val tokenCount by remember {
         derivedStateOf {
             tokens.size
-        }
-    }
-    val passwordCount by remember {
-        derivedStateOf {
-            passwordEntries.size
         }
     }
 
@@ -101,7 +96,7 @@ fun HomeScreen(tokenViewModel: TokenViewModel) {
                     // 密码
                     FeatureCard(
                         title = "密码",
-                        value = "$passwordCount",
+                        value = "$passwordTotalCount",
                         onClick = {
                             val intent = Intent(context, PasswordDetailActivity::class.java)
                             context.startActivity(intent)

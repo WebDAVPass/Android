@@ -32,6 +32,10 @@ import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 class PasswordDetailActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        TokenViewModel.getSharedInstance(application).apply {
+            resetPasswordGroupStackOnly()
+            refreshPasswordEntries()
+        }
         this.setContent {
             val tokenViewModel: TokenViewModel = viewModel(
                 factory = object : ViewModelProvider.Factory {
@@ -60,10 +64,6 @@ class PasswordDetailActivity : ComponentActivity() {
                 }
             }
 
-            LaunchedEffect(Unit) {
-                tokenViewModel.resetPasswordGroupNavigation()
-            }
-
             NavigationEventDispatcherProvider {
                 AppTheme {
                     SetupSystemBars()
@@ -79,5 +79,10 @@ class PasswordDetailActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        TokenViewModel.getSharedInstance(application).resetPasswordGroupStackOnly()
+        super.onDestroy()
     }
 }

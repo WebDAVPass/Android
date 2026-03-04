@@ -83,12 +83,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())
     val tokens: StateFlow<List<OtpToken>> = _tokens.asStateFlow()
 
-    private val _passwordEntries = MutableStateFlow<List<PasswordEntry>>(emptyList())
-    val passwordEntries: StateFlow<List<PasswordEntry>> = _passwordEntries.asStateFlow()
-
-    private val _passwordGroupStack = MutableStateFlow<List<Long>>(emptyList())
-    val passwordGroupStack: StateFlow<List<Long>> = _passwordGroupStack.asStateFlow()
-
     private val _libraryHistory = MutableStateFlow<List<LibraryContext>>(emptyList())
     val libraryHistory: StateFlow<List<LibraryContext>> = _libraryHistory.asStateFlow()
 
@@ -107,6 +101,35 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
     private val _currentTimeMillis = MutableStateFlow(System.currentTimeMillis())
     val currentTimeMillis: StateFlow<Long> = _currentTimeMillis.asStateFlow()
+
+    private val passwordSubViewModel: PasswordPagingSubViewModel by lazy {
+        PasswordPagingSubViewModel(
+            repository = kdbxTokenRepository,
+            scope = viewModelScope,
+            accessProvider = {
+                PasswordDataAccess(
+                    isLibraryUnlocked = _isLibraryUnlocked.value,
+                    localPath = _currentLibrary.value?.localPath,
+                    masterPassword = currentLibraryMasterPassword
+                )
+            }
+        )
+    }
+
+    val passwordEntries: StateFlow<List<PasswordEntry>>
+        get() = passwordSubViewModel.passwordEntries
+
+    val passwordTotalCount: StateFlow<Int>
+        get() = passwordSubViewModel.passwordTotalCount
+
+    val passwordGroupStack: StateFlow<List<Long>>
+        get() = passwordSubViewModel.passwordGroupStack
+
+    val passwordIndexKeys: StateFlow<List<String>>
+        get() = passwordSubViewModel.passwordIndexKeys
+
+    val passwordHasMore: StateFlow<Boolean>
+        get() = passwordSubViewModel.passwordHasMore
 
     // WebDAV配置相关
     private val _webDavConfigs = MutableStateFlow<List<WebDavConfig>>(emptyList())
@@ -127,9 +150,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     
     private val _restoreProgress = MutableStateFlow(0)
     val restoreProgress: StateFlow<Int> = _restoreProgress.asStateFlow()
-    
-    
-    
+
+
+
+
     init {
         refreshLibraryHistory()
         loadWebDavConfigs()
@@ -153,8 +177,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         currentLibraryMasterPassword = ""
         _isLibraryUnlocked.value = false
         _tokens.value = emptyList()
-        _passwordEntries.value = emptyList()
-        _passwordGroupStack.value = emptyList()
+        viewModelScope.launch {
+            passwordSubViewModel.clearAll(resetTotalCount = true)
+        }
         _tokenCodes.clear()
         publishTokenCodeSnapshot()
         refreshLibraryHistory()
@@ -169,8 +194,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         currentLibraryMasterPassword = ""
         _isLibraryUnlocked.value = false
         _tokens.value = emptyList()
-        _passwordEntries.value = emptyList()
-        _passwordGroupStack.value = emptyList()
+        viewModelScope.launch {
+            passwordSubViewModel.clearAll(resetTotalCount = true)
+        }
         _tokenCodes.clear()
         publishTokenCodeSnapshot()
         refreshLibraryHistory()
@@ -185,8 +211,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         currentLibraryMasterPassword = ""
         _isLibraryUnlocked.value = false
         _tokens.value = emptyList()
-        _passwordEntries.value = emptyList()
-        _passwordGroupStack.value = emptyList()
+        viewModelScope.launch {
+            passwordSubViewModel.clearAll(resetTotalCount = true)
+        }
         _tokenCodes.clear()
         publishTokenCodeSnapshot()
         refreshLibraryHistory()
@@ -351,15 +378,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             publishTokenCodeSnapshot()
 
             _isLibraryUnlocked.value = true
-
-            val passwordEntries = withContext(Dispatchers.IO) {
-                kdbxTokenRepository.loadPasswordEntries(localPath, currentLibraryMasterPassword)
-            }
-            _passwordEntries.value = passwordEntries
+            passwordSubViewModel.reloadInitialPasswordData()
             true
         } catch (ex: Exception) {
             _tokens.value = emptyList()
-            _passwordEntries.value = emptyList()
+            passwordSubViewModel.clearAll(resetTotalCount = true)
             _tokenCodes.clear()
             publishTokenCodeSnapshot()
             _isLibraryUnlocked.value = false
@@ -386,69 +409,56 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 刷新密码条目与键值列表。
      */
     fun refreshPasswordEntries(searchQuery: String = "") {
-        viewModelScope.launch {
-            val localPath = _currentLibrary.value?.localPath
-            if (!_isLibraryUnlocked.value || localPath.isNullOrBlank() || currentLibraryMasterPassword.isBlank()) {
-                _passwordEntries.value = emptyList()
-                return@launch
-            }
+        passwordSubViewModel.refreshPasswordEntries(searchQuery)
+    }
 
-            val keyword = searchQuery.trim()
-            val currentGroupId = _passwordGroupStack.value.lastOrNull()
-            val values = withContext(Dispatchers.IO) {
-                val source = if (keyword.isBlank()) {
-                    if (currentGroupId == null) {
-                        kdbxTokenRepository.loadPasswordEntriesByTopLevel(localPath, currentLibraryMasterPassword)
-                    } else {
-                        kdbxTokenRepository.loadPasswordEntriesByGroup(localPath, currentLibraryMasterPassword, currentGroupId)
-                    }
-                } else {
-                    kdbxTokenRepository.loadPasswordEntries(localPath, currentLibraryMasterPassword)
-                }
+    /**
+     * 触发密码列表加载下一页。
+     */
+    fun loadNextPasswordPage() {
+        passwordSubViewModel.loadNextPage()
+    }
 
-                source
-                    .asSequence()
-                    .filter { item ->
-                        keyword.isBlank() ||
-                            item.title.contains(keyword, ignoreCase = true) ||
-                            item.account.contains(keyword, ignoreCase = true)
-                    }
-                    .sortedBy { item ->
-                        item.title.ifBlank { item.account }.lowercase()
-                    }
-                    .toList()
-            }
-            _passwordEntries.value = values
-        }
+    /**
+     * 为索引跳转预加载到目标分组。
+     */
+    suspend fun ensurePasswordIndexLoaded(indexKey: String): Boolean {
+        return passwordSubViewModel.ensureSectionLoaded(indexKey)
+    }
+
+    /**
+     * 获取指定索引分组在 LazyColumn 中对应的标题项下标。
+     */
+    suspend fun getPasswordHeaderScrollIndex(indexKey: String): Int? {
+        return passwordSubViewModel.getHeaderScrollIndex(indexKey)
     }
 
     /**
      * 进入密码分组。
      */
     fun openPasswordGroup(groupStableId: Long, searchQuery: String = "") {
-        _passwordGroupStack.value = _passwordGroupStack.value + groupStableId
-        refreshPasswordEntries(searchQuery)
+        passwordSubViewModel.openPasswordGroup(groupStableId, searchQuery)
     }
 
     /**
      * 返回上一级密码分组。
      */
     fun navigateUpPasswordGroup(searchQuery: String = "") {
-        val stack = _passwordGroupStack.value
-        if (stack.isEmpty()) {
-            return
-        }
-
-        _passwordGroupStack.value = stack.dropLast(1)
-        refreshPasswordEntries(searchQuery)
+        passwordSubViewModel.navigateUpPasswordGroup(searchQuery)
     }
 
     /**
      * 重置密码分组导航到根分组。
      */
     fun resetPasswordGroupNavigation(searchQuery: String = "") {
-        _passwordGroupStack.value = emptyList()
-        refreshPasswordEntries(searchQuery)
+        passwordSubViewModel.resetPasswordGroupNavigation(searchQuery)
+    }
+
+    /**
+     * 仅重置密码分组栈，不触发刷新。
+     */
+    fun resetPasswordGroupStackOnly() {
+        passwordSubViewModel.resetPasswordGroupStackOnly()
     }
 
     /**

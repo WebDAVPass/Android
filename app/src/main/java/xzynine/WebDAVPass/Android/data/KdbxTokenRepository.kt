@@ -145,6 +145,15 @@ class KdbxTokenRepository {
         }
     }
 
+    /**
+     * 统计数据库中全部条目数量（不构建明细对象）。
+     */
+    fun countPasswordEntries(localPath: String, masterPassword: String): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            collectEntries(db.rootGroup).size
+        }
+    }
+
     fun isDuplicate(localPath: String, masterPassword: String, secret: String, algorithm: String, digits: Int, period: Int): Boolean {
         return loadTokens(localPath, masterPassword)
             .any { it.secret == secret && it.algorithm == algorithm && it.digits == digits && it.period == period }

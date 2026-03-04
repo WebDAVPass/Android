@@ -96,7 +96,11 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
             modifier = Modifier.Companion.fillMaxSize(),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
-            items(tokens, key = { it.id }) { token ->
+            items(
+                items = tokens,
+                key = { it.id },
+                contentType = { "token_item" }
+            ) { token ->
                 val tokenCode = tokenCodeMap[token.id]
                 val iconEntry = entryIconMap[token.id]
 

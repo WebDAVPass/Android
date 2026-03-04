@@ -1,6 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
-import android.icu.text.Transliterator
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +27,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
@@ -35,16 +36,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlinx.coroutines.launch
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
+import xzynine.WebDAVPass.Android.ui.ViewModel.toPasswordIndexKey
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 
@@ -64,29 +71,53 @@ fun PasswordListScreen(
     val focusManager = LocalFocusManager.current
     val entries by tokenViewModel.passwordEntries.collectAsState(emptyList())
     val passwordGroupStack by tokenViewModel.passwordGroupStack.collectAsState(emptyList())
+    val passwordIndexKeys by tokenViewModel.passwordIndexKeys.collectAsState(emptyList())
+    val passwordHasMore by tokenViewModel.passwordHasMore.collectAsState(false)
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(searchQuery) {
-        tokenViewModel.refreshPasswordEntries(searchQuery = searchQuery)
+    BackHandler(enabled = passwordGroupStack.isNotEmpty()) {
+        tokenViewModel.navigateUpPasswordGroup(searchQuery)
     }
 
     val groupedEntries by remember(entries) {
         derivedStateOf {
-            entries.groupBy { item -> item.toIndexLetter() }
+            entries.groupBy { item -> item.toPasswordIndexKey() }
                 .toList()
                 .sortedWith(compareBy<Pair<String, List<PasswordEntry>>> { (letter, _) ->
                     when (letter) {
-                        FolderIndexLabel -> 0
+                        PasswordFolderIndexLabel -> 0
                         "#" -> 1
                         else -> 2
                     }
                 }.thenBy { (letter, _) ->
-                    if (letter == FolderIndexLabel) "" else letter
+                    if (letter == PasswordFolderIndexLabel) "" else letter
                 }
                 )
+        }
+    }
+
+    LaunchedEffect(searchQuery) {
+        tokenViewModel.refreshPasswordEntries(searchQuery = searchQuery)
+    }
+
+    LaunchedEffect(passwordGroupStack, searchQuery) {
+        if (listState.firstVisibleItemIndex != 0 || listState.firstVisibleItemScrollOffset != 0) {
+            listState.scrollToItem(0)
+        }
+    }
+
+    LaunchedEffect(listState, passwordHasMore) {
+        snapshotFlow {
+            val layoutInfo = listState.layoutInfo
+            val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            lastVisibleIndex to layoutInfo.totalItemsCount
+        }.collect { (lastVisibleIndex, totalCount) ->
+            if (passwordHasMore && totalCount > 0 && lastVisibleIndex >= totalCount - 4) {
+                tokenViewModel.loadNextPasswordPage()
+            }
         }
     }
 
@@ -96,7 +127,7 @@ fun PasswordListScreen(
                 var currentIndex = 0
                 groupedEntries.forEach { (letter, itemsInSection) ->
                     put(letter, currentIndex)
-                    if (letter == FolderIndexLabel) {
+                    if (letter == PasswordFolderIndexLabel) {
                         put(FolderIndexBarLabel, currentIndex)
                     }
                     currentIndex += 1 + itemsInSection.size
@@ -105,12 +136,16 @@ fun PasswordListScreen(
         }
     }
 
-    val indexLetters by remember(groupedEntries) {
+    val indexLetters by remember(passwordIndexKeys) {
         derivedStateOf {
-            groupedEntries.map { (letter, _) ->
-                if (letter == FolderIndexLabel) FolderIndexBarLabel else letter
+            passwordIndexKeys.map { letter ->
+                if (letter == PasswordFolderIndexLabel) FolderIndexBarLabel else letter
             }
         }
+    }
+
+    val enabledIndexLetters by remember(indexLetters) {
+        derivedStateOf { indexLetters.toSet() }
     }
 
     val activeLetter by remember(listState, groupedEntries) {
@@ -126,7 +161,7 @@ fun PasswordListScreen(
                     currentIndex = sectionEnd + 1
                     visibleItemIndex in sectionStart..sectionEnd
                 }?.first?.let { letter ->
-                    if (letter == FolderIndexLabel) FolderIndexBarLabel else letter
+                    if (letter == PasswordFolderIndexLabel) FolderIndexBarLabel else letter
                 }
             }
         }
@@ -139,13 +174,16 @@ fun PasswordListScreen(
                 title = "全部密码",
                 navigationIcon = {
                     if (passwordGroupStack.isNotEmpty()) {
-                        Text(
-                            text = "返回",
-                            color = MiuixTheme.colorScheme.primary,
-                            modifier = Modifier.clickable {
+                        IconButton(
+                            onClick = {
                                 tokenViewModel.navigateUpPasswordGroup(searchQuery)
                             }
-                        )
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Back,
+                                contentDescription = "返回上一级"
+                            )
+                        }
                     }
                 },
                 actions = {},
@@ -219,10 +257,19 @@ fun PasswordListScreen(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         groupedEntries.forEach { (letter, sectionItems) ->
-                            item(key = "header_$letter") {
+                            item(
+                                key = "header_$letter",
+                                contentType = "password_section_header"
+                            ) {
                                 PasswordSectionHeader(letter = letter)
                             }
-                            items(sectionItems, key = { entry -> entry.entryId }) { item ->
+                            items(
+                                items = sectionItems,
+                                key = { entry -> entry.entryId },
+                                contentType = { entry ->
+                                    if (entry.isFolderPlaceholder) "password_folder_item" else "password_entry_item"
+                                }
+                            ) { item ->
                                 PasswordEntryCard(
                                     item = item,
                                     onClick = {
@@ -239,13 +286,27 @@ fun PasswordListScreen(
 
                     AlphabetIndexScrollbar(
                         letters = indexLetters,
-                        enabledLetters = indexLetters.toSet(),
+                        enabledLetters = enabledIndexLetters,
                         activeLetter = activeLetter,
                         onLetterSelected = { letter ->
-                            headerIndexMap[letter]?.let { targetIndex ->
-                                coroutineScope.launch {
-                                    listState.scrollToItem(targetIndex)
+                            coroutineScope.launch {
+                                val targetKey = if (letter == FolderIndexBarLabel) {
+                                    PasswordFolderIndexLabel
+                                } else {
+                                    letter
                                 }
+
+                                val loaded = tokenViewModel.ensurePasswordIndexLoaded(targetKey)
+                                if (!loaded) {
+                                    return@launch
+                                }
+
+                                val targetIndex = tokenViewModel.getPasswordHeaderScrollIndex(targetKey)
+                                    ?: headerIndexMap[letter]
+                                    ?: headerIndexMap[targetKey]
+                                    ?: return@launch
+
+                                listState.scrollToItem(targetIndex)
                             }
                         },
                         modifier = Modifier
@@ -324,40 +385,6 @@ private fun PasswordEntryCard(item: PasswordEntry, onClick: () -> Unit) {
         }
     }
 }
-
-/**
- * 计算条目用于分组和索引的首字母。
- *
- * 规则：
- * - 优先取标题，其次账号
- * - 中文会先转拼音再取首字母
- * - 非 A-Z 归类为 #
- */
-private fun PasswordEntry.toIndexLetter(): String {
-    if (isFolderGroup) {
-        return FolderIndexLabel
-    }
-
-    val source = title.ifBlank { account }.trim()
-    if (source.isBlank()) return "#"
-
-    val transformed = HanToLatinTransliterator.transliterate(source)
-    val first = transformed.firstOrNull { ch -> ch.isLetterOrDigit() } ?: return "#"
-    val upper = first.uppercaseChar()
-    return if (upper in 'A'..'Z') upper.toString() else "#"
-}
-
-/**
- * 中文转拉丁的转换器，用于首字母分组。
- */
-private val HanToLatinTransliterator: Transliterator by lazy {
-    Transliterator.getInstance("Han-Latin; Latin-ASCII")
-}
-
-/**
- * 文件夹分组标题。
- */
-private const val FolderIndexLabel = "文件夹"
 
 /**
  * 索引栏中用于表示文件夹分组的标记。
