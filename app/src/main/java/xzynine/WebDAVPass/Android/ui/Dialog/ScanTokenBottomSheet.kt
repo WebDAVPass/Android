@@ -337,25 +337,8 @@ fun ScanTokenScreen(
                 }
             }
         }
-            // 手动输入密钥弹窗
-            if (showManualInput.value) {
-                TokenDialog(
-                    token = null,
-                    show = showManualInput,
-                    onDismiss = { showManualInput.value = false }
-                ) {
-                    coroutineScope.launch(Dispatchers.Main) {
-                        val added = tokenViewModel.addToken(it)
-                        if (added) {
-                            Toast.makeText(context, "令牌添加成功", Toast.LENGTH_SHORT).show()
-                            showManualInput.value = false
-                            onTokenScanned()
-                        } else {
-                            Toast.makeText(context, "该令牌已存在", Toast.LENGTH_SHORT).show()
-                        }
-                    }
-                }
-            }
+            // 手动输入密钥功能暂不可用，已移除 TokenDialog
+            // 如需添加令牌，请使用扫描二维码或上传图片的方式
         }
     }
 

@@ -6,6 +6,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
+import android.widget.ImageView
 import android.widget.Toast
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -14,7 +15,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -29,6 +32,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
@@ -43,11 +47,13 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
+import xzynine.WebDAVPass.Android.util.QrCodeUtil
 
 @Composable
 fun PasswordEntryDetailScreen(
@@ -63,6 +69,7 @@ fun PasswordEntryDetailScreen(
     val selectedToken = tokens.firstOrNull { it.id == entryId }
     val tokenCode by tokenViewModel.getTokenCode(entryId).collectAsState(null)
     var showOtpSecret by rememberSaveable(entryId) { mutableStateOf(false) }
+    var showQrCode by rememberSaveable(entryId) { mutableStateOf(false) }
     var isPasswordVisible by rememberSaveable(entryId) { mutableStateOf(false) }
     val cornerRadius = 12.dp
     val cardBorderColor = MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.18f)
@@ -160,6 +167,64 @@ fun PasswordEntryDetailScreen(
                             modifier = Modifier.fillMaxWidth(),
                             onClick = {}
                         )
+                    }
+
+                    item {
+                        Card(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .border(
+                                    width = 0.5.dp,
+                                    color = cardBorderColor,
+                                    shape = RoundedCornerShape(cornerRadius)
+                                ),
+                            colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
+                            cornerRadius = cornerRadius,
+                            pressFeedbackType = PressFeedbackType.None,
+                            showIndication = false,
+                            onClick = {}
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                IconButton(onClick = { showQrCode = !showQrCode }) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Notes,
+                                        contentDescription = if (showQrCode) "隐藏二维码" else "显示二维码"
+                                    )
+                                }
+                                Text(
+                                    text = if (showQrCode) "点击图标隐藏二维码" else "点击图标显示二维码",
+                                    fontSize = 12.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+
+                                if (showQrCode && selectedToken != null) {
+                                    Text(
+                                        text = "扫描二维码添加到其他设备:",
+                                        fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)
+                                    )
+                                    AndroidView(
+                                        modifier = Modifier.size(200.dp),
+                                        factory = { context ->
+                                            ImageView(context).apply {
+                                                scaleType = ImageView.ScaleType.FIT_CENTER
+                                            }
+                                        },
+                                        update = { imageView ->
+                                            val bitmap = QrCodeUtil.generateQrCodeFromToken(selectedToken)
+                                            imageView.setImageBitmap(bitmap)
+                                        }
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
             }

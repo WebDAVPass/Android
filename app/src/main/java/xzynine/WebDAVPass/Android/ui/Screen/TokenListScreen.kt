@@ -3,6 +3,7 @@ package xzynine.WebDAVPass.Android.ui.Screen
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -31,7 +32,7 @@ import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Text
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
-import xzynine.WebDAVPass.Android.ui.Dialog.TokenDialog
+import xzynine.WebDAVPass.Android.ui.activity.PasswordEntryDetailActivity
 import androidx.compose.runtime.LaunchedEffect
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
@@ -45,7 +46,7 @@ enum class DialogState { NONE, EDIT, DELETE }
  * 令牌列表界面
  */
 @Composable
-fun TokenListScreen(tokenViewModel: TokenViewModel) {
+fun TokenListScreen(tokenViewModel: TokenViewModel, onEntryClick: (Long) -> Unit) {
     val context = LocalContext.current
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val passwordEntries by tokenViewModel.passwordEntries.collectAsState(emptyList())
@@ -119,8 +120,7 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
                         }
                     },
                     onLongClick = {
-                        selectedToken = token
-                        dialogState = DialogState.EDIT
+                        onEntryClick(token.id)
                     },
                     modifier = Modifier
                         .fillMaxWidth()
@@ -133,25 +133,8 @@ fun TokenListScreen(tokenViewModel: TokenViewModel) {
             }
         }
 
-        // 编辑令牌对话框
-        selectedToken?.let {
-            TokenDialog(
-                token = it,
-                show = showEditDialog,
-                onDismiss = {
-                    dialogState = DialogState.NONE
-                    selectedToken = null
-                },
-                onDelete = {
-                    dialogState = DialogState.DELETE
-                },
-                onSave = { updatedToken ->
-                    tokenViewModel.updateToken(updatedToken)
-                    dialogState = DialogState.NONE
-                    selectedToken = null
-                }
-            )
-        }
+        // 编辑令牌功能暂不可用，已移除 TokenDialog
+        // 如需编辑令牌，请在密码详情页面进行操作
 
         // 删除令牌对话框
         selectedToken?.let {
