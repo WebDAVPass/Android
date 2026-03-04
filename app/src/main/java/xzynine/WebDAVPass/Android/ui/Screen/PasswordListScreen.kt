@@ -43,11 +43,13 @@ import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlinx.coroutines.launch
+import top.yukonga.miuix.kmp.extra.SuperArrow
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
@@ -343,20 +345,10 @@ private fun PasswordSectionHeader(letter: String) {
  */
 @Composable
 private fun PasswordEntryCard(item: PasswordEntry, onClick: () -> Unit) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-        pressFeedbackType = PressFeedbackType.Sink,
-        showIndication = true,
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
+    SuperArrow(
+        title = item.title,
+        summary = if (item.account.isNotBlank()) item.account else null,
+        startAction = {
             EntryIcon(
                 customIconBytes = item.customIconBytes,
                 standardIconId = item.standardIconId,
@@ -365,25 +357,10 @@ private fun PasswordEntryCard(item: PasswordEntry, onClick: () -> Unit) {
                 modifier = Modifier.size(32.dp),
                 contentDescription = "账号图标"
             )
-
-            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    text = item.title,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurface
-                )
-
-                if (item.account.isNotBlank()) {
-                    Text(
-                        text = item.account,
-                        fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
-                    )
-                }
-            }
-        }
-    }
+        },
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth()
+    )
 }
 
 /**
