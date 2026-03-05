@@ -2,9 +2,6 @@ package xzynine.WebDAVPass.Android.ui.Screen
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,14 +31,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Button
@@ -53,15 +46,10 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.extra.WindowDialog
-import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.CheckboxLocation
-import top.yukonga.miuix.kmp.extra.SuperCheckbox
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
@@ -70,7 +58,7 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.ViewModel.toPasswordIndexKey
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar
-import xzynine.WebDAVPass.Android.ui.component.EntryIcon
+import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 
 /**
  * 全部密码列表页面。
@@ -379,8 +367,14 @@ fun PasswordListScreen(
                                     if (entry.isFolderPlaceholder) "password_folder_item" else "password_entry_item"
                                 }
                             ) { item ->
-                                PasswordEntryCard(
-                                    item = item,
+                                SelectableEntryCard(
+                                    itemKey = item.entryId,
+                                    title = item.title,
+                                    summary = item.account.ifBlank { null },
+                                    customIconBytes = item.customIconBytes,
+                                    standardIconId = item.standardIconId,
+                                    iconPrimary = item.title,
+                                    iconSecondary = item.account,
                                     isSelectionMode = isSelectionMode.value,
                                     isSelected = selectedTargets.containsKey(item.entryId),
                                     onClick = {
@@ -688,105 +682,6 @@ private fun PasswordSectionHeader(letter: String) {
             color = MiuixTheme.colorScheme.onSurfaceSecondary,
             modifier = Modifier.padding(horizontal = 2.dp, vertical = 4.dp)
         )
-    }
-}
-
-/**
- * 条目卡片（账号 + 图标）
- */
-@Composable
-private fun PasswordEntryCard(
-    item: PasswordEntry,
-    isSelectionMode: Boolean,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    if (isSelectionMode) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            EntryIcon(
-                customIconBytes = item.customIconBytes,
-                standardIconId = item.standardIconId,
-                primary = item.title,
-                secondary = item.account,
-                modifier = Modifier.size(32.dp),
-                contentDescription = "账号图标"
-            )
-            SuperCheckbox(
-                title = item.title,
-                summary = item.account.ifBlank { null },
-                checked = isSelected,
-                onCheckedChange = { checked ->
-                    onCheckedChange(checked)
-                },
-                checkboxLocation = CheckboxLocation.End,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 12.dp)
-            )
-        }
-        return
-    }
-
-    val viewConfiguration = LocalViewConfiguration.current
-    var holdDownState by remember(item.entryId) { mutableStateOf(false) }
-    var skipNextClick by remember(item.entryId) { mutableStateOf(false) }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(modifier = Modifier.weight(1f)) {
-            SuperArrow(
-                title = item.title,
-                summary = if (item.account.isNotBlank()) item.account else null,
-                startAction = {
-                    EntryIcon(
-                        customIconBytes = item.customIconBytes,
-                        standardIconId = item.standardIconId,
-                        primary = item.title,
-                        secondary = item.account,
-                        modifier = Modifier.size(32.dp),
-                        contentDescription = "账号图标"
-                    )
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .pointerInput(item.entryId, isSelectionMode, isSelected) {
-                        awaitEachGesture {
-                            awaitFirstDown(requireUnconsumed = false)
-                            holdDownState = true
-
-                            val longPressReached = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis + 400L) {
-                                waitForUpOrCancellation()
-                                false
-                            } ?: true
-
-                            if (longPressReached) {
-                                // 仅当真正超时（达到长按阈值）时触发长按；
-                                // 滚动/手势取消返回的 null 不再被误判为长按。
-                                skipNextClick = true
-                                onLongClick()
-                                waitForUpOrCancellation()
-                            }
-
-                            holdDownState = false
-                        }
-                    },
-                holdDownState = holdDownState,
-                onClick = {
-                    if (skipNextClick) {
-                        skipNextClick = false
-                        return@SuperArrow
-                    }
-                    onClick()
-                }
-            )
-        }
     }
 }
 

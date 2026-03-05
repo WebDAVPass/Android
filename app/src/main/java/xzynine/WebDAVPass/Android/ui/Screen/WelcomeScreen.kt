@@ -2,6 +2,7 @@ package xzynine.WebDAVPass.Android.ui.Screen
 
 import android.net.Uri
 import xzylib.base.util.ToastUtils
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -16,6 +17,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -38,18 +40,19 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
+import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
 import xzynine.WebDAVPass.Android.ui.Dialog.CreateMasterPasswordDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CreateMode
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 
 
 
@@ -76,6 +79,49 @@ fun WelcomeScreen(
     var showInlinePassword by remember { mutableStateOf(false) }
     var inlineUnlockLoading by remember { mutableStateOf(false) }
     var inlineUnlockFocusNonce by remember { mutableStateOf(0) }
+    val isSelectionMode = remember { mutableStateOf(false) }
+    val selectedHistoryIds = remember { mutableStateMapOf<String, Boolean>() }
+    val showDeleteDialog = remember { mutableStateOf(false) }
+
+    /**
+     * 清理内联解锁输入状态。
+     */
+    fun clearInlineUnlock() {
+        pendingUnlockLibrary = null
+        inlineUnlockPassword = ""
+        showInlinePassword = false
+        inlineUnlockLoading = false
+        keyboardController?.hide()
+    }
+
+    /**
+     * 退出选择模式并清空选择。
+     */
+    fun clearSelectionMode() {
+        selectedHistoryIds.clear()
+        isSelectionMode.value = false
+        showDeleteDialog.value = false
+    }
+
+    /**
+     * 设置历史项选择状态。
+     */
+    fun setSelection(item: LibraryContext, checked: Boolean) {
+        if (checked) {
+            isSelectionMode.value = true
+            selectedHistoryIds[item.id] = true
+            clearInlineUnlock()
+        } else {
+            selectedHistoryIds.remove(item.id)
+            if (selectedHistoryIds.isEmpty()) {
+                isSelectionMode.value = false
+            }
+        }
+    }
+
+    BackHandler(enabled = isSelectionMode.value) {
+        clearSelectionMode()
+    }
 
     /**
      * 显示历史库顶部的内联解锁输入行
@@ -154,7 +200,24 @@ fun WelcomeScreen(
             TopAppBar(
                 title = "欢迎使用 WebDAVPass",
                 navigationIcon = {},
-                actions = {},
+                actions = {
+                    if (isSelectionMode.value) {
+                        TextButton(
+                            text = "删除",
+                            onClick = {
+                                if (selectedHistoryIds.isNotEmpty()) {
+                                    showDeleteDialog.value = true
+                                }
+                            }
+                        )
+                        TextButton(
+                            text = "取消",
+                            onClick = {
+                                clearSelectionMode()
+                            }
+                        )
+                    }
+                },
                 defaultWindowInsetsPadding = true
             )
         }
@@ -170,70 +233,66 @@ fun WelcomeScreen(
 
             Text(text = "历史库")
 
-            pendingUnlockLibrary?.let { unlockLibrary ->
-                Text(text = "解锁: ${unlockLibrary.displayName}")
+            if (!isSelectionMode.value) {
+                pendingUnlockLibrary?.let { unlockLibrary ->
+                    Text(text = "解锁: ${unlockLibrary.displayName}")
 
-                TextField(
-                    value = inlineUnlockPassword,
-                    onValueChange = { inlineUnlockPassword = it },
-                    label = "请输入主密码",
-                    visualTransformation = if (showInlinePassword) {
-                        VisualTransformation.None
-                    } else {
-                        PasswordVisualTransformation()
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    trailingIcon = {
-                        TextButton(
-                            text = if (showInlinePassword) "隐藏" else "显示",
-                            onClick = { showInlinePassword = !showInlinePassword }
-                        )
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(inlineUnlockFocusRequester),
-                    singleLine = true
-                )
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(
-                        text = "取消",
-                        onClick = {
-                            pendingUnlockLibrary = null
-                            inlineUnlockPassword = ""
-                            showInlinePassword = false
-                            keyboardController?.hide()
+                    TextField(
+                        value = inlineUnlockPassword,
+                        onValueChange = { inlineUnlockPassword = it },
+                        label = "请输入主密码",
+                        visualTransformation = if (showInlinePassword) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
                         },
-                        modifier = Modifier.weight(1f)
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        trailingIcon = {
+                            TextButton(
+                                text = if (showInlinePassword) "隐藏" else "显示",
+                                onClick = { showInlinePassword = !showInlinePassword }
+                            )
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(inlineUnlockFocusRequester),
+                        singleLine = true
                     )
 
-                    Button(
-                        onClick = {
-                            if (inlineUnlockPassword.isBlank()) {
-                                ToastUtils.showShortToast(context, "请输入主密码")
-                                return@Button
-                            }
-                            coroutineScope.launch {
-                                inlineUnlockLoading = true
-                                val ok = tokenViewModel.unlockCurrentLibrary(inlineUnlockPassword)
-                                inlineUnlockLoading = false
-                                if (ok) {
-                                    pendingUnlockLibrary = null
-                                    inlineUnlockPassword = ""
-                                    showInlinePassword = false
-                                    keyboardController?.hide()
-                                    onEnterLibrary()
-                                } else {
-                                    val message = tokenViewModel.getLastUnlockErrorMessage()
-                                        ?: "解锁失败：主密码不正确或文件无效"
-                                    ToastUtils.showShortToast(context, message)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(
+                            text = "取消",
+                            onClick = {
+                                clearInlineUnlock()
+                            },
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Button(
+                            onClick = {
+                                if (inlineUnlockPassword.isBlank()) {
+                                    ToastUtils.showShortToast(context, "请输入主密码")
+                                    return@Button
                                 }
-                            }
-                        },
-                        modifier = Modifier.weight(1f),
-                        enabled = !inlineUnlockLoading
-                    ) {
-                        Text(text = if (inlineUnlockLoading) "解锁中..." else "解锁")
+                                coroutineScope.launch {
+                                    inlineUnlockLoading = true
+                                    val ok = tokenViewModel.unlockCurrentLibrary(inlineUnlockPassword)
+                                    inlineUnlockLoading = false
+                                    if (ok) {
+                                        clearInlineUnlock()
+                                        onEnterLibrary()
+                                    } else {
+                                        val message = tokenViewModel.getLastUnlockErrorMessage()
+                                            ?: "解锁失败：主密码不正确或文件无效"
+                                        ToastUtils.showShortToast(context, message)
+                                    }
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            enabled = !inlineUnlockLoading
+                        ) {
+                            Text(text = if (inlineUnlockLoading) "解锁中..." else "解锁")
+                        }
                     }
                 }
             }
@@ -242,13 +301,25 @@ fun WelcomeScreen(
                 Text(text = "暂无历史记录")
             } else {
                 history.forEach { item ->
-                    SuperArrow(
+                    SelectableEntryCard(
+                        itemKey = item.id,
                         title = item.displayName,
                         summary = if (item.sourceType == LibrarySourceType.CLOUD) {
                             item.remoteFilePath ?: item.remoteBaseUrl.orEmpty()
                         } else {
                             item.localPath
                         },
+                        isSelectionMode = isSelectionMode.value,
+                        isSelected = selectedHistoryIds.containsKey(item.id),
+                        onLongClick = {
+                            if (!isSelectionMode.value) {
+                                setSelection(item, true)
+                            }
+                        },
+                        onCheckedChange = { checked ->
+                            setSelection(item, checked)
+                        },
+                        contentDescription = "历史库图标",
                         startAction = {
                             Icon(
                                 modifier = Modifier.padding(end = 16.dp),
@@ -371,6 +442,27 @@ fun WelcomeScreen(
                 } else {
                     showCloudCreateDialog = true
                 }
+            }
+        )
+    }
+
+    if (isSelectionMode.value && selectedHistoryIds.isNotEmpty()) {
+        ConfirmationDialog(
+            title = "确认删除",
+            summary = "已选 ${selectedHistoryIds.size} 项，仅从应用内历史中移除，不删除本地或云端文件。",
+            show = showDeleteDialog,
+            onDismiss = {
+                showDeleteDialog.value = false
+            },
+            confirmButtonText = "删除",
+            isDestructive = true,
+            onConfirm = {
+                val removedIds = selectedHistoryIds.keys.toSet()
+                val removedCount = tokenViewModel.removeLibraryHistoryByIds(removedIds)
+                if (removedCount > 0 && pendingUnlockLibrary?.id in removedIds) {
+                    clearInlineUnlock()
+                }
+                clearSelectionMode()
             }
         )
     }

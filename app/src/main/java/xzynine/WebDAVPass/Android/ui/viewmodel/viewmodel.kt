@@ -270,6 +270,43 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 按ID移除单个历史库。
+     *
+     * 说明：
+     * - 仅移除应用内历史记录，不删除本地或云端文件；
+     * - 若移除的是当前选中库，会同步清理当前库状态。
+     */
+    fun removeLibraryHistoryById(libraryId: String): Boolean {
+        return removeLibraryHistoryByIds(listOf(libraryId)) > 0
+    }
+
+    /**
+     * 批量移除历史库。
+     *
+     * @return 实际移除数量。
+     */
+    fun removeLibraryHistoryByIds(libraryIds: Collection<String>): Int {
+        val targetIds = libraryIds.filter { it.isNotBlank() }.toSet()
+        if (targetIds.isEmpty()) {
+            return 0
+        }
+
+        val currentId = _currentLibrary.value?.id
+        val removedCount = libraryContextStore.removeHistoryByIds(targetIds)
+        if (removedCount <= 0) {
+            return 0
+        }
+
+        if (!currentId.isNullOrBlank() && targetIds.contains(currentId)) {
+            // 复用现有清理逻辑，确保解锁状态、缓存、分组导航都被重置。
+            clearCurrentLibrarySelection()
+        } else {
+            refreshLibraryHistory()
+        }
+        return removedCount
+    }
+
+    /**
      * 解锁当前库（主密码与WebDAV密码分离）
      */
     suspend fun unlockCurrentLibrary(masterPassword: String): Boolean {

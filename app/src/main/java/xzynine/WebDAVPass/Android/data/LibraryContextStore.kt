@@ -70,6 +70,44 @@ class LibraryContextStore(private val context: Context) {
     }
 
     /**
+     * 按ID移除历史库。
+     *
+     * @return 若成功移除返回 true。
+     */
+    fun removeHistoryById(id: String): Boolean {
+        return removeHistoryByIds(setOf(id)) > 0
+    }
+
+    /**
+     * 批量移除历史库。
+     *
+     * 说明：
+     * - 仅移除应用内历史记录；
+     * - 若当前选中库被移除，会同步清理 `KEY_CURRENT_ID`。
+     *
+     * @return 实际移除数量。
+     */
+    fun removeHistoryByIds(ids: Set<String>): Int {
+        if (ids.isEmpty()) {
+            return 0
+        }
+
+        val history = getHistory()
+        val filtered = history.filterNot { ids.contains(it.id) }
+        val removedCount = history.size - filtered.size
+        if (removedCount <= 0) {
+            return 0
+        }
+
+        saveHistory(filtered)
+        val currentId = preferences.getString(KEY_CURRENT_ID, null)
+        if (!currentId.isNullOrBlank() && ids.contains(currentId)) {
+            preferences.edit().remove(KEY_CURRENT_ID).apply()
+        }
+        return removedCount
+    }
+
+    /**
      * 清空当前选中库
      */
     fun clearCurrentSelection() {
