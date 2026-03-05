@@ -12,6 +12,8 @@ import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.PasswordEntry
+import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
+import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.data.TokenCode
 import xzynine.WebDAVPass.Android.data.WebDavConfig
 import xzynine.WebDAVPass.webdav.WebDav
@@ -551,6 +553,204 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         return withContext(Dispatchers.IO) {
             kdbxTokenRepository.loadPasswordEntryById(localPath, access.masterPassword, entryId)
         }
+    }
+
+    /**
+     * 按稳定 ID 读取条目编辑草稿。
+     */
+    suspend fun loadPasswordEntryDraft(entryId: Long): PasswordEntryEditDraft? {
+        if (entryId < 0) {
+            return null
+        }
+        val access = PasswordDataAccess(
+            isLibraryUnlocked = _isLibraryUnlocked.value,
+            localPath = _currentLibrary.value?.localPath,
+            masterPassword = currentLibraryMasterPassword
+        )
+        if (!access.isReady()) {
+            return null
+        }
+
+        val localPath = access.localPath ?: return null
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.loadPasswordEntryDraft(localPath, access.masterPassword, entryId)
+        }
+    }
+
+    /**
+     * 按稳定 ID 读取分组编辑草稿。
+     */
+    suspend fun loadPasswordGroupDraft(groupId: Long): PasswordGroupEditDraft? {
+        if (groupId >= 0) {
+            return null
+        }
+        val access = PasswordDataAccess(
+            isLibraryUnlocked = _isLibraryUnlocked.value,
+            localPath = _currentLibrary.value?.localPath,
+            masterPassword = currentLibraryMasterPassword
+        )
+        if (!access.isReady()) {
+            return null
+        }
+
+        val localPath = access.localPath ?: return null
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.loadPasswordGroupDraft(localPath, access.masterPassword, groupId)
+        }
+    }
+
+    /**
+     * 新建密码条目并返回稳定 ID。
+     */
+    suspend fun createPasswordEntry(draft: PasswordEntryEditDraft): Long? {
+        val access = PasswordDataAccess(
+            isLibraryUnlocked = _isLibraryUnlocked.value,
+            localPath = _currentLibrary.value?.localPath,
+            masterPassword = currentLibraryMasterPassword
+        )
+        if (!access.isReady()) {
+            return null
+        }
+
+        val localPath = access.localPath ?: return null
+        val createdId = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.createPasswordEntry(localPath, access.masterPassword, draft)
+        }
+        if (createdId != null) {
+            onPasswordWriteSuccess()
+        }
+        return createdId
+    }
+
+    /**
+     * 更新密码条目。
+     */
+    suspend fun updatePasswordEntry(draft: PasswordEntryEditDraft): Boolean {
+        val access = PasswordDataAccess(
+            isLibraryUnlocked = _isLibraryUnlocked.value,
+            localPath = _currentLibrary.value?.localPath,
+            masterPassword = currentLibraryMasterPassword
+        )
+        if (!access.isReady()) {
+            return false
+        }
+
+        val localPath = access.localPath ?: return false
+        val updated = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.updatePasswordEntry(localPath, access.masterPassword, draft)
+        }
+        if (updated) {
+            onPasswordWriteSuccess()
+        }
+        return updated
+    }
+
+    /**
+     * 删除密码条目（进入回收站）。
+     */
+    suspend fun deletePasswordEntry(entryId: Long): Boolean {
+        if (entryId < 0) {
+            return false
+        }
+        val access = PasswordDataAccess(
+            isLibraryUnlocked = _isLibraryUnlocked.value,
+            localPath = _currentLibrary.value?.localPath,
+            masterPassword = currentLibraryMasterPassword
+        )
+        if (!access.isReady()) {
+            return false
+        }
+
+        val localPath = access.localPath ?: return false
+        val deleted = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.deletePasswordEntry(localPath, access.masterPassword, entryId)
+        }
+        if (deleted) {
+            onPasswordWriteSuccess()
+        }
+        return deleted
+    }
+
+    /**
+     * 新建密码分组并返回稳定 ID。
+     */
+    suspend fun createPasswordGroup(draft: PasswordGroupEditDraft): Long? {
+        val access = PasswordDataAccess(
+            isLibraryUnlocked = _isLibraryUnlocked.value,
+            localPath = _currentLibrary.value?.localPath,
+            masterPassword = currentLibraryMasterPassword
+        )
+        if (!access.isReady()) {
+            return null
+        }
+
+        val localPath = access.localPath ?: return null
+        val createdId = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.createPasswordGroup(localPath, access.masterPassword, draft)
+        }
+        if (createdId != null) {
+            onPasswordWriteSuccess()
+        }
+        return createdId
+    }
+
+    /**
+     * 更新密码分组。
+     */
+    suspend fun updatePasswordGroup(draft: PasswordGroupEditDraft): Boolean {
+        val access = PasswordDataAccess(
+            isLibraryUnlocked = _isLibraryUnlocked.value,
+            localPath = _currentLibrary.value?.localPath,
+            masterPassword = currentLibraryMasterPassword
+        )
+        if (!access.isReady()) {
+            return false
+        }
+
+        val localPath = access.localPath ?: return false
+        val updated = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.updatePasswordGroup(localPath, access.masterPassword, draft)
+        }
+        if (updated) {
+            onPasswordWriteSuccess()
+        }
+        return updated
+    }
+
+    /**
+     * 删除密码分组（进入回收站）。
+     */
+    suspend fun deletePasswordGroup(groupId: Long): Boolean {
+        if (groupId >= 0) {
+            return false
+        }
+        val access = PasswordDataAccess(
+            isLibraryUnlocked = _isLibraryUnlocked.value,
+            localPath = _currentLibrary.value?.localPath,
+            masterPassword = currentLibraryMasterPassword
+        )
+        if (!access.isReady()) {
+            return false
+        }
+
+        val localPath = access.localPath ?: return false
+        val deleted = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.deletePasswordGroup(localPath, access.masterPassword, groupId)
+        }
+        if (deleted) {
+            onPasswordWriteSuccess()
+        }
+        return deleted
+    }
+
+    /**
+     * 写入成功后的统一刷新链路。
+     */
+    private fun onPasswordWriteSuccess() {
+        loadTokens()
+        refreshPasswordEntries()
+        refreshRecentDeletedCount()
+        backupTokens()
     }
 
     /**

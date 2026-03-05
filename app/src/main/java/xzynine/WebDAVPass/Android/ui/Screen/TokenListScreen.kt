@@ -3,9 +3,7 @@ package xzynine.WebDAVPass.Android.ui.Screen
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.content.Intent
 import android.widget.Toast
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -15,32 +13,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Text
-import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
-import xzynine.WebDAVPass.Android.ui.activity.PasswordEntryDetailActivity
-import androidx.compose.runtime.LaunchedEffect
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
-
-/**
- * 弹窗状态枚举
- */
-enum class DialogState { NONE, EDIT, DELETE }
 
 /**
  * 令牌列表界面
@@ -59,20 +44,6 @@ fun TokenListScreen(tokenViewModel: TokenViewModel, onEntryClick: (Long) -> Unit
      */
     val entryIconMap by remember(passwordEntries) {
         derivedStateOf { passwordEntries.associateBy { it.entryId } }
-    }
-
-    // 长按功能状态管理 - 使用枚举确保单例
-    var dialogState by remember { mutableStateOf(DialogState.NONE) }
-    var selectedToken by remember { mutableStateOf<OtpToken?>(null) }
-    
-    // 对话框显示状态
-    val showEditDialog = remember { mutableStateOf(dialogState == DialogState.EDIT) }
-    val showDeleteDialog = remember { mutableStateOf(dialogState == DialogState.DELETE) }
-    
-    // 当 dialogState 变化时，更新对话框显示状态
-    LaunchedEffect(dialogState) {
-        showEditDialog.value = dialogState == DialogState.EDIT
-        showDeleteDialog.value = dialogState == DialogState.DELETE
     }
 
     if (isLoading) {
@@ -133,27 +104,5 @@ fun TokenListScreen(tokenViewModel: TokenViewModel, onEntryClick: (Long) -> Unit
             }
         }
 
-        // 编辑令牌功能暂不可用，已移除 TokenDialog
-        // 如需编辑令牌，请在密码详情页面进行操作
-
-        // 删除令牌对话框
-        selectedToken?.let {
-            ConfirmationDialog(
-                title = "确认删除",
-                summary = "确定要删除令牌 \"${it.issuer ?: it.label}\" 吗？删除后可在最近删除中查看。",
-                show = showDeleteDialog,
-                onDismiss = {
-                    dialogState = DialogState.NONE
-                    selectedToken = null
-                },
-                confirmButtonText = "删除",
-                isDestructive = true,
-                onConfirm = {
-                    tokenViewModel.deleteToken(it.id)
-                    dialogState = DialogState.NONE
-                    selectedToken = null
-                }
-            )
-        }
     }
 }

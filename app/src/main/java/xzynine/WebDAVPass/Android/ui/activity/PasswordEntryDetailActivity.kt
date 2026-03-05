@@ -60,7 +60,10 @@ class PasswordEntryDetailActivity : ComponentActivity() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         PasswordEntryDetailScreen(
                             tokenViewModel = tokenViewModel,
-                            entryId = entryId
+                            entryId = entryId,
+                            onDeleted = {
+                                finish()
+                            }
                         )
                         MiuixPopupHost()
                     }

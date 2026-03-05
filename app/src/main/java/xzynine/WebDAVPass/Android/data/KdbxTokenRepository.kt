@@ -7,8 +7,10 @@ import com.kunzisoft.keepass.database.element.Field
 import com.kunzisoft.keepass.database.element.Group
 import com.kunzisoft.keepass.database.element.MasterCredential
 import com.kunzisoft.keepass.database.element.database.DatabaseVersioned
+import com.kunzisoft.keepass.database.element.security.ProtectedString
 import com.kunzisoft.keepass.hardware.HardwareKey
 import com.kunzisoft.keepass.model.EntryInfo
+import com.kunzisoft.keepass.model.GroupInfo
 import com.kunzisoft.keepass.otp.OtpElement
 import com.kunzisoft.keepass.otp.OtpEntryFields
 import com.kunzisoft.keepass.otp.OtpEntryFields.isOTP
@@ -184,6 +186,221 @@ class KdbxTokenRepository {
     }
 
     /**
+     * 按稳定 ID 读取条目编辑草稿。
+     */
+    fun loadPasswordEntryDraft(localPath: String, masterPassword: String, entryId: Long): PasswordEntryEditDraft? {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
+                ?: return@withDatabase null
+            val entryInfo = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+            PasswordEntryEditDraft(
+                entryId = toStableId(entry),
+                parentGroupId = toStableParentGroupId(entry.parent),
+                title = entryInfo.title,
+                username = entryInfo.username,
+                password = entryInfo.password,
+                url = entryInfo.url,
+                notes = entryInfo.notes,
+                customFields = entryInfo.customFields.map { field ->
+                    EditableFieldDraft(
+                        name = field.name,
+                        value = field.protectedValue.stringValue,
+                        isProtected = field.protectedValue.isProtected
+                    )
+                }
+            )
+        }
+    }
+
+    /**
+     * 按稳定 ID 读取分组编辑草稿。
+     */
+    fun loadPasswordGroupDraft(localPath: String, masterPassword: String, groupId: Long): PasswordGroupEditDraft? {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val group = findGroupByStableId(db.rootGroup, groupId)
+                ?: return@withDatabase null
+            if (group.parent == null) {
+                return@withDatabase null
+            }
+            val groupInfo = group.getGroupInfo()
+            PasswordGroupEditDraft(
+                groupId = toStableGroupId(group),
+                parentGroupId = toStableParentGroupId(group.parent),
+                title = groupInfo.title,
+                notes = groupInfo.notes ?: ""
+            )
+        }
+    }
+
+    /**
+     * 新建条目并返回稳定 ID。
+     */
+    fun createPasswordEntry(localPath: String, masterPassword: String, draft: PasswordEntryEditDraft): Long? {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val parent = resolveParentGroup(db, draft.parentGroupId) ?: return@withDatabase null
+            if (db.groupIsInRecycleBin(parent)) {
+                return@withDatabase null
+            }
+
+            val entry = db.createEntry() ?: return@withDatabase null
+            val entryInfo = EntryInfo().apply {
+                title = draft.title
+                username = draft.username
+                password = draft.password
+                url = draft.url
+                notes = draft.notes
+                customFields = draft.customFields
+                    .filter { field -> field.name.isNotBlank() }
+                    .map { field ->
+                        Field(
+                            field.name,
+                            ProtectedString(field.isProtected, field.value)
+                        )
+                    }
+                    .toMutableList()
+            }
+            entry.setEntryInfo(db, entryInfo)
+            db.addEntryTo(entry, parent)
+            toStableId(entry)
+        }
+    }
+
+    /**
+     * 更新条目。
+     */
+    fun updatePasswordEntry(localPath: String, masterPassword: String, draft: PasswordEntryEditDraft): Boolean {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val entryId = draft.entryId ?: return@withDatabase false
+            val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
+                ?: return@withDatabase false
+
+            val entryInfo = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false).apply {
+                title = draft.title
+                username = draft.username
+                password = draft.password
+                url = draft.url
+                notes = draft.notes
+                customFields = draft.customFields
+                    .filter { field -> field.name.isNotBlank() }
+                    .map { field ->
+                        Field(
+                            field.name,
+                            ProtectedString(field.isProtected, field.value)
+                        )
+                    }
+                    .toMutableList()
+            }
+            entry.setEntryInfo(db, entryInfo)
+
+            val targetParent = resolveParentGroup(db, draft.parentGroupId) ?: return@withDatabase false
+            if (db.groupIsInRecycleBin(targetParent)) {
+                return@withDatabase false
+            }
+
+            val currentParent = entry.parent
+            val currentParentId = toStableParentGroupId(currentParent)
+            val targetParentId = toStableParentGroupId(targetParent)
+            if (currentParent != null && currentParentId != targetParentId) {
+                db.removeEntryFrom(entry, currentParent)
+                db.addEntryTo(entry, targetParent)
+            }
+
+            db.updateEntry(entry)
+            true
+        }
+    }
+
+    /**
+     * 删除条目（仅回收站删除）。
+     */
+    fun deletePasswordEntry(localPath: String, masterPassword: String, entryId: Long): Boolean {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
+                ?: return@withDatabase false
+            if (!db.canRecycle(entry)) {
+                return@withDatabase false
+            }
+            db.recycle(entry, resolveRecycleBinTitle(db))
+            true
+        }
+    }
+
+    /**
+     * 新建分组并返回稳定 ID。
+     */
+    fun createPasswordGroup(localPath: String, masterPassword: String, draft: PasswordGroupEditDraft): Long? {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val parent = resolveParentGroup(db, draft.parentGroupId) ?: return@withDatabase null
+            if (db.groupIsInRecycleBin(parent)) {
+                return@withDatabase null
+            }
+
+            val group = db.createGroup(virtual = false) ?: return@withDatabase null
+            val groupInfo = GroupInfo().apply {
+                title = draft.title
+                notes = draft.notes
+            }
+            group.setGroupInfo(groupInfo)
+            db.addGroupTo(group, parent)
+            toStableGroupId(group)
+        }
+    }
+
+    /**
+     * 更新分组。
+     */
+    fun updatePasswordGroup(localPath: String, masterPassword: String, draft: PasswordGroupEditDraft): Boolean {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val groupId = draft.groupId ?: return@withDatabase false
+            val group = findGroupByStableId(db.rootGroup, groupId)
+                ?: return@withDatabase false
+            if (group.parent == null || db.groupIsInRecycleBin(group)) {
+                return@withDatabase false
+            }
+
+            val groupInfo = group.getGroupInfo().apply {
+                title = draft.title
+                notes = draft.notes
+            }
+            group.setGroupInfo(groupInfo)
+
+            val targetParent = resolveParentGroup(db, draft.parentGroupId) ?: return@withDatabase false
+            if (db.groupIsInRecycleBin(targetParent)) {
+                return@withDatabase false
+            }
+
+            val currentParent = group.parent
+            val currentParentId = toStableParentGroupId(currentParent)
+            val targetParentId = toStableParentGroupId(targetParent)
+            if (currentParent != null && currentParentId != targetParentId) {
+                db.removeGroupFrom(group, currentParent)
+                db.addGroupTo(group, targetParent)
+            }
+
+            db.updateGroup(group)
+            true
+        }
+    }
+
+    /**
+     * 删除分组（仅回收站删除）。
+     */
+    fun deletePasswordGroup(localPath: String, masterPassword: String, groupId: Long): Boolean {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val group = findGroupByStableId(db.rootGroup, groupId)
+                ?: return@withDatabase false
+            if (group.parent == null || db.groupIsInRecycleBin(group)) {
+                return@withDatabase false
+            }
+            if (!db.canRecycle(group)) {
+                return@withDatabase false
+            }
+            db.recycle(group, resolveRecycleBinTitle(db))
+            true
+        }
+    }
+
+    /**
      * 统计数据库中全部条目数量（不构建明细对象）。
      */
     fun countPasswordEntries(localPath: String, masterPassword: String): Int {
@@ -235,12 +452,10 @@ class KdbxTokenRepository {
     fun deleteToken(localPath: String, masterPassword: String, tokenId: Long): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val entry = findEntryById(db, tokenId) ?: return@withDatabase false
-            if (db.canRecycle(entry)) {
-                db.recycle(entry, resolveRecycleBinTitle(db))
-            } else {
-                val parent = entry.parent ?: return@withDatabase false
-                db.removeEntryFrom(entry, parent)
+            if (!db.canRecycle(entry)) {
+                return@withDatabase false
             }
+            db.recycle(entry, resolveRecycleBinTitle(db))
             true
         }
     }
@@ -595,6 +810,27 @@ class KdbxTokenRepository {
             }
         }
         return null
+    }
+
+    /**
+     * 解析草稿中的父分组，空值表示根分组。
+     */
+    private fun resolveParentGroup(database: Database, parentGroupId: Long?): Group? {
+        if (parentGroupId == null) {
+            return database.rootGroup
+        }
+        return findGroupByStableId(database.rootGroup, parentGroupId)
+    }
+
+    /**
+     * 将父分组转换为稳定 ID，根分组返回 null。
+     */
+    private fun toStableParentGroupId(parent: Group?): Long? {
+        parent ?: return null
+        if (parent.parent == null) {
+            return null
+        }
+        return toStableGroupId(parent)
     }
 
     /**

@@ -50,6 +50,8 @@ import android.graphics.BitmapFactory
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import xzynine.WebDAVPass.Android.data.OtpTokenFactory
 import xzynine.WebDAVPass.Android.util.TokenQRCodeDecoder
@@ -63,6 +65,7 @@ import top.yukonga.miuix.kmp.icon.extended.Scan
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.Executors
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.extra.WindowDialog
 import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.DelicateCoroutinesApi
 
@@ -337,8 +340,70 @@ fun ScanTokenScreen(
                 }
             }
         }
-            // 手动输入密钥功能暂不可用，已移除 TokenDialog
-            // 如需添加令牌，请使用扫描二维码或上传图片的方式
+        }
+    }
+
+    WindowDialog(
+        title = "手动输入密钥",
+        summary = "请输入完整 otpauth:// 链接",
+        show = showManualInput,
+        onDismissRequest = {
+            showManualInput.value = false
+        }
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            TextField(
+                value = manualInputText,
+                onValueChange = { manualInputText = it },
+                label = "otpauth 链接",
+                modifier = Modifier.fillMaxWidth()
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                TextButton(
+                    text = "取消",
+                    onClick = {
+                        showManualInput.value = false
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                Button(
+                    onClick = {
+                        val raw = manualInputText.trim()
+                        if (raw.isBlank()) {
+                            pickedImageError = "请输入 otpauth 链接"
+                            return@Button
+                        }
+
+                        coroutineScope.launch {
+                            try {
+                                val token = OtpTokenFactory.createFromUri(Uri.parse(raw))
+                                val added = tokenViewModel.addToken(token)
+                                if (added) {
+                                    Toast.makeText(context, "令牌添加成功", Toast.LENGTH_SHORT).show()
+                                    manualInputText = ""
+                                    showManualInput.value = false
+                                    onTokenScanned()
+                                } else {
+                                    pickedImageError = "该令牌已存在"
+                                }
+                            } catch (e: Exception) {
+                                pickedImageError = when (e) {
+                                    is IllegalArgumentException -> e.message ?: "无效的令牌参数"
+                                    is NoSuchAlgorithmException -> "不支持的加密算法"
+                                    else -> "无效的二维码格式"
+                                }
+                            }
+                        }
+                    },
+                    enabled = manualInputText.isNotBlank(),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(text = "添加")
+                }
+            }
         }
     }
 

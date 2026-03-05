@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -24,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -43,15 +45,19 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import kotlinx.coroutines.launch
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
+import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
@@ -60,18 +66,46 @@ import xzynine.WebDAVPass.Android.util.QrCodeUtil
 @Composable
 fun PasswordEntryDetailScreen(
     tokenViewModel: TokenViewModel,
-    entryId: Long
+    entryId: Long,
+    onDeleted: () -> Unit = {}
 ) {
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val currentTimeMillis by tokenViewModel.currentTimeMillis.collectAsState(System.currentTimeMillis())
 
     var selectedEntry by remember(entryId) { mutableStateOf<PasswordEntry?>(null) }
     var detailLoaded by rememberSaveable(entryId) { mutableStateOf(false) }
+    val showDeleteDialog = remember { mutableStateOf(false) }
+    var isEditing by rememberSaveable(entryId) { mutableStateOf(false) }
+
+    var editTitle by rememberSaveable(entryId) { mutableStateOf("") }
+    var editUsername by rememberSaveable(entryId) { mutableStateOf("") }
+    var editPassword by rememberSaveable(entryId) { mutableStateOf("") }
+    var editUrl by rememberSaveable(entryId) { mutableStateOf("") }
+    var editNotes by rememberSaveable(entryId) { mutableStateOf("") }
+
+    fun syncEditFields(entry: PasswordEntry) {
+        val usernameField = entry.keyValues.firstOrNull { it.fieldName.equals("UserName", ignoreCase = true) }
+        val passwordField = entry.keyValues.firstOrNull {
+            it.fieldName.equals("Password", ignoreCase = true) || it.valueType == RemainingValueType.PASSWORD
+        }
+        val urlField = entry.keyValues.firstOrNull {
+            it.fieldName.equals("URL", ignoreCase = true) || it.valueType == RemainingValueType.URL
+        }
+        val notesField = entry.keyValues.firstOrNull { it.fieldName.equals("Notes", ignoreCase = true) }
+
+        editTitle = entry.title
+        editUsername = if (entry.account.isNotBlank()) entry.account else (usernameField?.rawValue ?: "")
+        editPassword = passwordField?.rawValue ?: ""
+        editUrl = urlField?.rawValue ?: ""
+        editNotes = notesField?.rawValue ?: ""
+    }
 
     LaunchedEffect(entryId) {
         detailLoaded = false
         selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
+        selectedEntry?.let { entry -> syncEditFields(entry) }
         detailLoaded = true
     }
 
@@ -80,6 +114,7 @@ fun PasswordEntryDetailScreen(
     var showOtpSecret by rememberSaveable(entryId) { mutableStateOf(false) }
     var showQrCode by rememberSaveable(entryId) { mutableStateOf(false) }
     var isPasswordVisible by rememberSaveable(entryId) { mutableStateOf(false) }
+
     val cornerRadius = 12.dp
     val cardBorderColor = MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.18f)
 
@@ -90,11 +125,50 @@ fun PasswordEntryDetailScreen(
                 title = selectedEntry?.title ?: "密码详情",
                 navigationIcon = {},
                 actions = {
-                    IconButton(onClick = {}) {
-                        Icon(
-                            imageVector = MiuixIcons.Edit,
-                            contentDescription = "编辑"
-                        )
+                    if (selectedEntry != null) {
+                        if (isEditing) {
+                            TextButton(
+                                text = "取消",
+                                onClick = {
+                                    selectedEntry?.let { syncEditFields(it) }
+                                    isEditing = false
+                                }
+                            )
+                            TextButton(
+                                text = "保存",
+                                onClick = {
+                                    coroutineScope.launch {
+                                        val existingDraft = tokenViewModel.loadPasswordEntryDraft(entryId) ?: return@launch
+                                        val updated = tokenViewModel.updatePasswordEntry(
+                                            existingDraft.copy(
+                                                title = editTitle.trim(),
+                                                username = editUsername.trim(),
+                                                password = editPassword,
+                                                url = editUrl.trim(),
+                                                notes = editNotes
+                                            )
+                                        )
+                                        if (updated) {
+                                            selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
+                                            isEditing = false
+                                        }
+                                    }
+                                }
+                            )
+                        } else {
+                            TextButton(
+                                text = "删除",
+                                onClick = {
+                                    showDeleteDialog.value = true
+                                }
+                            )
+                            IconButton(onClick = { isEditing = true }) {
+                                Icon(
+                                    imageVector = MiuixIcons.Edit,
+                                    contentDescription = "编辑"
+                                )
+                            }
+                        }
                     }
                 },
                 defaultWindowInsetsPadding = true
@@ -133,12 +207,14 @@ fun PasswordEntryDetailScreen(
         val urlField = entry.keyValues.firstOrNull {
             it.fieldName.equals("URL", ignoreCase = true) || it.valueType == RemainingValueType.URL
         }
+        val notesField = entry.keyValues.firstOrNull { it.fieldName.equals("Notes", ignoreCase = true) }
         val otpFields = entry.keyValues.filter { isOtpField(it) }
         val otpSecretField = otpFields.firstOrNull()
         val additionalFields = entry.keyValues.filterNot { item ->
             item == usernameField
                 || item == passwordField
                 || item == urlField
+                || item == notesField
             || (selectedToken != null && isOtpField(item))
         }
         val usernameValue = when {
@@ -148,6 +224,7 @@ fun PasswordEntryDetailScreen(
         }
         val passwordValue = passwordField?.rawValue?.ifBlank { "--" } ?: "--"
         val urlValue = urlField?.rawValue?.ifBlank { "--" } ?: "--"
+        val notesValue = notesField?.rawValue?.ifBlank { "--" } ?: "--"
 
         LazyColumn(
             modifier = Modifier
@@ -267,22 +344,15 @@ fun PasswordEntryDetailScreen(
                     onClick = {}
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        if (selectedToken == null) {
-                            SuperArrow(
-                                title = "账号",
-                                summary = usernameValue,
-                                modifier = Modifier.fillMaxWidth(),
-                                startAction = {
-                                    EntryIcon(
-                                        customIconBytes = entry.customIconBytes,
-                                        standardIconId = entry.standardIconId,
-                                        primary = entry.title,
-                                        secondary = entry.account,
-                                        modifier = Modifier.padding(end = 16.dp),
-                                        contentDescription = "条目图标"
-                                    )
-                                },
-                                onClick = {}
+                        if (isEditing) {
+                            TextField(
+                                value = editTitle,
+                                onValueChange = { editTitle = it },
+                                label = "标题",
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                             HorizontalDivider(
                                 modifier = Modifier.padding(horizontal = 14.dp),
@@ -290,39 +360,121 @@ fun PasswordEntryDetailScreen(
                             )
                         }
 
-                        SuperArrow(
-                            title = "密码",
-                            summary = when {
-                                passwordValue == "--" -> "--"
-                                isPasswordVisible -> passwordValue
-                                else -> "••••••"
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {
-                                if (passwordValue == "--") return@SuperArrow
-                                if (!isPasswordVisible) {
-                                    copySensitiveToClipboard(
-                                        context = context,
-                                        label = "密码",
-                                        content = passwordValue
-                                    )
-                                    Toast.makeText(context, "密码已复制到剪贴板", Toast.LENGTH_SHORT).show()
-                                }
-                                isPasswordVisible = !isPasswordVisible
+                        if (selectedToken == null) {
+                            if (isEditing) {
+                                TextField(
+                                    value = editUsername,
+                                    onValueChange = { editUsername = it },
+                                    label = "账号",
+                                    singleLine = true,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 12.dp, vertical = 8.dp)
+                                )
+                            } else {
+                                SuperArrow(
+                                    title = "账号",
+                                    summary = usernameValue,
+                                    modifier = Modifier.fillMaxWidth(),
+                                    startAction = {
+                                        EntryIcon(
+                                            customIconBytes = entry.customIconBytes,
+                                            standardIconId = entry.standardIconId,
+                                            primary = entry.title,
+                                            secondary = entry.account,
+                                            modifier = Modifier.padding(end = 16.dp),
+                                            contentDescription = "条目图标"
+                                        )
+                                    },
+                                    onClick = {}
+                                )
                             }
-                        )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                thickness = 0.5.dp
+                            )
+                        }
+
+                        if (isEditing) {
+                            TextField(
+                                value = editPassword,
+                                onValueChange = { editPassword = it },
+                                label = "密码",
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        } else {
+                            SuperArrow(
+                                title = "密码",
+                                summary = when {
+                                    passwordValue == "--" -> "--"
+                                    isPasswordVisible -> passwordValue
+                                    else -> "••••••"
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    if (passwordValue == "--") return@SuperArrow
+                                    if (!isPasswordVisible) {
+                                        copySensitiveToClipboard(
+                                            context = context,
+                                            label = "密码",
+                                            content = passwordValue
+                                        )
+                                        Toast.makeText(context, "密码已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                                    }
+                                    isPasswordVisible = !isPasswordVisible
+                                }
+                            )
+                        }
 
                         HorizontalDivider(
                             modifier = Modifier.padding(horizontal = 14.dp),
                             thickness = 0.5.dp
                         )
 
-                        SuperArrow(
-                            title = "网站",
-                            summary = urlValue,
-                            modifier = Modifier.fillMaxWidth(),
-                            onClick = {}
+                        if (isEditing) {
+                            TextField(
+                                value = editUrl,
+                                onValueChange = { editUrl = it },
+                                label = "网站",
+                                singleLine = true,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        } else {
+                            SuperArrow(
+                                title = "网站",
+                                summary = urlValue,
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {}
+                            )
+                        }
+
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 14.dp),
+                            thickness = 0.5.dp
                         )
+
+                        if (isEditing) {
+                            TextField(
+                                value = editNotes,
+                                onValueChange = { editNotes = it },
+                                label = "备注",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        } else {
+                            SuperArrow(
+                                title = "备注",
+                                summary = notesValue,
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {}
+                            )
+                        }
                     }
                 }
             }
@@ -364,6 +516,28 @@ fun PasswordEntryDetailScreen(
                 }
             }
         }
+    }
+
+    selectedEntry?.let { entry ->
+        ConfirmationDialog(
+            title = "确认删除",
+            summary = "\"${entry.title}\" 将移入回收站。",
+            show = showDeleteDialog,
+            onDismiss = {
+                showDeleteDialog.value = false
+            },
+            confirmButtonText = "删除",
+            isDestructive = true,
+            onConfirm = {
+                coroutineScope.launch {
+                    val deleted = tokenViewModel.deletePasswordEntry(entryId)
+                    if (deleted) {
+                        showDeleteDialog.value = false
+                        onDeleted()
+                    }
+                }
+            }
+        )
     }
 }
 
