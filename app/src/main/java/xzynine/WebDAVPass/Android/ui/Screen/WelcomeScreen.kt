@@ -1,22 +1,18 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
 import android.net.Uri
-import xzylib.base.util.Logger
 import xzylib.base.util.ToastUtils
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -24,37 +20,35 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.net.URLEncoder
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
-import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
 import xzynine.WebDAVPass.Android.ui.Dialog.CreateMasterPasswordDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CreateMode
-import xzynine.WebDAVPass.Android.ui.Dialog.PasswordDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 
 
@@ -68,8 +62,9 @@ fun WelcomeScreen(
     onEnterLibrary: () -> Unit
 ) {
     val context = LocalContext.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val coroutineScope = rememberCoroutineScope()
-    val cornerRadius = getAppRoundedCorner()
+    val inlineUnlockFocusRequester = remember { FocusRequester() }
     val history by tokenViewModel.libraryHistory.collectAsState()
     var showCloudImportDialog by remember { mutableStateOf(false) }
     var showCloudCreateDialog by remember { mutableStateOf(false) }
@@ -77,11 +72,26 @@ fun WelcomeScreen(
     var createMode by remember { mutableStateOf(CreateMode.LOCAL) }
     var pendingCreateMasterPassword by remember { mutableStateOf("") }
     var pendingUnlockLibrary by remember { mutableStateOf<LibraryContext?>(null) }
-    val showUnlockDialog = remember { mutableStateOf(false) }
+    var inlineUnlockPassword by remember { mutableStateOf("") }
+    var showInlinePassword by remember { mutableStateOf(false) }
+    var inlineUnlockLoading by remember { mutableStateOf(false) }
+    var inlineUnlockFocusNonce by remember { mutableStateOf(0) }
 
-    fun requestUnlockAndEnter(libraryContext: LibraryContext) {
+    /**
+     * 显示历史库顶部的内联解锁输入行
+     */
+    fun showInlineUnlock(libraryContext: LibraryContext) {
         pendingUnlockLibrary = libraryContext
-        showUnlockDialog.value = true
+        inlineUnlockPassword = ""
+        showInlinePassword = false
+        inlineUnlockFocusNonce++
+    }
+
+    LaunchedEffect(pendingUnlockLibrary?.id, inlineUnlockFocusNonce) {
+        if (pendingUnlockLibrary != null) {
+            inlineUnlockFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
     }
 
     val localImportLauncher = rememberLauncherForActivityResult(
@@ -103,7 +113,7 @@ fun WelcomeScreen(
                     localPath = path
                 )
                 tokenViewModel.openLibraryContext(item)
-                requestUnlockAndEnter(item)
+                showInlineUnlock(item)
             }
         }
     )
@@ -132,7 +142,7 @@ fun WelcomeScreen(
                 if (unlockOk) {
                     onEnterLibrary()
                 } else {
-                    requestUnlockAndEnter(item)
+                    showInlineUnlock(item)
                 }
             }
         }
@@ -157,6 +167,108 @@ fun WelcomeScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Text(text = "请选择数据库来源", fontSize = 18.sp)
+
+            Text(text = "历史库")
+
+            pendingUnlockLibrary?.let { unlockLibrary ->
+                Text(text = "解锁: ${unlockLibrary.displayName}")
+
+                TextField(
+                    value = inlineUnlockPassword,
+                    onValueChange = { inlineUnlockPassword = it },
+                    label = "请输入主密码",
+                    visualTransformation = if (showInlinePassword) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    trailingIcon = {
+                        TextButton(
+                            text = if (showInlinePassword) "隐藏" else "显示",
+                            onClick = { showInlinePassword = !showInlinePassword }
+                        )
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(inlineUnlockFocusRequester),
+                    singleLine = true
+                )
+
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        text = "取消",
+                        onClick = {
+                            pendingUnlockLibrary = null
+                            inlineUnlockPassword = ""
+                            showInlinePassword = false
+                            keyboardController?.hide()
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    Button(
+                        onClick = {
+                            if (inlineUnlockPassword.isBlank()) {
+                                ToastUtils.showShortToast(context, "请输入主密码")
+                                return@Button
+                            }
+                            coroutineScope.launch {
+                                inlineUnlockLoading = true
+                                val ok = tokenViewModel.unlockCurrentLibrary(inlineUnlockPassword)
+                                inlineUnlockLoading = false
+                                if (ok) {
+                                    pendingUnlockLibrary = null
+                                    inlineUnlockPassword = ""
+                                    showInlinePassword = false
+                                    keyboardController?.hide()
+                                    onEnterLibrary()
+                                } else {
+                                    val message = tokenViewModel.getLastUnlockErrorMessage()
+                                        ?: "解锁失败：主密码不正确或文件无效"
+                                    ToastUtils.showShortToast(context, message)
+                                }
+                            }
+                        },
+                        modifier = Modifier.weight(1f),
+                        enabled = !inlineUnlockLoading
+                    ) {
+                        Text(text = if (inlineUnlockLoading) "解锁中..." else "解锁")
+                    }
+                }
+            }
+
+            if (history.isEmpty()) {
+                Text(text = "暂无历史记录")
+            } else {
+                history.forEach { item ->
+                    SuperArrow(
+                        title = item.displayName,
+                        summary = if (item.sourceType == LibrarySourceType.CLOUD) {
+                            item.remoteFilePath ?: item.remoteBaseUrl.orEmpty()
+                        } else {
+                            item.localPath
+                        },
+                        startAction = {
+                            Icon(
+                                modifier = Modifier.padding(end = 16.dp),
+                                imageVector = if (item.sourceType == LibrarySourceType.CLOUD) MiuixIcons.CloudFill else MiuixIcons.Download,
+                                contentDescription = "历史库"
+                            )
+                        },
+                        onClick = {
+                            coroutineScope.launch {
+                                tokenViewModel.switchLibrary(item.id)
+                                showInlineUnlock(item)
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.weight(1f))
 
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
@@ -203,39 +315,6 @@ fun WelcomeScreen(
                     Text(text = "云端新建")
                 }
             }
-
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(text = "历史库")
-
-            if (history.isEmpty()) {
-                Text(text = "暂无历史记录")
-            } else {
-                history.forEach { item ->
-                    SuperArrow(
-                        title = item.displayName,
-                        summary = if (item.sourceType == LibrarySourceType.CLOUD) {
-                            item.remoteFilePath ?: item.remoteBaseUrl.orEmpty()
-                        } else {
-                            item.localPath
-                        },
-                        startAction = {
-                            Icon(
-                                modifier = Modifier.padding(end = 16.dp),
-                                imageVector = if (item.sourceType == LibrarySourceType.CLOUD) MiuixIcons.CloudFill else MiuixIcons.Download,
-                                contentDescription = "历史库"
-                            )
-                        },
-                        onClick = {
-                            coroutineScope.launch {
-                                tokenViewModel.switchLibrary(item.id)
-                                requestUnlockAndEnter(item)
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                    )
-                }
-            }
         }
     }
 
@@ -248,7 +327,7 @@ fun WelcomeScreen(
                 coroutineScope.launch {
                     tokenViewModel.openLibraryContext(library)
                     showCloudImportDialog = false
-                    requestUnlockAndEnter(library)
+                    showInlineUnlock(library)
                 }
             }
         )
@@ -270,7 +349,7 @@ fun WelcomeScreen(
                     if (unlockOk) {
                         onEnterLibrary()
                     } else {
-                        requestUnlockAndEnter(library)
+                        showInlineUnlock(library)
                     }
                 }
             }
@@ -293,33 +372,6 @@ fun WelcomeScreen(
                     showCloudCreateDialog = true
                 }
             }
-        )
-    }
-
-    if (showUnlockDialog.value) {
-        PasswordDialog(
-            title = "解锁数据库",
-            summary = pendingUnlockLibrary?.displayName,
-            show = showUnlockDialog,
-            onDismiss = {
-                pendingUnlockLibrary = null
-                showUnlockDialog.value = false
-            },
-            onConfirm = { password ->
-                coroutineScope.launch {
-                    val ok = tokenViewModel.unlockCurrentLibrary(password)
-                    if (ok) {
-                        showUnlockDialog.value = false
-                        pendingUnlockLibrary = null
-                        onEnterLibrary()
-                    } else {
-                        val message = tokenViewModel.getLastUnlockErrorMessage()
-                            ?: "解锁失败：主密码不正确或文件无效"
-                        ToastUtils.showShortToast(context, message)
-                    }
-                }
-            },
-            confirmButtonText = "解锁"
         )
     }
 }
