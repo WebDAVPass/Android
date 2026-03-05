@@ -7,7 +7,7 @@ import android.content.Context
 import android.os.Build
 import android.os.PersistableBundle
 import android.widget.ImageView
-import android.widget.Toast
+import xzylib.base.util.ToastUtils
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -245,7 +245,7 @@ fun PasswordEntryDetailScreen(
                                     val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                                     val clipData = ClipData.newPlainText("2FA Token", code.code)
                                     clipboardManager.setPrimaryClip(clipData)
-                                    Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                                    ToastUtils.showShortToast(context, "已复制到剪贴板")
                                 }
                             }
                         },
@@ -422,7 +422,7 @@ fun PasswordEntryDetailScreen(
                                             label = "密码",
                                             content = passwordValue
                                         )
-                                        Toast.makeText(context, "密码已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                                        ToastUtils.showShortToast(context, "密码已复制到剪贴板")
                                     }
                                     isPasswordVisible = !isPasswordVisible
                                 }

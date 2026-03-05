@@ -1,8 +1,8 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
 import android.net.Uri
-import android.util.Log
-import android.widget.Toast
+import xzylib.base.util.Logger
+import xzylib.base.util.ToastUtils
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -93,7 +93,7 @@ fun WelcomeScreen(
             coroutineScope.launch {
                 val path = tokenViewModel.persistKdbxFromUri(uri)
                 if (path == null) {
-                    Toast.makeText(context, "导入失败：无法读取文件", Toast.LENGTH_SHORT).show()
+                    ToastUtils.showShortToast(context, "导入失败：无法读取文件")
                     return@launch
                 }
 
@@ -117,7 +117,7 @@ fun WelcomeScreen(
             coroutineScope.launch {
                 val path = tokenViewModel.createLocalKdbx(uri, pendingCreateMasterPassword)
                 if (path == null) {
-                    Toast.makeText(context, "新建失败：无法创建文件", Toast.LENGTH_SHORT).show()
+                    ToastUtils.showShortToast(context, "新建失败：无法创建文件")
                     return@launch
                 }
 
@@ -315,7 +315,7 @@ fun WelcomeScreen(
                     } else {
                         val message = tokenViewModel.getLastUnlockErrorMessage()
                             ?: "解锁失败：主密码不正确或文件无效"
-                        Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                        ToastUtils.showShortToast(context, message)
                     }
                 }
             },

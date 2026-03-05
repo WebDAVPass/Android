@@ -1,7 +1,7 @@
 package xzynine.WebDAVPass.Android.util
 
 import android.graphics.Bitmap
-import android.util.Log
+import xzylib.base.util.Logger
 import androidx.camera.core.ImageProxy
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.ChecksumException
@@ -66,7 +66,7 @@ class TokenQRCodeDecoder {
             return decodeBinaryBitmap(binaryBitmap)
         } catch (e: Exception) {
             // 亮度源创建失败，记录错误
-            Log.e(tag, "二维码处理失败: ${e.message}")
+            Logger.e(tag, "二维码处理失败: ${e.message}")
             return ParseResult(success = false, errorType = ParseResult.ErrorType.UNKNOWN_ERROR)
         } finally {
             qrCodeReader.reset()
@@ -119,7 +119,7 @@ class TokenQRCodeDecoder {
                 return decodeBinaryBitmap(binaryBitmap)
             } catch (e: Exception) {
                 // 亮度源创建失败，记录错误
-                Log.e(tag, "二维码处理失败: ${e.message}")
+                Logger.e(tag, "二维码处理失败: ${e.message}")
                 return ParseResult(success = false, errorType = ParseResult.ErrorType.UNKNOWN_ERROR)
             } finally {
                 qrCodeReader.reset()
@@ -146,7 +146,7 @@ class TokenQRCodeDecoder {
             
             // 检查是否是重复的URL，避免重复日志
             if (resultText != lastDecodedUrl) {
-                Log.d(tag, "成功解析二维码: $resultText")
+                Logger.d(tag, "成功解析二维码: $resultText")
                 lastDecodedUrl = resultText
             }
             
@@ -167,7 +167,7 @@ class TokenQRCodeDecoder {
                 
                 // 检查是否是重复的URL，避免重复日志
                 if (resultText != lastDecodedUrl) {
-                    Log.d(tag, "成功解析二维码: $resultText")
+                    Logger.d(tag, "成功解析二维码: $resultText")
                     lastDecodedUrl = resultText
                 }
                 
@@ -183,7 +183,7 @@ class TokenQRCodeDecoder {
                     
                     // 检查是否是重复的URL，避免重复日志
                     if (resultText != lastDecodedUrl) {
-                        Log.d(tag, "成功解析二维码: $resultText")
+                        Logger.d(tag, "成功解析二维码: $resultText")
                         lastDecodedUrl = resultText
                     }
                     
@@ -193,15 +193,15 @@ class TokenQRCodeDecoder {
                     return ParseResult(success = false, errorType = ParseResult.ErrorType.NOT_FOUND)
                 } catch (e3: ChecksumException) {
                     // 二维码校验和错误，记录日志
-                    Log.e(tag, "二维码校验和错误")
+                    Logger.e(tag, "二维码校验和错误")
                     return ParseResult(success = false, errorType = ParseResult.ErrorType.CHECKSUM_ERROR)
                 } catch (e3: FormatException) {
                     // 二维码格式错误，记录日志
-                    Log.e(tag, "二维码格式错误")
+                    Logger.e(tag, "二维码格式错误")
                     return ParseResult(success = false, errorType = ParseResult.ErrorType.FORMAT_ERROR)
                 } catch (e3: Exception) {
                     // 其他错误，记录日志
-                    Log.e(tag, "二维码解析未知错误: ${e3.message}", e3)
+                    Logger.e(tag, "二维码解析未知错误: ${e3.message}", e3)
                     return ParseResult(success = false, errorType = ParseResult.ErrorType.UNKNOWN_ERROR)
                 }
             }

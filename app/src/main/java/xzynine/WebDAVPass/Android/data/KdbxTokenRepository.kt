@@ -1,6 +1,6 @@
 package xzynine.WebDAVPass.Android.data
 
-import android.util.Log
+import xzylib.base.util.Logger
 import com.kunzisoft.keepass.database.element.Database
 import com.kunzisoft.keepass.database.element.Entry
 import com.kunzisoft.keepass.database.element.Field
@@ -88,7 +88,7 @@ class KdbxTokenRepository {
             val file = File(localPath)
             val hint = buildFileHint(file)
             lastUnlockErrorMessage = "${it.javaClass.simpleName}: ${it.message ?: "unknown"} | $hint"
-            Log.e(LOG_TAG, "validatePassword failed, path=$localPath, hint=$hint, message=${it.message}", it)
+            Logger.e(LOG_TAG, "validatePassword failed, path=$localPath, hint=$hint, message=${it.message}", it)
         }.getOrDefault(false)
     }
 

@@ -1,6 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.Dialog
 
-import android.widget.Toast
+import xzylib.base.util.ToastUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -187,11 +187,11 @@ fun WebDavConfigContent(
         Button(
             onClick = {
                 if (serverUrl.trim().isEmpty()) {
-                    Toast.makeText(context, "请输入服务器地址", Toast.LENGTH_SHORT).show()
+                    ToastUtils.showShortToast(context, "请输入服务器地址")
                     return@Button
                 }
                 if (urlError != null) {
-                    Toast.makeText(context, urlError, Toast.LENGTH_SHORT).show()
+                    ToastUtils.showShortToast(context, urlError.toString())
                     return@Button
                 }
 
@@ -202,12 +202,12 @@ fun WebDavConfigContent(
                 }
 
                 if (testPassword.isEmpty()) {
-                    Toast.makeText(context, "请输入密码", Toast.LENGTH_SHORT).show()
+                    ToastUtils.showShortToast(context, "请输入密码")
                     return@Button
                 }
 
                 isTesting = true
-                Toast.makeText(context, "正在测试连接...", Toast.LENGTH_SHORT).show()
+                ToastUtils.showShortToast(context, "正在测试连接...")
 
                 coroutineScope.launch(Dispatchers.IO) {
                     try {
@@ -216,16 +216,15 @@ fun WebDavConfigContent(
 
                         withContext(Dispatchers.Main) {
                             if (success) {
-                                Toast.makeText(context, "连接成功", Toast.LENGTH_SHORT).show()
+                                ToastUtils.showShortToast(context, "连接成功")
                             } else {
-                                Toast.makeText(context, "连接失败", Toast.LENGTH_SHORT).show()
+                                ToastUtils.showShortToast(context, "连接失败")
                             }
                             isTesting = false
                         }
                     } catch (e: Exception) {
                         withContext(Dispatchers.Main) {
-                            Toast.makeText(context, "连接错误: ${e.message}", Toast.LENGTH_SHORT)
-                                .show()
+                            ToastUtils.showShortToast(context, "连接错误: ${e.message}")
                             isTesting = false
                         }
                     }
@@ -240,7 +239,7 @@ fun WebDavConfigContent(
         Button(
             onClick = {
                 if (serverUrl.trim().isEmpty() || username.isBlank() || password.isBlank()) {
-                    Toast.makeText(context, "请先填写地址、用户名和密码", Toast.LENGTH_SHORT).show()
+                    ToastUtils.showShortToast(context, "请先填写地址、用户名和密码")
                     return@Button
                 }
 
@@ -286,11 +285,11 @@ fun WebDavConfigContent(
         Button(
             onClick = {
                 if (serverUrl.trim().isEmpty()) {
-                    Toast.makeText(context, "请输入服务器地址", Toast.LENGTH_SHORT).show()
+                    ToastUtils.showShortToast(context, "请输入服务器地址")
                     return@Button
                 }
                 if (urlError != null) {
-                    Toast.makeText(context, urlError, Toast.LENGTH_SHORT).show()
+                    ToastUtils.showShortToast(context, urlError.toString())
                     return@Button
                 }
 
@@ -301,7 +300,7 @@ fun WebDavConfigContent(
                 }
 
                 if (finalPassword.isEmpty()) {
-                    Toast.makeText(context, "请输入密码", Toast.LENGTH_SHORT).show()
+                    ToastUtils.showShortToast(context, "请输入密码")
                     return@Button
                 }
 

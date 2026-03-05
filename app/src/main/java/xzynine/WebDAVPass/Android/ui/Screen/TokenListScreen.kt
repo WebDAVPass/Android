@@ -3,7 +3,7 @@ package xzynine.WebDAVPass.Android.ui.Screen
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
-import android.widget.Toast
+import xzylib.base.util.ToastUtils
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -87,7 +87,7 @@ fun TokenListScreen(tokenViewModel: TokenViewModel, onEntryClick: (Long) -> Unit
                             val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             val clipData = ClipData.newPlainText("2FA Token", code.code)
                             clipboardManager.setPrimaryClip(clipData)
-                            Toast.makeText(context, "已复制到剪贴板", Toast.LENGTH_SHORT).show()
+                            ToastUtils.showShortToast(context, "已复制到剪贴板")
                         }
                     },
                     onLongClick = {

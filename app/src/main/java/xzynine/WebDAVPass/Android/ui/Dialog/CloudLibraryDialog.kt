@@ -1,7 +1,7 @@
 package xzynine.WebDAVPass.Android.ui.Dialog
 
-import android.util.Log
-import android.widget.Toast
+import xzylib.base.util.Logger
+import xzylib.base.util.ToastUtils
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -126,9 +126,9 @@ fun CloudLibraryDialog(
         return withContext(Dispatchers.IO) {
             val auth = Authorization(user, pass)
             val dirUrl = buildDirectoryUrl(baseUrl, relativeDirectory)
-            Log.d(SEARCH_LOG_TAG, "listCurrentDirectory start, baseUrl=$baseUrl, relativeDirectory=$relativeDirectory, dirUrl=$dirUrl")
+            Logger.d(SEARCH_LOG_TAG, "listCurrentDirectory start, baseUrl=$baseUrl, relativeDirectory=$relativeDirectory, dirUrl=$dirUrl")
             val entries = WebDav(dirUrl, auth).listFiles()
-            Log.d(SEARCH_LOG_TAG, "listCurrentDirectory entries=${entries.size}, dirUrl=$dirUrl")
+            Logger.d(SEARCH_LOG_TAG, "listCurrentDirectory entries=${entries.size}, dirUrl=$dirUrl")
 
             val dirPrefix = normalizeRelativePath(relativeDirectory)
             val dirs = entries
@@ -157,7 +157,7 @@ fun CloudLibraryDialog(
                 .distinct()
                 .sorted()
 
-            Log.d(SEARCH_LOG_TAG, "listCurrentDirectory done, dirs=${dirs.size}, files=${files.size}, relativeDirectory=$relativeDirectory")
+            Logger.d(SEARCH_LOG_TAG, "listCurrentDirectory done, dirs=${dirs.size}, files=${files.size}, relativeDirectory=$relativeDirectory")
 
             dirs to files
         }
@@ -255,7 +255,7 @@ fun CloudLibraryDialog(
                             status = "已连接，当前为根目录"
                         } catch (e: Exception) {
                             val msg = e.message.orEmpty()
-                            Log.e(SEARCH_LOG_TAG, "UI connectAndBrowseRoot failed, message=$msg", e)
+                            Logger.e(SEARCH_LOG_TAG, "UI connectAndBrowseRoot failed, message=$msg", e)
                             status = "连接失败：$msg"
                         }
                     }
@@ -312,7 +312,7 @@ fun CloudLibraryDialog(
                                 status = "已切换到根目录"
                             } catch (e: Exception) {
                                 val msg = e.message.orEmpty()
-                                Log.e(SEARCH_LOG_TAG, "UI goRoot failed, message=$msg", e)
+                                Logger.e(SEARCH_LOG_TAG, "UI goRoot failed, message=$msg", e)
                                 status = "加载失败：$msg"
                             }
                         }
@@ -334,7 +334,7 @@ fun CloudLibraryDialog(
                                     status = "已返回上级目录"
                                 } catch (e: Exception) {
                                     val msg = e.message.orEmpty()
-                                    Log.e(SEARCH_LOG_TAG, "UI goParent failed, message=$msg", e)
+                                    Logger.e(SEARCH_LOG_TAG, "UI goParent failed, message=$msg", e)
                                     status = "加载失败：$msg"
                                 }
                             }
@@ -361,7 +361,7 @@ fun CloudLibraryDialog(
                                     status = "已进入目录：/$dirPath"
                                 } catch (e: Exception) {
                                     val msg = e.message.orEmpty()
-                                    Log.e(SEARCH_LOG_TAG, "UI openDir failed, dirPath=$dirPath, message=$msg", e)
+                                    Logger.e(SEARCH_LOG_TAG, "UI openDir failed, dirPath=$dirPath, message=$msg", e)
                                     status = "目录加载失败：$msg"
                                 }
                             }
@@ -382,12 +382,12 @@ fun CloudLibraryDialog(
                                     importRemote(baseUrl, filePath, username, password)
                                 } catch (e: Exception) {
                                     val msg = e.message.orEmpty()
-                                    Log.e(SEARCH_LOG_TAG, "UI importFromList failed, filePath=$filePath, message=$msg", e)
+                                    Logger.e(SEARCH_LOG_TAG, "UI importFromList failed, filePath=$filePath, message=$msg", e)
                                     null
                                 }
 
                                 if (selected == null) {
-                                    Toast.makeText(context, "导入失败：$filePath", Toast.LENGTH_SHORT).show()
+                                    ToastUtils.showShortToast(context, "导入失败：$filePath")
                                     return@launch
                                 }
 
@@ -407,11 +407,11 @@ fun CloudLibraryDialog(
                 coroutineScope.launch {
                     if (mode == CloudMode.CREATE) {
                         if (createPassword.isBlank()) {
-                            Toast.makeText(context, "请输入主密码", Toast.LENGTH_SHORT).show()
+                            ToastUtils.showShortToast(context, "请输入主密码")
                             return@launch
                         }
                         if (createPassword != createPasswordConfirm) {
-                            Toast.makeText(context, "两次主密码不一致", Toast.LENGTH_SHORT).show()
+                            ToastUtils.showShortToast(context, "两次主密码不一致")
                             return@launch
                         }
                     }
@@ -434,7 +434,7 @@ fun CloudLibraryDialog(
                     }
 
                     if (selected == null) {
-                        Toast.makeText(context, "操作失败，请检查路径和账号信息", Toast.LENGTH_SHORT).show()
+                        ToastUtils.showShortToast(context, "操作失败，请检查路径和账号信息")
                         return@launch
                     }
 

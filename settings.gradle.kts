@@ -25,6 +25,7 @@ dependencyResolutionManagement {
 rootProject.name = "WebDAVPass"
 
 include(":app")
+include(":base")
 include(":crypto")
 include(":database")
 include(":icon-pack", ":icon-pack:classic", ":icon-pack:material")

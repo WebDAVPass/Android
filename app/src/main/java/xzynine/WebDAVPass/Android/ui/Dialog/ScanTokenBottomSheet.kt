@@ -5,10 +5,10 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Handler
-import android.util.Log
+import xzylib.base.util.Logger
 import android.util.Size
 import android.view.ViewGroup
-import android.widget.Toast
+import xzylib.base.util.ToastUtils  
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.camera.core.Camera
@@ -97,11 +97,10 @@ fun ScanTokenScreen(
         contract = ActivityResultContracts.RequestPermission(),
         onResult = { isGranted ->
             if (!isGranted) {
-                Toast.makeText(
+                ToastUtils.showShortToast(
                     context,
-                    "需要相机权限才能扫描二维码",
-                    Toast.LENGTH_SHORT
-                ).show()
+                    "需要相机权限才能扫描二维码"
+                )
                 onDismiss()
             }
         }
@@ -138,7 +137,7 @@ fun ScanTokenScreen(
                         coroutineScope.launch(Dispatchers.Main) {
                             val added = tokenViewModel.addToken(token)
                             if (added) {
-                                Toast.makeText(context, "令牌添加成功", Toast.LENGTH_SHORT).show()
+                                ToastUtils.showShortToast(context, "令牌添加成功")
                                 onTokenScanned()
                             } else {
                                 pickedImageError = "该令牌已存在"
@@ -161,7 +160,7 @@ fun ScanTokenScreen(
                     }
                 }
             } catch (e: Exception) {
-                Log.e("ImagePicker", "Error: ${e.message}", e)
+                Logger.e("ImagePicker", "Error: ${e.message}", e)
                 pickedImageError = "图片处理失败"
             }
         }
@@ -270,11 +269,10 @@ fun ScanTokenScreen(
                                                 // 在主线程上更新UI
                                                 coroutineScope.launch {
                                                     // 显示成功提示
-                                                    Toast.makeText(
+                                                    ToastUtils.showShortToast(
                                                         context,
-                                                        "令牌添加成功",
-                                                        Toast.LENGTH_SHORT
-                                                    ).show()
+                                                        "令牌添加成功"
+                                                    )
 
                                                     // 通知父组件
                                                     onTokenScanned()
@@ -302,7 +300,7 @@ fun ScanTokenScreen(
                                     imageAnalyzer
                                 )
                             } catch (exc: Exception) {
-                                Log.e("ScanTokenScreen", "无法绑定相机用例", exc)
+                                Logger.e("ScanTokenScreen", "无法绑定相机用例", exc)
                             }
                         }, ContextCompat.getMainExecutor(context))
                     }
@@ -382,7 +380,7 @@ fun ScanTokenScreen(
                                 val token = OtpTokenFactory.createFromUri(Uri.parse(raw))
                                 val added = tokenViewModel.addToken(token)
                                 if (added) {
-                                    Toast.makeText(context, "令牌添加成功", Toast.LENGTH_SHORT).show()
+                                    ToastUtils.showShortToast(context, "令牌添加成功")
                                     manualInputText = ""
                                     showManualInput.value = false
                                     onTokenScanned()
@@ -462,7 +460,7 @@ private fun processImageProxy(
                 // 更新最近扫描的URL
                 lastScannedUrl.value = tokenString
 
-                Log.d("QRCodeScanner", "Found QR code: $tokenString")
+                Logger.d("QRCodeScanner", "Found QR code: $tokenString")
 
                 try {
                     // 解析URI对象
@@ -470,7 +468,7 @@ private fun processImageProxy(
 
                     // 从URI创建令牌 - 这里会执行令牌规则验证
                     val token = OtpTokenFactory.createFromUri(uri)
-                    Log.d("QRCodeScanner", "令牌规则验证通过，准备检查是否已存在")
+                    Logger.d("QRCodeScanner", "令牌规则验证通过，准备检查是否已存在")
 
                     // 检查令牌是否已存在，使用同步方式避免重复处理
                     val isExists = runBlocking {
@@ -484,14 +482,13 @@ private fun processImageProxy(
 
                     if (isExists) {
                         // 令牌已存在，直接截停，显示提示
-                        Log.d("QRCodeScanner", "令牌已存在，跳过添加操作")
+                        Logger.d("QRCodeScanner", "令牌已存在，跳过添加操作")
                         // 使用主线程显示Toast
                         Handler(context.mainLooper).post {
-                            Toast.makeText(
+                            ToastUtils.showShortToast(
                                 context,
-                                "该令牌已存在",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                                "该令牌已存在"
+                            )
                         }
                         return@use // 直接返回，不进入后续步骤
                     }
@@ -508,48 +505,45 @@ private fun processImageProxy(
                                 // 不在这里清除URL，由父组件关闭扫描窗口时处理
                             } else {
                                 // 理论上不会走到这里，因为已经提前检查过了
-                                Log.d("QRCodeScanner", "Token addition failed unexpectedly")
-                                Toast.makeText(
+                                Logger.d("QRCodeScanner", "Token addition failed unexpectedly")
+                                ToastUtils.showShortToast(
                                     context,
-                                    "添加令牌失败",
-                                    Toast.LENGTH_SHORT
-                                ).show()
+                                    "添加令牌失败"
+                                )
                             }
                         } catch (e: Exception) {
-                            Log.e("QRCodeScanner", "Error adding token: ${e.message}", e)
-                            Toast.makeText(
+                            Logger.e("QRCodeScanner", "Error adding token: ${e.message}", e)
+                            ToastUtils.showShortToast(
                                 context,
-                                "添加令牌失败",
-                                Toast.LENGTH_SHORT
-                            ).show()
+                                "添加令牌失败"
+                            )
                         }
                     }
                 } catch (e: Exception) {
                     val errorMsg = when (e) {
                         is IllegalArgumentException -> {
                             // 令牌规则验证失败，显示具体错误信息
-                            Log.e("QRCodeScanner", "令牌规则验证失败: ${e.message}", e)
+                            Logger.e("QRCodeScanner", "令牌规则验证失败: ${e.message}", e)
                             e.message ?: "无效的令牌参数"
                         }
                         is NoSuchAlgorithmException -> {
                             // 算法不支持
-                            Log.e("QRCodeScanner", "不支持的算法: ${e.message}", e)
+                            Logger.e("QRCodeScanner", "不支持的算法: ${e.message}", e)
                             "不支持的加密算法"
                         }
                         else -> {
                             // 其他错误
-                            Log.e("QRCodeScanner", "二维码处理失败: ${e.message}", e)
+                            Logger.e("QRCodeScanner", "二维码处理失败: ${e.message}", e)
                             "无效的二维码格式"
                         }
                     }
 
                     // 使用主线程显示Toast
                     Handler(context.mainLooper).post {
-                        Toast.makeText(
+                        ToastUtils.showShortToast(
                             context,
-                            errorMsg,
-                            Toast.LENGTH_SHORT
-                        ).show()
+                            errorMsg
+                        )
                     }
                 }
                 }
@@ -562,15 +556,14 @@ private fun processImageProxy(
                         else -> "二维码解析失败"
                     }
                     // 添加更多调试信息，包括图像信息
-                    Log.e("QRCodeScanner", "$errorMessage: 图像尺寸=${image.width}x${image.height}，图像格式=${image.format}")
+                    Logger.e("QRCodeScanner", "$errorMessage: 图像尺寸=${image.width}x${image.height}，图像格式=${image.format}")
 
                     // 在主线程显示Toast
                     Handler(context.mainLooper).post {
-                        Toast.makeText(
+                        ToastUtils.showShortToast(
                             context,
-                            errorMessage,
-                            Toast.LENGTH_SHORT
-                        ).show()
+                            errorMessage
+                        )
                     }
                 }
                 // 其他情况（如NOT_FOUND），不显示提示，也不记录日志
@@ -580,15 +573,14 @@ private fun processImageProxy(
             }
         }
     } catch (e: Exception) {
-        Log.e("QRCodeScanner", "Error processing image: ${e.message}", e)
+        Logger.e("QRCodeScanner", "Error processing image: ${e.message}", e)
 
         // 显示未知错误提示
         Handler(context.mainLooper).post {
-            Toast.makeText(
+            ToastUtils.showShortToast(
                 context,
-                "二维码处理失败",
-                Toast.LENGTH_SHORT
-            ).show()
+                "二维码处理失败"
+            )
         }
     }
 }

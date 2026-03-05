@@ -133,6 +133,8 @@ dependencies {
     implementation(project(":crypto"))
     implementation(project(":database"))
     implementation(project(":icon-pack"))
+    // 导入base模块
+    implementation(project(":base"))
     implementation("com.google.code.gson:gson:2.10.1") // Gson JSON解析库
     // 接入令牌图标系统模块
     implementation(project(":text-drawable"))
