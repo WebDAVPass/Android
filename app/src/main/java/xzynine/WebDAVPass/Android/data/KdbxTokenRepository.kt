@@ -1,5 +1,8 @@
 package xzynine.WebDAVPass.Android.data
 
+import android.content.Context
+import android.net.Uri
+import android.provider.OpenableColumns
 import xzylib.base.util.Logger
 import com.kunzisoft.keepass.database.element.Database
 import com.kunzisoft.keepass.database.element.Entry
@@ -19,10 +22,14 @@ import com.kunzisoft.keepass.otp.TokenCalculator
 import java.io.ByteArrayOutputStream
 import java.io.ByteArrayInputStream
 import java.io.File
+import java.io.InputStream
+import java.io.OutputStream
 import java.util.UUID
 import kotlin.math.abs
 
-class KdbxTokenRepository {
+class KdbxTokenRepository(context: Context) {
+
+    private val appContext: Context = context.applicationContext
 
     @Volatile
     private var lastUnlockErrorMessage: String? = null
@@ -39,13 +46,35 @@ class KdbxTokenRepository {
         ByteArray(0)
     }
 
+    /**
+     * 数据库存储定位。
+     */
+    private sealed interface DatabaseLocation {
+        data class FileLocation(val file: File) : DatabaseLocation
+        data class UriLocation(val uri: Uri) : DatabaseLocation
+    }
+
     fun initializeDatabase(localPath: String, masterPassword: String) {
-        val file = File(localPath)
-        file.parentFile?.mkdirs()
-        if (file.exists() && file.length() > 0) {
-            return
+        val location = resolveLocation(localPath)
+        when (location) {
+            is DatabaseLocation.FileLocation -> {
+                val file = location.file
+                file.parentFile?.mkdirs()
+                if (file.exists() && file.length() > 0) {
+                    return
+                }
+                file.writeBytes(createDatabaseBytes(masterPassword))
+            }
+
+            is DatabaseLocation.UriLocation -> {
+                if (hasUriData(location.uri)) {
+                    return
+                }
+                openOutputStream(location).use { output ->
+                    output.write(createDatabaseBytes(masterPassword))
+                }
+            }
         }
-        file.writeBytes(createDatabaseBytes(masterPassword))
     }
 
     fun createDatabaseBytes(masterPassword: String): ByteArray {
@@ -74,12 +103,10 @@ class KdbxTokenRepository {
     fun validatePassword(localPath: String, masterPassword: String): Boolean {
         lastUnlockErrorMessage = null
         return runCatching {
-            val file = File(localPath)
-            if (!file.exists() || file.length() == 0L) {
-                initializeDatabase(localPath, masterPassword)
-            }
+            val location = resolveLocation(localPath)
+            ensureLocationInitialized(location, masterPassword)
 
-            val (database, cacheDirectory) = openDatabase(file, masterPassword)
+            val (database, cacheDirectory) = openDatabase(location, masterPassword)
             try {
                 database.rootGroup
             } finally {
@@ -87,8 +114,7 @@ class KdbxTokenRepository {
             }
             true
         }.onFailure {
-            val file = File(localPath)
-            val hint = buildFileHint(file)
+            val hint = buildLocationHint(resolveLocation(localPath))
             lastUnlockErrorMessage = "${it.javaClass.simpleName}: ${it.message ?: "unknown"} | $hint"
             Logger.e(LOG_TAG, "validatePassword failed, path=$localPath, hint=$hint, message=${it.message}", it)
         }.getOrDefault(false)
@@ -904,16 +930,14 @@ class KdbxTokenRepository {
     }
 
     private fun <T> withDatabase(localPath: String, masterPassword: String, saveAfter: Boolean, block: (Database) -> T): T {
-        val file = File(localPath)
-        if (!file.exists() || file.length() == 0L) {
-            initializeDatabase(localPath, masterPassword)
-        }
+        val location = resolveLocation(localPath)
+        ensureLocationInitialized(location, masterPassword)
 
-        val (database, cacheDirectory) = openDatabase(file, masterPassword)
+        val (database, cacheDirectory) = openDatabase(location, masterPassword)
         try {
             val result = block(database)
             if (saveAfter && database.dataModifiedSinceLastLoading) {
-                saveDatabase(database, file, masterPassword, cacheDirectory)
+                saveDatabase(database, location, masterPassword, cacheDirectory)
             }
             return result
         } finally {
@@ -921,10 +945,13 @@ class KdbxTokenRepository {
         }
     }
 
-    private fun openDatabase(file: File, masterPassword: String): Pair<Database, File> {
-        val cacheDirectory = buildCacheDirectory(file)
+    /**
+     * 根据定位打开数据库。
+     */
+    private fun openDatabase(location: DatabaseLocation, masterPassword: String): Pair<Database, File> {
+        val cacheDirectory = buildCacheDirectory(location)
         val database = Database()
-        file.inputStream().use { input ->
+        openInputStream(location).use { input ->
             database.loadData(
                 databaseStream = input,
                 masterCredential = MasterCredential(password = masterPassword),
@@ -940,43 +967,181 @@ class KdbxTokenRepository {
         return database to cacheDirectory
     }
 
-    private fun saveDatabase(database: Database, file: File, masterPassword: String, cacheDirectory: File) {
+    /**
+     * 将数据库保存回定位目标。
+     */
+    private fun saveDatabase(database: Database, location: DatabaseLocation, masterPassword: String, cacheDirectory: File) {
         val cacheFile = File.createTempFile("kdbx-save-", ".tmp", cacheDirectory)
         database.saveData(
             cacheFile = cacheFile,
-            databaseOutputStream = { file.outputStream() },
+            databaseOutputStream = { openOutputStream(location) },
             isNewLocation = true,
             masterCredential = MasterCredential(password = masterPassword),
             challengeResponseRetriever = emptyChallengeResponseRetriever
         )
     }
 
-    private fun buildCacheDirectory(file: File): File {
-        val parent = file.parentFile ?: File(System.getProperty("java.io.tmpdir") ?: ".")
-        val cacheDirectory = File(parent, ".kdbx-cache")
+    /**
+     * 为定位构建缓存目录。
+     */
+    private fun buildCacheDirectory(location: DatabaseLocation): File {
+        val cacheDirectory = when (location) {
+            is DatabaseLocation.FileLocation -> {
+                val parent = location.file.parentFile ?: File(System.getProperty("java.io.tmpdir") ?: ".")
+                File(parent, ".kdbx-cache")
+            }
+
+            is DatabaseLocation.UriLocation -> {
+                val raw = location.uri.toString().hashCode().toLong()
+                val safeHash = if (raw == Long.MIN_VALUE) 0L else abs(raw)
+                File(appContext.cacheDir, ".kdbx-cache-$safeHash")
+            }
+        }
         if (!cacheDirectory.exists()) {
             cacheDirectory.mkdirs()
         }
         return cacheDirectory
     }
 
-    private fun buildFileHint(file: File): String {
-        if (!file.exists()) {
-            return "fileMissing"
+    /**
+     * 标准化定位字符串为文件或 Uri。
+     */
+    private fun resolveLocation(localPath: String): DatabaseLocation {
+        val maybeUri = runCatching { Uri.parse(localPath) }.getOrNull()
+        if (maybeUri != null && maybeUri.scheme.equals("content", ignoreCase = true)) {
+            return DatabaseLocation.UriLocation(maybeUri)
         }
-        val length = file.length()
-        val head = runCatching {
-            file.inputStream().use { input ->
-                val bytes = ByteArray(8)
-                val read = input.read(bytes)
-                if (read <= 0) {
-                    "empty"
-                } else {
-                    bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+        return DatabaseLocation.FileLocation(File(localPath))
+    }
+
+    /**
+     * 按定位打开输入流。
+     */
+    private fun openInputStream(location: DatabaseLocation): InputStream {
+        return when (location) {
+            is DatabaseLocation.FileLocation -> {
+                location.file.inputStream()
+            }
+
+            is DatabaseLocation.UriLocation -> {
+                appContext.contentResolver.openInputStream(location.uri)
+                    ?: throw IllegalStateException("无法读取数据库文件")
+            }
+        }
+    }
+
+    /**
+     * 按定位打开输出流。
+     */
+    private fun openOutputStream(location: DatabaseLocation): OutputStream {
+        return when (location) {
+            is DatabaseLocation.FileLocation -> {
+                location.file.parentFile?.let {
+                    if (!it.exists()) {
+                        it.mkdirs()
+                    }
+                }
+                location.file.outputStream()
+            }
+
+            is DatabaseLocation.UriLocation -> {
+                appContext.contentResolver.openOutputStream(location.uri, "wt")
+                    ?: throw IllegalStateException("无法写入数据库文件")
+            }
+        }
+    }
+
+    /**
+     * 确保定位目标可初始化。
+     */
+    private fun ensureLocationInitialized(location: DatabaseLocation, masterPassword: String) {
+        when (location) {
+            is DatabaseLocation.FileLocation -> {
+                val file = location.file
+                if (!file.exists() || file.length() == 0L) {
+                    initializeDatabase(file.absolutePath, masterPassword)
                 }
             }
-        }.getOrElse { "readError:${it.javaClass.simpleName}" }
-        return "size=$length, head=$head"
+
+            is DatabaseLocation.UriLocation -> {
+                if (!hasUriData(location.uri)) {
+                    initializeDatabase(location.uri.toString(), masterPassword)
+                }
+            }
+        }
+    }
+
+    /**
+     * 判断 Uri 是否已有内容。
+     */
+    private fun hasUriData(uri: Uri): Boolean {
+        return appContext.contentResolver.openInputStream(uri)?.use { input ->
+            input.read() != -1
+        } ?: false
+    }
+
+    /**
+     * 构建定位调试信息。
+     */
+    private fun buildLocationHint(location: DatabaseLocation): String {
+        return when (location) {
+            is DatabaseLocation.FileLocation -> {
+                val file = location.file
+                if (!file.exists()) {
+                    return "fileMissing"
+                }
+                val length = file.length()
+                val head = runCatching {
+                    file.inputStream().use { input ->
+                        val bytes = ByteArray(8)
+                        val read = input.read(bytes)
+                        if (read <= 0) {
+                            "empty"
+                        } else {
+                            bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+                        }
+                    }
+                }.getOrElse { "readError:${it.javaClass.simpleName}" }
+                "size=$length, head=$head"
+            }
+
+            is DatabaseLocation.UriLocation -> {
+                val size = queryUriSize(location.uri)?.toString() ?: "unknown"
+                val head = runCatching {
+                    appContext.contentResolver.openInputStream(location.uri)?.use { input ->
+                        val bytes = ByteArray(8)
+                        val read = input.read(bytes)
+                        if (read <= 0) {
+                            "empty"
+                        } else {
+                            bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+                        }
+                    } ?: "openNull"
+                }.getOrElse { "readError:${it.javaClass.simpleName}" }
+                "uriSize=$size, head=$head"
+            }
+        }
+    }
+
+    /**
+     * 查询 Uri 的声明大小。
+     */
+    private fun queryUriSize(uri: Uri): Long? {
+        val cursor = appContext.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+            ?: return null
+        return try {
+            if (!cursor.moveToFirst()) {
+                return null
+            }
+            val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
+            if (sizeIndex < 0 || cursor.isNull(sizeIndex)) {
+                null
+            } else {
+                cursor.getLong(sizeIndex)
+            }
+        } finally {
+            cursor.close()
+        }
     }
 
     private fun toStableId(entry: Entry): Long {

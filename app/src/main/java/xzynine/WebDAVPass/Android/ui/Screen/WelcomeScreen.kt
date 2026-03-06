@@ -1,6 +1,7 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
 import android.net.Uri
+import android.provider.OpenableColumns
 import xzylib.base.util.ToastUtils
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -133,6 +134,27 @@ fun WelcomeScreen(
         inlineUnlockFocusNonce++
     }
 
+    /**
+     * 解析 Uri 展示名称。
+     */
+    fun resolveUriDisplayName(uri: Uri): String {
+        val cursor = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?: return uri.lastPathSegment ?: "未命名.kdbx"
+        return try {
+            if (!cursor.moveToFirst()) {
+                return uri.lastPathSegment ?: "未命名.kdbx"
+            }
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index < 0 || cursor.isNull(index)) {
+                uri.lastPathSegment ?: "未命名.kdbx"
+            } else {
+                cursor.getString(index).ifBlank { uri.lastPathSegment ?: "未命名.kdbx" }
+            }
+        } finally {
+            cursor.close()
+        }
+    }
+
     LaunchedEffect(pendingUnlockLibrary?.id, inlineUnlockFocusNonce) {
         if (pendingUnlockLibrary != null) {
             inlineUnlockFocusRequester.requestFocus()
@@ -153,8 +175,10 @@ fun WelcomeScreen(
                     return@launch
                 }
 
+                val displayName = resolveUriDisplayName(uri)
+
                 val item = LibraryContext(
-                    displayName = path.substringAfterLast('/'),
+                    displayName = displayName,
                     sourceType = LibrarySourceType.LOCAL,
                     localPath = path
                 )
@@ -177,8 +201,10 @@ fun WelcomeScreen(
                     return@launch
                 }
 
+                val displayName = resolveUriDisplayName(uri)
+
                 val item = LibraryContext(
-                    displayName = path.substringAfterLast('/'),
+                    displayName = displayName,
                     sourceType = LibrarySourceType.LOCAL,
                     localPath = path
                 )

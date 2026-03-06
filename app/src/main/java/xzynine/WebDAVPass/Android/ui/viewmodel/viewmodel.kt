@@ -1,10 +1,12 @@
 package xzynine.WebDAVPass.Android.ui.ViewModel
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import xzylib.base.util.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import xzynine.WebDAVPass.Android.data.AppDatabase
 import xzynine.WebDAVPass.Android.data.LibraryContext
@@ -22,6 +24,11 @@ import xzynine.WebDAVPass.webdav.Authorization
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
 import java.io.File
+import java.io.FileNotFoundException
+import java.net.ConnectException
+import java.net.SocketException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -93,7 +100,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
     private val database: AppDatabase = getDatabase(context)
     private val libraryContextStore: LibraryContextStore = LibraryContextStore(context)
-    private val kdbxTokenRepository: KdbxTokenRepository = KdbxTokenRepository()
+    private val kdbxTokenRepository: KdbxTokenRepository = KdbxTokenRepository(context)
     private var currentLibraryMasterPassword: String = ""
     private var lastUnlockErrorMessage: String? = null
 
@@ -407,7 +414,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             kdbxTokenRepository.validatePassword(localPath, masterPassword)
         }
         if (!ok) {
-            lastUnlockErrorMessage = "解锁失败：主密码不正确或文件无效"
+            lastUnlockErrorMessage = resolveUnlockFailureMessage(localPath)
             _isLibraryUnlocked.value = false
             return false
         }
@@ -440,48 +447,218 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 将Uri指向的kdbx文件持久化到应用私有目录
+     * 判断路径是否为 Content Uri。
+     */
+    private fun asContentUri(path: String): Uri? {
+        val parsed = runCatching { Uri.parse(path) }.getOrNull() ?: return null
+        return if (parsed.scheme.equals("content", ignoreCase = true)) parsed else null
+    }
+
+    /**
+     * 拼接异常链文本，便于关键字匹配。
+     */
+    private fun flattenThrowableMessage(throwable: Throwable): String {
+        return generateSequence(throwable) { current ->
+            current.cause
+        }.joinToString(separator = " | ") { current ->
+            "${current.javaClass.simpleName}:${current.message.orEmpty()}"
+        }
+    }
+
+    /**
+     * 判断是否为权限相关异常。
+     */
+    private fun isPermissionIssue(throwable: Throwable): Boolean {
+        if (throwable is SecurityException) {
+            return true
+        }
+        val text = flattenThrowableMessage(throwable)
+        return text.contains("permission", ignoreCase = true)
+                || text.contains("denied", ignoreCase = true)
+                || text.contains("ACTION_OPEN_DOCUMENT", ignoreCase = true)
+                || text.contains("persistable", ignoreCase = true)
+                || text.contains("EACCES", ignoreCase = true)
+    }
+
+    /**
+     * 判断是否为网络异常。
+     */
+    private fun isNetworkIssue(throwable: Throwable): Boolean {
+        return throwable is UnknownHostException
+                || throwable is SocketTimeoutException
+                || throwable is ConnectException
+                || throwable is SocketException
+    }
+
+    /**
+     * 归一化云端同步失败文案。
+     */
+    private fun resolveSyncFailureMessage(action: String, localPath: String?, throwable: Throwable): String {
+        val isUriPath = !localPath.isNullOrBlank() && asContentUri(localPath) != null
+        if (isUriPath && isPermissionIssue(throwable)) {
+            return "本地数据库访问权限已失效，请重新选择数据库文件"
+        }
+        if (throwable is FileNotFoundException) {
+            return if (isUriPath) {
+                "本地数据库文件不存在或已失效，请重新选择数据库文件"
+            } else {
+                "本地数据库文件不存在，请检查路径"
+            }
+        }
+        if (isNetworkIssue(throwable)) {
+            return "网络异常，请检查网络连接后重试"
+        }
+        return throwable.message?.takeIf { it.isNotBlank() } ?: "${action}失败"
+    }
+
+    /**
+     * 归一化解锁失败文案。
+     */
+    private fun resolveUnlockFailureMessage(localPath: String): String {
+        val raw = kdbxTokenRepository.getLastUnlockErrorMessage().orEmpty()
+        val isUriPath = asContentUri(localPath) != null
+
+        if (isUriPath && (
+                    raw.contains("SecurityException", ignoreCase = true)
+                            || raw.contains("permission", ignoreCase = true)
+                            || raw.contains("denied", ignoreCase = true)
+                            || raw.contains("ACTION_OPEN_DOCUMENT", ignoreCase = true)
+                    )) {
+            return "解锁失败：文件访问权限已失效，请重新选择数据库文件"
+        }
+
+        if (raw.contains("FileNotFoundException", ignoreCase = true)
+            || raw.contains("fileMissing", ignoreCase = true)
+        ) {
+            return "解锁失败：数据库文件不存在或不可访问"
+        }
+
+        return "解锁失败：主密码不正确或文件无效"
+    }
+
+    /**
+     * 获取最近一次云端同步错误文案。
+     */
+    private fun currentCloudSyncError(): String {
+        return _currentLibrary.value?.lastSyncError?.takeIf { it.isNotBlank() } ?: "请检查网络、权限与文件状态"
+    }
+
+    /**
+     * 申请并持久化 Uri 读写权限。
+     */
+    private fun takePersistableUriPermission(uri: Uri) {
+        if (!uri.scheme.equals("content", ignoreCase = true)) {
+            return
+        }
+
+        val resolver = context.contentResolver
+        runCatching {
+            resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        runCatching {
+            resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+        }
+    }
+
+    /**
+     * 写入本地定位（文件路径或 Uri）。
+     */
+    private fun writeBytesToLocalPath(localPath: String, bytes: ByteArray) {
+        val uri = asContentUri(localPath)
+        if (uri != null) {
+            takePersistableUriPermission(uri)
+            val output = context.contentResolver.openOutputStream(uri, "wt")
+                ?: throw IllegalStateException("无法写入本地数据库")
+            output.use { stream ->
+                stream.write(bytes)
+            }
+            return
+        }
+
+        val localFile = File(localPath)
+        localFile.parentFile?.let {
+            if (!it.exists()) {
+                it.mkdirs()
+            }
+        }
+        localFile.writeBytes(bytes)
+    }
+
+    /**
+     * 读取本地定位（文件路径或 Uri）。
+     */
+    private fun readBytesFromLocalPath(localPath: String): ByteArray {
+        val uri = asContentUri(localPath)
+        if (uri != null) {
+            takePersistableUriPermission(uri)
+            val input = context.contentResolver.openInputStream(uri)
+                ?: throw IllegalStateException("无法读取本地数据库")
+            return input.use { stream ->
+                stream.readBytes()
+            }
+        }
+        return File(localPath).readBytes()
+    }
+
+    /**
+     * 判断本地定位是否可访问。
+     */
+    private fun localPathExists(localPath: String): Boolean {
+        val uri = asContentUri(localPath)
+        if (uri != null) {
+            return runCatching {
+                takePersistableUriPermission(uri)
+                context.contentResolver.openInputStream(uri)?.use { true } ?: false
+            }.getOrDefault(false)
+        }
+        return File(localPath).exists()
+    }
+
+    /**
+     * 获取本地文件最近修改时间。
+     */
+    private fun getLocalPathLastModified(localPath: String): Long? {
+        val uri = asContentUri(localPath)
+        if (uri != null) {
+            val modified = runCatching {
+                DocumentFile.fromSingleUri(context, uri)?.lastModified()
+            }.getOrNull() ?: 0L
+            return modified.takeIf { it > 0L }
+        }
+
+        val localFile = File(localPath)
+        if (!localFile.exists()) {
+            return null
+        }
+        return localFile.lastModified().takeIf { it > 0L }
+    }
+
+    /**
+     * 将 Uri 指向的 kdbx 文件登记为本地库（就地编辑，不复制文件）。
      *
-     * @return 持久化后的绝对路径，失败返回null
+     * @return 可持久化使用的定位字符串，失败返回 null。
      */
     suspend fun persistKdbxFromUri(uri: Uri): String? {
         return runCatching {
-            val libraryDir = File(context.filesDir, "libraries")
-            if (!libraryDir.exists()) {
-                libraryDir.mkdirs()
-            }
-
-            val fileName = buildString {
-                append("import-")
-                append(System.currentTimeMillis())
-                append(".kdbx")
-            }
-
-            val localFile = File(libraryDir, fileName)
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                localFile.outputStream().use { output ->
-                    input.copyTo(output)
-                }
-            } ?: return null
-
-            localFile.absolutePath
+            takePersistableUriPermission(uri)
+            uri.toString()
         }.getOrNull()
     }
 
     /**
-     * 通过系统CreateDocument创建本地kdbx文件，并同步保存一份到应用私有目录
+     * 通过系统 CreateDocument 创建本地 kdbx 文件并就地使用。
      *
-     * @return 本地私有目录中的绝对路径，失败返回null
+     * @return 可持久化使用的定位字符串，失败返回 null。
      */
     suspend fun createLocalKdbx(uri: Uri, masterPassword: String): String? {
         return runCatching {
             val kdbxBytes = kdbxTokenRepository.createDatabaseBytes(masterPassword)
-            context.contentResolver.openOutputStream(uri)?.use { out ->
+            context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
                 out.write(kdbxBytes)
             } ?: return null
 
-            val persistedPath = persistKdbxFromUri(uri) ?: return null
-            persistedPath
+            takePersistableUriPermission(uri)
+            uri.toString()
         }.getOrNull()
     }
 
@@ -524,8 +701,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     private suspend fun loadTokensInternal(): Boolean {
         _isLoading.value = true
+        val currentLocalPath = _currentLibrary.value?.localPath
         return try {
-            val localPath = _currentLibrary.value?.localPath
+            val localPath = currentLocalPath
             if (localPath.isNullOrBlank()) {
                 _tokens.value = emptyList()
                 _tokenCodes.clear()
@@ -557,8 +735,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             _tokenCodes.clear()
             publishTokenCodeSnapshot()
             _isLibraryUnlocked.value = false
-            lastUnlockErrorMessage = "加载失败：${ex.message ?: ex.javaClass.simpleName}"
-            ex.printStackTrace()
+            lastUnlockErrorMessage = "加载失败：${resolveSyncFailureMessage("加载", currentLocalPath, ex)}"
+            Logger.e(SYNC_LOG_TAG, "加载当前库失败: ${ex.message}", ex)
             false
         } finally {
             _isLoading.value = false
@@ -1149,19 +1327,17 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 val remote = WebDav(current.remoteFilePath!!, Authorization(current.username!!, current.password!!))
                 if (!remote.exists()) {
                     Logger.d(SYNC_LOG_TAG, "跳过下载，远端文件不存在")
+                    updateCloudSyncState(
+                        status = SYNC_STATUS_FAILED,
+                        errorMessage = "远端文件不存在，无法下载"
+                    )
                     return@runCatching false
                 }
 
                 val remoteInfo = remote.getWebDavFile()
                 val remoteModified = remoteInfo?.lastModify?.takeIf { it > 0 }
                 val bytes = remote.download()
-                val localFile = File(current.localPath)
-                localFile.parentFile?.let {
-                    if (!it.exists()) {
-                        it.mkdirs()
-                    }
-                }
-                localFile.writeBytes(bytes)
+                writeBytesToLocalPath(current.localPath, bytes)
 
                 updateCloudSyncState(
                     status = SYNC_STATUS_SUCCESS,
@@ -1176,9 +1352,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 true
             }.onFailure {
                 Logger.e(SYNC_LOG_TAG, "下载云端库失败: ${it.message}", it)
+                val message = resolveSyncFailureMessage("下载", current.localPath, it)
                 updateCloudSyncState(
                     status = SYNC_STATUS_FAILED,
-                    errorMessage = it.message ?: "下载失败"
+                    errorMessage = message
                 )
             }.getOrDefault(false)
         }
@@ -1204,17 +1381,30 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
         return withContext(Dispatchers.IO) {
             runCatching {
-                val localFile = File(current.localPath)
-                if (!localFile.exists()) {
+                if (!localPathExists(current.localPath)) {
+                    updateCloudSyncState(
+                        status = SYNC_STATUS_FAILED,
+                        errorMessage = "本地数据库文件不存在或不可访问"
+                    )
                     return@runCatching false
                 }
+
+                val localPathIsUri = asContentUri(current.localPath) != null
 
                 val remote = WebDav(current.remoteFilePath!!, Authorization(current.username!!, current.password!!))
                 val remoteInfo = remote.getWebDavFile()
                 val remoteModified = remoteInfo?.lastModify?.takeIf { it > 0 }
                 val remoteChangedAfterSync = remoteModified != null
                         && (current.lastRemoteModifiedAt == null || remoteModified > current.lastRemoteModifiedAt)
-                val localChangedAfterSync = current.lastSyncAt?.let { localFile.lastModified() > it } ?: true
+                val localChangedAfterSync = if (localPathIsUri) {
+                    // Uri 场景保守处理：默认本地可能有变更，避免覆盖用户编辑。
+                    true
+                } else {
+                    val localModifiedAt = getLocalPathLastModified(current.localPath)
+                    current.lastSyncAt?.let { syncAt ->
+                        (localModifiedAt ?: Long.MAX_VALUE) > syncAt
+                    } ?: true
+                }
                 Logger.d(
                     SYNC_LOG_TAG,
                     "上传前比较: 远端已变更=$remoteChangedAfterSync, 本地已变更=$localChangedAfterSync, 当前远端修改时间=$remoteModified, 已记录远端修改时间=${current.lastRemoteModifiedAt}, 上次同步时间=${current.lastSyncAt}"
@@ -1232,7 +1422,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                         )
                     } else {
                         Logger.d(SYNC_LOG_TAG, "本地无变更，使用远端内容覆盖本地")
-                        localFile.writeBytes(remoteBytes)
+                        writeBytesToLocalPath(current.localPath, remoteBytes)
                         true
                     }
 
@@ -1248,7 +1438,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     Logger.d(SYNC_LOG_TAG, "自动合并成功")
                 }
 
-                remote.upload(localFile, "application/octet-stream")
+                if (localPathIsUri) {
+                    remote.upload(readBytesFromLocalPath(current.localPath), "application/octet-stream")
+                } else {
+                    remote.upload(File(current.localPath), "application/octet-stream")
+                }
                 val refreshedRemoteModified = runCatching {
                     remote.getWebDavFile()?.lastModify
                 }.getOrNull()?.takeIf { it > 0 } ?: remoteModified
@@ -1271,9 +1465,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 true
             }.onFailure {
                 Logger.e(SYNC_LOG_TAG, "上传云端库失败: ${it.message}", it)
+                val message = resolveSyncFailureMessage("上传", current.localPath, it)
                 updateCloudSyncState(
                     status = SYNC_STATUS_FAILED,
-                    errorMessage = it.message ?: "上传失败"
+                    errorMessage = message
                 )
             }.getOrDefault(false)
         }
@@ -1305,17 +1500,22 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                         if (success && _isLibraryUnlocked.value) {
                             loadTokensInternal()
                         }
-                        _backupStatus.value = if (success) "云端库自动同步完成" else "云端库自动同步失败"
+                        _backupStatus.value = if (success) {
+                            "云端库自动同步完成"
+                        } else {
+                            "云端库自动同步失败：${currentCloudSyncError()}"
+                        }
                         return@withLock
                     }
 
                     _backupStatus.value = "未绑定云端 .kdbx，已跳过自动恢复"
                 } catch (ex: Exception) {
                     Logger.e(SYNC_LOG_TAG, "自动恢复失败: ${ex.message}", ex)
-                    _backupStatus.value = "自动恢复失败：${ex.message}"
+                    val message = resolveSyncFailureMessage("自动恢复", _currentLibrary.value?.localPath, ex)
+                    _backupStatus.value = "自动恢复失败：$message"
                     updateCloudSyncState(
                         status = SYNC_STATUS_FAILED,
-                        errorMessage = ex.message ?: "自动恢复失败"
+                        errorMessage = message
                     )
                 } finally {
                     _isRestoreInProgress.value = false
@@ -1345,17 +1545,22 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                         if (success && _isLibraryUnlocked.value) {
                             loadTokensInternal()
                         }
-                        _backupStatus.value = if (success) "云端库恢复成功" else "云端库恢复失败"
+                        _backupStatus.value = if (success) {
+                            "云端库恢复成功"
+                        } else {
+                            "云端库恢复失败：${currentCloudSyncError()}"
+                        }
                         return@withLock
                     }
 
                     _backupStatus.value = "未绑定云端 .kdbx，无法手动恢复"
                 } catch (ex: Exception) {
                     Logger.e(SYNC_LOG_TAG, "手动恢复失败: ${ex.message}", ex)
-                    _backupStatus.value = "手动恢复失败：${ex.message}"
+                    val message = resolveSyncFailureMessage("手动恢复", _currentLibrary.value?.localPath, ex)
+                    _backupStatus.value = "手动恢复失败：$message"
                     updateCloudSyncState(
                         status = SYNC_STATUS_FAILED,
-                        errorMessage = ex.message ?: "手动恢复失败"
+                        errorMessage = message
                     )
                 } finally {
                     _isRestoreInProgress.value = false
@@ -1393,7 +1598,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                                 else -> "云端库同步成功"
                             }
                         } else {
-                            "云端库同步失败"
+                            "云端库同步失败：${currentCloudSyncError()}"
                         }
                         return@withLock
                     }
@@ -1401,10 +1606,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     _backupStatus.value = "未绑定云端 .kdbx，无法同步备份"
                 } catch (ex: Exception) {
                     Logger.e(SYNC_LOG_TAG, "备份同步失败: ${ex.message}", ex)
-                    _backupStatus.value = "备份失败：${ex.message}"
+                    val message = resolveSyncFailureMessage("备份", _currentLibrary.value?.localPath, ex)
+                    _backupStatus.value = "备份失败：$message"
                     updateCloudSyncState(
                         status = SYNC_STATUS_FAILED,
-                        errorMessage = ex.message ?: "备份失败"
+                        errorMessage = message
                     )
                 } finally {
                     _isBackupInProgress.value = false

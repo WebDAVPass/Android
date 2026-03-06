@@ -1,6 +1,8 @@
 package xzynine.WebDAVPass.Android.data
 
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 
@@ -135,6 +137,7 @@ class LibraryContextStore(private val context: Context) {
         }
 
         val history = getHistory()
+        val removedItems = history.filter { ids.contains(it.id) }
         val filtered = history.filterNot { ids.contains(it.id) }
         val removedCount = history.size - filtered.size
         if (removedCount <= 0) {
@@ -146,7 +149,43 @@ class LibraryContextStore(private val context: Context) {
         if (!currentId.isNullOrBlank() && ids.contains(currentId)) {
             preferences.edit().remove(KEY_CURRENT_ID).apply()
         }
+
+        // 清理已不再被历史引用的 Uri 权限。
+        releaseObsoleteUriPermissions(removedItems, filtered)
         return removedCount
+    }
+
+    /**
+     * 释放被移除历史项的 Uri 权限（若仍被其他历史项引用则保留）。
+     */
+    private fun releaseObsoleteUriPermissions(removedItems: List<LibraryContext>, remainedItems: List<LibraryContext>) {
+        val remainedLocalPaths = remainedItems.map { it.localPath }.toSet()
+        val targetUris = removedItems
+            .mapNotNull { item -> toContentUri(item.localPath) }
+            .filter { uri -> !remainedLocalPaths.contains(uri.toString()) }
+            .distinctBy { it.toString() }
+
+        if (targetUris.isEmpty()) {
+            return
+        }
+
+        val resolver = context.contentResolver
+        targetUris.forEach { uri ->
+            runCatching {
+                resolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
+            }
+            runCatching {
+                resolver.releasePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+    }
+
+    /**
+     * 将本地路径解析为 Content Uri。
+     */
+    private fun toContentUri(localPath: String): Uri? {
+        val parsed = runCatching { Uri.parse(localPath) }.getOrNull() ?: return null
+        return if (parsed.scheme.equals("content", ignoreCase = true)) parsed else null
     }
 
     /**

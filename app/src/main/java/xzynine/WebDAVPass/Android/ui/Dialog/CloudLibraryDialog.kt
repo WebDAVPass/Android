@@ -577,6 +577,8 @@ fun CloudLibraryDialog(
 
                         onSelected(
                             current.copy(
+                                // 本地升级云同步时保持原本地定位，不迁移文件位置。
+                                localPath = current.localPath,
                                 sourceType = xzynine.WebDAVPass.Android.data.LibrarySourceType.CLOUD,
                                 remoteBaseUrl = baseUrl,
                                 remoteFilePath = remoteFilePath,
@@ -640,7 +642,11 @@ fun CloudLibraryDialog(
 }
 
 /**
- * 下载远端文件到本地并返回绝对路径
+ * 下载远端文件到应用私有目录并返回绝对路径。
+ *
+ * 说明：
+ * - 仅用于云端导入/云端新建的本地离线副本；
+ * - 本地库升级云同步（BIND）不走该路径，保持原本地文件位置。
  */
 private suspend fun tokenViewModelSaveRemoteToLocal(
     context: android.content.Context,
