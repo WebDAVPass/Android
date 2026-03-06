@@ -45,12 +45,14 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlinx.coroutines.launch
@@ -127,15 +129,18 @@ fun PasswordEntryDetailScreen(
                 actions = {
                     if (selectedEntry != null) {
                         if (isEditing) {
-                            TextButton(
-                                text = "取消",
+                            IconButton(
                                 onClick = {
                                     selectedEntry?.let { syncEditFields(it) }
                                     isEditing = false
                                 }
-                            )
-                            TextButton(
-                                text = "保存",
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Close,
+                                    contentDescription = "取消编辑"
+                                )
+                            }
+                            IconButton(
                                 onClick = {
                                     coroutineScope.launch {
                                         val existingDraft = tokenViewModel.loadPasswordEntryDraft(entryId) ?: return@launch
@@ -154,14 +159,23 @@ fun PasswordEntryDetailScreen(
                                         }
                                     }
                                 }
-                            )
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Ok,
+                                    contentDescription = "保存"
+                                )
+                            }
                         } else {
-                            TextButton(
-                                text = "删除",
+                            IconButton(
                                 onClick = {
                                     showDeleteDialog.value = true
                                 }
-                            )
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Delete,
+                                    contentDescription = "删除"
+                                )
+                            }
                             IconButton(onClick = { isEditing = true }) {
                                 Icon(
                                     imageVector = MiuixIcons.Edit,

@@ -1,7 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,13 +40,17 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.extra.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Add
+import top.yukonga.miuix.kmp.icon.extended.AddFolder
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
 import xzynine.WebDAVPass.Android.data.PasswordEntry
@@ -254,33 +257,49 @@ fun PasswordListScreen(
                 actions = {
                     if (allowWriteActions) {
                         if (isSelectionMode.value) {
-                            TextButton(
-                                text = "删除",
+                            IconButton(
                                 onClick = {
                                     if (selectedTargets.isNotEmpty()) {
                                         showDeleteDialog.value = true
                                     }
                                 }
-                            )
-                            TextButton(
-                                text = "取消",
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Delete,
+                                    contentDescription = "删除"
+                                )
+                            }
+                            IconButton(
                                 onClick = {
                                     clearSelectionMode()
                                 }
-                            )
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Close,
+                                    contentDescription = "取消选择"
+                                )
+                            }
                         } else {
-                            TextButton(
-                                text = "新建条目",
+                            IconButton(
                                 onClick = {
                                     showCreateEntryDialog.value = true
                                 }
-                            )
-                            TextButton(
-                                text = "新建分组",
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Add,
+                                    contentDescription = "新建条目"
+                                )
+                            }
+                            IconButton(
                                 onClick = {
                                     showCreateGroupDialog.value = true
                                 }
-                            )
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.AddFolder,
+                                    contentDescription = "新建分组"
+                                )
+                            }
                         }
                     }
                 },
@@ -319,17 +338,19 @@ fun PasswordListScreen(
                     }
                 },
                 outsideEndAction = {
-                    Text(
-                        text = "清空",
-                        color = MiuixTheme.colorScheme.primary,
-                        modifier = Modifier
-                            .padding(start = 12.dp)
-                            .clickable {
-                                searchQuery = ""
-                                searchExpanded = false
-                                focusManager.clearFocus()
-                            }
-                    )
+                    IconButton(
+                        onClick = {
+                            searchQuery = ""
+                            searchExpanded = false
+                            focusManager.clearFocus()
+                        },
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Close,
+                            contentDescription = "清空搜索"
+                        )
+                    }
                 }
             ) {
             }
@@ -594,17 +615,24 @@ private fun PasswordEntryEditorDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                TextButton(
-                    text = "取消",
+                IconButton(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f)
-                )
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Close,
+                        contentDescription = "取消"
+                    )
+                }
                 Button(
                     onClick = onConfirm,
                     enabled = entryTitle.isNotBlank(),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(text = "保存")
+                    Icon(
+                        imageVector = MiuixIcons.Ok,
+                        contentDescription = "保存"
+                    )
                 }
             }
         }
@@ -649,17 +677,24 @@ private fun PasswordGroupEditorDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                TextButton(
-                    text = "取消",
+                IconButton(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f)
-                )
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Close,
+                        contentDescription = "取消"
+                    )
+                }
                 Button(
                     onClick = onConfirm,
                     enabled = groupTitle.isNotBlank(),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(text = "保存")
+                    Icon(
+                        imageVector = MiuixIcons.Ok,
+                        contentDescription = "保存"
+                    )
                 }
             }
         }

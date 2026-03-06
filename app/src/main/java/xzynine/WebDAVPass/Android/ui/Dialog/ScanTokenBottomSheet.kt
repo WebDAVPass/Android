@@ -50,7 +50,6 @@ import android.graphics.BitmapFactory
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import xzynine.WebDAVPass.Android.data.OtpTokenFactory
@@ -60,7 +59,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.Executors
@@ -360,13 +361,17 @@ fun ScanTokenScreen(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                TextButton(
-                    text = "取消",
+                Button(
                     onClick = {
                         showManualInput.value = false
                     },
                     modifier = Modifier.weight(1f)
-                )
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Close,
+                        contentDescription = "取消"
+                    )
+                }
                 Button(
                     onClick = {
                         val raw = manualInputText.trim()
@@ -399,7 +404,10 @@ fun ScanTokenScreen(
                     enabled = manualInputText.isNotBlank(),
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(text = "添加")
+                    Icon(
+                        imageVector = MiuixIcons.Add,
+                        contentDescription = "添加"
+                    )
                 }
             }
         }

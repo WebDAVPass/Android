@@ -36,13 +36,16 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
+import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 import xzynine.WebDAVPass.Android.data.LibraryContext
@@ -228,20 +231,28 @@ fun WelcomeScreen(
                 navigationIcon = {},
                 actions = {
                     if (isSelectionMode.value) {
-                        TextButton(
-                            text = "删除",
+                        IconButton(
                             onClick = {
                                 if (selectedHistoryIds.isNotEmpty()) {
                                     showDeleteDialog.value = true
                                 }
                             }
-                        )
-                        TextButton(
-                            text = "取消",
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Delete,
+                                contentDescription = "删除"
+                            )
+                        }
+                        IconButton(
                             onClick = {
                                 clearSelectionMode()
                             }
-                        )
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Close,
+                                contentDescription = "取消选择"
+                            )
+                        }
                     }
                 },
                 defaultWindowInsetsPadding = true
