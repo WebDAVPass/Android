@@ -48,6 +48,7 @@ import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
+import androidx.fragment.app.FragmentActivity
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
@@ -381,8 +382,41 @@ fun WelcomeScreen(
                             )
                         },
                         onClick = {
+                            if (isSelectionMode.value) {
+                                setSelection(item, !selectedHistoryIds.containsKey(item.id))
+                                return@SelectableEntryCard
+                            }
                             coroutineScope.launch {
                                 tokenViewModel.switchLibrary(item.id)
+                                
+                                if (tokenViewModel.isAutoUnlockAvailable(item)) {
+                                    val cipher = tokenViewModel.getCipherForAutoUnlock(item)
+                                    if (cipher != null && context is FragmentActivity) {
+                                        tokenViewModel.biometricKeyStoreManager.authenticate(
+                                            activity = context,
+                                            cipher = cipher,
+                                            onSuccess = { authCipher ->
+                                                if (authCipher != null) {
+                                                    coroutineScope.launch {
+                                                        if (tokenViewModel.unlockWithBiometric(item, authCipher)) {
+                                                            onEnterLibrary()
+                                                        } else {
+                                                            ToastUtils.showShortToast(context, "自动解锁失败，请手动输入密码")
+                                                            showInlineUnlock(item)
+                                                        }
+                                                    }
+                                                } else {
+                                                    showInlineUnlock(item)
+                                                }
+                                            },
+                                            onFailure = { _, _ ->
+                                                showInlineUnlock(item)
+                                            }
+                                        )
+                                        return@launch
+                                    }
+                                }
+                                
                                 showInlineUnlock(item)
                             }
                         },

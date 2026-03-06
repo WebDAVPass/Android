@@ -20,6 +20,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.fragment.app.FragmentActivity
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.service.TwoFasAutofillService
 import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
@@ -158,6 +159,58 @@ fun SettingsScreen(
                         }
                     }
                     context.startActivity(intent)
+                },
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.Companion.height(16.dp))
+
+            // 安全设置
+            Text(
+                text = "安全",
+                modifier = Modifier.padding(8.dp)
+            )
+
+            val currentLib = currentLibraryState
+            val isAutoUnlockEnabled = currentLib?.autoUnlockEnabled == true
+
+            SuperArrow(
+                title = "自动解锁",
+                summary = if (isAutoUnlockEnabled) "已启用生物识别解锁" else "使用生物识别快速解锁",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Settings,
+                        contentDescription = "自动解锁",
+                    )
+                },
+                onClick = {
+                    if (currentLib != null && context is FragmentActivity) {
+                        if (isAutoUnlockEnabled) {
+                            viewModel.disableAutoUnlock(currentLib)
+                        } else {
+                            val cipher = viewModel.getCipherForEnrollment(currentLib)
+                            if (cipher != null) {
+                                viewModel.biometricKeyStoreManager.authenticate(
+                                    activity = context,
+                                    cipher = cipher,
+                                    title = "启用自动解锁",
+                                    subtitle = "验证身份以启用",
+                                    onSuccess = { authCipher ->
+                                        if (authCipher != null) {
+                                            viewModel.enableAutoUnlock(currentLib, authCipher)
+                                        }
+                                    },
+                                    onFailure = { _, _ -> }
+                                )
+                            } else {
+                                xzylib.base.util.ToastUtils.showShortToast(context, "无法启用生物识别")
+                            }
+                        }
+                    } else if (currentLib == null) {
+                        xzylib.base.util.ToastUtils.showShortToast(context, "请先选择数据库文件")
+                    }
                 },
                 modifier = Modifier.Companion
                     .fillMaxWidth()

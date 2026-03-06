@@ -49,5 +49,10 @@ data class LibraryContext(
     val lastRemoteModifiedAt: Long? = null,
     val lastSyncStatus: String? = null,
     val lastSyncError: String? = null,
-    val lastUsedAt: Long = System.currentTimeMillis()
+    val lastUsedAt: Long = System.currentTimeMillis(),
+    val autoUnlockEnabled: Boolean = false,
+    val autoUnlockEnrollDismissed: Boolean = false,
+    val encryptedMasterPassword: String? = null,
+    val encryptedMasterPasswordIv: String? = null,
+    val autoUnlockAuthMode: Int = 0
 )

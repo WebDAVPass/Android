@@ -122,6 +122,7 @@ android {
 
 dependencies {
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.biometric)
         implementation(libs.material) // Material 组件库
     implementation(libs.miuix.android) // Miuix UI 库
     implementation(libs.miuix.icons)

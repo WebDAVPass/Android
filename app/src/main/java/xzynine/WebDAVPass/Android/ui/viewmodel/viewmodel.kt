@@ -9,6 +9,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.Room
 import xzynine.WebDAVPass.Android.data.AppDatabase
+import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
+import javax.crypto.Cipher
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.LibraryContextStore
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
@@ -99,6 +101,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     private val database: AppDatabase = getDatabase(context)
+    val biometricKeyStoreManager = BiometricKeyStoreManager(context)
     private val libraryContextStore: LibraryContextStore = LibraryContextStore(context)
     private val kdbxTokenRepository: KdbxTokenRepository = KdbxTokenRepository(context)
     private var currentLibraryMasterPassword: String = ""
@@ -440,6 +443,98 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
         lastUnlockErrorMessage = "加载失败：已重试${UNLOCK_LOAD_RETRY_COUNT}次，请重试"
         return false
+    }
+
+    /**
+     * 判断指定库是否可用于自动解锁。
+     */
+    fun isAutoUnlockAvailable(library: LibraryContext): Boolean {
+        return library.autoUnlockEnabled && 
+               !library.encryptedMasterPassword.isNullOrBlank() && 
+               !library.encryptedMasterPasswordIv.isNullOrBlank() &&
+               biometricKeyStoreManager.hasKey(library.id)
+    }
+
+    /**
+     * 启用自动解锁并持久化。
+     */
+    fun enableAutoUnlock(library: LibraryContext, cipher: Cipher): Boolean {
+        if (currentLibraryMasterPassword.isEmpty()) return false
+        
+        return try {
+            val (encrypted, iv) = biometricKeyStoreManager.encrypt(cipher, currentLibraryMasterPassword)
+            val updated = library.copy(
+                autoUnlockEnabled = true,
+                encryptedMasterPassword = encrypted,
+                encryptedMasterPasswordIv = iv,
+                autoUnlockEnrollDismissed = false // Reset dismissal if manually enabled
+            )
+            persistCurrentLibraryMetadata(updated)
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * 禁用自动解锁并清理密钥。
+     */
+    fun disableAutoUnlock(library: LibraryContext) {
+        biometricKeyStoreManager.deleteKey(library.id)
+        val updated = library.copy(
+            autoUnlockEnabled = false,
+            encryptedMasterPassword = null,
+            encryptedMasterPasswordIv = null
+        )
+        persistCurrentLibraryMetadata(updated)
+    }
+
+    /**
+     * 标记该库已拒绝首次自动解锁引导。
+     */
+    fun setAutoUnlockEnrollDismissed(library: LibraryContext) {
+        val updated = library.copy(autoUnlockEnrollDismissed = true)
+        persistCurrentLibraryMetadata(updated)
+    }
+
+    /**
+     * 获取用于解密的 Cipher。若密钥无效会自动清理并返回 null。
+     */
+    fun getCipherForAutoUnlock(library: LibraryContext): Cipher? {
+        if (!isAutoUnlockAvailable(library)) return null
+        return try {
+            biometricKeyStoreManager.getCipherForDecryption(library.id, library.encryptedMasterPasswordIv!!)
+        } catch (e: Exception) {
+            // Key invalidated or other error
+            disableAutoUnlock(library)
+            null
+        }
+    }
+
+    /**
+     * 获取用于加密（启用）的 Cipher。
+     */
+    fun getCipherForEnrollment(library: LibraryContext): Cipher? {
+        return try {
+            biometricKeyStoreManager.getCipherForEncryption(library.id)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
+        }
+    }
+
+    /**
+     * 使用生物识别解密并解锁库。
+     */
+    suspend fun unlockWithBiometric(library: LibraryContext, cipher: Cipher): Boolean {
+        return try {
+            val decrypted = biometricKeyStoreManager.decrypt(cipher, library.encryptedMasterPassword!!)
+            unlockCurrentLibrary(decrypted)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
     }
 
     fun getLastUnlockErrorMessage(): String? {
