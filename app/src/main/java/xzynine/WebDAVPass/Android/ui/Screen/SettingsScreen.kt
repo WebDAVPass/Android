@@ -15,10 +15,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.service.TwoFasAutofillService
 import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
@@ -39,12 +41,12 @@ import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 /**
  * 设置界面组件
  * @param viewModel TokenViewModel实例
- * @param onWebDavConfigClick 点击WebDAV配置的回调
+ * @param onCloudBindingClick 点击当前库云端设置的回调
  */
 @Composable
 fun SettingsScreen(
     viewModel: TokenViewModel,
-    onWebDavConfigClick: () -> Unit,
+    onCloudBindingClick: () -> Unit,
     onSwitchLibraryClick: () -> Unit
 ) {
     // 获取统一的圆角半径
@@ -56,7 +58,47 @@ fun SettingsScreen(
     val backupProgress = viewModel.backupProgress.collectAsState()
     val isRestoreInProgress = viewModel.isRestoreInProgress.collectAsState()
     val restoreProgress = viewModel.restoreProgress.collectAsState()
+    val currentLibraryState by viewModel.currentLibrary.collectAsState()
     val context = LocalContext.current
+
+    /**
+     * 当前库是否已具备云端同步所需信息。
+     */
+    val isCurrentLibraryCloudBound = run {
+        val current = currentLibraryState
+        current != null
+                && current.sourceType == LibrarySourceType.CLOUD
+                && !current.remoteFilePath.isNullOrBlank()
+                && !current.username.isNullOrBlank()
+                && !current.password.isNullOrBlank()
+    }
+
+    /**
+     * 将同步状态编码映射为可读文案。
+     */
+    val cloudSyncStatusText = when (currentLibraryState?.lastSyncStatus) {
+        "syncing" -> "同步中"
+        "success" -> "同步成功"
+        "merged" -> "已自动合并"
+        "conflict" -> "同步冲突"
+        "failed" -> "同步失败"
+        else -> "未同步"
+    }
+
+    /**
+     * 设置页展示的当前库云端摘要。
+     */
+    val cloudBindingSummary = run {
+        val current = currentLibraryState
+        if (current == null) {
+            "当前未选择数据库文件"
+        } else if (isCurrentLibraryCloudBound) {
+            val remote = current.remoteFilePath ?: current.remoteBaseUrl.orEmpty()
+            "$remote | $cloudSyncStatusText"
+        } else {
+            "当前库未绑定云端 .kdbx，点击配置"
+        }
+    }
 
     Scaffold(
         popupHost = { },
@@ -125,15 +167,16 @@ fun SettingsScreen(
 
             // WebDAV配置
             SuperArrow(
-                title = "WebDAV 配置",
+                title = "当前库云端设置",
+                summary = cloudBindingSummary,
                 startAction = {
                     Icon(
                         modifier = Modifier.Companion.padding(end = 16.dp),
                         imageVector = MiuixIcons.CloudFill,
-                        contentDescription = "WebDAV 配置",
+                        contentDescription = "当前库云端设置",
                     )
                 },
-                onClick = onWebDavConfigClick,
+                onClick = onCloudBindingClick,
                 modifier = Modifier.Companion
                     .fillMaxWidth()
             )
@@ -182,8 +225,14 @@ fun SettingsScreen(
 
             // 备份按钮
             SuperArrow(
-                title = if (isBackupInProgress.value) "备份中..." else "备份令牌",
-                summary = if (isBackupInProgress.value) "正在备份到WebDAV服务器... ${backupProgress.value}%" else "点击开始备份",
+                title = if (isBackupInProgress.value) "备份中..." else if (isCurrentLibraryCloudBound) "备份令牌" else "绑定后可备份",
+                summary = if (isBackupInProgress.value) {
+                    "正在备份到WebDAV服务器... ${backupProgress.value}%"
+                } else if (isCurrentLibraryCloudBound) {
+                    "点击开始备份"
+                } else {
+                    "当前库未绑定云端 .kdbx"
+                },
                 startAction = {
                     if (isBackupInProgress.value) {
                         CircularProgressIndicator(
@@ -198,7 +247,7 @@ fun SettingsScreen(
                     }
                 },
                 onClick = {
-                    if (!isBackupInProgress.value) {
+                    if (!isBackupInProgress.value && isCurrentLibraryCloudBound) {
                         viewModel.backupTokens(force = true)
                     }
                 },
@@ -210,8 +259,14 @@ fun SettingsScreen(
 
             // 手动恢复按钮
             SuperArrow(
-                title = if (isRestoreInProgress.value) "恢复中..." else "手动恢复",
-                summary = if (isRestoreInProgress.value) "正在从WebDAV服务器恢复... ${restoreProgress.value}%" else "点击开始手动恢复",
+                title = if (isRestoreInProgress.value) "恢复中..." else if (isCurrentLibraryCloudBound) "手动恢复" else "绑定后可恢复",
+                summary = if (isRestoreInProgress.value) {
+                    "正在从WebDAV服务器恢复... ${restoreProgress.value}%"
+                } else if (isCurrentLibraryCloudBound) {
+                    "点击开始手动恢复"
+                } else {
+                    "当前库未绑定云端 .kdbx"
+                },
                 startAction = {
                     if (isRestoreInProgress.value) {
                         CircularProgressIndicator(
@@ -226,7 +281,7 @@ fun SettingsScreen(
                     }
                 },
                 onClick = {
-                    if (!isRestoreInProgress.value) {
+                    if (!isRestoreInProgress.value && isCurrentLibraryCloudBound) {
                         viewModel.manualRestoreTokens()
                     }
                 },

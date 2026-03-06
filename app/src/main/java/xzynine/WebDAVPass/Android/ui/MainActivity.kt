@@ -18,9 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
+import xzylib.base.util.ToastUtils
 import top.yukonga.miuix.kmp.basic.FabPosition
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
@@ -36,9 +34,10 @@ import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
-import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
+import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
 import xzynine.WebDAVPass.Android.ui.Dialog.ScanTokenScreen
 import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
 import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
@@ -69,10 +68,8 @@ fun MainScreen() {
         TokenViewModel.getSharedInstance(context.applicationContext)
     }
 
-    // 控制WebDAV配置弹窗的显示与隐藏
-    val showWebDavDialog = remember { mutableStateOf(false) }
-    // 当前选中的WebDAV配置
-    val selectedWebDavConfig = remember { mutableStateOf<xzynine.WebDAVPass.Android.data.WebDavConfig?>(null) }
+    // 控制当前库云端绑定弹窗的显示与隐藏
+    val showCloudBindingDialog = remember { mutableStateOf(false) }
 
     // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
     var selectedIndex by rememberSaveable { mutableStateOf(0) }
@@ -146,12 +143,11 @@ fun MainScreen() {
                             // 设置页面
                             SettingsScreen(
                                 viewModel = tokenViewModel,
-                                onWebDavConfigClick = {
-                                    // 加载第一个WebDAV配置（如果存在）
-                                    tokenViewModel.viewModelScope.launch {
-                                        val firstConfig = tokenViewModel.getFirstWebDavConfig()
-                                        selectedWebDavConfig.value = firstConfig
-                                        showWebDavDialog.value = true
+                                onCloudBindingClick = {
+                                    if (currentLibrary == null) {
+                                        ToastUtils.showShortToast(context, "请先选择数据库文件")
+                                    } else {
+                                        showCloudBindingDialog.value = true
                                     }
                                 },
                                 onSwitchLibraryClick = {
@@ -183,35 +179,25 @@ fun MainScreen() {
         }
     }
 
-    // 使用外部文件中的WebDAV配置弹窗组件
-        WebDavConfigDialog(
-            showDialog = showWebDavDialog,
-            onDismissRequest = { 
-                showWebDavDialog.value = false
-                // 重置选中的配置
-                selectedWebDavConfig.value = null
+    if (showCloudBindingDialog.value) {
+        CloudLibraryDialog(
+            tokenViewModel = tokenViewModel,
+            mode = CloudMode.BIND,
+            initialLibraryContext = currentLibrary,
+            onDismiss = {
+                showCloudBindingDialog.value = false
             },
-            onConfigSaved = { config ->
-                // 使用 ViewModel 的 viewModelScope 来管理协程，确保生命周期安全
-                tokenViewModel.viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        if (config.id == 0L) {
-                            // 新配置，插入数据库
-                            tokenViewModel.addWebDavConfig(config)
-                        } else {
-                            // 现有配置，更新数据库
-                            tokenViewModel.updateWebDavConfig(config)
-                        }
-                    } catch (e: Exception) {
-                        // 错误处理
-                        e.printStackTrace()
-                    }
+            onSelected = { library, _ ->
+                val saved = tokenViewModel.bindCurrentLibraryToCloud(library)
+                if (saved) {
+                    ToastUtils.showShortToast(context, "当前库云端绑定已保存")
+                    showCloudBindingDialog.value = false
+                } else {
+                    ToastUtils.showShortToast(context, "保存失败，请重新选择当前库")
                 }
-                // 重置选中的配置
-                selectedWebDavConfig.value = null
-            },
-            existingConfig = selectedWebDavConfig.value
+            }
         )
+    }
 
     if (!showWelcome) {
         // 扫描二维码底部抽屉

@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -49,7 +52,12 @@ enum class CloudMode {
     /**
      * 云端新建
      */
-    CREATE
+    CREATE,
+
+    /**
+     * 当前库绑定/编辑云端信息
+     */
+    BIND
 }
 
 private const val SEARCH_LOG_TAG = "tag:搜索"
@@ -66,24 +74,77 @@ private const val SEARCH_LOG_TAG = "tag:搜索"
 fun CloudLibraryDialog(
     tokenViewModel: TokenViewModel,
     mode: CloudMode,
+    initialLibraryContext: LibraryContext? = null,
     createMasterPassword: String = "",
     onDismiss: () -> Unit,
     onSelected: (LibraryContext, String?) -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    var serverUrl by remember { mutableStateOf("https://dav.jianguoyun.com/dav/") }
-    var username by remember { mutableStateOf("") }
-    var password by remember { mutableStateOf("") }
+    val isImportMode = mode == CloudMode.IMPORT
+    val isCreateMode = mode == CloudMode.CREATE
+    val isBindMode = mode == CloudMode.BIND
+        val isCloudBound = initialLibraryContext?.sourceType == xzynine.WebDAVPass.Android.data.LibrarySourceType.CLOUD
+            && !initialLibraryContext.remoteBaseUrl.isNullOrBlank()
+            && !initialLibraryContext.remoteFilePath.isNullOrBlank()
+            && !initialLibraryContext.username.isNullOrBlank()
+            && !initialLibraryContext.password.isNullOrBlank()
+        val isCloudBindingStable = initialLibraryContext?.lastSyncStatus == "success"
+            || initialLibraryContext?.lastSyncStatus == "merged"
+            || (initialLibraryContext?.lastSyncAt ?: 0L) > 0L
+        val isBindReadOnly = isBindMode && isCloudBound && isCloudBindingStable
+
+    val initialServerUrl = initialLibraryContext?.remoteBaseUrl
+        ?.takeIf { it.isNotBlank() }
+        ?: "https://dav.jianguoyun.com/dav/"
+    val initialRemoteRelativePath = run {
+        val remotePath = initialLibraryContext?.remoteFilePath.orEmpty()
+        val remoteBase = initialLibraryContext?.remoteBaseUrl.orEmpty()
+        val relative = if (remotePath.isNotBlank() && remoteBase.isNotBlank() && remotePath.startsWith(remoteBase)) {
+            remotePath.removePrefix(remoteBase).trimStart('/')
+        } else {
+            remotePath
+        }
+        relative.trim().trim('/')
+    }
+
+    var serverUrl by remember(mode, initialLibraryContext) { mutableStateOf(initialServerUrl) }
+    var username by remember(mode, initialLibraryContext) { mutableStateOf(initialLibraryContext?.username.orEmpty()) }
+    var password by remember(mode, initialLibraryContext) { mutableStateOf(initialLibraryContext?.password.orEmpty()) }
     var folder by remember(mode) { mutableStateOf(if (mode == CloudMode.CREATE) "WebDavPass" else "") }
-    var manualPath by remember { mutableStateOf("WebDavPass.kdbx") }
-    var currentDirectory by remember { mutableStateOf("") }
-    var status by remember { mutableStateOf("") }
+    var manualPath by remember(mode, initialLibraryContext) {
+        mutableStateOf(
+            when {
+                isBindMode -> initialRemoteRelativePath.ifBlank { "WebDavPass.kdbx" }
+                else -> "WebDavPass.kdbx"
+            }
+        )
+    }
+    var currentDirectory by remember(mode, initialLibraryContext) {
+        mutableStateOf(
+            if (isBindMode) {
+                initialRemoteRelativePath.substringBeforeLast('/', "")
+            } else {
+                ""
+            }
+        )
+    }
+    var status by remember(mode, initialLibraryContext) {
+        mutableStateOf(
+            if (isBindMode && !initialLibraryContext?.remoteFilePath.isNullOrBlank()) {
+                "已加载当前库云端信息"
+            } else {
+                ""
+            }
+        )
+    }
     var directoryListing by remember { mutableStateOf<List<String>>(emptyList()) }
     var listing by remember { mutableStateOf<List<String>>(emptyList()) }
     var isConnectedForBrowse by remember(mode) { mutableStateOf(mode == CloudMode.CREATE) }
     var createPassword by remember(mode) { mutableStateOf(createMasterPassword) }
     var createPasswordConfirm by remember(mode) { mutableStateOf(createMasterPassword) }
+    var accountPasswordVisible by remember(mode) { mutableStateOf(false) }
+    var masterPasswordVisible by remember(mode) { mutableStateOf(false) }
 
     fun normalizeServerRootUrl(raw: String): String {
         return if (raw.endsWith('/')) raw else "$raw/"
@@ -230,8 +291,16 @@ fun CloudLibraryDialog(
     }
 
     WindowDialog(
-        title = if (mode == CloudMode.IMPORT) "云端导入 .kdbx" else "云端新建 .kdbx",
-        summary = "支持列表选择与手动路径",
+        title = when {
+            isImportMode -> "云端导入 .kdbx"
+            isCreateMode -> "云端新建 .kdbx"
+            else -> "当前库云端设置"
+        },
+        summary = if (isBindMode) {
+            if (isBindReadOnly) "当前配置已验证成功，仅可浏览" else "为当前库绑定或更新云端 .kdbx"
+        } else {
+            "支持列表选择与手动路径"
+        },
         show = remember { mutableStateOf(true) },
         onDismissRequest = onDismiss,
         defaultWindowInsetsPadding = true
@@ -242,13 +311,55 @@ fun CloudLibraryDialog(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(16.dp)
+                .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (mode == CloudMode.IMPORT && !isConnectedForBrowse) {
-                TextField(value = serverUrl, onValueChange = { serverUrl = it }, label = "WebDAV地址")
-                TextField(value = username, onValueChange = { username = it }, label = "用户名")
-                TextField(value = password, onValueChange = { password = it }, label = "密码")
+            if ((isImportMode && !isConnectedForBrowse) || isBindMode) {
+                TextField(
+                    value = serverUrl,
+                    onValueChange = { if (!isBindReadOnly) serverUrl = it },
+                    label = "WebDAV地址",
+                    readOnly = isBindReadOnly,
+                    enabled = true
+                )
+                TextField(
+                    value = username,
+                    onValueChange = { if (!isBindReadOnly) username = it },
+                    label = "用户名",
+                    readOnly = isBindReadOnly,
+                    enabled = true
+                )
+                TextField(
+                    value = password,
+                    onValueChange = { if (!isBindReadOnly) password = it },
+                    label = "密码",
+                    visualTransformation = if (accountPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    singleLine = true,
+                    readOnly = isBindReadOnly,
+                    enabled = true
+                )
+                Button(
+                    onClick = {
+                        accountPasswordVisible = !accountPasswordVisible
+                    },
+                    enabled = true
+                ) {
+                    Text(if (accountPasswordVisible) "隐藏密码" else "显示密码")
+                }
+                if (isBindMode) {
+                    TextField(
+                        value = manualPath,
+                        onValueChange = { if (!isBindReadOnly) manualPath = it },
+                        label = "远端文件路径（可手动输入）",
+                        readOnly = isBindReadOnly,
+                        enabled = true
+                    )
+                    if (isBindReadOnly) {
+                        Text("当前库已完成云端连接并同步，配置已锁定为只读。")
+                    }
+                }
 
                 Button(onClick = {
                     coroutineScope.launch {
@@ -272,11 +383,21 @@ fun CloudLibraryDialog(
                 }
             }
 
-            if (mode == CloudMode.CREATE || isConnectedForBrowse) {
-                if (mode == CloudMode.CREATE) {
+            if (isCreateMode || isConnectedForBrowse || isBindMode) {
+                if (isCreateMode) {
                     TextField(value = serverUrl, onValueChange = { serverUrl = it }, label = "WebDAV地址")
                     TextField(value = username, onValueChange = { username = it }, label = "用户名")
-                    TextField(value = password, onValueChange = { password = it }, label = "密码")
+                    TextField(
+                        value = password,
+                        onValueChange = { password = it },
+                        label = "密码",
+                        visualTransformation = if (accountPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true
+                    )
+                    Button(onClick = { accountPasswordVisible = !accountPasswordVisible }) {
+                        Text(if (accountPasswordVisible) "隐藏密码" else "显示密码")
+                    }
                     TextField(value = folder, onValueChange = { folder = it }, label = "目录（默认 WebDavPass）")
                     TextField(
                         value = manualPath,
@@ -286,12 +407,12 @@ fun CloudLibraryDialog(
                 }
             }
 
-            if (mode == CloudMode.CREATE) {
+            if (isCreateMode) {
                 TextField(
                     value = createPassword,
                     onValueChange = { createPassword = it },
                     label = "主密码",
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (masterPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     singleLine = true
                 )
@@ -299,13 +420,16 @@ fun CloudLibraryDialog(
                     value = createPasswordConfirm,
                     onValueChange = { createPasswordConfirm = it },
                     label = "确认主密码",
-                    visualTransformation = PasswordVisualTransformation(),
+                    visualTransformation = if (masterPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     singleLine = true
                 )
+                Button(onClick = { masterPasswordVisible = !masterPasswordVisible }) {
+                    Text(if (masterPasswordVisible) "隐藏主密码" else "显示主密码")
+                }
             }
 
-            if (mode == CloudMode.IMPORT && isConnectedForBrowse) {
+            if ((isImportMode || isBindMode) && isConnectedForBrowse) {
                 Text(text = "当前目录: /${normalizeRelativePath(currentDirectory)}")
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -384,6 +508,15 @@ fun CloudLibraryDialog(
                         title = filePath.substringAfterLast('/'),
                         summary = filePath,
                         onClick = {
+                            if (isBindMode) {
+                                if (isBindReadOnly) {
+                                    return@SuperArrow
+                                }
+                                manualPath = filePath
+                                status = "已选择远端文件：$filePath"
+                                return@SuperArrow
+                            }
+
                             coroutineScope.launch {
                                 val baseUrl = normalizeServerRootUrl(serverUrl)
                                 val selected = try {
@@ -413,7 +546,52 @@ fun CloudLibraryDialog(
 
             Button(onClick = {
                 coroutineScope.launch {
-                    if (mode == CloudMode.CREATE) {
+                    if (isBindMode) {
+                        if (isBindReadOnly) {
+                            ToastUtils.showShortToast(context, "当前配置已锁定，不允许编辑")
+                            return@launch
+                        }
+                        if (serverUrl.isBlank() || username.isBlank() || password.isBlank() || manualPath.isBlank()) {
+                            ToastUtils.showShortToast(context, "请填写地址、用户名、密码和远端文件路径")
+                            return@launch
+                        }
+
+                        val baseUrl = normalizeServerRootUrl(serverUrl)
+                        val normalizedPath = if (manualPath.endsWith(".kdbx", ignoreCase = true)) {
+                            manualPath
+                        } else {
+                            "$manualPath.kdbx"
+                        }
+                        val remoteFilePath = if (normalizedPath.startsWith("http://") || normalizedPath.startsWith("https://")) {
+                            normalizedPath
+                        } else {
+                            val encoded = encodeRelativePath(normalizedPath)
+                            "$baseUrl$encoded"
+                        }
+
+                        val current = initialLibraryContext
+                        if (current == null) {
+                            ToastUtils.showShortToast(context, "当前未选择库，无法保存")
+                            return@launch
+                        }
+
+                        onSelected(
+                            current.copy(
+                                sourceType = xzynine.WebDAVPass.Android.data.LibrarySourceType.CLOUD,
+                                remoteBaseUrl = baseUrl,
+                                remoteFilePath = remoteFilePath,
+                                username = username,
+                                password = password,
+                                autoSyncEnabled = true,
+                                lastSyncStatus = current.lastSyncStatus ?: "idle",
+                                lastSyncError = null
+                            ),
+                            null
+                        )
+                        return@launch
+                    }
+
+                    if (isCreateMode) {
                         if (createPassword.isBlank()) {
                             ToastUtils.showShortToast(context, "请输入主密码")
                             return@launch
@@ -425,14 +603,14 @@ fun CloudLibraryDialog(
                     }
 
                     val baseUrl = normalizeServerRootUrl(serverUrl)
-                    val path = if (mode == CloudMode.CREATE && !manualPath.endsWith(".kdbx", ignoreCase = true)) {
+                    val path = if (isCreateMode && !manualPath.endsWith(".kdbx", ignoreCase = true)) {
                         "$manualPath.kdbx"
                     } else {
                         manualPath
                     }
 
                     val selected = try {
-                        if (mode == CloudMode.IMPORT) {
+                        if (isImportMode) {
                             importRemote(baseUrl, path, username, password)
                         } else {
                             createRemote(baseUrl, path, username, password, createPassword)
@@ -446,10 +624,16 @@ fun CloudLibraryDialog(
                         return@launch
                     }
 
-                    onSelected(selected, if (mode == CloudMode.CREATE) createPassword else null)
+                    onSelected(selected, if (isCreateMode) createPassword else null)
                 }
-            }, enabled = mode == CloudMode.CREATE) {
-                Text("新建并进入")
+            }, enabled = isCreateMode || (isBindMode && !isBindReadOnly)) {
+                Text(
+                    when {
+                        isBindMode && isBindReadOnly -> "配置已锁定"
+                        isBindMode -> "保存云端绑定"
+                        else -> "新建并进入"
+                    }
+                )
             }
         }
     }

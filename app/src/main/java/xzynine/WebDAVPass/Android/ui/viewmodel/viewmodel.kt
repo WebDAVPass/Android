@@ -325,6 +325,36 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 保存当前库的云端绑定信息。
+     *
+     * 说明：
+     * - 仅更新当前库元数据，不重置解锁状态；
+     * - 绑定成功后会将来源类型标记为云端，以复用现有同步流程。
+     *
+     * @return 绑定成功返回 true；当前库为空或参数无效返回 false。
+     */
+    fun bindCurrentLibraryToCloud(boundContext: LibraryContext): Boolean {
+        val current = _currentLibrary.value ?: return false
+        val remoteBaseUrl = boundContext.remoteBaseUrl?.takeIf { it.isNotBlank() } ?: return false
+        val remoteFilePath = boundContext.remoteFilePath?.takeIf { it.isNotBlank() } ?: return false
+        val username = boundContext.username?.takeIf { it.isNotBlank() } ?: return false
+        val password = boundContext.password?.takeIf { it.isNotBlank() } ?: return false
+
+        val updated = current.copy(
+            sourceType = LibrarySourceType.CLOUD,
+            remoteBaseUrl = remoteBaseUrl,
+            remoteFilePath = remoteFilePath,
+            username = username,
+            password = password,
+            autoSyncEnabled = true,
+            lastSyncStatus = current.lastSyncStatus ?: SYNC_STATUS_IDLE,
+            lastSyncError = null
+        )
+        persistCurrentLibraryMetadata(updated)
+        return true
+    }
+
+    /**
      * 切换已存在库
      */
     fun switchLibrary(libraryId: String) {
