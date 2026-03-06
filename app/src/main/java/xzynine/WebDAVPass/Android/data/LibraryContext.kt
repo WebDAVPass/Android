@@ -28,6 +28,11 @@ enum class LibrarySourceType {
  * @property remoteFilePath 远端文件路径（可为空）
  * @property username WebDAV用户名（可为空）
  * @property password WebDAV密码（可为空）
+ * @property autoSyncEnabled 是否启用自动同步（仅云端库有效）
+ * @property lastSyncAt 最近同步完成时间戳（可为空）
+ * @property lastRemoteModifiedAt 最近一次同步后记录的远端修改时间戳（可为空）
+ * @property lastSyncStatus 最近同步状态（可为空）
+ * @property lastSyncError 最近同步错误信息（可为空）
  * @property lastUsedAt 最近使用时间戳
  */
 data class LibraryContext(
@@ -39,5 +44,10 @@ data class LibraryContext(
     val remoteFilePath: String? = null,
     val username: String? = null,
     val password: String? = null,
+    val autoSyncEnabled: Boolean = true,
+    val lastSyncAt: Long? = null,
+    val lastRemoteModifiedAt: Long? = null,
+    val lastSyncStatus: String? = null,
+    val lastSyncError: String? = null,
     val lastUsedAt: Long = System.currentTimeMillis()
 )

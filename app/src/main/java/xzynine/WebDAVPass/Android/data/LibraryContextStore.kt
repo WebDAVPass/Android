@@ -20,10 +20,34 @@ class LibraryContextStore(private val context: Context) {
         val raw = preferences.getString(KEY_HISTORY, null) ?: return emptyList()
         return runCatching {
             val type = object : TypeToken<List<LibraryContext>>() {}.type
-            gson.fromJson<List<LibraryContext>>(raw, type) ?: emptyList()
+            (gson.fromJson<List<LibraryContext>>(raw, type) ?: emptyList())
+                .map { normalizeContext(it) }
         }.getOrElse {
             emptyList()
         }
+    }
+
+    /**
+     * 标准化历史项。
+     *
+     * 说明：旧版本历史记录不存在同步字段时，Gson 反序列化会使用默认零值。
+     * 这里统一修正为预期行为，避免云端库被误判为关闭自动同步。
+     */
+    private fun normalizeContext(item: LibraryContext): LibraryContext {
+        val hasSyncMetadata = item.lastSyncAt != null
+                || item.lastRemoteModifiedAt != null
+                || !item.lastSyncStatus.isNullOrBlank()
+                || !item.lastSyncError.isNullOrBlank()
+
+        val normalizedAutoSync = when (item.sourceType) {
+            LibrarySourceType.CLOUD -> {
+                if (hasSyncMetadata) item.autoSyncEnabled else true
+            }
+
+            LibrarySourceType.LOCAL -> false
+        }
+
+        return item.copy(autoSyncEnabled = normalizedAutoSync)
     }
 
     /**
@@ -67,6 +91,24 @@ class LibraryContextStore(private val context: Context) {
         val item = getHistory().firstOrNull { it.id == id } ?: return null
         preferences.edit().putString(KEY_CURRENT_ID, item.id).apply()
         return item
+    }
+
+    /**
+     * 仅更新历史项内容，不改变当前选中状态。
+     *
+     * @return 更新后的历史项；未命中时返回 null。
+     */
+    fun updateHistoryItem(item: LibraryContext): LibraryContext? {
+        val history = getHistory().toMutableList()
+        val index = history.indexOfFirst { it.id == item.id }
+        if (index < 0) {
+            return null
+        }
+
+        val merged = item.copy(lastUsedAt = history[index].lastUsedAt)
+        history[index] = merged
+        saveHistory(history.sortedByDescending { it.lastUsedAt })
+        return merged
     }
 
     /**

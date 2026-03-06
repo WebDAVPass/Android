@@ -2,6 +2,7 @@ package xzynine.WebDAVPass.Android.ui.ViewModel
 
 import android.content.Context
 import android.net.Uri
+import xzylib.base.util.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.room.Room
@@ -28,6 +29,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 
@@ -40,6 +43,14 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     companion object {
         private const val UNLOCK_LOAD_RETRY_COUNT = 3
         private const val UNLOCK_LOAD_RETRY_DELAY_MS = 250L
+
+        private const val SYNC_STATUS_IDLE = "idle"
+        private const val SYNC_STATUS_SYNCING = "syncing"
+        private const val SYNC_STATUS_SUCCESS = "success"
+        private const val SYNC_STATUS_MERGED = "merged"
+        private const val SYNC_STATUS_CONFLICT = "conflict"
+        private const val SYNC_STATUS_FAILED = "failed"
+        private const val SYNC_LOG_TAG = "同步"
 
         @Volatile
         private var INSTANCE: AppDatabase? = null
@@ -88,6 +99,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
     private var tokenRefreshJob: Job? = null
+    private val cloudSyncMutex = Mutex()
     
 
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())
@@ -199,6 +211,56 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private fun refreshLibraryHistory() {
         _libraryHistory.value = libraryContextStore.getHistory().sortedByDescending { it.lastUsedAt }
         _currentLibrary.value = libraryContextStore.getCurrentLibrary()
+    }
+
+    /**
+     * 持久化当前库元数据，不重置已解锁状态。
+     */
+    private fun persistCurrentLibraryMetadata(updated: LibraryContext) {
+        val persisted = libraryContextStore.updateHistoryItem(updated)
+            ?: libraryContextStore.upsertAndSelect(updated)
+        _currentLibrary.value = persisted
+        _libraryHistory.value = libraryContextStore.getHistory().sortedByDescending { it.lastUsedAt }
+    }
+
+    /**
+     * 判断当前库是否开启自动同步。
+     */
+    private fun shouldAutoSyncCurrentLibrary(): Boolean {
+        val current = _currentLibrary.value ?: return false
+        if (current.sourceType != LibrarySourceType.CLOUD) {
+            return false
+        }
+        return current.autoSyncEnabled
+    }
+
+    /**
+     * 更新云端同步状态并写回当前库。
+     */
+    private fun updateCloudSyncState(
+        status: String,
+        errorMessage: String? = null,
+        remoteModifiedAt: Long? = null,
+        syncAt: Long? = null
+    ) {
+        val current = getCurrentCloudLibrary() ?: return
+        Logger.d(
+            SYNC_LOG_TAG,
+            "更新同步状态: 状态=$status, 远端修改时间=$remoteModifiedAt, 同步时间=$syncAt, 错误=${errorMessage.orEmpty()}"
+        )
+        persistCurrentLibraryMetadata(
+            current.copy(
+                lastSyncStatus = status,
+                lastSyncError = errorMessage,
+                lastRemoteModifiedAt = remoteModifiedAt ?: current.lastRemoteModifiedAt,
+                lastSyncAt = syncAt ?: when (status) {
+                    SYNC_STATUS_SUCCESS,
+                    SYNC_STATUS_MERGED -> System.currentTimeMillis()
+
+                    else -> current.lastSyncAt
+                }
+            )
+        )
     }
 
     /**
@@ -327,6 +389,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             val loaded = loadTokensInternal()
             if (loaded) {
                 lastUnlockErrorMessage = null
+                if (shouldAutoSyncCurrentLibrary()) {
+                    Logger.d(SYNC_LOG_TAG, "解锁成功，触发自动恢复")
+                    autoRestoreTokens()
+                }
                 return true
             }
 
@@ -1044,22 +1110,48 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     private suspend fun downloadCurrentCloudLibrary(): Boolean {
         val current = getCurrentCloudLibrary() ?: return false
-        return runCatching {
-            val remote = WebDav(current.remoteFilePath!!, Authorization(current.username!!, current.password!!))
-            if (!remote.exists()) {
-                return false
-            }
-
-            val bytes = remote.download()
-            val localFile = File(current.localPath)
-            localFile.parentFile?.let {
-                if (!it.exists()) {
-                    it.mkdirs()
+        Logger.d(
+            SYNC_LOG_TAG,
+            "开始下载云端库: 本地路径=${current.localPath}, 远端路径=${current.remoteFilePath.orEmpty()}"
+        )
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val remote = WebDav(current.remoteFilePath!!, Authorization(current.username!!, current.password!!))
+                if (!remote.exists()) {
+                    Logger.d(SYNC_LOG_TAG, "跳过下载，远端文件不存在")
+                    return@runCatching false
                 }
-            }
-            localFile.writeBytes(bytes)
-            true
-        }.getOrDefault(false)
+
+                val remoteInfo = remote.getWebDavFile()
+                val remoteModified = remoteInfo?.lastModify?.takeIf { it > 0 }
+                val bytes = remote.download()
+                val localFile = File(current.localPath)
+                localFile.parentFile?.let {
+                    if (!it.exists()) {
+                        it.mkdirs()
+                    }
+                }
+                localFile.writeBytes(bytes)
+
+                updateCloudSyncState(
+                    status = SYNC_STATUS_SUCCESS,
+                    errorMessage = null,
+                    remoteModifiedAt = remoteModified,
+                    syncAt = System.currentTimeMillis()
+                )
+                Logger.d(
+                    SYNC_LOG_TAG,
+                    "下载云端库成功: 远端修改时间=$remoteModified"
+                )
+                true
+            }.onFailure {
+                Logger.e(SYNC_LOG_TAG, "下载云端库失败: ${it.message}", it)
+                updateCloudSyncState(
+                    status = SYNC_STATUS_FAILED,
+                    errorMessage = it.message ?: "下载失败"
+                )
+            }.getOrDefault(false)
+        }
     }
 
     /**
@@ -1067,16 +1159,94 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     private suspend fun uploadCurrentCloudLibrary(): Boolean {
         val current = getCurrentCloudLibrary() ?: return false
-        return runCatching {
-            val localFile = File(current.localPath)
-            if (!localFile.exists()) {
-                return false
-            }
+        Logger.d(
+            SYNC_LOG_TAG,
+            "开始上传云端库: 本地路径=${current.localPath}, 远端路径=${current.remoteFilePath.orEmpty()}"
+        )
+        if (currentLibraryMasterPassword.isBlank()) {
+            Logger.d(SYNC_LOG_TAG, "上传中止，主密码为空")
+            updateCloudSyncState(
+                status = SYNC_STATUS_FAILED,
+                errorMessage = "未解锁数据库，无法执行云端同步"
+            )
+            return false
+        }
 
-            val remote = WebDav(current.remoteFilePath!!, Authorization(current.username!!, current.password!!))
-            remote.upload(localFile, "application/octet-stream")
-            true
-        }.getOrDefault(false)
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val localFile = File(current.localPath)
+                if (!localFile.exists()) {
+                    return@runCatching false
+                }
+
+                val remote = WebDav(current.remoteFilePath!!, Authorization(current.username!!, current.password!!))
+                val remoteInfo = remote.getWebDavFile()
+                val remoteModified = remoteInfo?.lastModify?.takeIf { it > 0 }
+                val remoteChangedAfterSync = remoteModified != null
+                        && (current.lastRemoteModifiedAt == null || remoteModified > current.lastRemoteModifiedAt)
+                val localChangedAfterSync = current.lastSyncAt?.let { localFile.lastModified() > it } ?: true
+                Logger.d(
+                    SYNC_LOG_TAG,
+                    "上传前比较: 远端已变更=$remoteChangedAfterSync, 本地已变更=$localChangedAfterSync, 当前远端修改时间=$remoteModified, 已记录远端修改时间=${current.lastRemoteModifiedAt}, 上次同步时间=${current.lastSyncAt}"
+                )
+
+                if (remoteChangedAfterSync) {
+                    Logger.d(SYNC_LOG_TAG, "检测到远端变更，进入下载/合并流程")
+                    val remoteBytes = remote.download()
+                    val merged = if (localChangedAfterSync) {
+                        Logger.d(SYNC_LOG_TAG, "检测到本地也有变更，尝试自动合并")
+                        kdbxTokenRepository.mergeRemoteDatabaseBytes(
+                            localPath = current.localPath,
+                            masterPassword = currentLibraryMasterPassword,
+                            remoteBytes = remoteBytes
+                        )
+                    } else {
+                        Logger.d(SYNC_LOG_TAG, "本地无变更，使用远端内容覆盖本地")
+                        localFile.writeBytes(remoteBytes)
+                        true
+                    }
+
+                    if (!merged) {
+                        Logger.e(SYNC_LOG_TAG, "自动合并失败，标记为冲突")
+                        updateCloudSyncState(
+                            status = SYNC_STATUS_CONFLICT,
+                            errorMessage = "自动合并失败，请先手动恢复后再同步",
+                            remoteModifiedAt = remoteModified
+                        )
+                        return@runCatching false
+                    }
+                    Logger.d(SYNC_LOG_TAG, "自动合并成功")
+                }
+
+                remote.upload(localFile, "application/octet-stream")
+                val refreshedRemoteModified = runCatching {
+                    remote.getWebDavFile()?.lastModify
+                }.getOrNull()?.takeIf { it > 0 } ?: remoteModified
+
+                val finalStatus = if (remoteChangedAfterSync && localChangedAfterSync) {
+                    SYNC_STATUS_MERGED
+                } else {
+                    SYNC_STATUS_SUCCESS
+                }
+                updateCloudSyncState(
+                    status = finalStatus,
+                    errorMessage = null,
+                    remoteModifiedAt = refreshedRemoteModified,
+                    syncAt = System.currentTimeMillis()
+                )
+                Logger.d(
+                    SYNC_LOG_TAG,
+                    "上传云端库成功: 最终状态=$finalStatus, 最新远端修改时间=$refreshedRemoteModified"
+                )
+                true
+            }.onFailure {
+                Logger.e(SYNC_LOG_TAG, "上传云端库失败: ${it.message}", it)
+                updateCloudSyncState(
+                    status = SYNC_STATUS_FAILED,
+                    errorMessage = it.message ?: "上传失败"
+                )
+            }.getOrDefault(false)
+        }
     }
     
     /**
@@ -1084,24 +1254,43 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     private fun autoRestoreTokens() {
         viewModelScope.launch {
-            try {
-                _isRestoreInProgress.value = true
-                _restoreProgress.value = 0
-                _backupStatus.value = "正在尝试自动恢复..."
+            cloudSyncMutex.withLock {
+                try {
+                    Logger.d(SYNC_LOG_TAG, "开始自动恢复")
+                    if (!shouldAutoSyncCurrentLibrary()) {
+                        Logger.d(SYNC_LOG_TAG, "自动恢复跳过：自动同步未开启")
+                        _backupStatus.value = "当前云端库未启用自动同步"
+                        return@withLock
+                    }
 
-                val cloudLibrary = getCurrentCloudLibrary()
-                if (cloudLibrary != null) {
-                    val success = downloadCurrentCloudLibrary()
-                    _backupStatus.value = if (success) "云端库自动同步完成" else "云端库自动同步失败"
-                    return@launch
+                    _isRestoreInProgress.value = true
+                    _restoreProgress.value = 0
+                    _backupStatus.value = "正在尝试自动恢复..."
+                    updateCloudSyncState(status = SYNC_STATUS_SYNCING)
+
+                    val cloudLibrary = getCurrentCloudLibrary()
+                    if (cloudLibrary != null) {
+                        val success = downloadCurrentCloudLibrary()
+                        Logger.d(SYNC_LOG_TAG, "自动恢复下载结果=$success")
+                        if (success && _isLibraryUnlocked.value) {
+                            loadTokensInternal()
+                        }
+                        _backupStatus.value = if (success) "云端库自动同步完成" else "云端库自动同步失败"
+                        return@withLock
+                    }
+
+                    _backupStatus.value = "未绑定云端 .kdbx，已跳过自动恢复"
+                } catch (ex: Exception) {
+                    Logger.e(SYNC_LOG_TAG, "自动恢复失败: ${ex.message}", ex)
+                    _backupStatus.value = "自动恢复失败：${ex.message}"
+                    updateCloudSyncState(
+                        status = SYNC_STATUS_FAILED,
+                        errorMessage = ex.message ?: "自动恢复失败"
+                    )
+                } finally {
+                    _isRestoreInProgress.value = false
+                    _restoreProgress.value = 0
                 }
-
-                _backupStatus.value = "未绑定云端 .kdbx，已跳过自动恢复"
-            } catch (ex: Exception) {
-                _backupStatus.value = "自动恢复失败：${ex.message}"
-            } finally {
-                _isRestoreInProgress.value = false
-                _restoreProgress.value = 0
             }
         }
     }
@@ -1111,24 +1300,37 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     fun manualRestoreTokens() {
         viewModelScope.launch {
-            try {
-                _isRestoreInProgress.value = true
-                _restoreProgress.value = 0
-                _backupStatus.value = "正在手动恢复..."
+            cloudSyncMutex.withLock {
+                try {
+                    Logger.d(SYNC_LOG_TAG, "开始手动恢复")
+                    _isRestoreInProgress.value = true
+                    _restoreProgress.value = 0
+                    _backupStatus.value = "正在手动恢复..."
+                    updateCloudSyncState(status = SYNC_STATUS_SYNCING)
 
-                val cloudLibrary = getCurrentCloudLibrary()
-                if (cloudLibrary != null) {
-                    val success = downloadCurrentCloudLibrary()
-                    _backupStatus.value = if (success) "云端库恢复成功" else "云端库恢复失败"
-                    return@launch
+                    val cloudLibrary = getCurrentCloudLibrary()
+                    if (cloudLibrary != null) {
+                        val success = downloadCurrentCloudLibrary()
+                        Logger.d(SYNC_LOG_TAG, "手动恢复下载结果=$success")
+                        if (success && _isLibraryUnlocked.value) {
+                            loadTokensInternal()
+                        }
+                        _backupStatus.value = if (success) "云端库恢复成功" else "云端库恢复失败"
+                        return@withLock
+                    }
+
+                    _backupStatus.value = "未绑定云端 .kdbx，无法手动恢复"
+                } catch (ex: Exception) {
+                    Logger.e(SYNC_LOG_TAG, "手动恢复失败: ${ex.message}", ex)
+                    _backupStatus.value = "手动恢复失败：${ex.message}"
+                    updateCloudSyncState(
+                        status = SYNC_STATUS_FAILED,
+                        errorMessage = ex.message ?: "手动恢复失败"
+                    )
+                } finally {
+                    _isRestoreInProgress.value = false
+                    _restoreProgress.value = 0
                 }
-
-                _backupStatus.value = "未绑定云端 .kdbx，无法手动恢复"
-            } catch (ex: Exception) {
-                _backupStatus.value = "手动恢复失败：${ex.message}"
-            } finally {
-                _isRestoreInProgress.value = false
-                _restoreProgress.value = 0
             }
         }
     }
@@ -1136,26 +1338,48 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     /**
      * 备份令牌
      */
-    fun backupTokens() {
+    fun backupTokens(force: Boolean = false) {
         viewModelScope.launch {
-            try {
-                _isBackupInProgress.value = true
-                _backupStatus.value = "正在备份..."
-                _backupProgress.value = 0
+            cloudSyncMutex.withLock {
+                try {
+                    Logger.d(SYNC_LOG_TAG, "开始执行备份同步: force=$force")
+                    val cloudLibrary = getCurrentCloudLibrary()
+                    if (cloudLibrary == null && !force) {
+                        Logger.d(SYNC_LOG_TAG, "备份同步跳过：未绑定云端库且 force=false")
+                        return@withLock
+                    }
 
-                val cloudLibrary = getCurrentCloudLibrary()
-                if (cloudLibrary != null) {
-                    val success = uploadCurrentCloudLibrary()
-                    _backupStatus.value = if (success) "云端库同步成功" else "云端库同步失败"
-                    return@launch
+                    _isBackupInProgress.value = true
+                    _backupStatus.value = "正在备份..."
+                    _backupProgress.value = 0
+                    updateCloudSyncState(status = SYNC_STATUS_SYNCING)
+
+                    if (cloudLibrary != null) {
+                        val success = uploadCurrentCloudLibrary()
+                        Logger.d(SYNC_LOG_TAG, "备份上传结果=$success")
+                        _backupStatus.value = if (success) {
+                            when (_currentLibrary.value?.lastSyncStatus) {
+                                SYNC_STATUS_MERGED -> "云端库自动合并并同步成功"
+                                else -> "云端库同步成功"
+                            }
+                        } else {
+                            "云端库同步失败"
+                        }
+                        return@withLock
+                    }
+
+                    _backupStatus.value = "未绑定云端 .kdbx，无法同步备份"
+                } catch (ex: Exception) {
+                    Logger.e(SYNC_LOG_TAG, "备份同步失败: ${ex.message}", ex)
+                    _backupStatus.value = "备份失败：${ex.message}"
+                    updateCloudSyncState(
+                        status = SYNC_STATUS_FAILED,
+                        errorMessage = ex.message ?: "备份失败"
+                    )
+                } finally {
+                    _isBackupInProgress.value = false
+                    _backupProgress.value = 0
                 }
-
-                _backupStatus.value = "未绑定云端 .kdbx，无法同步备份"
-            } catch (ex: Exception) {
-                _backupStatus.value = "备份失败：${ex.message}"
-            } finally {
-                _isBackupInProgress.value = false
-                _backupProgress.value = 0
             }
         }
     }

@@ -301,11 +301,27 @@ fun WelcomeScreen(
                 Text(text = "暂无历史记录")
             } else {
                 history.forEach { item ->
+                    val cloudSyncSummary = if (item.sourceType == LibrarySourceType.CLOUD) {
+                        val syncText = when (item.lastSyncStatus) {
+                            "syncing" -> "同步中"
+                            "success" -> "同步成功"
+                            "merged" -> "已自动合并"
+                            "conflict" -> "同步冲突"
+                            "failed" -> "同步失败"
+                            else -> "未同步"
+                        }
+                        val syncAtText = item.lastSyncAt?.let { "，上次: $it" }.orEmpty()
+                        "$syncText$syncAtText"
+                    } else {
+                        ""
+                    }
+
                     SelectableEntryCard(
                         itemKey = item.id,
                         title = item.displayName,
                         summary = if (item.sourceType == LibrarySourceType.CLOUD) {
-                            item.remoteFilePath ?: item.remoteBaseUrl.orEmpty()
+                            val remote = item.remoteFilePath ?: item.remoteBaseUrl.orEmpty()
+                            "$remote | $cloudSyncSummary"
                         } else {
                             item.localPath
                         },

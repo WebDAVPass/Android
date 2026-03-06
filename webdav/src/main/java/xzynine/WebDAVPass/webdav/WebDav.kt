@@ -22,6 +22,7 @@ import java.net.MalformedURLException
 import java.net.URL
 import java.time.LocalDateTime
 import java.time.ZoneOffset
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.coroutineContext
@@ -183,8 +184,7 @@ open class WebDav(
                 val lastModify: Long = kotlin.runCatching {
                     element.findNS("getlastmodified", ns)
                         .firstOrNull()?.text()?.let {
-                            LocalDateTime.parse(it, dateTimeFormatter)
-                                .toInstant(ZoneOffset.of("+8")).toEpochMilli()
+                            parseLastModifiedTime(it)
                         }
                 }.getOrNull() ?: 0
                 var fullURL = NetworkUtils.getAbsoluteURL(baseUrl, hrefDecode)
@@ -221,6 +221,22 @@ open class WebDav(
         }.onFailure {
             coroutineContext.ensureActive()
         }.getOrDefault(false)
+    }
+
+    /**
+     * 解析 WebDAV 返回的最后修改时间。
+     *
+     * 优先按 RFC1123 解析并使用响应中的时区信息，
+     * 失败后回退到旧实现，尽量保证兼容。
+     */
+    private fun parseLastModifiedTime(value: String): Long {
+        return kotlin.runCatching {
+            ZonedDateTime.parse(value, dateTimeFormatter).toInstant().toEpochMilli()
+        }.getOrElse {
+            LocalDateTime.parse(value, dateTimeFormatter)
+                .toInstant(ZoneOffset.UTC)
+                .toEpochMilli()
+        }
     }
 
     suspend fun check(): Boolean {

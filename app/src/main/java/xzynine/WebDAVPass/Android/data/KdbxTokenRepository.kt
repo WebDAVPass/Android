@@ -17,6 +17,7 @@ import com.kunzisoft.keepass.otp.OtpEntryFields.isOTP
 import com.kunzisoft.keepass.otp.OtpType
 import com.kunzisoft.keepass.otp.TokenCalculator
 import java.io.ByteArrayOutputStream
+import java.io.ByteArrayInputStream
 import java.io.File
 import java.util.UUID
 import kotlin.math.abs
@@ -27,7 +28,8 @@ class KdbxTokenRepository {
     private var lastUnlockErrorMessage: String? = null
 
     companion object {
-        private const val LOG_TAG = "tag:解锁"
+        private const val LOG_TAG = "解锁"
+        private const val SYNC_LOG_TAG = "同步"
         private const val DATABASE_NAME = "WebDavPass"
         private const val ROOT_GROUP_NAME = "WebDavPass"
         private const val RECYCLE_BIN_FALLBACK_TITLE = "回收站"
@@ -417,6 +419,43 @@ class KdbxTokenRepository {
             val recycleBin = db.recycleBin ?: return@withDatabase 0
             collectEntries(recycleBin).size
         }
+    }
+
+    /**
+     * 合并远端数据库二进制内容到本地数据库。
+     *
+     * 说明：
+     * - 使用数据库模块内置 merge 能力；
+     * - 合并后按 `dataModifiedSinceLastLoading` 自动决定是否写回。
+     */
+    fun mergeRemoteDatabaseBytes(localPath: String, masterPassword: String, remoteBytes: ByteArray): Boolean {
+        if (remoteBytes.isEmpty()) {
+            Logger.d(SYNC_LOG_TAG, "跳过远端合并：远端数据为空")
+            return false
+        }
+
+        return runCatching {
+            Logger.d(
+                SYNC_LOG_TAG,
+                "开始合并远端数据库：本地路径=$localPath, 远端数据大小=${remoteBytes.size}"
+            )
+            withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+                ByteArrayInputStream(remoteBytes).use { input ->
+                    db.mergeData(
+                        databaseToMergeStream = input,
+                        databaseToMergeMasterCredential = MasterCredential(password = masterPassword),
+                        databaseToMergeChallengeResponseRetriever = emptyChallengeResponseRetriever,
+                        isRAMSufficient = { true },
+                        progressTaskUpdater = null
+                    )
+                }
+                true
+            }
+        }.onSuccess {
+            Logger.d(SYNC_LOG_TAG, "远端数据库合并成功：本地路径=$localPath")
+        }.onFailure {
+            Logger.e(SYNC_LOG_TAG, "远端数据库合并失败：${it.message}", it)
+        }.getOrDefault(false)
     }
 
     fun isDuplicate(localPath: String, masterPassword: String, secret: String, algorithm: String, digits: Int, period: Int): Boolean {

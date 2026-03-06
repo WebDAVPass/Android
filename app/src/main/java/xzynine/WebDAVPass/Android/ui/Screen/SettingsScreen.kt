@@ -196,7 +196,7 @@ fun SettingsScreen(
                 },
                 onClick = {
                     if (!isBackupInProgress.value) {
-                        viewModel.backupTokens()
+                        viewModel.backupTokens(force = true)
                     }
                 },
                 modifier = Modifier.Companion

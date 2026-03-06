@@ -175,6 +175,7 @@ fun CloudLibraryDialog(
             if (!remote.exists()) {
                 return@withContext null
             }
+            val remoteModifiedAt = remote.getWebDavFile()?.lastModify?.takeIf { it > 0 }
 
             val localFileName = normalized.substringAfterLast('/').ifBlank { "WebDavPass.kdbx" }
             val localPath = tokenViewModelSaveRemoteToLocal(context, remote, localFileName)
@@ -186,7 +187,10 @@ fun CloudLibraryDialog(
                     remoteBaseUrl = baseUrl,
                     remoteFilePath = normalized,
                     username = user,
-                    password = pass
+                    password = pass,
+                    autoSyncEnabled = true,
+                    lastRemoteModifiedAt = remoteModifiedAt,
+                    lastSyncStatus = "idle"
                 )
             }
         }
@@ -204,6 +208,7 @@ fun CloudLibraryDialog(
             val remote = WebDav(normalized, Authorization(user, pass))
             val kdbxBytes = tokenViewModel.createEmptyKdbxBytes(masterPassword)
             remote.upload(kdbxBytes, "application/octet-stream")
+            val remoteModifiedAt = remote.getWebDavFile()?.lastModify?.takeIf { it > 0 }
 
             val localFileName = normalized.substringAfterLast('/').ifBlank { "WebDavPass.kdbx" }
             val localPath = tokenViewModelSaveRemoteToLocal(context, remote, localFileName)
@@ -215,7 +220,10 @@ fun CloudLibraryDialog(
                     remoteBaseUrl = baseUrl,
                     remoteFilePath = normalized,
                     username = user,
-                    password = pass
+                    password = pass,
+                    autoSyncEnabled = true,
+                    lastRemoteModifiedAt = remoteModifiedAt,
+                    lastSyncStatus = "idle"
                 )
             }
         }
