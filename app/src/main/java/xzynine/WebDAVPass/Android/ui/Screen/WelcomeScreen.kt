@@ -34,6 +34,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
@@ -87,6 +88,7 @@ fun WelcomeScreen(
     var showInlinePassword by remember { mutableStateOf(false) }
     var inlineUnlockLoading by remember { mutableStateOf(false) }
     var inlineUnlockFocusNonce by remember { mutableStateOf(0) }
+    var manualUnlockClockMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     val isSelectionMode = remember { mutableStateOf(false) }
     val selectedHistoryIds = remember { mutableStateMapOf<String, Boolean>() }
     val showDeleteDialog = remember { mutableStateOf(false) }
@@ -124,6 +126,9 @@ fun WelcomeScreen(
                     showInlinePassword = false
                     inlineUnlockFocusNonce++
                 }
+                if (pendingFlow == "reactivate") {
+                    ToastUtils.showShortToast(context, "身份验证失败")
+                }
                 return@rememberLauncherForActivityResult
             }
 
@@ -153,6 +158,15 @@ fun WelcomeScreen(
                     val targetLibrary = currentLibraryState?.takeIf { it.id == pendingLibrary.id } ?: pendingLibrary
                     val authCipher = tokenViewModel.getCipherForAutoUnlock(targetLibrary)
                     if (authCipher != null && tokenViewModel.unlockWithBiometric(targetLibrary, authCipher)) {
+                        val cleared = tokenViewModel.applyPostCredentialUnlockPolicy(targetLibrary)
+                        if (cleared) {
+                            ToastUtils.showShortToast(context, "已超过48小时，自动解锁已失效，请输入主密码并再次验证恢复")
+                        }
+                        pendingUnlockLibrary = null
+                        inlineUnlockPassword = ""
+                        showInlinePassword = false
+                        inlineUnlockLoading = false
+                        keyboardController?.hide()
                         onEnterLibrary()
                     } else {
                         ToastUtils.showShortToast(context, "自动解锁失败，请手动输入密码")
@@ -161,6 +175,51 @@ fun WelcomeScreen(
                         showInlinePassword = false
                         inlineUnlockFocusNonce++
                     }
+                }
+                return@rememberLauncherForActivityResult
+            }
+
+            if (pendingFlow == "reactivate") {
+                if (pendingPassword.isNullOrBlank()) {
+                    return@rememberLauncherForActivityResult
+                }
+                coroutineScope.launch {
+                    inlineUnlockLoading = true
+                    val unlocked = tokenViewModel.unlockCurrentLibrary(
+                        masterPassword = pendingPassword,
+                        isManualUnlock = true
+                    )
+                    inlineUnlockLoading = false
+                    if (!unlocked) {
+                        val message = tokenViewModel.getLastUnlockErrorMessage()
+                            ?: "解锁失败：主密码不正确或文件无效"
+                        ToastUtils.showShortToast(context, message)
+                        return@launch
+                    }
+
+                    val targetLibrary = currentLibraryState?.takeIf { it.id == pendingLibrary.id } ?: pendingLibrary
+                    val cipher = tokenViewModel.getCipherForEnrollment(targetLibrary)
+                    if (cipher == null) {
+                        ToastUtils.showShortToast(context, "自动解锁恢复失败，请重试")
+                        return@launch
+                    }
+                    val enabled = tokenViewModel.enableAutoUnlock(
+                        library = targetLibrary,
+                        cipher = cipher,
+                        masterPassword = pendingPassword,
+                        authMode = pendingMode
+                    )
+                    if (!enabled) {
+                        ToastUtils.showShortToast(context, "自动解锁恢复失败，请重试")
+                        return@launch
+                    }
+
+                    pendingUnlockLibrary = null
+                    inlineUnlockPassword = ""
+                    showInlinePassword = false
+                    inlineUnlockLoading = false
+                    keyboardController?.hide()
+                    onEnterLibrary()
                 }
             }
         }
@@ -214,18 +273,37 @@ fun WelcomeScreen(
         inlineUnlockPassword = ""
         showInlinePassword = false
         inlineUnlockFocusNonce++
+        manualUnlockClockMillis = System.currentTimeMillis()
+    }
+
+    /**
+     * 获取指定历史项的最新快照，避免使用过期对象。
+     */
+    fun resolveLatestLibrary(libraryContext: LibraryContext?): LibraryContext? {
+        if (libraryContext == null) {
+            return null
+        }
+        val current = currentLibraryState
+        if (current?.id == libraryContext.id) {
+            return current
+        }
+        return history.firstOrNull { it.id == libraryContext.id } ?: libraryContext
     }
 
     /**
      * 手动解锁成功后触发首次自动解锁引导。
      */
-    fun tryEnrollAutoUnlockAfterManualUnlock(library: LibraryContext, masterPassword: String) {
+    fun tryEnrollAutoUnlockAfterManualUnlock(
+        library: LibraryContext,
+        masterPassword: String,
+        forcePrompt: Boolean = false
+    ) {
         if (context !is FragmentActivity) {
             return
         }
 
         val targetLibrary = currentLibraryState?.takeIf { it.id == library.id } ?: library
-        if (!tokenViewModel.shouldPromptAutoUnlockEnroll(targetLibrary)) {
+        if (!forcePrompt && !tokenViewModel.shouldPromptAutoUnlockEnroll(targetLibrary)) {
             return
         }
 
@@ -279,6 +357,172 @@ fun WelcomeScreen(
     }
 
     /**
+     * 从内联输入区域触发凭据/生物识别解锁。
+     */
+    fun launchCredentialUnlockFromInline(libraryContext: LibraryContext) {
+        val targetLibrary = resolveLatestLibrary(libraryContext) ?: libraryContext
+        val authMode = tokenViewModel.normalizeAutoUnlockAuthMode(targetLibrary.autoUnlockAuthMode)
+
+        // 分支1：输入框有内容 -> 先验证主密码，再验证凭据/生物。
+        if (inlineUnlockPassword.isNotBlank()) {
+            coroutineScope.launch {
+                inlineUnlockLoading = true
+                val plainPassword = inlineUnlockPassword
+                val verified = tokenViewModel.verifyCurrentLibraryPassword(
+                    masterPassword = plainPassword,
+                    updateManualTimestamp = true
+                )
+                inlineUnlockLoading = false
+                if (!verified) {
+                    inlineUnlockPassword = ""
+                    val message = tokenViewModel.getLastUnlockErrorMessage()
+                        ?: "解锁失败：主密码不正确或文件无效"
+                    ToastUtils.showShortToast(context, message)
+                    return@launch
+                }
+
+                val unlockedLibrary = resolveLatestLibrary(targetLibrary) ?: targetLibrary
+                if (context !is FragmentActivity) {
+                    ToastUtils.showShortToast(context, "当前页面无法发起身份验证")
+                    return@launch
+                }
+
+                val enrollCipher = tokenViewModel.getCipherForEnrollment(unlockedLibrary)
+                if (enrollCipher == null) {
+                    ToastUtils.showShortToast(context, "自动解锁恢复失败，请重试")
+                    return@launch
+                }
+
+                tokenViewModel.biometricKeyStoreManager.authenticate(
+                    activity = context,
+                    cipher = enrollCipher,
+                    title = "验证身份",
+                    subtitle = "请验证身份以完成解锁",
+                    authMode = authMode,
+                    onSuccess = { authCipher ->
+                        if (authCipher == null) {
+                            ToastUtils.showShortToast(context, "身份验证失败")
+                            return@authenticate
+                        }
+
+                        coroutineScope.launch {
+                            inlineUnlockLoading = true
+                            val unlocked = tokenViewModel.unlockCurrentLibrary(
+                                masterPassword = plainPassword,
+                                isManualUnlock = true
+                            )
+                            inlineUnlockLoading = false
+                            if (!unlocked) {
+                                val message = tokenViewModel.getLastUnlockErrorMessage()
+                                    ?: "解锁失败：主密码不正确或文件无效"
+                                ToastUtils.showShortToast(context, message)
+                                return@launch
+                            }
+
+                            val enabled = tokenViewModel.enableAutoUnlock(
+                                library = unlockedLibrary,
+                                cipher = authCipher,
+                                masterPassword = plainPassword,
+                                authMode = authMode
+                            )
+                            if (!enabled) {
+                                ToastUtils.showShortToast(context, "自动解锁恢复失败，请重试")
+                                return@launch
+                            }
+
+                            clearInlineUnlock()
+                            onEnterLibrary()
+                        }
+                    },
+                    onFailure = { errorCode, _ ->
+                        var fallbackLaunched = false
+                        if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
+                            val intent = tokenViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
+                                title = "验证身份",
+                                subtitle = "请使用 PIN/图案/密码完成验证"
+                            )
+                            if (intent != null) {
+                                pendingDeviceCredentialLibrary = unlockedLibrary
+                                pendingDeviceCredentialMasterPassword = plainPassword
+                                pendingDeviceCredentialFlow = "reactivate"
+                                pendingDeviceCredentialAuthMode = authMode
+                                deviceCredentialLauncher.launch(intent)
+                                fallbackLaunched = true
+                            }
+                        }
+                        if (!fallbackLaunched) {
+                            ToastUtils.showShortToast(context, "身份验证失败")
+                        }
+                    }
+                )
+            }
+            return
+        }
+
+        // 分支2：输入框无内容 -> 原始凭据/生物解锁，不重置48小时计时。
+        if (!tokenViewModel.isAutoUnlockAvailable(targetLibrary)) {
+            ToastUtils.showShortToast(context, "自动解锁不可用，请先输入主密码")
+            return
+        }
+
+        val cipher = tokenViewModel.getCipherForAutoUnlock(targetLibrary)
+        if (cipher == null) {
+            ToastUtils.showShortToast(context, "自动解锁不可用，请手动输入主密码")
+            return
+        }
+
+        if (context !is FragmentActivity) {
+            ToastUtils.showShortToast(context, "当前页面无法发起身份验证")
+            return
+        }
+
+        tokenViewModel.biometricKeyStoreManager.authenticate(
+            activity = context,
+            cipher = cipher,
+            authMode = authMode,
+            onSuccess = { authCipher ->
+                if (authCipher != null) {
+                    coroutineScope.launch {
+                        if (tokenViewModel.unlockWithBiometric(targetLibrary, authCipher)) {
+                            val cleared = tokenViewModel.applyPostCredentialUnlockPolicy(targetLibrary)
+                            if (cleared) {
+                                ToastUtils.showShortToast(context, "已超过48小时，自动解锁已失效，请输入主密码并再次验证恢复")
+                            }
+                            clearInlineUnlock()
+                            onEnterLibrary()
+                        } else {
+                            ToastUtils.showShortToast(context, "自动解锁失败，请手动输入密码")
+                        }
+                    }
+                } else {
+                    showInlineUnlock(targetLibrary)
+                }
+            },
+            onFailure = { errorCode, _ ->
+                var fallbackLaunched = false
+                if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
+                    val intent = tokenViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
+                        title = "验证身份",
+                        subtitle = "请使用 PIN/图案/密码解锁"
+                    )
+                    if (intent != null) {
+                        pendingDeviceCredentialLibrary = targetLibrary
+                        pendingDeviceCredentialMasterPassword = null
+                        pendingDeviceCredentialFlow = "unlock"
+                        pendingDeviceCredentialAuthMode = authMode
+                        deviceCredentialLauncher.launch(intent)
+                        fallbackLaunched = true
+                    }
+                }
+                if (!fallbackLaunched) {
+                    ToastUtils.showShortToast(context, "身份验证失败")
+                    showInlineUnlock(targetLibrary)
+                }
+            }
+        )
+    }
+
+    /**
      * 解析 Uri 展示名称。
      */
     fun resolveUriDisplayName(uri: Uri): String {
@@ -303,6 +547,17 @@ fun WelcomeScreen(
         if (pendingUnlockLibrary != null) {
             inlineUnlockFocusRequester.requestFocus()
             keyboardController?.show()
+        }
+    }
+
+    LaunchedEffect(pendingUnlockLibrary?.id) {
+        if (pendingUnlockLibrary == null) {
+            return@LaunchedEffect
+        }
+        manualUnlockClockMillis = System.currentTimeMillis()
+        while (true) {
+            delay(60_000L)
+            manualUnlockClockMillis = System.currentTimeMillis()
         }
     }
 
@@ -414,8 +669,25 @@ fun WelcomeScreen(
             Text(text = "历史库")
 
             if (!isSelectionMode.value) {
-                pendingUnlockLibrary?.let { unlockLibrary ->
+                resolveLatestLibrary(pendingUnlockLibrary)?.let { unlockLibrary ->
+                    val autoUnlockAvailable = tokenViewModel.isAutoUnlockAvailable(unlockLibrary)
+                    val autoUnlockInvalidated = tokenViewModel.isAutoUnlockInvalidated(unlockLibrary)
+                    val isManualWindowEnabled = tokenViewModel.isManualUnlockWindowEnabled(unlockLibrary)
+                    val manualWindowRemaining = tokenViewModel.getManualUnlockWindowRemainingMillis(
+                        library = unlockLibrary,
+                        nowMillis = manualUnlockClockMillis
+                    )
                     Text(text = "解锁: ${unlockLibrary.displayName}")
+                    Text(
+                        text = when {
+                            autoUnlockInvalidated -> "自动解锁状态：已失效（需主密码+认证恢复）"
+                            !isManualWindowEnabled -> "48小时主密码校验：已关闭"
+                            manualWindowRemaining == null -> "48小时主密码校验：不可用"
+                            manualWindowRemaining <= 0L -> "48小时主密码校验：已到期（本次凭据解锁后将标记失效）"
+                            else -> "48小时主密码校验剩余：${tokenViewModel.formatRemainingHoursMinutes(manualWindowRemaining)}"
+                        },
+                        fontSize = 12.sp
+                    )
 
                     TextField(
                         value = inlineUnlockPassword,
@@ -459,8 +731,7 @@ fun WelcomeScreen(
                                     val ok = tokenViewModel.unlockCurrentLibrary(inlineUnlockPassword)
                                     inlineUnlockLoading = false
                                     if (ok) {
-                                        val unlockedLibrary = currentLibraryState
-                                            ?: pendingUnlockLibrary
+                                        val unlockedLibrary = resolveLatestLibrary(unlockLibrary)
                                             ?: return@launch
                                         val plainPassword = inlineUnlockPassword
                                         clearInlineUnlock()
@@ -479,6 +750,21 @@ fun WelcomeScreen(
                             Text(text = if (inlineUnlockLoading) "解锁中..." else "解锁")
                         }
                     }
+
+                    TextButton(
+                        text = if (autoUnlockAvailable) {
+                            "使用凭据/生物识别解锁"
+                        } else if (autoUnlockInvalidated) {
+                            "使用凭据/生物识别解锁（已失效，输入主密码后恢复）"
+                        } else {
+                            "使用凭据/生物识别解锁（输入主密码后可启用）"
+                        },
+                        onClick = {
+                            launchCredentialUnlockFromInline(unlockLibrary)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !inlineUnlockLoading
+                    )
                 }
             }
 
@@ -536,54 +822,7 @@ fun WelcomeScreen(
                             coroutineScope.launch {
                                 tokenViewModel.switchLibrary(item.id)
                                 val selectedLibrary = currentLibraryState?.takeIf { it.id == item.id } ?: item
-                                
-                                if (tokenViewModel.isAutoUnlockAvailable(selectedLibrary)) {
-                                    val cipher = tokenViewModel.getCipherForAutoUnlock(selectedLibrary)
-                                    if (cipher != null && context is FragmentActivity) {
-                                        val authMode = tokenViewModel.normalizeAutoUnlockAuthMode(selectedLibrary.autoUnlockAuthMode)
-                                        tokenViewModel.biometricKeyStoreManager.authenticate(
-                                            activity = context,
-                                            cipher = cipher,
-                                            authMode = authMode,
-                                            onSuccess = { authCipher ->
-                                                if (authCipher != null) {
-                                                    coroutineScope.launch {
-                                                        if (tokenViewModel.unlockWithBiometric(selectedLibrary, authCipher)) {
-                                                            onEnterLibrary()
-                                                        } else {
-                                                            ToastUtils.showShortToast(context, "自动解锁失败，请手动输入密码")
-                                                            showInlineUnlock(selectedLibrary)
-                                                        }
-                                                    }
-                                                } else {
-                                                    showInlineUnlock(selectedLibrary)
-                                                }
-                                            },
-                                            onFailure = { errorCode, _ ->
-                                                var fallbackLaunched = false
-                                                if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
-                                                    val intent = tokenViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
-                                                        title = "验证身份",
-                                                        subtitle = "请使用 PIN/图案/密码解锁"
-                                                    )
-                                                    if (intent != null) {
-                                                        pendingDeviceCredentialLibrary = selectedLibrary
-                                                        pendingDeviceCredentialMasterPassword = null
-                                                        pendingDeviceCredentialFlow = "unlock"
-                                                        pendingDeviceCredentialAuthMode = authMode
-                                                        deviceCredentialLauncher.launch(intent)
-                                                        fallbackLaunched = true
-                                                    }
-                                                }
-                                                if (!fallbackLaunched) {
-                                                    showInlineUnlock(selectedLibrary)
-                                                }
-                                            }
-                                        )
-                                        return@launch
-                                    }
-                                }
-                                
+
                                 showInlineUnlock(selectedLibrary)
                             }
                         },

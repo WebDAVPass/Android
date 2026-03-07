@@ -54,9 +54,17 @@ class LibraryContextStore(private val context: Context) {
             else -> 0
         }
 
+        // 兼容旧版本：缺省视为启用48小时手动主密码策略。
+        val normalizedForceManualUnlock = item.forceManualUnlockEvery48Hours ?: true
+
+        // 兼容旧版本：缺省视为未失效。
+        val normalizedAutoUnlockInvalidated = item.autoUnlockInvalidated
+
         return item.copy(
             autoSyncEnabled = normalizedAutoSync,
-            autoUnlockAuthMode = normalizedAuthMode
+            autoUnlockAuthMode = normalizedAuthMode,
+            forceManualUnlockEvery48Hours = normalizedForceManualUnlock,
+            autoUnlockInvalidated = normalizedAutoUnlockInvalidated
         )
     }
 

@@ -56,6 +56,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
         private const val UNLOCK_LOAD_RETRY_COUNT = 3
         private const val UNLOCK_LOAD_RETRY_DELAY_MS = 250L
+        private const val MANUAL_UNLOCK_WINDOW_MILLIS = 48L * 60L * 60L * 1000L
+        private const val MINUTE_MILLIS = 60L * 1000L
 
         private const val SYNC_STATUS_IDLE = "idle"
         private const val SYNC_STATUS_SYNCING = "syncing"
@@ -109,6 +111,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val libraryContextStore: LibraryContextStore = LibraryContextStore(context)
     private val kdbxTokenRepository: KdbxTokenRepository = KdbxTokenRepository(context)
     private var currentLibraryMasterPassword: String = ""
+        private var isCurrentLibraryMasterPasswordManualVerified: Boolean = false
     private var lastUnlockErrorMessage: String? = null
 
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
@@ -284,6 +287,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         val updated = libraryContextStore.upsertAndSelect(libraryContext)
         _currentLibrary.value = updated
         currentLibraryMasterPassword = ""
+            isCurrentLibraryMasterPasswordManualVerified = false
         _isLibraryUnlocked.value = false
         passwordListModeSubViewModel.resetAllState()
         _tokens.value = emptyList()
@@ -302,6 +306,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         val selected = libraryContextStore.selectById(libraryId)
         _currentLibrary.value = selected
         currentLibraryMasterPassword = ""
+            isCurrentLibraryMasterPasswordManualVerified = false
         _isLibraryUnlocked.value = false
         passwordListModeSubViewModel.resetAllState()
         _tokens.value = emptyList()
@@ -320,6 +325,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         libraryContextStore.clearCurrentSelection()
         _currentLibrary.value = null
         currentLibraryMasterPassword = ""
+            isCurrentLibraryMasterPasswordManualVerified = false
         _isLibraryUnlocked.value = false
         passwordListModeSubViewModel.resetAllState()
         _tokens.value = emptyList()
@@ -420,7 +426,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     /**
      * 解锁当前库（主密码与WebDAV密码分离）
      */
-    suspend fun unlockCurrentLibrary(masterPassword: String): Boolean {
+    suspend fun unlockCurrentLibrary(
+        masterPassword: String,
+        isManualUnlock: Boolean = true
+    ): Boolean {
         val localPath = _currentLibrary.value?.localPath ?: return false
         val ok = withContext(Dispatchers.IO) {
             kdbxTokenRepository.validatePassword(localPath, masterPassword)
@@ -433,6 +442,16 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
         lastUnlockErrorMessage = null
         currentLibraryMasterPassword = masterPassword
+
+            isCurrentLibraryMasterPasswordManualVerified = isManualUnlock
+        if (isManualUnlock) {
+            val current = _currentLibrary.value
+            if (current != null) {
+                persistCurrentLibraryMetadata(
+                    current.copy(lastManualMasterUnlockAt = System.currentTimeMillis())
+                )
+            }
+        }
 
         repeat(UNLOCK_LOAD_RETRY_COUNT) { attemptIndex ->
             val loaded = loadTokensInternal()
@@ -455,13 +474,137 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 仅校验当前库主密码，不进入解锁态。
+     *
+     * @param updateManualTimestamp 校验成功后是否更新“最近手动主密码时间”。
+     */
+    suspend fun verifyCurrentLibraryPassword(
+        masterPassword: String,
+        updateManualTimestamp: Boolean = false
+    ): Boolean {
+        val localPath = _currentLibrary.value?.localPath ?: return false
+        val ok = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.validatePassword(localPath, masterPassword)
+        }
+        if (!ok) {
+            lastUnlockErrorMessage = resolveUnlockFailureMessage(localPath)
+            return false
+        }
+
+        lastUnlockErrorMessage = null
+        if (updateManualTimestamp) {
+            val current = _currentLibrary.value
+            if (current != null) {
+                persistCurrentLibraryMetadata(
+                    current.copy(lastManualMasterUnlockAt = System.currentTimeMillis())
+                )
+            }
+        }
+        return true
+    }
+
+    /**
      * 判断指定库是否可用于自动解锁。
      */
     fun isAutoUnlockAvailable(library: LibraryContext): Boolean {
-        return library.autoUnlockEnabled && 
+        return library.autoUnlockEnabled &&
+               !library.autoUnlockInvalidated &&
                !library.encryptedMasterPassword.isNullOrBlank() && 
                !library.encryptedMasterPasswordIv.isNullOrBlank() &&
                biometricKeyStoreManager.hasKey(library.id)
+    }
+
+    /**
+     * 自动解锁是否处于“失效待重验”状态。
+     */
+    fun isAutoUnlockInvalidated(library: LibraryContext): Boolean {
+        return library.autoUnlockEnabled && library.autoUnlockInvalidated
+    }
+
+    /**
+     * 是否启用“48小时需手动主密码一次”策略。
+     */
+    fun isManualUnlockWindowEnabled(library: LibraryContext): Boolean {
+        return library.forceManualUnlockEvery48Hours != false
+    }
+
+    /**
+     * 当前库是否已超过手动主密码时限。
+     */
+    fun isManualUnlockWindowExpired(
+        library: LibraryContext,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Boolean {
+        if (!isManualUnlockWindowEnabled(library)) {
+            return false
+        }
+        val lastManualUnlockAt = library.lastManualMasterUnlockAt ?: return true
+        return nowMillis - lastManualUnlockAt >= MANUAL_UNLOCK_WINDOW_MILLIS
+    }
+
+    /**
+     * 获取“48小时手动主密码”策略剩余时长。
+     *
+     * @return 剩余毫秒；策略关闭时返回 null。
+     */
+    fun getManualUnlockWindowRemainingMillis(
+        library: LibraryContext,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Long? {
+        if (!isManualUnlockWindowEnabled(library)) {
+            return null
+        }
+        val lastManualUnlockAt = library.lastManualMasterUnlockAt ?: return 0L
+        val deadline = lastManualUnlockAt + MANUAL_UNLOCK_WINDOW_MILLIS
+        return (deadline - nowMillis).coerceAtLeast(0L)
+    }
+
+    /**
+     * 将剩余毫秒格式化为“X小时Y分钟”。
+     */
+    fun formatRemainingHoursMinutes(remainingMillis: Long): String {
+        val normalized = remainingMillis.coerceAtLeast(0L)
+        val rounded = ((normalized + MINUTE_MILLIS - 1) / MINUTE_MILLIS) * MINUTE_MILLIS
+        val totalMinutes = rounded / MINUTE_MILLIS
+        val hours = totalMinutes / 60
+        val minutes = totalMinutes % 60
+        return "${hours}小时${minutes}分钟"
+    }
+
+    /**
+     * 更新当前库“48小时需手动主密码一次”策略开关。
+     */
+    fun updateManualUnlockWindowEnabled(library: LibraryContext, enabled: Boolean) {
+        val currentValue = library.forceManualUnlockEvery48Hours
+        if (currentValue == enabled) {
+            return
+        }
+        persistCurrentLibraryMetadata(library.copy(forceManualUnlockEvery48Hours = enabled))
+    }
+
+    /**
+     * 仅测试用途：将当前库的48小时手动主密码窗口直接标记为已到期。
+     */
+    fun forceManualUnlockWindowExpiredForTesting(library: LibraryContext) {
+        val expiredAt = System.currentTimeMillis() - MANUAL_UNLOCK_WINDOW_MILLIS - MINUTE_MILLIS
+        persistCurrentLibraryMetadata(library.copy(lastManualMasterUnlockAt = expiredAt))
+    }
+
+    /**
+     * 凭据自动解锁成功后的策略收尾。
+     *
+     * @return 若本次成功后清理了自动解锁材料则返回 true。
+     */
+    fun applyPostCredentialUnlockPolicy(library: LibraryContext): Boolean {
+        val latest = resolveLibrarySnapshot(library.id) ?: library
+        if (!isAutoUnlockAvailable(latest)) {
+            return false
+        }
+        if (!isManualUnlockWindowExpired(latest)) {
+            return false
+        }
+        invalidateAutoUnlock(latest)
+        return true
     }
 
     /**
@@ -478,7 +621,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 获取当前库内存中的主密码（仅在已手动解锁后可用）。
      */
     fun getCurrentLibraryMasterPassword(): String? {
-        return currentLibraryMasterPassword.takeIf { it.isNotBlank() }
+        return currentLibraryMasterPassword.takeIf {
+            it.isNotBlank() && isCurrentLibraryMasterPasswordManualVerified
+        }
     }
 
     /**
@@ -506,12 +651,15 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         if (masterPassword.isBlank()) return false
         
         return try {
+            // 基于最新快照写回，避免覆盖刚更新的手动解锁时间等元数据。
+            val baseLibrary = resolveLibrarySnapshot(library.id) ?: library
             val (encrypted, iv) = biometricKeyStoreManager.encrypt(cipher, masterPassword)
-            val updated = library.copy(
+            val updated = baseLibrary.copy(
                 autoUnlockEnabled = true,
                 encryptedMasterPassword = encrypted,
                 encryptedMasterPasswordIv = iv,
                 autoUnlockAuthMode = normalizeAutoUnlockAuthMode(authMode),
+                autoUnlockInvalidated = false,
                 autoUnlockEnrollDismissed = false // Reset dismissal if manually enabled
             )
             persistCurrentLibraryMetadata(updated)
@@ -530,7 +678,26 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         val updated = library.copy(
             autoUnlockEnabled = false,
             encryptedMasterPassword = null,
-            encryptedMasterPasswordIv = null
+            encryptedMasterPasswordIv = null,
+            autoUnlockInvalidated = false
+        )
+        persistCurrentLibraryMetadata(updated)
+    }
+
+    /**
+     * 标记自动解锁为失效状态（保留开关与认证方式）。
+     *
+     * 说明：
+     * - 会清理密钥与密文材料，保证后续必须通过主密码 + 重新验证恢复；
+     * - 不会关闭自动解锁开关，也不会重置认证方式。
+     */
+    fun invalidateAutoUnlock(library: LibraryContext) {
+        biometricKeyStoreManager.deleteKey(library.id)
+        val updated = library.copy(
+            autoUnlockEnabled = true,
+            encryptedMasterPassword = null,
+            encryptedMasterPasswordIv = null,
+            autoUnlockInvalidated = true
         )
         persistCurrentLibraryMetadata(updated)
     }
@@ -562,8 +729,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         return try {
             biometricKeyStoreManager.getCipherForDecryption(library.id, library.encryptedMasterPasswordIv!!)
         } catch (e: Exception) {
-            // Key invalidated or other error
-            disableAutoUnlock(library)
+            // 密钥失效或异常时标记为“失效待重验”，保留开关与认证方式。
+            invalidateAutoUnlock(library)
             null
         }
     }
@@ -586,11 +753,22 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun unlockWithBiometric(library: LibraryContext, cipher: Cipher): Boolean {
         return try {
             val decrypted = biometricKeyStoreManager.decrypt(cipher, library.encryptedMasterPassword!!)
-            unlockCurrentLibrary(decrypted)
+            unlockCurrentLibrary(decrypted, isManualUnlock = false)
         } catch (e: Exception) {
             e.printStackTrace()
             false
         }
+    }
+
+    /**
+     * 按库ID获取最新快照，避免使用过期对象执行策略判断。
+     */
+    private fun resolveLibrarySnapshot(libraryId: String): LibraryContext? {
+        val current = _currentLibrary.value
+        if (current?.id == libraryId) {
+            return current
+        }
+        return _libraryHistory.value.firstOrNull { it.id == libraryId }
     }
 
     fun getLastUnlockErrorMessage(): String? {

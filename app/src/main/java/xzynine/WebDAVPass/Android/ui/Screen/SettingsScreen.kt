@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.delay
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.service.TwoFasAutofillService
@@ -117,6 +118,10 @@ fun SettingsScreen(
     var pendingSettingAuthMode by remember {
         mutableStateOf(TokenViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT)
     }
+    var manualUnlockWindowSwitchChecked by remember(currentLib?.id, currentLib?.forceManualUnlockEvery48Hours) {
+        mutableStateOf(currentLib?.forceManualUnlockEvery48Hours != false)
+    }
+    var manualUnlockClockMillis by remember { mutableStateOf(System.currentTimeMillis()) }
 
     val settingDeviceCredentialLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartActivityForResult(),
@@ -163,12 +168,29 @@ fun SettingsScreen(
         }
     )
 
-    LaunchedEffect(currentLib?.id, currentLib?.autoUnlockEnabled, currentLib?.autoUnlockAuthMode) {
+    LaunchedEffect(
+        currentLib?.id,
+        currentLib?.autoUnlockEnabled,
+        currentLib?.autoUnlockAuthMode,
+        currentLib?.forceManualUnlockEvery48Hours
+    ) {
         autoUnlockSwitchChecked = currentLib?.autoUnlockEnabled == true
         autoUnlockSelectedIndex = if (currentLib?.autoUnlockEnabled == true) {
             authModeToIndex(currentLib.autoUnlockAuthMode)
         } else {
             -1
+        }
+        manualUnlockWindowSwitchChecked = currentLib?.forceManualUnlockEvery48Hours != false
+    }
+
+    LaunchedEffect(currentLib?.id, manualUnlockWindowSwitchChecked) {
+        if (currentLib == null || !manualUnlockWindowSwitchChecked) {
+            return@LaunchedEffect
+        }
+        manualUnlockClockMillis = System.currentTimeMillis()
+        while (true) {
+            delay(60_000L)
+            manualUnlockClockMillis = System.currentTimeMillis()
         }
     }
 
@@ -283,11 +305,13 @@ fun SettingsScreen(
             )
 
             val isAutoUnlockEnabled = currentLib?.autoUnlockEnabled == true
+            val isAutoUnlockInvalidated = currentLib?.autoUnlockInvalidated == true
 
             SuperSwitch(
                 title = "自动解锁",
                 summary = when {
                     currentLib == null -> "请先选择数据库文件"
+                    isAutoUnlockInvalidated -> "自动解锁已失效，需手动主密码后重新验证"
                     isAutoUnlockEnabled -> "已启用自动解锁"
                     autoUnlockSwitchChecked -> "请选择认证方式并完成一次身份验证"
                     else -> "开启后可使用生物识别或 PIN 快速解锁"
@@ -427,6 +451,57 @@ fun SettingsScreen(
                                 }
                             }
                         )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (currentLib != null) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                val manualUnlockRemaining = viewModel.getManualUnlockWindowRemainingMillis(
+                    library = currentLib,
+                    nowMillis = manualUnlockClockMillis
+                )
+
+                SuperSwitch(
+                    title = "48小时需手动主密码一次",
+                    summary = when {
+                        !manualUnlockWindowSwitchChecked -> "已关闭48小时主密码校验"
+                        !autoUnlockSwitchChecked && !currentLib.autoUnlockEnabled -> "启用自动解锁后生效"
+                        manualUnlockRemaining == null -> "48小时主密码校验不可用"
+                        manualUnlockRemaining <= 0L -> "已到期：凭据解锁一次后将清理自动解锁"
+                        else -> "剩余：${viewModel.formatRemainingHoursMinutes(manualUnlockRemaining)}"
+                    },
+                    checked = manualUnlockWindowSwitchChecked,
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Settings,
+                            contentDescription = "48小时主密码校验"
+                        )
+                    },
+                    onCheckedChange = { checked ->
+                        manualUnlockWindowSwitchChecked = checked
+                        viewModel.updateManualUnlockWindowEnabled(currentLib, checked)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                SuperArrow(
+                    title = "测试：立即结束48小时窗口",
+                    summary = "点击后将当前库标记为已到期，便于验证凭据解锁后的清理逻辑",
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Settings,
+                            contentDescription = "测试结束48小时窗口"
+                        )
+                    },
+                    onClick = {
+                        viewModel.forceManualUnlockWindowExpiredForTesting(currentLib)
+                        manualUnlockClockMillis = System.currentTimeMillis()
+                        xzylib.base.util.ToastUtils.showShortToast(context, "已将48小时窗口标记为到期")
                     },
                     modifier = Modifier.fillMaxWidth()
                 )

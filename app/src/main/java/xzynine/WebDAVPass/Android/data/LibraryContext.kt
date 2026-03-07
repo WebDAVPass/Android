@@ -34,6 +34,9 @@ enum class LibrarySourceType {
  * @property lastSyncStatus 最近同步状态（可为空）
  * @property lastSyncError 最近同步错误信息（可为空）
  * @property lastUsedAt 最近使用时间戳
+ * @property forceManualUnlockEvery48Hours 是否启用“48小时需手动主密码一次”策略（null 表示默认启用）
+ * @property lastManualMasterUnlockAt 最近一次手动输入主密码并解锁成功的时间戳（可为空）
+ * @property autoUnlockInvalidated 自动解锁是否处于“失效待重验”状态（保留开关与认证方式）
  */
 data class LibraryContext(
     val id: String = UUID.randomUUID().toString(),
@@ -54,5 +57,8 @@ data class LibraryContext(
     val autoUnlockEnrollDismissed: Boolean = false,
     val encryptedMasterPassword: String? = null,
     val encryptedMasterPasswordIv: String? = null,
-    val autoUnlockAuthMode: Int = 0
+    val autoUnlockAuthMode: Int = 0,
+    val forceManualUnlockEvery48Hours: Boolean? = null,
+    val lastManualMasterUnlockAt: Long? = null,
+    val autoUnlockInvalidated: Boolean = false
 )
