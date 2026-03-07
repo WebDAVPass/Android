@@ -7,6 +7,7 @@ import xzylib.base.util.ToastUtils
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
@@ -29,6 +31,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -45,12 +48,16 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.AddFolder
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Folder
+import top.yukonga.miuix.kmp.icon.extended.Hide
+import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 import androidx.fragment.app.FragmentActivity
+import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
@@ -700,10 +707,12 @@ fun WelcomeScreen(
                         },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                         trailingIcon = {
-                            TextButton(
-                                text = if (showInlinePassword) "隐藏" else "显示",
-                                onClick = { showInlinePassword = !showInlinePassword }
-                            )
+                            IconButton(onClick = { showInlinePassword = !showInlinePassword }) {
+                                Icon(
+                                    imageVector = if (showInlinePassword) MiuixIcons.Hide else MiuixIcons.Show,
+                                    contentDescription = if (showInlinePassword) "隐藏密码" else "显示密码"
+                                )
+                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -747,24 +756,50 @@ fun WelcomeScreen(
                             modifier = Modifier.weight(1f),
                             enabled = !inlineUnlockLoading
                         ) {
+                            Image(
+                                painter = painterResource(id = R.drawable.lock_open_48),
+                                contentDescription = "解锁",
+                                modifier = Modifier
+                                    .padding(end = 6.dp)
+                                    .size(20.dp)
+                            )
                             Text(text = if (inlineUnlockLoading) "解锁中..." else "解锁")
                         }
                     }
 
-                    TextButton(
-                        text = if (autoUnlockAvailable) {
-                            "使用凭据/生物识别解锁"
-                        } else if (autoUnlockInvalidated) {
-                            "使用凭据/生物识别解锁（已失效，输入主密码后恢复）"
-                        } else {
-                            "使用凭据/生物识别解锁（输入主密码后可启用）"
-                        },
+                    Button(
                         onClick = {
                             launchCredentialUnlockFromInline(unlockLibrary)
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !inlineUnlockLoading
-                    )
+                    ) {
+                        Text(text = "使用")
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Image(
+                            painter = painterResource(id = R.drawable.key_vertical_24),
+                            contentDescription = "凭据解锁",
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.size(4.dp))
+                        Text(text = "/")
+                        Spacer(modifier = Modifier.size(4.dp))
+                        Image(
+                            painter = painterResource(id = R.drawable.fingerprint_24),
+                            contentDescription = "生物识别解锁",
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.size(6.dp))
+                        Text(
+                            text = if (autoUnlockAvailable) {
+                                "解锁"
+                            } else if (autoUnlockInvalidated) {
+                                "解锁（已失效，输入主密码后恢复）"
+                            } else {
+                                "解锁（输入主密码后可启用）"
+                            }
+                        )
+                    }
                 }
             }
 
@@ -810,7 +845,7 @@ fun WelcomeScreen(
                         startAction = {
                             Icon(
                                 modifier = Modifier.padding(end = 16.dp),
-                                imageVector = if (item.sourceType == LibrarySourceType.CLOUD) MiuixIcons.CloudFill else MiuixIcons.Download,
+                                imageVector = if (item.sourceType == LibrarySourceType.CLOUD) MiuixIcons.CloudFill else MiuixIcons.Folder,
                                 contentDescription = "历史库"
                             )
                         },
@@ -841,7 +876,7 @@ fun WelcomeScreen(
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(imageVector = MiuixIcons.Download, contentDescription = "本地导入")
+                    Icon(imageVector = MiuixIcons.Folder, contentDescription = "本地导入")
                     Text(text = "本地导入")
                 }
 
@@ -864,7 +899,7 @@ fun WelcomeScreen(
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(imageVector = MiuixIcons.UploadCloud, contentDescription = "本地新建")
+                    Icon(imageVector = MiuixIcons.AddFolder, contentDescription = "本地新建")
                     Text(text = "本地新建")
                 }
 
@@ -875,7 +910,7 @@ fun WelcomeScreen(
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Icon(imageVector = MiuixIcons.CloudFill, contentDescription = "云端新建")
+                    Icon(imageVector = MiuixIcons.UploadCloud, contentDescription = "云端新建")
                     Text(text = "云端新建")
                 }
             }

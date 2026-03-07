@@ -5,17 +5,21 @@ import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -26,9 +30,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
+import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.service.TwoFasAutofillService
@@ -296,6 +302,23 @@ fun SettingsScreen(
                     .fillMaxWidth()
             )
 
+            Spacer(modifier = Modifier.Companion.height(8.dp))
+
+            SuperArrow(
+                title = "切换数据库文件",
+                summary = "返回欢迎页，选择其他 .kdbx",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Months,
+                        contentDescription = "切换数据库文件",
+                    )
+                },
+                onClick = onSwitchLibraryClick,
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+            )
+
             Spacer(modifier = Modifier.Companion.height(16.dp))
 
             // 安全设置
@@ -366,11 +389,41 @@ fun SettingsScreen(
                     showValue = autoUnlockSelectedIndex >= 0,
                     enabled = currentLib != null,
                     startAction = {
-                        Icon(
+                        val currentAuthIconIndex = if (autoUnlockSelectedIndex >= 0) autoUnlockSelectedIndex else 0
+                        Row(
                             modifier = Modifier.padding(end = 16.dp),
-                            imageVector = MiuixIcons.Settings,
-                            contentDescription = "认证方式"
-                        )
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            when (currentAuthIconIndex) {
+                                1 -> {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.fingerprint_24),
+                                        contentDescription = "生物识别",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                2 -> {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.key_vertical_24),
+                                        contentDescription = "PIN",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                                else -> {
+                                    Image(
+                                        painter = painterResource(id = R.drawable.key_vertical_24),
+                                        contentDescription = "默认凭据",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Text(text = "/")
+                                    Image(
+                                        painter = painterResource(id = R.drawable.fingerprint_24),
+                                        contentDescription = "默认生物识别",
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+                            }
+                        }
                     },
                     onSelectedIndexChange = { selectedIndex ->
                         val selectedLibrary = currentLibraryState
@@ -488,61 +541,32 @@ fun SettingsScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
 
-                SuperArrow(
-                    title = "测试：立即结束48小时窗口",
-                    summary = "点击后将当前库标记为已到期，便于验证凭据解锁后的清理逻辑",
-                    startAction = {
-                        Icon(
-                            modifier = Modifier.padding(end = 16.dp),
-                            imageVector = MiuixIcons.Settings,
-                            contentDescription = "测试结束48小时窗口"
-                        )
-                    },
-                    onClick = {
-                        viewModel.forceManualUnlockWindowExpiredForTesting(currentLib)
-                        manualUnlockClockMillis = System.currentTimeMillis()
-                        xzylib.base.util.ToastUtils.showShortToast(context, "已将48小时窗口标记为到期")
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                )
+                /*
+                 * 测试入口（已隐藏）：手动将48小时窗口标记为到期。
+                 * 说明：仅注释 UI，后端测试方法保留。
+                 */
+                // SuperArrow(
+                //     title = "测试：立即结束48小时窗口",
+                //     summary = "点击后将当前库标记为已到期，便于验证凭据解锁后的清理逻辑",
+                //     startAction = {
+                //         Icon(
+                //             modifier = Modifier.padding(end = 16.dp),
+                //             imageVector = MiuixIcons.Settings,
+                //             contentDescription = "测试结束48小时窗口"
+                //         )
+                //     },
+                //     onClick = {
+                //         viewModel.forceManualUnlockWindowExpiredForTesting(currentLib)
+                //         manualUnlockClockMillis = System.currentTimeMillis()
+                //         xzylib.base.util.ToastUtils.showShortToast(context, "已将48小时窗口标记为到期")
+                //     },
+                //     modifier = Modifier.fillMaxWidth()
+                // )
             }
 
             Spacer(modifier = Modifier.Companion.height(16.dp))
 
-            // WebDAV配置
-            SuperArrow(
-                title = "当前库云端设置",
-                summary = cloudBindingSummary,
-                startAction = {
-                    Icon(
-                        modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.CloudFill,
-                        contentDescription = "当前库云端设置",
-                    )
-                },
-                onClick = onCloudBindingClick,
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.Companion.height(8.dp))
-
-            SuperArrow(
-                title = "切换数据库文件",
-                summary = "返回欢迎页，选择其他 .kdbx",
-                startAction = {
-                    Icon(
-                        modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.Months,
-                        contentDescription = "切换数据库文件",
-                    )
-                },
-                onClick = onSwitchLibraryClick,
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.Companion.height(16.dp))
+            // WebDAV配置（摘要已合并到备份状态）
 
             // 备份和恢复标题
             Text(
@@ -550,10 +574,14 @@ fun SettingsScreen(
                 modifier = Modifier.padding(8.dp)
             )
 
-            // 备份状态显示
+            // 备份状态显示（包含当前库云端摘要）
+            val combinedBackupSummary = run {
+                val statusText = backupStatus.value
+                if (statusText.isBlank()) cloudBindingSummary else if (cloudBindingSummary.isBlank()) statusText else "$statusText | $cloudBindingSummary"
+            }
             SuperArrow(
                 title = "备份状态",
-                summary = backupStatus.value,
+                summary = combinedBackupSummary,
                 startAction = {
                     Icon(
                         modifier = Modifier.Companion.padding(end = 16.dp),
@@ -561,6 +589,7 @@ fun SettingsScreen(
                         contentDescription = "备份状态",
                     )
                 },
+                onClick = onCloudBindingClick,
                 modifier = Modifier.Companion
                     .fillMaxWidth()
             )
