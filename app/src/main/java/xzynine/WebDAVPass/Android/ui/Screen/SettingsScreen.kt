@@ -1,5 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
+import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
@@ -13,14 +14,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
+import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.service.TwoFasAutofillService
 import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
@@ -31,12 +39,15 @@ import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.extra.SuperArrow
+import top.yukonga.miuix.kmp.extra.SuperSwitch
+import top.yukonga.miuix.kmp.extra.WindowDropdown
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Months
+import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 
 /**
@@ -61,6 +72,105 @@ fun SettingsScreen(
     val restoreProgress = viewModel.restoreProgress.collectAsState()
     val currentLibraryState by viewModel.currentLibrary.collectAsState()
     val context = LocalContext.current
+    val autoUnlockModeItems = remember { listOf("默认", "生物识别", "PIN") }
+    val currentLib = currentLibraryState
+
+    /**
+     * 将认证模式转换为下拉索引。
+     */
+    fun authModeToIndex(mode: Int): Int {
+        return when (viewModel.normalizeAutoUnlockAuthMode(mode)) {
+            TokenViewModel.AUTO_UNLOCK_AUTH_MODE_BIOMETRIC -> 1
+            TokenViewModel.AUTO_UNLOCK_AUTH_MODE_PIN -> 2
+            else -> 0
+        }
+    }
+
+    /**
+     * 将下拉索引转换为认证模式。
+     */
+    fun indexToAuthMode(index: Int): Int {
+        return when (index) {
+            1 -> TokenViewModel.AUTO_UNLOCK_AUTH_MODE_BIOMETRIC
+            2 -> TokenViewModel.AUTO_UNLOCK_AUTH_MODE_PIN
+            else -> TokenViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
+        }
+    }
+
+    var autoUnlockSwitchChecked by remember(currentLib?.id, currentLib?.autoUnlockEnabled) {
+        mutableStateOf(currentLib?.autoUnlockEnabled == true)
+    }
+    var autoUnlockSelectedIndex by remember(
+        currentLib?.id,
+        currentLib?.autoUnlockEnabled,
+        currentLib?.autoUnlockAuthMode
+    ) {
+        mutableStateOf(
+            if (currentLib?.autoUnlockEnabled == true) {
+                authModeToIndex(currentLib.autoUnlockAuthMode)
+            } else {
+                -1
+            }
+        )
+    }
+    var pendingSettingAuthLibraryId by remember { mutableStateOf<String?>(null) }
+    var pendingSettingAuthMode by remember {
+        mutableStateOf(TokenViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT)
+    }
+
+    val settingDeviceCredentialLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+        onResult = { result ->
+            val pendingLibraryId = pendingSettingAuthLibraryId
+            val pendingMode = pendingSettingAuthMode
+            pendingSettingAuthLibraryId = null
+            pendingSettingAuthMode = TokenViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
+
+            val targetLibrary = currentLibraryState?.takeIf { it.id == pendingLibraryId }
+                ?: return@rememberLauncherForActivityResult
+
+            if (result.resultCode != Activity.RESULT_OK) {
+                autoUnlockSwitchChecked = targetLibrary.autoUnlockEnabled
+                autoUnlockSelectedIndex = if (targetLibrary.autoUnlockEnabled) {
+                    authModeToIndex(targetLibrary.autoUnlockAuthMode)
+                } else {
+                    -1
+                }
+                return@rememberLauncherForActivityResult
+            }
+
+            val masterPassword = viewModel.getCurrentLibraryMasterPassword()
+            if (masterPassword.isNullOrBlank()) {
+                xzylib.base.util.ToastUtils.showShortToast(context, "请先手动解锁一次当前库")
+                return@rememberLauncherForActivityResult
+            }
+
+            val cipher = viewModel.getCipherForEnrollment(targetLibrary)
+            if (cipher == null) {
+                xzylib.base.util.ToastUtils.showShortToast(context, "无法启用自动解锁")
+                return@rememberLauncherForActivityResult
+            }
+
+            val enabled = viewModel.enableAutoUnlock(
+                library = targetLibrary,
+                cipher = cipher,
+                masterPassword = masterPassword,
+                authMode = pendingMode
+            )
+            if (!enabled) {
+                xzylib.base.util.ToastUtils.showShortToast(context, "自动解锁启用失败")
+            }
+        }
+    )
+
+    LaunchedEffect(currentLib?.id, currentLib?.autoUnlockEnabled, currentLib?.autoUnlockAuthMode) {
+        autoUnlockSwitchChecked = currentLib?.autoUnlockEnabled == true
+        autoUnlockSelectedIndex = if (currentLib?.autoUnlockEnabled == true) {
+            authModeToIndex(currentLib.autoUnlockAuthMode)
+        } else {
+            -1
+        }
+    }
 
     /**
      * 当前库是否已具备云端同步所需信息。
@@ -172,12 +282,17 @@ fun SettingsScreen(
                 modifier = Modifier.padding(8.dp)
             )
 
-            val currentLib = currentLibraryState
             val isAutoUnlockEnabled = currentLib?.autoUnlockEnabled == true
 
-            SuperArrow(
+            SuperSwitch(
                 title = "自动解锁",
-                summary = if (isAutoUnlockEnabled) "已启用生物识别解锁" else "使用生物识别快速解锁",
+                summary = when {
+                    currentLib == null -> "请先选择数据库文件"
+                    isAutoUnlockEnabled -> "已启用自动解锁"
+                    autoUnlockSwitchChecked -> "请选择认证方式并完成一次身份验证"
+                    else -> "开启后可使用生物识别或 PIN 快速解锁"
+                },
+                checked = autoUnlockSwitchChecked,
                 startAction = {
                     Icon(
                         modifier = Modifier.Companion.padding(end = 16.dp),
@@ -185,36 +300,137 @@ fun SettingsScreen(
                         contentDescription = "自动解锁",
                     )
                 },
-                onClick = {
-                    if (currentLib != null && context is FragmentActivity) {
-                        if (isAutoUnlockEnabled) {
-                            viewModel.disableAutoUnlock(currentLib)
-                        } else {
-                            val cipher = viewModel.getCipherForEnrollment(currentLib)
-                            if (cipher != null) {
-                                viewModel.biometricKeyStoreManager.authenticate(
-                                    activity = context,
-                                    cipher = cipher,
-                                    title = "启用自动解锁",
-                                    subtitle = "验证身份以启用",
-                                    onSuccess = { authCipher ->
-                                        if (authCipher != null) {
-                                            viewModel.enableAutoUnlock(currentLib, authCipher)
-                                        }
-                                    },
-                                    onFailure = { _, _ -> }
-                                )
-                            } else {
-                                xzylib.base.util.ToastUtils.showShortToast(context, "无法启用生物识别")
-                            }
-                        }
-                    } else if (currentLib == null) {
+                onCheckedChange = { checked ->
+                    if (currentLib == null) {
                         xzylib.base.util.ToastUtils.showShortToast(context, "请先选择数据库文件")
+                        autoUnlockSwitchChecked = false
+                        return@SuperSwitch
+                    }
+
+                    if (!checked) {
+                        autoUnlockSwitchChecked = false
+                        autoUnlockSelectedIndex = -1
+                        if (currentLib.autoUnlockEnabled) {
+                            viewModel.disableAutoUnlock(currentLib)
+                        }
+                        return@SuperSwitch
+                    }
+
+                    autoUnlockSwitchChecked = true
+                    if (currentLib.autoUnlockEnabled) {
+                        autoUnlockSelectedIndex = authModeToIndex(currentLib.autoUnlockAuthMode)
+                    } else {
+                        autoUnlockSelectedIndex = -1
                     }
                 },
                 modifier = Modifier.Companion
                     .fillMaxWidth()
             )
+
+            if (autoUnlockSwitchChecked) {
+                Spacer(modifier = Modifier.height(8.dp))
+
+                WindowDropdown(
+                    title = "认证方式",
+                    summary = if (autoUnlockSelectedIndex >= 0) {
+                        "当前：${autoUnlockModeItems[autoUnlockSelectedIndex]}"
+                    } else {
+                        "请选择认证方式，选择后将触发身份验证"
+                    },
+                    items = autoUnlockModeItems,
+                    selectedIndex = if (autoUnlockSelectedIndex >= 0) autoUnlockSelectedIndex else 0,
+                    showValue = autoUnlockSelectedIndex >= 0,
+                    enabled = currentLib != null,
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Settings,
+                            contentDescription = "认证方式"
+                        )
+                    },
+                    onSelectedIndexChange = { selectedIndex ->
+                        val selectedLibrary = currentLibraryState
+                        if (selectedLibrary == null) {
+                            return@WindowDropdown
+                        }
+
+                        autoUnlockSelectedIndex = selectedIndex
+                        val authMode = indexToAuthMode(selectedIndex)
+
+                        if (context !is FragmentActivity) {
+                            xzylib.base.util.ToastUtils.showShortToast(context, "当前页面无法发起认证")
+                            return@WindowDropdown
+                        }
+
+                        val masterPassword = viewModel.getCurrentLibraryMasterPassword()
+                        if (masterPassword.isNullOrBlank()) {
+                            xzylib.base.util.ToastUtils.showShortToast(context, "请先手动解锁一次当前库")
+                            autoUnlockSelectedIndex = if (selectedLibrary.autoUnlockEnabled) {
+                                authModeToIndex(selectedLibrary.autoUnlockAuthMode)
+                            } else {
+                                -1
+                            }
+                            return@WindowDropdown
+                        }
+
+                        val cipher = viewModel.getCipherForEnrollment(selectedLibrary)
+                        if (cipher == null) {
+                            xzylib.base.util.ToastUtils.showShortToast(context, "无法启用自动解锁")
+                            autoUnlockSelectedIndex = if (selectedLibrary.autoUnlockEnabled) {
+                                authModeToIndex(selectedLibrary.autoUnlockAuthMode)
+                            } else {
+                                -1
+                            }
+                            return@WindowDropdown
+                        }
+
+                        viewModel.biometricKeyStoreManager.authenticate(
+                            activity = context,
+                            cipher = cipher,
+                            title = "启用自动解锁",
+                            subtitle = "请验证身份以保存自动解锁",
+                            authMode = authMode,
+                            onSuccess = { authCipher ->
+                                if (authCipher != null) {
+                                    val enabled = viewModel.enableAutoUnlock(
+                                        library = selectedLibrary,
+                                        cipher = authCipher,
+                                        masterPassword = masterPassword,
+                                        authMode = authMode
+                                    )
+                                    if (!enabled) {
+                                        xzylib.base.util.ToastUtils.showShortToast(context, "自动解锁启用失败")
+                                    }
+                                }
+                            },
+                            onFailure = { errorCode, _ ->
+                                var fallbackLaunched = false
+                                if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
+                                    val intent = viewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
+                                        title = "启用自动解锁",
+                                        subtitle = "请使用 PIN/图案/密码完成验证"
+                                    )
+                                    if (intent != null) {
+                                        pendingSettingAuthLibraryId = selectedLibrary.id
+                                        pendingSettingAuthMode = authMode
+                                        settingDeviceCredentialLauncher.launch(intent)
+                                        fallbackLaunched = true
+                                    }
+                                }
+
+                                if (!fallbackLaunched) {
+                                    autoUnlockSelectedIndex = if (selectedLibrary.autoUnlockEnabled) {
+                                        authModeToIndex(selectedLibrary.autoUnlockAuthMode)
+                                    } else {
+                                        -1
+                                    }
+                                }
+                            }
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             Spacer(modifier = Modifier.Companion.height(16.dp))
 

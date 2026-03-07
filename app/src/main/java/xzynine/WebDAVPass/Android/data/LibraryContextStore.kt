@@ -49,7 +49,15 @@ class LibraryContextStore(private val context: Context) {
             LibrarySourceType.LOCAL -> false
         }
 
-        return item.copy(autoSyncEnabled = normalizedAutoSync)
+        val normalizedAuthMode = when (item.autoUnlockAuthMode) {
+            0, 1, 2 -> item.autoUnlockAuthMode
+            else -> 0
+        }
+
+        return item.copy(
+            autoSyncEnabled = normalizedAutoSync,
+            autoUnlockAuthMode = normalizedAuthMode
+        )
     }
 
     /**

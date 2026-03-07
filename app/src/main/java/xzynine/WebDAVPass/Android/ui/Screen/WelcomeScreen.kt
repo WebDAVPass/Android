@@ -1,5 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
+import android.app.Activity
 import android.net.Uri
 import android.provider.OpenableColumns
 import xzylib.base.util.ToastUtils
@@ -49,6 +50,7 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 import androidx.fragment.app.FragmentActivity
+import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
@@ -74,6 +76,7 @@ fun WelcomeScreen(
     val coroutineScope = rememberCoroutineScope()
     val inlineUnlockFocusRequester = remember { FocusRequester() }
     val history by tokenViewModel.libraryHistory.collectAsState()
+    val currentLibraryState by tokenViewModel.currentLibrary.collectAsState()
     var showCloudImportDialog by remember { mutableStateOf(false) }
     var showCloudCreateDialog by remember { mutableStateOf(false) }
     var showCreateMasterPasswordDialog by remember { mutableStateOf(false) }
@@ -87,6 +90,81 @@ fun WelcomeScreen(
     val isSelectionMode = remember { mutableStateOf(false) }
     val selectedHistoryIds = remember { mutableStateMapOf<String, Boolean>() }
     val showDeleteDialog = remember { mutableStateOf(false) }
+    var pendingDeviceCredentialLibrary by remember { mutableStateOf<LibraryContext?>(null) }
+    var pendingDeviceCredentialMasterPassword by remember { mutableStateOf<String?>(null) }
+    var pendingDeviceCredentialFlow by remember { mutableStateOf("") }
+    var pendingDeviceCredentialAuthMode by remember {
+        mutableStateOf(TokenViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT)
+    }
+
+    val deviceCredentialLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult(),
+        onResult = { result ->
+            val pendingLibrary = pendingDeviceCredentialLibrary
+            val pendingPassword = pendingDeviceCredentialMasterPassword
+            val pendingFlow = pendingDeviceCredentialFlow
+            val pendingMode = pendingDeviceCredentialAuthMode
+
+            pendingDeviceCredentialLibrary = null
+            pendingDeviceCredentialMasterPassword = null
+            pendingDeviceCredentialFlow = ""
+            pendingDeviceCredentialAuthMode = TokenViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
+
+            if (pendingLibrary == null) {
+                return@rememberLauncherForActivityResult
+            }
+
+            if (result.resultCode != Activity.RESULT_OK) {
+                if (pendingFlow == "enroll") {
+                    tokenViewModel.setAutoUnlockEnrollDismissed(pendingLibrary)
+                }
+                if (pendingFlow == "unlock") {
+                    pendingUnlockLibrary = pendingLibrary
+                    inlineUnlockPassword = ""
+                    showInlinePassword = false
+                    inlineUnlockFocusNonce++
+                }
+                return@rememberLauncherForActivityResult
+            }
+
+            if (pendingFlow == "enroll") {
+                if (pendingPassword.isNullOrBlank()) {
+                    return@rememberLauncherForActivityResult
+                }
+                val targetLibrary = currentLibraryState?.takeIf { it.id == pendingLibrary.id } ?: pendingLibrary
+                val cipher = tokenViewModel.getCipherForEnrollment(targetLibrary)
+                if (cipher == null) {
+                    return@rememberLauncherForActivityResult
+                }
+                val enabled = tokenViewModel.enableAutoUnlock(
+                    library = targetLibrary,
+                    cipher = cipher,
+                    masterPassword = pendingPassword,
+                    authMode = pendingMode
+                )
+                if (!enabled) {
+                    ToastUtils.showShortToast(context, "自动解锁启用失败，可在设置中重试")
+                }
+                return@rememberLauncherForActivityResult
+            }
+
+            if (pendingFlow == "unlock") {
+                coroutineScope.launch {
+                    val targetLibrary = currentLibraryState?.takeIf { it.id == pendingLibrary.id } ?: pendingLibrary
+                    val authCipher = tokenViewModel.getCipherForAutoUnlock(targetLibrary)
+                    if (authCipher != null && tokenViewModel.unlockWithBiometric(targetLibrary, authCipher)) {
+                        onEnterLibrary()
+                    } else {
+                        ToastUtils.showShortToast(context, "自动解锁失败，请手动输入密码")
+                        pendingUnlockLibrary = targetLibrary
+                        inlineUnlockPassword = ""
+                        showInlinePassword = false
+                        inlineUnlockFocusNonce++
+                    }
+                }
+            }
+        }
+    )
 
     /**
      * 清理内联解锁输入状态。
@@ -136,6 +214,68 @@ fun WelcomeScreen(
         inlineUnlockPassword = ""
         showInlinePassword = false
         inlineUnlockFocusNonce++
+    }
+
+    /**
+     * 手动解锁成功后触发首次自动解锁引导。
+     */
+    fun tryEnrollAutoUnlockAfterManualUnlock(library: LibraryContext, masterPassword: String) {
+        if (context !is FragmentActivity) {
+            return
+        }
+
+        val targetLibrary = currentLibraryState?.takeIf { it.id == library.id } ?: library
+        if (!tokenViewModel.shouldPromptAutoUnlockEnroll(targetLibrary)) {
+            return
+        }
+
+        val authMode = tokenViewModel.normalizeAutoUnlockAuthMode(targetLibrary.autoUnlockAuthMode)
+        val cipher = tokenViewModel.getCipherForEnrollment(targetLibrary)
+        if (cipher == null) {
+            return
+        }
+
+        tokenViewModel.biometricKeyStoreManager.authenticate(
+            activity = context,
+            cipher = cipher,
+            title = "启用自动解锁",
+            subtitle = "首次解锁成功，验证身份后可下次快速解锁",
+            authMode = authMode,
+            onSuccess = { authCipher ->
+                if (authCipher != null) {
+                    val enabled = tokenViewModel.enableAutoUnlock(
+                        library = targetLibrary,
+                        cipher = authCipher,
+                        masterPassword = masterPassword,
+                        authMode = authMode
+                    )
+                    if (!enabled) {
+                        ToastUtils.showShortToast(context, "自动解锁启用失败，可在设置中重试")
+                    }
+                }
+            },
+            onFailure = { errorCode, _ ->
+                var fallbackLaunched = false
+                if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
+                    val intent = tokenViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
+                        title = "启用自动解锁",
+                        subtitle = "请使用 PIN/图案/密码完成验证"
+                    )
+                    if (intent != null) {
+                        pendingDeviceCredentialLibrary = targetLibrary
+                        pendingDeviceCredentialMasterPassword = masterPassword
+                        pendingDeviceCredentialFlow = "enroll"
+                        pendingDeviceCredentialAuthMode = authMode
+                        deviceCredentialLauncher.launch(intent)
+                        fallbackLaunched = true
+                    }
+                }
+
+                if (!fallbackLaunched) {
+                    tokenViewModel.setAutoUnlockEnrollDismissed(targetLibrary)
+                }
+            }
+        )
     }
 
     /**
@@ -213,9 +353,11 @@ fun WelcomeScreen(
                     localPath = path
                 )
                 tokenViewModel.openLibraryContext(item)
-                val unlockOk = tokenViewModel.unlockCurrentLibrary(pendingCreateMasterPassword)
+                val plainPassword = pendingCreateMasterPassword
+                val unlockOk = tokenViewModel.unlockCurrentLibrary(plainPassword)
                 pendingCreateMasterPassword = ""
                 if (unlockOk) {
+                    tryEnrollAutoUnlockAfterManualUnlock(item, plainPassword)
                     onEnterLibrary()
                 } else {
                     showInlineUnlock(item)
@@ -317,7 +459,12 @@ fun WelcomeScreen(
                                     val ok = tokenViewModel.unlockCurrentLibrary(inlineUnlockPassword)
                                     inlineUnlockLoading = false
                                     if (ok) {
+                                        val unlockedLibrary = currentLibraryState
+                                            ?: pendingUnlockLibrary
+                                            ?: return@launch
+                                        val plainPassword = inlineUnlockPassword
                                         clearInlineUnlock()
+                                        tryEnrollAutoUnlockAfterManualUnlock(unlockedLibrary, plainPassword)
                                         onEnterLibrary()
                                     } else {
                                         val message = tokenViewModel.getLastUnlockErrorMessage()
@@ -388,36 +535,56 @@ fun WelcomeScreen(
                             }
                             coroutineScope.launch {
                                 tokenViewModel.switchLibrary(item.id)
+                                val selectedLibrary = currentLibraryState?.takeIf { it.id == item.id } ?: item
                                 
-                                if (tokenViewModel.isAutoUnlockAvailable(item)) {
-                                    val cipher = tokenViewModel.getCipherForAutoUnlock(item)
+                                if (tokenViewModel.isAutoUnlockAvailable(selectedLibrary)) {
+                                    val cipher = tokenViewModel.getCipherForAutoUnlock(selectedLibrary)
                                     if (cipher != null && context is FragmentActivity) {
+                                        val authMode = tokenViewModel.normalizeAutoUnlockAuthMode(selectedLibrary.autoUnlockAuthMode)
                                         tokenViewModel.biometricKeyStoreManager.authenticate(
                                             activity = context,
                                             cipher = cipher,
+                                            authMode = authMode,
                                             onSuccess = { authCipher ->
                                                 if (authCipher != null) {
                                                     coroutineScope.launch {
-                                                        if (tokenViewModel.unlockWithBiometric(item, authCipher)) {
+                                                        if (tokenViewModel.unlockWithBiometric(selectedLibrary, authCipher)) {
                                                             onEnterLibrary()
                                                         } else {
                                                             ToastUtils.showShortToast(context, "自动解锁失败，请手动输入密码")
-                                                            showInlineUnlock(item)
+                                                            showInlineUnlock(selectedLibrary)
                                                         }
                                                     }
                                                 } else {
-                                                    showInlineUnlock(item)
+                                                    showInlineUnlock(selectedLibrary)
                                                 }
                                             },
-                                            onFailure = { _, _ ->
-                                                showInlineUnlock(item)
+                                            onFailure = { errorCode, _ ->
+                                                var fallbackLaunched = false
+                                                if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
+                                                    val intent = tokenViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
+                                                        title = "验证身份",
+                                                        subtitle = "请使用 PIN/图案/密码解锁"
+                                                    )
+                                                    if (intent != null) {
+                                                        pendingDeviceCredentialLibrary = selectedLibrary
+                                                        pendingDeviceCredentialMasterPassword = null
+                                                        pendingDeviceCredentialFlow = "unlock"
+                                                        pendingDeviceCredentialAuthMode = authMode
+                                                        deviceCredentialLauncher.launch(intent)
+                                                        fallbackLaunched = true
+                                                    }
+                                                }
+                                                if (!fallbackLaunched) {
+                                                    showInlineUnlock(selectedLibrary)
+                                                }
                                             }
                                         )
                                         return@launch
                                     }
                                 }
                                 
-                                showInlineUnlock(item)
+                                showInlineUnlock(selectedLibrary)
                             }
                         },
                         modifier = Modifier
@@ -505,6 +672,7 @@ fun WelcomeScreen(
                     val unlockOk = tokenViewModel.unlockCurrentLibrary(password)
                     pendingCreateMasterPassword = ""
                     if (unlockOk) {
+                        tryEnrollAutoUnlockAfterManualUnlock(library, password)
                         onEnterLibrary()
                     } else {
                         showInlineUnlock(library)

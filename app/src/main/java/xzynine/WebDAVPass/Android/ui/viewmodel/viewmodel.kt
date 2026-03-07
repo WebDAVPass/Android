@@ -50,6 +50,10 @@ import kotlinx.coroutines.withContext
 class TokenViewModel(private val context: Context) : ViewModel() {
 
     companion object {
+        const val AUTO_UNLOCK_AUTH_MODE_DEFAULT = 0
+        const val AUTO_UNLOCK_AUTH_MODE_BIOMETRIC = 1
+        const val AUTO_UNLOCK_AUTH_MODE_PIN = 2
+
         private const val UNLOCK_LOAD_RETRY_COUNT = 3
         private const val UNLOCK_LOAD_RETRY_DELAY_MS = 250L
 
@@ -393,6 +397,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             return 0
         }
 
+        // 按库清理自动解锁密钥，避免历史项删除后仍残留可用密钥。
+        targetIds.forEach { targetId ->
+            biometricKeyStoreManager.deleteKey(targetId)
+        }
+
         val currentId = _currentLibrary.value?.id
         val removedCount = libraryContextStore.removeHistoryByIds(targetIds)
         if (removedCount <= 0) {
@@ -456,17 +465,53 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 当前库是否应触发“首次自动解锁引导”。
+     */
+    fun shouldPromptAutoUnlockEnroll(library: LibraryContext): Boolean {
+        return !library.autoUnlockEnabled
+                && !library.autoUnlockEnrollDismissed
+                && library.encryptedMasterPassword.isNullOrBlank()
+                && library.encryptedMasterPasswordIv.isNullOrBlank()
+    }
+
+    /**
+     * 获取当前库内存中的主密码（仅在已手动解锁后可用）。
+     */
+    fun getCurrentLibraryMasterPassword(): String? {
+        return currentLibraryMasterPassword.takeIf { it.isNotBlank() }
+    }
+
+    /**
+     * 将认证模式规范到可识别范围。
+     */
+    fun normalizeAutoUnlockAuthMode(mode: Int): Int {
+        return when (mode) {
+            AUTO_UNLOCK_AUTH_MODE_DEFAULT,
+            AUTO_UNLOCK_AUTH_MODE_BIOMETRIC,
+            AUTO_UNLOCK_AUTH_MODE_PIN -> mode
+
+            else -> AUTO_UNLOCK_AUTH_MODE_DEFAULT
+        }
+    }
+
+    /**
      * 启用自动解锁并持久化。
      */
-    fun enableAutoUnlock(library: LibraryContext, cipher: Cipher): Boolean {
-        if (currentLibraryMasterPassword.isEmpty()) return false
+    fun enableAutoUnlock(
+        library: LibraryContext,
+        cipher: Cipher,
+        masterPassword: String,
+        authMode: Int = library.autoUnlockAuthMode
+    ): Boolean {
+        if (masterPassword.isBlank()) return false
         
         return try {
-            val (encrypted, iv) = biometricKeyStoreManager.encrypt(cipher, currentLibraryMasterPassword)
+            val (encrypted, iv) = biometricKeyStoreManager.encrypt(cipher, masterPassword)
             val updated = library.copy(
                 autoUnlockEnabled = true,
                 encryptedMasterPassword = encrypted,
                 encryptedMasterPasswordIv = iv,
+                autoUnlockAuthMode = normalizeAutoUnlockAuthMode(authMode),
                 autoUnlockEnrollDismissed = false // Reset dismissal if manually enabled
             )
             persistCurrentLibraryMetadata(updated)
@@ -488,6 +533,17 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             encryptedMasterPasswordIv = null
         )
         persistCurrentLibraryMetadata(updated)
+    }
+
+    /**
+     * 更新自动解锁认证模式。
+     */
+    fun updateAutoUnlockAuthMode(library: LibraryContext, authMode: Int) {
+        val normalized = normalizeAutoUnlockAuthMode(authMode)
+        if (library.autoUnlockAuthMode == normalized) {
+            return
+        }
+        persistCurrentLibraryMetadata(library.copy(autoUnlockAuthMode = normalized))
     }
 
     /**

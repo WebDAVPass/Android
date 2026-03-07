@@ -25,7 +25,7 @@ class BiometricKeyStoreManager(private val context: Context) {
         private const val ANDROID_KEYSTORE = "AndroidKeyStore"
         private const val KEY_ALIAS_PREFIX = "webdavpass_auto_unlock_"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
-        private const val IV_SEPARATOR = "]"
+        const val ERROR_REQUIRE_DEVICE_CREDENTIAL = -10001
     }
 
     private val keyStore: KeyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
@@ -107,6 +107,20 @@ class BiometricKeyStoreManager(private val context: Context) {
         val plaintext = cipher.doFinal(ciphertext)
         return String(plaintext, Charset.forName("UTF-8"))
     }
+
+    /**
+     * API 29 的设备凭据认证回退入口。
+     */
+    fun createDeviceCredentialIntent(title: String, subtitle: String): Intent? {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return null
+        }
+        val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+        if (!keyguardManager.isDeviceSecure) {
+            return null
+        }
+        return keyguardManager.createConfirmDeviceCredentialIntent(title, subtitle)
+    }
     
     // Authentication Logic
     fun authenticate(
@@ -115,9 +129,16 @@ class BiometricKeyStoreManager(private val context: Context) {
         title: String = "验证身份",
         subtitle: String = "使用生物识别或设备密码解锁",
         negativeButtonText: String = "取消",
+        authMode: Int = 0,
         onSuccess: (Cipher?) -> Unit,
         onFailure: (Int, CharSequence) -> Unit
     ) {
+        // API 29 的 PIN 模式由外层使用 Keyguard Intent 处理。
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && authMode == 2) {
+            onFailure(ERROR_REQUIRE_DEVICE_CREDENTIAL, "需要设备凭据认证")
+            return
+        }
+
         val executor = ContextCompat.getMainExecutor(activity)
         
         val callback = object : BiometricPrompt.AuthenticationCallback() {
@@ -129,35 +150,18 @@ class BiometricKeyStoreManager(private val context: Context) {
             override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
                 super.onAuthenticationError(errorCode, errString)
                 
-                // API 29 Fallback logic for NO_BIOMETRICS or similar
-                if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && 
-                   (errorCode == BiometricPrompt.ERROR_NO_BIOMETRICS || 
-                    errorCode == BiometricPrompt.ERROR_HW_UNAVAILABLE ||
-                    errorCode == BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL)) {
-                    
-                    // Try Keyguard Manager
-                    val keyguardManager = context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-                    if (keyguardManager.isDeviceSecure) {
-                        val intent = keyguardManager.createConfirmDeviceCredentialIntent(title, subtitle)
-                        if (intent != null) {
-                            // We need to launch intent and wait for result. 
-                            // This is tricky inside a helper method without Activity Result API.
-                            // We might need to ask ViewModel/Activity to handle this.
-                            // But for now, let's just report error and let UI handle fallback if needed, 
-                            // OR we assume the caller handles fallback.
-                            // The prompt says "API 29 use createConfirmDeviceCredentialIntent fallback".
-                            // I will report a specific error code or handle it if I can.
-                            
-                            // Since we can't startActivityForResult here easily without registering it beforehand in Activity/Fragment,
-                            // we should probably let the UI layer handle the Intent launch.
-                            // So I will pass a special error or just let the caller handle it?
-                            // Actually, I can use a simpler approach: 
-                            // The caller (ViewModel/Activity) should call `authenticate`.
-                            // If `authenticate` fails with specific error, caller handles it.
-                            onFailure(errorCode, errString) 
-                            return
-                        }
-                    }
+                // API 29 默认模式且生物不可用时，通知外层走设备凭据 Intent。
+                if (
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.R
+                    && authMode == 0
+                    && (
+                        errorCode == BiometricPrompt.ERROR_NO_BIOMETRICS
+                            || errorCode == BiometricPrompt.ERROR_HW_UNAVAILABLE
+                            || errorCode == BiometricPrompt.ERROR_NO_DEVICE_CREDENTIAL
+                    )
+                ) {
+                    onFailure(ERROR_REQUIRE_DEVICE_CREDENTIAL, "需要设备凭据认证")
+                    return
                 }
                 onFailure(errorCode, errString)
             }
@@ -175,11 +179,20 @@ class BiometricKeyStoreManager(private val context: Context) {
             .setSubtitle(subtitle)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-             promptInfoBuilder.setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL)
+            val authenticators = when (authMode) {
+                1 -> BiometricManager.Authenticators.BIOMETRIC_STRONG
+                2 -> BiometricManager.Authenticators.DEVICE_CREDENTIAL
+                else -> BiometricManager.Authenticators.BIOMETRIC_STRONG or BiometricManager.Authenticators.DEVICE_CREDENTIAL
+            }
+            promptInfoBuilder.setAllowedAuthenticators(authenticators)
+
+            // Biometric only 模式下需要显式取消按钮。
+            if (authMode == 1) {
+                promptInfoBuilder.setNegativeButtonText(negativeButtonText)
+            }
         } else {
-             // API 29: can't use DEVICE_CREDENTIAL in AllowedAuthenticators easily with CryptoObject
-             // We must set NegativeButtonText
-             promptInfoBuilder.setNegativeButtonText(negativeButtonText)
+            // API 29: CryptoObject + 设备凭据不支持，统一走生物识别弹窗。
+            promptInfoBuilder.setNegativeButtonText(negativeButtonText)
         }
 
         val promptInfo = promptInfoBuilder.build()
