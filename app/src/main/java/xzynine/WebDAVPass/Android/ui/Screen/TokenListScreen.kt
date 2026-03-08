@@ -34,10 +34,10 @@ import xzynine.WebDAVPass.Android.ui.component.TokenCard
 fun TokenListScreen(tokenViewModel: TokenViewModel, onEntryClick: (Long) -> Unit) {
     val context = LocalContext.current
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
-    val passwordEntries by tokenViewModel.passwordEntries.collectAsState(emptyList())
+    val passwordEntries by tokenViewModel.passwordViewModel.passwordEntries.collectAsState(emptyList())
     val tokenCodeMap by tokenViewModel.tokenCodeSnapshot.collectAsState(emptyMap())
     val currentTimeMillis by tokenViewModel.currentTimeMillis.collectAsState(System.currentTimeMillis())
-    val isLoading by tokenViewModel.isLoading.collectAsState(false)
+    val isLoading by tokenViewModel.libraryViewModel.isLoading.collectAsState(false)
 
     /**
      * 通过稳定 ID 建立条目索引，用于令牌列表复用 KeePass 图标数据。

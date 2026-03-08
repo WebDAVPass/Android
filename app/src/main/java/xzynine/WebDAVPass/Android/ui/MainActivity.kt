@@ -88,7 +88,7 @@ fun MainScreen() {
 
     // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
     var showWelcome by rememberSaveable { mutableStateOf(true) }
-    val currentLibrary by tokenViewModel.currentLibrary.collectAsState()
+    val currentLibrary by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
     // 控制扫描界面的显示与隐藏
     val showScanBottomSheet = remember { mutableStateOf(false) }
@@ -205,8 +205,8 @@ fun MainScreen() {
                 }
             }
             entry(AppScreen.TokenList) {
-                val isLibraryUnlocked by tokenViewModel.isLibraryUnlocked.collectAsState(false)
-                val lib by tokenViewModel.currentLibrary.collectAsState(null)
+                val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
 
                 LaunchedEffect(isLibraryUnlocked, lib) {
                     if (!isLibraryUnlocked || lib == null) {
@@ -255,12 +255,12 @@ fun MainScreen() {
             }
             entry<AppScreen.PasswordList> { key ->
                 val listMode = key.listMode
-                val isLibraryUnlocked by tokenViewModel.isLibraryUnlocked.collectAsState(false)
-                val lib by tokenViewModel.currentLibrary.collectAsState(null)
+                val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
 
                 LaunchedEffect(listMode) {
-                    tokenViewModel.setPasswordListMode(listMode, refreshNow = true)
-                    tokenViewModel.refreshRecentDeletedCount()
+                    tokenViewModel.passwordViewModel.setPasswordListMode(listMode, refreshNow = true)
+                    tokenViewModel.passwordViewModel.refreshRecentDeletedCount()
                 }
 
                 LaunchedEffect(isLibraryUnlocked, lib) {
@@ -273,9 +273,9 @@ fun MainScreen() {
 
                 DisposableEffect(listMode) {
                     onDispose {
-                        tokenViewModel.resetPasswordGroupStackOnly()
+                        tokenViewModel.passwordViewModel.resetPasswordGroupStackOnly()
                         if (listMode == PasswordListMode.RECENT_DELETED) {
-                            tokenViewModel.setPasswordListMode(PasswordListMode.ALL_PASSWORDS, refreshNow = true)
+                            tokenViewModel.passwordViewModel.setPasswordListMode(PasswordListMode.ALL_PASSWORDS, refreshNow = true)
                         }
                     }
                 }
@@ -299,8 +299,8 @@ fun MainScreen() {
             }
             entry<AppScreen.PasswordEntryDetail> { key ->
                 val entryId = key.entryId
-                val isLibraryUnlocked by tokenViewModel.isLibraryUnlocked.collectAsState(false)
-                val lib by tokenViewModel.currentLibrary.collectAsState(null)
+                val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
 
                 LaunchedEffect(isLibraryUnlocked, lib) {
                     if (!isLibraryUnlocked || lib == null) {
@@ -360,7 +360,7 @@ fun MainScreen() {
                 showCloudBindingDialog.value = false
             },
             onSelected = { library, _ ->
-                val saved = tokenViewModel.bindCurrentLibraryToCloud(library)
+                val saved = tokenViewModel.libraryViewModel.bindCurrentLibraryToCloud(library)
                 if (saved) {
                     ToastUtils.showShortToast(context, "当前库云端绑定已保存")
                     showCloudBindingDialog.value = false

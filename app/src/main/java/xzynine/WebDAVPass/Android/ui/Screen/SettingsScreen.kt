@@ -40,6 +40,7 @@ import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.service.TwoFasAutofillService
 import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -75,12 +76,12 @@ fun SettingsScreen(
     val cornerRadius = getAppRoundedCorner()
     
     // 收集状态流
-    val backupStatus = viewModel.backupStatus.collectAsState()
-    val isBackupInProgress = viewModel.isBackupInProgress.collectAsState()
-    val backupProgress = viewModel.backupProgress.collectAsState()
-    val isRestoreInProgress = viewModel.isRestoreInProgress.collectAsState()
-    val restoreProgress = viewModel.restoreProgress.collectAsState()
-    val currentLibraryState by viewModel.currentLibrary.collectAsState()
+    val backupStatus = viewModel.cloudSyncViewModel.backupStatus.collectAsState()
+    val isBackupInProgress = viewModel.cloudSyncViewModel.isBackupInProgress.collectAsState()
+    val backupProgress = viewModel.cloudSyncViewModel.backupProgress.collectAsState()
+    val isRestoreInProgress = viewModel.cloudSyncViewModel.isRestoreInProgress.collectAsState()
+    val restoreProgress = viewModel.cloudSyncViewModel.restoreProgress.collectAsState()
+    val currentLibraryState by viewModel.libraryViewModel.currentLibrary.collectAsState()
     val context = LocalContext.current
     val autoUnlockModeItems = remember { listOf("默认", "生物识别", "PIN") }
     val currentLib = currentLibraryState
@@ -89,9 +90,9 @@ fun SettingsScreen(
      * 将认证模式转换为下拉索引。
      */
     fun authModeToIndex(mode: Int): Int {
-        return when (viewModel.normalizeAutoUnlockAuthMode(mode)) {
-            TokenViewModel.AUTO_UNLOCK_AUTH_MODE_BIOMETRIC -> 1
-            TokenViewModel.AUTO_UNLOCK_AUTH_MODE_PIN -> 2
+        return when (viewModel.autoUnlockViewModel.normalizeAutoUnlockAuthMode(mode)) {
+            AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_BIOMETRIC -> 1
+            AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_PIN -> 2
             else -> 0
         }
     }
@@ -101,9 +102,9 @@ fun SettingsScreen(
      */
     fun indexToAuthMode(index: Int): Int {
         return when (index) {
-            1 -> TokenViewModel.AUTO_UNLOCK_AUTH_MODE_BIOMETRIC
-            2 -> TokenViewModel.AUTO_UNLOCK_AUTH_MODE_PIN
-            else -> TokenViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
+            1 -> AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_BIOMETRIC
+            2 -> AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_PIN
+            else -> AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
         }
     }
 
@@ -125,7 +126,7 @@ fun SettingsScreen(
     }
     var pendingSettingAuthLibraryId by remember { mutableStateOf<String?>(null) }
     var pendingSettingAuthMode by remember {
-        mutableStateOf(TokenViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT)
+        mutableStateOf(AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT)
     }
     var manualUnlockWindowSwitchChecked by remember(currentLib?.id, currentLib?.forceManualUnlockEvery48Hours) {
         mutableStateOf(currentLib?.forceManualUnlockEvery48Hours != false)
@@ -138,7 +139,7 @@ fun SettingsScreen(
             val pendingLibraryId = pendingSettingAuthLibraryId
             val pendingMode = pendingSettingAuthMode
             pendingSettingAuthLibraryId = null
-            pendingSettingAuthMode = TokenViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
+pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
 
             val targetLibrary = currentLibraryState?.takeIf { it.id == pendingLibraryId }
                 ?: return@rememberLauncherForActivityResult
@@ -153,13 +154,13 @@ fun SettingsScreen(
                 return@rememberLauncherForActivityResult
             }
 
-            val masterPassword = viewModel.getCurrentLibraryMasterPassword()
+            val masterPassword = viewModel.libraryViewModel.getCurrentLibraryMasterPassword()
             if (masterPassword.isNullOrBlank()) {
                 xzylib.base.util.ToastUtils.showShortToast(context, "请先手动解锁一次当前库")
                 return@rememberLauncherForActivityResult
             }
 
-            val cipher = viewModel.getCipherForEnrollment(targetLibrary)
+            val cipher = viewModel.autoUnlockViewModel.getCipherForEnrollment(targetLibrary)
             if (cipher == null) {
                 xzylib.base.util.ToastUtils.showShortToast(context, "无法启用自动解锁")
                 return@rememberLauncherForActivityResult
@@ -451,7 +452,7 @@ fun SettingsScreen(
                             return@WindowDropdown
                         }
 
-                        val masterPassword = viewModel.getCurrentLibraryMasterPassword()
+                        val masterPassword = viewModel.libraryViewModel.getCurrentLibraryMasterPassword()
                         if (masterPassword.isNullOrBlank()) {
                             xzylib.base.util.ToastUtils.showShortToast(context, "请先手动解锁一次当前库")
                             autoUnlockSelectedIndex = if (selectedLibrary.autoUnlockEnabled) {
@@ -462,7 +463,7 @@ fun SettingsScreen(
                             return@WindowDropdown
                         }
 
-                        val cipher = viewModel.getCipherForEnrollment(selectedLibrary)
+                        val cipher = viewModel.autoUnlockViewModel.getCipherForEnrollment(selectedLibrary)
                         if (cipher == null) {
                             xzylib.base.util.ToastUtils.showShortToast(context, "无法启用自动解锁")
                             autoUnlockSelectedIndex = if (selectedLibrary.autoUnlockEnabled) {
@@ -473,7 +474,7 @@ fun SettingsScreen(
                             return@WindowDropdown
                         }
 
-                        viewModel.biometricKeyStoreManager.authenticate(
+                        viewModel.autoUnlockViewModel.biometricKeyStoreManager.authenticate(
                             activity = context,
                             cipher = cipher,
                             title = "启用自动解锁",
@@ -495,7 +496,7 @@ fun SettingsScreen(
                             onFailure = { errorCode, _ ->
                                 var fallbackLaunched = false
                                 if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
-                                    val intent = viewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
+                                    val intent = viewModel.autoUnlockViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
                                         title = "启用自动解锁",
                                         subtitle = "请使用 PIN/图案/密码完成验证"
                                     )
@@ -524,7 +525,7 @@ fun SettingsScreen(
             if (currentLib != null) {
                 Spacer(modifier = Modifier.height(8.dp))
 
-                val manualUnlockRemaining = viewModel.getManualUnlockWindowRemainingMillis(
+                val manualUnlockRemaining = viewModel.autoUnlockViewModel.getManualUnlockWindowRemainingMillis(
                     library = currentLib,
                     nowMillis = manualUnlockClockMillis
                 )
@@ -536,7 +537,7 @@ fun SettingsScreen(
                         !autoUnlockSwitchChecked && !currentLib.autoUnlockEnabled -> "启用自动解锁后生效"
                         manualUnlockRemaining == null -> "48小时主密码校验不可用"
                         manualUnlockRemaining <= 0L -> "已到期：凭据解锁一次后将清理自动解锁"
-                        else -> "剩余：${viewModel.formatRemainingHoursMinutes(manualUnlockRemaining)}"
+                        else -> "剩余：${viewModel.autoUnlockViewModel.formatRemainingHoursMinutes(manualUnlockRemaining)}"
                     },
                     checked = manualUnlockWindowSwitchChecked,
                     startAction = {

@@ -12,7 +12,6 @@ import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.data.TokenCode
-import xzynine.WebDAVPass.Android.data.WebDavConfig
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +27,7 @@ import javax.crypto.Cipher
 /**
  * 令牌视图模型
  *
- * 作为协调器组合各子 ViewModel，负责令牌管理和各模块协调。
+ * 持有令牌相关状态（OTP 列表、验证码快照等），并协调跨模块操作（解锁后刷新、写入后备份等）。
  */
 class TokenViewModel(private val context: Context) : ViewModel() {
 
@@ -36,10 +35,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         private const val UNLOCK_LOAD_RETRY_COUNT = 3
         private const val UNLOCK_LOAD_RETRY_DELAY_MS = 250L
         private const val SYNC_LOG_TAG = "同步"
-
-        const val AUTO_UNLOCK_AUTH_MODE_DEFAULT = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
-        const val AUTO_UNLOCK_AUTH_MODE_BIOMETRIC = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_BIOMETRIC
-        const val AUTO_UNLOCK_AUTH_MODE_PIN = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_PIN
 
         @Volatile
         private var SHARED_VIEW_MODEL: TokenViewModel? = null
@@ -66,11 +61,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
     private var tokenRefreshJob: Job? = null
 
-    internal val libraryViewModel: LibraryViewModel = LibraryViewModel(context)
-    internal val autoUnlockViewModel: AutoUnlockViewModel = AutoUnlockViewModel(context)
-    internal val cloudSyncViewModel: CloudSyncViewModel = CloudSyncViewModel(context)
-    internal val webDavConfigViewModel: WebDavConfigViewModel = WebDavConfigViewModel(context)
-    internal val passwordViewModel: PasswordViewModel = PasswordViewModel(context)
+    val libraryViewModel: LibraryViewModel = LibraryViewModel(context)
+    val autoUnlockViewModel: AutoUnlockViewModel = AutoUnlockViewModel(context)
+    val cloudSyncViewModel: CloudSyncViewModel = CloudSyncViewModel(context)
+    val webDavConfigViewModel: WebDavConfigViewModel = WebDavConfigViewModel(context)
+    val passwordViewModel: PasswordViewModel = PasswordViewModel(context)
 
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())
     val tokens: StateFlow<List<OtpToken>> = _tokens.asStateFlow()
@@ -81,60 +76,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
     private val _currentTimeMillis = MutableStateFlow(System.currentTimeMillis())
     val currentTimeMillis: StateFlow<Long> = _currentTimeMillis.asStateFlow()
-
-    val libraryHistory: StateFlow<List<LibraryContext>>
-        get() = libraryViewModel.libraryHistory
-
-    val currentLibrary: StateFlow<LibraryContext?>
-        get() = libraryViewModel.currentLibrary
-
-    val isLoading: StateFlow<Boolean>
-        get() = libraryViewModel.isLoading
-
-    val isLibraryUnlocked: StateFlow<Boolean>
-        get() = libraryViewModel.isLibraryUnlocked
-
-    val passwordEntries: StateFlow<List<xzynine.WebDAVPass.Android.data.PasswordEntry>>
-        get() = passwordViewModel.passwordEntries
-
-    val passwordTotalCount: StateFlow<Int>
-        get() = passwordViewModel.passwordTotalCount
-
-    val passwordListMode: StateFlow<PasswordListMode>
-        get() = passwordViewModel.passwordListMode
-
-    val recentDeletedCount: StateFlow<Int>
-        get() = passwordViewModel.recentDeletedCount
-
-    val passwordGroupStack: StateFlow<List<Long>>
-        get() = passwordViewModel.passwordGroupStack
-
-    val passwordIndexKeys: StateFlow<List<String>>
-        get() = passwordViewModel.passwordIndexKeys
-
-    val passwordHasMore: StateFlow<Boolean>
-        get() = passwordViewModel.passwordHasMore
-
-    val webDavConfigs: StateFlow<List<WebDavConfig>>
-        get() = webDavConfigViewModel.webDavConfigs
-
-    val isBackupInProgress: StateFlow<Boolean>
-        get() = cloudSyncViewModel.isBackupInProgress
-
-    val isRestoreInProgress: StateFlow<Boolean>
-        get() = cloudSyncViewModel.isRestoreInProgress
-
-    val backupStatus: StateFlow<String>
-        get() = cloudSyncViewModel.backupStatus
-
-    val backupProgress: StateFlow<Int>
-        get() = cloudSyncViewModel.backupProgress
-
-    val restoreProgress: StateFlow<Int>
-        get() = cloudSyncViewModel.restoreProgress
-
-    val biometricKeyStoreManager
-        get() = autoUnlockViewModel.biometricKeyStoreManager
 
     init {
         startTokenRefreshTimer()
@@ -171,27 +112,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         _tokenCodes.clear()
         publishTokenCodeSnapshot()
         passwordViewModel.resetAllState()
-    }
-
-    /**
-     * 打开并选中库上下文
-     */
-    fun openLibraryContext(libraryContext: LibraryContext) {
-        upsertAndSelectLibrary(libraryContext)
-    }
-
-    /**
-     * 保存当前库的云端绑定信息。
-     */
-    fun bindCurrentLibraryToCloud(boundContext: LibraryContext): Boolean {
-        return libraryViewModel.bindCurrentLibraryToCloud(boundContext)
-    }
-
-    /**
-     * 切换已存在库
-     */
-    fun switchLibrary(libraryId: String) {
-        selectLibraryById(libraryId)
     }
 
     /**
@@ -412,23 +332,12 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 获取用于加密（启用）的 Cipher。
-     */
-    fun getCipherForEnrollment(library: LibraryContext): Cipher? {
-        return autoUnlockViewModel.getCipherForEnrollment(library)
-    }
-
-    /**
      * 使用生物识别解密并解锁库。
      */
     suspend fun unlockWithBiometric(library: LibraryContext, cipher: Cipher): Boolean {
         return autoUnlockViewModel.unlockWithBiometric(library, cipher, kdbxTokenRepository) { password, isManual ->
             unlockCurrentLibrary(password, isManual)
         }
-    }
-
-    fun getLastUnlockErrorMessage(): String? {
-        return libraryViewModel.getLastUnlockErrorMessage()
     }
 
     /**
@@ -465,7 +374,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     private suspend fun loadTokensInternal(): Boolean {
         libraryViewModel.setLoading(true)
-        val currentLocalPath = currentLibrary.value?.localPath
+        val currentLocalPath = libraryViewModel.currentLibrary.value?.localPath
         val masterPassword = libraryViewModel.getMasterPasswordInternal()
         return try {
             val localPath = currentLocalPath
@@ -519,94 +428,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 刷新密码条目与键值列表。
-     */
-    fun refreshPasswordEntries(searchQuery: String = "") {
-        passwordViewModel.refreshPasswordEntries(searchQuery)
-    }
-
-    /**
-     * 设置密码列表模式。
-     */
-    fun setPasswordListMode(
-        mode: PasswordListMode,
-        refreshNow: Boolean = true,
-        searchQuery: String = ""
-    ) {
-        passwordViewModel.setPasswordListMode(mode, refreshNow, searchQuery)
-    }
-
-    /**
-     * 刷新最近删除数量。
-     */
-    fun refreshRecentDeletedCount() {
-        passwordViewModel.refreshRecentDeletedCount()
-    }
-
-    /**
-     * 触发密码列表加载下一页。
-     */
-    fun loadNextPasswordPage() {
-        passwordViewModel.loadNextPasswordPage()
-    }
-
-    /**
-     * 为索引跳转预加载到目标分组。
-     */
-    suspend fun ensurePasswordIndexLoaded(indexKey: String): Boolean {
-        return passwordViewModel.ensurePasswordIndexLoaded(indexKey)
-    }
-
-    /**
-     * 获取指定索引分组在 LazyColumn 中对应的标题项下标。
-     */
-    suspend fun getPasswordHeaderScrollIndex(indexKey: String): Int? {
-        return passwordViewModel.getPasswordHeaderScrollIndex(indexKey)
-    }
-
-    /**
-     * 进入密码分组。
-     */
-    fun openPasswordGroup(groupStableId: Long, searchQuery: String = "") {
-        passwordViewModel.openPasswordGroup(groupStableId, searchQuery)
-    }
-
-    /**
-     * 返回上一级密码分组。
-     */
-    fun navigateUpPasswordGroup(searchQuery: String = "") {
-        passwordViewModel.navigateUpPasswordGroup(searchQuery)
-    }
-
-    /**
-     * 重置密码分组导航到根分组。
-     */
-    fun resetPasswordGroupNavigation(searchQuery: String = "") {
-        passwordViewModel.resetPasswordGroupNavigation(searchQuery)
-    }
-
-    /**
-     * 仅重置密码分组栈，不触发刷新。
-     */
-    fun resetPasswordGroupStackOnly() {
-        passwordViewModel.resetPasswordGroupStackOnly()
-    }
-
-    /**
-     * 兼容旧调用名。
-     */
-    fun refreshRemainingKeyValues() {
-        refreshPasswordEntries()
-    }
-
-    /**
      * 按稳定 ID 读取单条密码详情。
      */
     suspend fun loadPasswordEntryDetail(entryId: Long): xzynine.WebDAVPass.Android.data.PasswordEntry? {
         return passwordViewModel.loadPasswordEntryDetail(
             entryId,
-            isLibraryUnlocked.value,
-            currentLibrary.value?.localPath,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()
         )
     }
@@ -617,8 +445,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun loadPasswordEntryDraft(entryId: Long): PasswordEntryEditDraft? {
         return passwordViewModel.loadPasswordEntryDraft(
             entryId,
-            isLibraryUnlocked.value,
-            currentLibrary.value?.localPath,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()
         )
     }
@@ -629,8 +457,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun loadPasswordGroupDraft(groupId: Long): PasswordGroupEditDraft? {
         return passwordViewModel.loadPasswordGroupDraft(
             groupId,
-            isLibraryUnlocked.value,
-            currentLibrary.value?.localPath,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()
         )
     }
@@ -641,8 +469,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun createPasswordEntry(draft: PasswordEntryEditDraft): Long? {
         val createdId = passwordViewModel.createPasswordEntry(
             draft,
-            isLibraryUnlocked.value,
-            currentLibrary.value?.localPath,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()
         )
         if (createdId != null) {
@@ -657,8 +485,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun updatePasswordEntry(draft: PasswordEntryEditDraft): Boolean {
         val updated = passwordViewModel.updatePasswordEntry(
             draft,
-            isLibraryUnlocked.value,
-            currentLibrary.value?.localPath,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()
         )
         if (updated) {
@@ -673,8 +501,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun deletePasswordEntry(entryId: Long): Boolean {
         val deleted = passwordViewModel.deletePasswordEntry(
             entryId,
-            isLibraryUnlocked.value,
-            currentLibrary.value?.localPath,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()
         )
         if (deleted) {
@@ -689,8 +517,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun createPasswordGroup(draft: PasswordGroupEditDraft): Long? {
         val createdId = passwordViewModel.createPasswordGroup(
             draft,
-            isLibraryUnlocked.value,
-            currentLibrary.value?.localPath,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()
         )
         if (createdId != null) {
@@ -705,8 +533,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun updatePasswordGroup(draft: PasswordGroupEditDraft): Boolean {
         val updated = passwordViewModel.updatePasswordGroup(
             draft,
-            isLibraryUnlocked.value,
-            currentLibrary.value?.localPath,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()
         )
         if (updated) {
@@ -721,8 +549,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun deletePasswordGroup(groupId: Long): Boolean {
         val deleted = passwordViewModel.deletePasswordGroup(
             groupId,
-            isLibraryUnlocked.value,
-            currentLibrary.value?.localPath,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()
         )
         if (deleted) {
@@ -738,8 +566,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         viewModelScope.launch {
             loadTokensInternal()
         }
-        refreshPasswordEntries()
-        refreshRecentDeletedCount()
+        passwordViewModel.refreshPasswordEntries()
+        passwordViewModel.refreshRecentDeletedCount()
         backupTokens()
     }
 
@@ -804,7 +632,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 添加新令牌
      */
     suspend fun addToken(token: OtpToken): Boolean {
-        val localPath = currentLibrary.value?.localPath ?: return false
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
         val masterPassword = libraryViewModel.getMasterPasswordInternal()
 
         val tokenWithId = if (token.uniqueId.isBlank()) {
@@ -850,7 +678,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 判断令牌是否重复
      */
     suspend fun isTokenDuplicate(secret: String, algorithm: String, digits: Int, period: Int): Boolean {
-        val localPath = currentLibrary.value?.localPath ?: return false
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
         val masterPassword = libraryViewModel.getMasterPasswordInternal()
         return withContext(Dispatchers.IO) {
             kdbxTokenRepository.isDuplicate(
@@ -869,7 +697,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     fun deleteToken(tokenId: Long) {
         viewModelScope.launch {
-            val localPath = currentLibrary.value?.localPath ?: return@launch
+            val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return@launch
             val masterPassword = libraryViewModel.getMasterPasswordInternal()
             val deleted = withContext(Dispatchers.IO) {
                 kdbxTokenRepository.deleteToken(localPath, masterPassword, tokenId)
@@ -880,7 +708,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 viewModelScope.launch {
                     loadTokensInternal()
                 }
-                refreshRecentDeletedCount()
+                passwordViewModel.refreshRecentDeletedCount()
                 backupTokens()
             }
         }
@@ -891,7 +719,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     fun updateToken(token: OtpToken) {
         viewModelScope.launch {
-            val localPath = currentLibrary.value?.localPath ?: return@launch
+            val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return@launch
             val masterPassword = libraryViewModel.getMasterPasswordInternal()
             val updated = withContext(Dispatchers.IO) {
                 kdbxTokenRepository.updateToken(localPath, masterPassword, token)
@@ -912,7 +740,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     fun incrementCounter(tokenId: Long) {
         viewModelScope.launch {
-            val localPath = currentLibrary.value?.localPath ?: return@launch
+            val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return@launch
             val masterPassword = libraryViewModel.getMasterPasswordInternal()
             val incremented = withContext(Dispatchers.IO) {
                 kdbxTokenRepository.incrementCounter(localPath, masterPassword, tokenId)
@@ -923,48 +751,6 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 }
             }
         }
-    }
-
-    /**
-     * 添加WebDAV配置
-     */
-    suspend fun addWebDavConfig(config: WebDavConfig): Long {
-        return webDavConfigViewModel.addWebDavConfig(config)
-    }
-
-    /**
-     * 更新WebDAV配置
-     */
-    fun updateWebDavConfig(config: WebDavConfig) {
-        webDavConfigViewModel.updateWebDavConfig(config)
-    }
-
-    /**
-     * 删除WebDAV配置
-     */
-    fun deleteWebDavConfig(config: WebDavConfig) {
-        webDavConfigViewModel.deleteWebDavConfig(config)
-    }
-
-    /**
-     * 根据ID删除WebDAV配置
-     */
-    fun deleteWebDavConfigById(id: Long) {
-        webDavConfigViewModel.deleteWebDavConfigById(id)
-    }
-
-    /**
-     * 根据ID获取WebDAV配置
-     */
-    suspend fun getWebDavConfigById(id: Long): WebDavConfig? {
-        return webDavConfigViewModel.getWebDavConfigById(id)
-    }
-
-    /**
-     * 获取第一个WebDAV配置
-     */
-    suspend fun getFirstWebDavConfig(): WebDavConfig? {
-        return webDavConfigViewModel.getFirstWebDavConfig()
     }
 
     /**

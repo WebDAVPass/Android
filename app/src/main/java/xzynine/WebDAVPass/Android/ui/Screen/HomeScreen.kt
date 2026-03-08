@@ -72,8 +72,8 @@ fun HomeScreen(
     onNavigateToTokenList: () -> Unit
 ) {
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
-    val passwordTotalCount by tokenViewModel.passwordTotalCount.collectAsState(0)
-    val recentDeletedCount by tokenViewModel.recentDeletedCount.collectAsState(0)
+    val passwordTotalCount by tokenViewModel.passwordViewModel.passwordTotalCount.collectAsState(0)
+    val recentDeletedCount by tokenViewModel.passwordViewModel.recentDeletedCount.collectAsState(0)
     val tokenCount by remember {
         derivedStateOf {
             tokens.size

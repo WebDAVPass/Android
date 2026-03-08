@@ -84,10 +84,10 @@ fun PasswordListScreen(
 ) {
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
-    val entries by tokenViewModel.passwordEntries.collectAsState(emptyList())
-    val passwordGroupStack by tokenViewModel.passwordGroupStack.collectAsState(emptyList())
-    val passwordIndexKeys by tokenViewModel.passwordIndexKeys.collectAsState(emptyList())
-    val passwordHasMore by tokenViewModel.passwordHasMore.collectAsState(false)
+    val entries by tokenViewModel.passwordViewModel.passwordEntries.collectAsState(emptyList())
+    val passwordGroupStack by tokenViewModel.passwordViewModel.passwordGroupStack.collectAsState(emptyList())
+    val passwordIndexKeys by tokenViewModel.passwordViewModel.passwordIndexKeys.collectAsState(emptyList())
+    val passwordHasMore by tokenViewModel.passwordViewModel.passwordHasMore.collectAsState(false)
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
@@ -150,7 +150,7 @@ fun PasswordListScreen(
     }
 
     BackHandler(enabled = enableGroupNavigation && passwordGroupStack.isNotEmpty() && !isSelectionMode.value) {
-        tokenViewModel.navigateUpPasswordGroup(searchQuery)
+        tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
     }
 
     val groupedEntries by remember(entries) {
@@ -171,7 +171,7 @@ fun PasswordListScreen(
     }
 
     LaunchedEffect(searchQuery) {
-        tokenViewModel.refreshPasswordEntries(searchQuery = searchQuery)
+        tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = searchQuery)
     }
 
     LaunchedEffect(passwordGroupStack, searchQuery) {
@@ -187,7 +187,7 @@ fun PasswordListScreen(
             lastVisibleIndex to layoutInfo.totalItemsCount
         }.collect { (lastVisibleIndex, totalCount) ->
             if (passwordHasMore && totalCount > 0 && lastVisibleIndex >= totalCount - 4) {
-                tokenViewModel.loadNextPasswordPage()
+                tokenViewModel.passwordViewModel.loadNextPasswordPage()
             }
         }
     }
@@ -247,7 +247,7 @@ fun PasswordListScreen(
                     if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
                         IconButton(
                             onClick = {
-                                tokenViewModel.navigateUpPasswordGroup(searchQuery)
+                                tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
                             }
                         ) {
                             Icon(
@@ -412,7 +412,7 @@ fun PasswordListScreen(
                                     isSelected = selectedTargets.containsKey(item.entryId),
                                     onClick = {
                                         if (enableGroupNavigation && item.isFolderPlaceholder) {
-                                            tokenViewModel.openPasswordGroup(item.entryId, searchQuery)
+                                            tokenViewModel.passwordViewModel.openPasswordGroup(item.entryId, searchQuery)
                                         } else {
                                             onEntryClick(item.entryId)
                                         }
@@ -443,12 +443,12 @@ fun PasswordListScreen(
                                     letter
                                 }
 
-                                val loaded = tokenViewModel.ensurePasswordIndexLoaded(targetKey)
+                                val loaded = tokenViewModel.passwordViewModel.ensurePasswordIndexLoaded(targetKey)
                                 if (!loaded) {
                                     return@launch
                                 }
 
-                                val targetIndex = tokenViewModel.getPasswordHeaderScrollIndex(targetKey)
+                                val targetIndex = tokenViewModel.passwordViewModel.getPasswordHeaderScrollIndex(targetKey)
                                     ?: headerIndexMap[letter]
                                     ?: headerIndexMap[targetKey]
                                     ?: return@launch
