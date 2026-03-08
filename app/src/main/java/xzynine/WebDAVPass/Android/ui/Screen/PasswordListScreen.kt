@@ -60,6 +60,7 @@ import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.ViewModel.toPasswordIndexKey
+import androidx.compose.ui.platform.LocalContext
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 
@@ -82,6 +83,7 @@ fun PasswordListScreen(
     onNavigateBack: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
+    val context = LocalContext.current
     val entries by tokenViewModel.passwordEntries.collectAsState(emptyList())
     val passwordGroupStack by tokenViewModel.passwordGroupStack.collectAsState(emptyList())
     val passwordIndexKeys by tokenViewModel.passwordIndexKeys.collectAsState(emptyList())
@@ -429,6 +431,7 @@ fun PasswordListScreen(
                     }
 
                     AlphabetIndexScrollbar(
+                        context = context,
                         letters = indexLetters,
                         enabledLetters = enabledIndexLetters,
                         activeLetter = activeLetter,
