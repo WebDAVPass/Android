@@ -31,6 +31,8 @@ kotlinxCoroutinesCompose = "1.7.2"
 
 # Navigation 相关版本
 jetbrainsAndroidxNavigationevent = "1.0.1"
+navigation3 = "1.0.0"
+miuixNavigation3 = "0.8.4"
 
 # Room 数据库相关版本
 room = "2.8.2"
@@ -67,6 +69,8 @@ miuix-icons = { group = "top.yukonga.miuix.kmp", name = "miuix-icons", version.r
 
 # Navigation 相关库
 jetbrains-androidx-navigationevent = { group = "org.jetbrains.androidx.navigationevent", name = "navigationevent-compose", version.ref = "jetbrainsAndroidxNavigationevent" }
+androidx-navigation3-runtime = { group = "androidx.navigation3", name = "navigation3-runtime", version.ref = "navigation3" }
+miuix-navigation3-ui = { group = "top.yukonga.miuix.kmp", name = "miuix-navigation3-ui", version.ref = "miuixNavigation3" }
 # Room 数据库相关库
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }

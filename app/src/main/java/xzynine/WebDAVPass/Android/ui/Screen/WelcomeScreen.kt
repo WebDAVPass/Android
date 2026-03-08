@@ -77,7 +77,8 @@ import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 @Composable
 fun WelcomeScreen(
     tokenViewModel: TokenViewModel,
-    onEnterLibrary: () -> Unit
+    onEnterLibrary: () -> Unit,
+    onBackPressed: () -> Boolean = { false }
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -270,6 +271,35 @@ fun WelcomeScreen(
 
     BackHandler(enabled = isSelectionMode.value) {
         clearSelectionMode()
+    }
+
+    BackHandler(enabled = true) {
+        if (isSelectionMode.value) {
+            clearSelectionMode()
+            return@BackHandler
+        }
+        if (showCloudImportDialog) {
+            showCloudImportDialog = false
+            return@BackHandler
+        }
+        if (showCloudCreateDialog) {
+            showCloudCreateDialog = false
+            return@BackHandler
+        }
+        if (showCreateMasterPasswordDialog) {
+            showCreateMasterPasswordDialog = false
+            pendingCreateMasterPassword = ""
+            return@BackHandler
+        }
+        if (showDeleteDialog.value) {
+            showDeleteDialog.value = false
+            return@BackHandler
+        }
+        if (pendingUnlockLibrary != null) {
+            clearInlineUnlock()
+            return@BackHandler
+        }
+        onBackPressed()
     }
 
     /**

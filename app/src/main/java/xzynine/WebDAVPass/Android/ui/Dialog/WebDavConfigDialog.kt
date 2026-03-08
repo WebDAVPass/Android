@@ -20,7 +20,6 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.DpSize
-import androidx.activity.compose.BackHandler
 import xzynine.WebDAVPass.Android.data.WebDavConfig
 import xzynine.WebDAVPass.webdav.Authorization
 import xzynine.WebDAVPass.webdav.WebDav
@@ -356,10 +355,6 @@ fun WebDavConfigDialog(
         defaultWindowInsetsPadding = true,
         insideMargin = DpSize(16.dp, 16.dp)
     ) {
-        BackHandler(enabled = true) {
-            onDismissRequest()
-        }
-
         WebDavConfigContent(
             onDismiss = onDismissRequest,
             onConfigSaved = onConfigSaved,

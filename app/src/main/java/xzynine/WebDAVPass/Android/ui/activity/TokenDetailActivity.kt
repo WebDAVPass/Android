@@ -17,7 +17,6 @@ import xzynine.WebDAVPass.Android.ui.MainActivity
 import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.activity.PasswordEntryDetailActivity
-import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
 
 class TokenDetailActivity : ComponentActivity() {
@@ -45,21 +44,16 @@ class TokenDetailActivity : ComponentActivity() {
                 }
             }
             
-            NavigationEventDispatcherProvider {
-                AppTheme {
-                    // 设置系统栏外观
-                    SetupSystemBars()
-                    // 使用 Box 包裹，并在外部放置 MiuixPopupHost
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        TokenListScreen(
-                            tokenViewModel = tokenViewModel,
-                            onEntryClick = { entryId ->
-                                startActivity(PasswordEntryDetailActivity.createIntent(this@TokenDetailActivity, entryId))
-                            }
-                        )
-                        // MiuixPopupHost 作为弹窗宿主
-                        MiuixPopupHost()
-                    }
+            AppTheme {
+                SetupSystemBars()
+                Box(modifier = Modifier.fillMaxSize()) {
+                    TokenListScreen(
+                        tokenViewModel = tokenViewModel,
+                        onEntryClick = { entryId ->
+                            startActivity(PasswordEntryDetailActivity.createIntent(this@TokenDetailActivity, entryId))
+                        }
+                    )
+                    MiuixPopupHost()
                 }
             }
         }

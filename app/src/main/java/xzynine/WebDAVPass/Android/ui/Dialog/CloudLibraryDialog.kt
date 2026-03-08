@@ -2,7 +2,6 @@ package xzynine.WebDAVPass.Android.ui.Dialog
 
 import xzylib.base.util.Logger
 import xzylib.base.util.ToastUtils
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -305,9 +304,6 @@ fun CloudLibraryDialog(
         onDismissRequest = onDismiss,
         defaultWindowInsetsPadding = true
     ) {
-        BackHandler(enabled = true) {
-            onDismiss()
-        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()

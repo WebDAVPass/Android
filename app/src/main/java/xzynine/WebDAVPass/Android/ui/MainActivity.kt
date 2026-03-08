@@ -42,18 +42,25 @@ import xzynine.WebDAVPass.Android.ui.Dialog.ScanTokenScreen
 import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
 import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
-import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
+import androidx.navigation3.runtime.NavKey
+import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.rememberDecoratedNavEntries
+import androidx.navigation3.ui.NavDisplay
+import androidx.compose.runtime.mutableStateListOf
+
+sealed interface AppScreen : NavKey {
+    data object Home : AppScreen
+    data object Settings : AppScreen
+    data object Welcome : AppScreen
+}
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         this.setContent {
-            NavigationEventDispatcherProvider {
-                AppTheme {
-                    // 设置系统栏外观
-                    SetupSystemBars()
-                    MainScreen()
-                }
+            AppTheme {
+                SetupSystemBars()
+                MainScreen()
             }
         }
     }
@@ -72,7 +79,6 @@ fun MainScreen() {
     val showCloudBindingDialog = remember { mutableStateOf(false) }
 
     // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
-    var selectedIndex by rememberSaveable { mutableStateOf(0) }
     var showWelcome by rememberSaveable { mutableStateOf(true) }
     val currentLibrary by tokenViewModel.currentLibrary.collectAsState()
 
@@ -85,62 +91,114 @@ fun MainScreen() {
     // 控制扫描界面的显示与隐藏
     val showScanBottomSheet = remember { mutableStateOf(false) }
 
+    // Navigation3 导航栈
+    val backStack = remember {
+        if (showWelcome) {
+            mutableStateListOf<NavKey>(AppScreen.Welcome)
+        } else {
+            mutableStateListOf<NavKey>(AppScreen.Home)
+        }
+    }
 
-
-    if (showWelcome) {
-        WelcomeScreen(
-            tokenViewModel = tokenViewModel,
-            onEnterLibrary = {
-                showWelcome = false
-            }
-        )
-    } else {
-        // 基于Miuix Scaffold的主界面
-        Box(modifier = Modifier.fillMaxSize()) {
-            Scaffold(
-            popupHost = {},
-            topBar = {
-                // 只有在首页时显示标题
-                if (selectedIndex == 0) {
-                    TopAppBar(
-                        title = currentLibrary?.displayName ?: "WebDAVPass",
-                        navigationIcon = {},
-                        actions = {}
-                    )
-                }
-            },
-            floatingActionButton = {
-                // 只有在首页时显示悬浮扫描按钮
-                if (selectedIndex == 0) {
-                    FloatingActionButton(
-                        onClick = {
-                            showScanBottomSheet.value = true
+    // 导航条目提供者
+    val entryProvider = remember(backStack) {
+        entryProvider<NavKey> {
+            entry(AppScreen.Welcome) {
+                WelcomeScreen(
+                    tokenViewModel = tokenViewModel,
+                    onEnterLibrary = {
+                        backStack.clear()
+                        backStack.add(AppScreen.Home)
+                        showWelcome = false
+                    },
+                    onBackPressed = {
+                        if (backStack.size > 1) {
+                            backStack.removeAt(backStack.lastIndex)
+                            true
+                        } else {
+                            false
                         }
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Scan,
-                            contentDescription = "扫描二维码"
-                        )
                     }
-                }
-            },
-            floatingActionButtonPosition = FabPosition.Companion.End,
-            content = { paddingValues ->
-                // 主界面内容区域，根据选中的导航项显示不同内容
-                Box(
-                    modifier = Modifier.Companion
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                ) {
-                    when (selectedIndex) {
-                        0 -> {
+                )
+            }
+            entry(AppScreen.Home) {
+                // 基于Miuix Scaffold的主界面
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Scaffold(
+                    popupHost = {},
+                    topBar = {
+                        TopAppBar(
+                            title = currentLibrary?.displayName ?: "WebDAVPass",
+                            navigationIcon = {},
+                            actions = {}
+                        )
+                    },
+                    floatingActionButton = {
+                        FloatingActionButton(
+                            onClick = {
+                                showScanBottomSheet.value = true
+                            }
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Scan,
+                                contentDescription = "扫描二维码"
+                            )
+                        }
+                    },
+                    floatingActionButtonPosition = FabPosition.Companion.End,
+                    content = { paddingValues ->
+                        Box(
+                            modifier = Modifier.Companion
+                                .fillMaxSize()
+                                .padding(paddingValues)
+                        ) {
                             HomeScreen(
                                 tokenViewModel = tokenViewModel
                             )
                         }
-
-                        1 -> {
-                            // 设置页面
+                    },
+                    bottomBar = {
+                        // 底部导航栏
+                        NavigationBar {
+                            NavigationBarItem(
+                                selected = true,
+                                onClick = {},
+                                icon = navigationItems[0].icon,
+                                label = navigationItems[0].label
+                            )
+                            NavigationBarItem(
+                                selected = false,
+                                onClick = {
+                                    backStack.add(AppScreen.Settings)
+                                },
+                                icon = navigationItems[1].icon,
+                                label = navigationItems[1].label
+                            )
+                        }
+                    }
+                    )
+                    // 在 Scaffold 外部放置 MiuixPopupHost
+                    MiuixPopupHost()
+                }
+            }
+            entry(AppScreen.Settings) {
+                // 基于Miuix Scaffold的设置界面
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Scaffold(
+                    popupHost = {},
+                    topBar = {
+                        TopAppBar(
+                            title = "设置",
+                            navigationIcon = {},
+                            actions = {}
+                        )
+                    },
+                    content = { paddingValues ->
+                        Box(
+                            modifier = Modifier.Companion
+                                .fillMaxSize()
+                                .padding(paddingValues)
+                        ) {
                             SettingsScreen(
                                 viewModel = tokenViewModel,
                                 onCloudBindingClick = {
@@ -152,32 +210,63 @@ fun MainScreen() {
                                 },
                                 onSwitchLibraryClick = {
                                     tokenViewModel.clearCurrentLibrarySelection()
-                                    selectedIndex = 0
+                                    backStack.clear()
+                                    backStack.add(AppScreen.Welcome)
                                     showWelcome = true
                                 }
                             )
                         }
+                    },
+                    bottomBar = {
+                        // 底部导航栏
+                        NavigationBar {
+                            NavigationBarItem(
+                                selected = false,
+                                onClick = {
+                                    backStack.removeAt(backStack.lastIndex)
+                                },
+                                icon = navigationItems[0].icon,
+                                label = navigationItems[0].label
+                            )
+                            NavigationBarItem(
+                                selected = true,
+                                onClick = {},
+                                icon = navigationItems[1].icon,
+                                label = navigationItems[1].label
+                            )
+                        }
                     }
-                }
-            },
-            bottomBar = {
-                // 底部导航栏
-                NavigationBar {
-                    navigationItems.forEachIndexed { index, item ->
-                        NavigationBarItem(
-                            selected = selectedIndex == index,
-                            onClick = { selectedIndex = index },
-                            icon = item.icon,
-                            label = item.label
-                        )
-                    }
+                    )
+                    // 在 Scaffold 外部放置 MiuixPopupHost
+                    MiuixPopupHost()
                 }
             }
-            )
-            // 在 Scaffold 外部放置 MiuixPopupHost
-            MiuixPopupHost()
         }
     }
+
+    // 装饰导航条目
+    val entries = rememberDecoratedNavEntries(
+        backStack = backStack,
+        entryProvider = entryProvider
+    )
+
+    // 渲染导航场景
+    NavDisplay(
+        entries = entries,
+        onBack = {
+            if (showCloudBindingDialog.value) {
+                showCloudBindingDialog.value = false
+                return@NavDisplay
+            }
+            if (showScanBottomSheet.value) {
+                showScanBottomSheet.value = false
+                return@NavDisplay
+            }
+            if (backStack.size > 1) {
+                backStack.removeAt(backStack.lastIndex)
+            }
+        }
+    )
 
     if (showCloudBindingDialog.value) {
         CloudLibraryDialog(

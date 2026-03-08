@@ -1,6 +1,5 @@
 package xzynine.WebDAVPass.Android.ui.Dialog
 
-import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -58,9 +57,6 @@ fun CreateMasterPasswordDialog(
         onDismissRequest = onDismiss,
         defaultWindowInsetsPadding = true
     ) {
-        BackHandler(enabled = true) {
-            onDismiss()
-        }
         Column(
             modifier = Modifier
                 .fillMaxWidth()

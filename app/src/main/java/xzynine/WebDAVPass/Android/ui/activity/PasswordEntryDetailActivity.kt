@@ -18,7 +18,6 @@ import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.MainActivity
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
-import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
 
 class PasswordEntryDetailActivity : ComponentActivity() {
 
@@ -54,19 +53,17 @@ class PasswordEntryDetailActivity : ComponentActivity() {
                 }
             }
 
-            NavigationEventDispatcherProvider {
-                AppTheme {
-                    SetupSystemBars()
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        PasswordEntryDetailScreen(
-                            tokenViewModel = tokenViewModel,
-                            entryId = entryId,
-                            onDeleted = {
-                                finish()
-                            }
-                        )
-                        MiuixPopupHost()
-                    }
+            AppTheme {
+                SetupSystemBars()
+                Box(modifier = Modifier.fillMaxSize()) {
+                    PasswordEntryDetailScreen(
+                        tokenViewModel = tokenViewModel,
+                        entryId = entryId,
+                        onDeleted = {
+                            finish()
+                        }
+                    )
+                    MiuixPopupHost()
                 }
             }
         }
