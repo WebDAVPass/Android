@@ -192,7 +192,7 @@ fun MainScreen() {
                             }
                         },
                         onSwitchLibraryClick = {
-                            tokenViewModel.clearCurrentLibrarySelection()
+                            tokenViewModel.libraryViewModel.clearCurrentLibrarySelection()
                             backStack.clear()
                             backStack.add(AppScreen.Welcome)
                             showWelcome = true

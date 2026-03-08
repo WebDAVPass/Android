@@ -41,6 +41,7 @@ import xzynine.WebDAVPass.Android.service.TwoFasAutofillService
 import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
+import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -166,10 +167,12 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                 return@rememberLauncherForActivityResult
             }
 
-            val enabled = viewModel.enableAutoUnlock(
+            val enabled = viewModel.autoUnlockViewModel.enableAutoUnlock(
                 library = targetLibrary,
                 cipher = cipher,
                 masterPassword = masterPassword,
+                resolveLibrary = { viewModel.libraryViewModel.resolveLibrarySnapshot(it) },
+                onPersist = { viewModel.libraryViewModel.persistLibraryMetadata(it) },
                 authMode = pendingMode
             )
             if (!enabled) {
@@ -371,7 +374,9 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                         autoUnlockSwitchChecked = false
                         autoUnlockSelectedIndex = -1
                         if (currentLib.autoUnlockEnabled) {
-                            viewModel.disableAutoUnlock(currentLib)
+                            viewModel.autoUnlockViewModel.disableAutoUnlock(currentLib) {
+                                viewModel.libraryViewModel.persistLibraryMetadata(it)
+                            }
                         }
                         return@SuperSwitch
                     }
@@ -482,10 +487,12 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                             authMode = authMode,
                             onSuccess = { authCipher ->
                                 if (authCipher != null) {
-                                    val enabled = viewModel.enableAutoUnlock(
+                                    val enabled = viewModel.autoUnlockViewModel.enableAutoUnlock(
                                         library = selectedLibrary,
                                         cipher = authCipher,
                                         masterPassword = masterPassword,
+                                        resolveLibrary = { viewModel.libraryViewModel.resolveLibrarySnapshot(it) },
+                                        onPersist = { viewModel.libraryViewModel.persistLibraryMetadata(it) },
                                         authMode = authMode
                                     )
                                     if (!enabled) {
@@ -549,7 +556,9 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     },
                     onCheckedChange = { checked ->
                         manualUnlockWindowSwitchChecked = checked
-                        viewModel.updateManualUnlockWindowEnabled(currentLib, checked)
+                        viewModel.autoUnlockViewModel.updateManualUnlockWindowEnabled(currentLib, checked) {
+                            viewModel.libraryViewModel.persistLibraryMetadata(it)
+                        }
                     },
                     modifier = Modifier.fillMaxWidth()
                 )

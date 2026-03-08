@@ -67,6 +67,7 @@ import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
 import xzynine.WebDAVPass.Android.ui.Dialog.CreateMasterPasswordDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CreateMode
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
+import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 
@@ -127,7 +128,9 @@ fun WelcomeScreen(
 
             if (result.resultCode != Activity.RESULT_OK) {
                 if (pendingFlow == "enroll") {
-                    tokenViewModel.setAutoUnlockEnrollDismissed(pendingLibrary)
+                    tokenViewModel.autoUnlockViewModel.setAutoUnlockEnrollDismissed(pendingLibrary) {
+                        tokenViewModel.libraryViewModel.persistLibraryMetadata(it)
+                    }
                 }
                 if (pendingFlow == "unlock") {
                     pendingUnlockLibrary = pendingLibrary
@@ -150,10 +153,12 @@ fun WelcomeScreen(
                 if (cipher == null) {
                     return@rememberLauncherForActivityResult
                 }
-                val enabled = tokenViewModel.enableAutoUnlock(
+                val enabled = tokenViewModel.autoUnlockViewModel.enableAutoUnlock(
                     library = targetLibrary,
                     cipher = cipher,
                     masterPassword = pendingPassword,
+                    resolveLibrary = { tokenViewModel.libraryViewModel.resolveLibrarySnapshot(it) },
+                    onPersist = { tokenViewModel.libraryViewModel.persistLibraryMetadata(it) },
                     authMode = pendingMode
                 )
                 if (!enabled) {
@@ -165,7 +170,11 @@ fun WelcomeScreen(
             if (pendingFlow == "unlock") {
                 coroutineScope.launch {
                     val targetLibrary = currentLibraryState?.takeIf { it.id == pendingLibrary.id } ?: pendingLibrary
-                    val authCipher = tokenViewModel.getCipherForAutoUnlock(targetLibrary)
+                    val authCipher = tokenViewModel.autoUnlockViewModel.getCipherForAutoUnlock(targetLibrary) {
+                        tokenViewModel.autoUnlockViewModel.invalidateAutoUnlock(it) { lib ->
+                            tokenViewModel.libraryViewModel.persistLibraryMetadata(lib)
+                        }
+                    }
                     if (authCipher != null && tokenViewModel.unlockWithBiometric(targetLibrary, authCipher)) {
                         val cleared = tokenViewModel.applyPostCredentialUnlockPolicy(targetLibrary)
                         if (cleared) {
@@ -212,10 +221,12 @@ fun WelcomeScreen(
                         ToastUtils.showShortToast(context, "自动解锁恢复失败，请重试")
                         return@launch
                     }
-                    val enabled = tokenViewModel.enableAutoUnlock(
+                    val enabled = tokenViewModel.autoUnlockViewModel.enableAutoUnlock(
                         library = targetLibrary,
                         cipher = cipher,
                         masterPassword = pendingPassword,
+                        resolveLibrary = { tokenViewModel.libraryViewModel.resolveLibrarySnapshot(it) },
+                        onPersist = { tokenViewModel.libraryViewModel.persistLibraryMetadata(it) },
                         authMode = pendingMode
                     )
                     if (!enabled) {
@@ -359,10 +370,12 @@ fun WelcomeScreen(
             authMode = authMode,
             onSuccess = { authCipher ->
                 if (authCipher != null) {
-                    val enabled = tokenViewModel.enableAutoUnlock(
+                    val enabled = tokenViewModel.autoUnlockViewModel.enableAutoUnlock(
                         library = targetLibrary,
                         cipher = authCipher,
                         masterPassword = masterPassword,
+                        resolveLibrary = { tokenViewModel.libraryViewModel.resolveLibrarySnapshot(it) },
+                        onPersist = { tokenViewModel.libraryViewModel.persistLibraryMetadata(it) },
                         authMode = authMode
                     )
                     if (!enabled) {
@@ -388,7 +401,9 @@ fun WelcomeScreen(
                 }
 
                 if (!fallbackLaunched) {
-                    tokenViewModel.setAutoUnlockEnrollDismissed(targetLibrary)
+                    tokenViewModel.autoUnlockViewModel.setAutoUnlockEnrollDismissed(targetLibrary) {
+                        tokenViewModel.libraryViewModel.persistLibraryMetadata(it)
+                    }
                 }
             }
         )
@@ -457,10 +472,12 @@ fun WelcomeScreen(
                                 return@launch
                             }
 
-                            val enabled = tokenViewModel.enableAutoUnlock(
+                            val enabled = tokenViewModel.autoUnlockViewModel.enableAutoUnlock(
                                 library = unlockedLibrary,
                                 cipher = authCipher,
                                 masterPassword = plainPassword,
+                                resolveLibrary = { tokenViewModel.libraryViewModel.resolveLibrarySnapshot(it) },
+                                onPersist = { tokenViewModel.libraryViewModel.persistLibraryMetadata(it) },
                                 authMode = authMode
                             )
                             if (!enabled) {
@@ -503,7 +520,11 @@ fun WelcomeScreen(
             return
         }
 
-        val cipher = tokenViewModel.getCipherForAutoUnlock(targetLibrary)
+        val cipher = tokenViewModel.autoUnlockViewModel.getCipherForAutoUnlock(targetLibrary) {
+            tokenViewModel.autoUnlockViewModel.invalidateAutoUnlock(it) { lib ->
+                tokenViewModel.libraryViewModel.persistLibraryMetadata(lib)
+            }
+        }
         if (cipher == null) {
             ToastUtils.showShortToast(context, "自动解锁不可用，请手动输入主密码")
             return
@@ -619,7 +640,7 @@ fun WelcomeScreen(
                     sourceType = LibrarySourceType.LOCAL,
                     localPath = path
                 )
-                tokenViewModel.upsertAndSelectLibrary(item)
+                tokenViewModel.libraryViewModel.upsertAndSelectLibrary(item)
                 showInlineUnlock(item)
             }
         }
@@ -645,7 +666,7 @@ fun WelcomeScreen(
                     sourceType = LibrarySourceType.LOCAL,
                     localPath = path
                 )
-                tokenViewModel.upsertAndSelectLibrary(item)
+                tokenViewModel.libraryViewModel.upsertAndSelectLibrary(item)
                 val plainPassword = pendingCreateMasterPassword
                 val unlockOk = tokenViewModel.unlockCurrentLibrary(plainPassword)
                 pendingCreateMasterPassword = ""
@@ -886,7 +907,7 @@ fun WelcomeScreen(
                                 return@SelectableEntryCard
                             }
                             coroutineScope.launch {
-                                tokenViewModel.selectLibraryById(item.id)
+                                tokenViewModel.libraryViewModel.selectLibraryById(item.id)
                                 val selectedLibrary = currentLibraryState?.takeIf { it.id == item.id } ?: item
 
                                 showInlineUnlock(selectedLibrary)
@@ -955,7 +976,7 @@ fun WelcomeScreen(
             onDismiss = { showCloudImportDialog = false },
             onSelected = { library, _ ->
                 coroutineScope.launch {
-                    tokenViewModel.upsertAndSelectLibrary(library)
+                    tokenViewModel.libraryViewModel.upsertAndSelectLibrary(library)
                     showCloudImportDialog = false
                     showInlineUnlock(library)
                 }
@@ -971,7 +992,7 @@ fun WelcomeScreen(
             onDismiss = { showCloudCreateDialog = false },
             onSelected = { library, createdMasterPassword ->
                 coroutineScope.launch {
-                    tokenViewModel.upsertAndSelectLibrary(library)
+                    tokenViewModel.libraryViewModel.upsertAndSelectLibrary(library)
                     showCloudCreateDialog = false
                     val password = createdMasterPassword.orEmpty()
                     val unlockOk = tokenViewModel.unlockCurrentLibrary(password)
@@ -1018,7 +1039,9 @@ fun WelcomeScreen(
             isDestructive = true,
             onConfirm = {
                 val removedIds = selectedHistoryIds.keys.toSet()
-                val removedCount = tokenViewModel.removeLibraryHistoryByIds(removedIds)
+                val removedCount = tokenViewModel.libraryViewModel.removeLibraryHistoryByIds(removedIds) { id ->
+                    tokenViewModel.autoUnlockViewModel.deleteKey(id)
+                }
                 if (removedCount > 0 && pendingUnlockLibrary?.id in removedIds) {
                     clearInlineUnlock()
                 }
