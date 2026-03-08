@@ -76,11 +76,19 @@ class LibraryContextStore(private val context: Context) {
     }
 
     /**
+     * 获取当前选中的库ID
+     */
+    fun getCurrentLibraryId(): String? {
+        return preferences.getString(KEY_CURRENT_ID, null)
+    }
+
+    /**
      * 获取当前选中的库
      */
     fun getCurrentLibrary(): LibraryContext? {
-        val currentId = preferences.getString(KEY_CURRENT_ID, null) ?: return null
-        return getHistory().firstOrNull { it.id == currentId }
+        val currentId = getCurrentLibraryId() ?: return null
+        val history = getHistory()
+        return history.firstOrNull { it.id == currentId }
     }
 
     /**

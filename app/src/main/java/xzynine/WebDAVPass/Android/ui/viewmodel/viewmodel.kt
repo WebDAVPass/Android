@@ -226,8 +226,17 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      * 刷新库历史与当前库状态
      */
     private fun refreshLibraryHistory() {
-        _libraryHistory.value = libraryContextStore.getHistory().sortedByDescending { it.lastUsedAt }
-        _currentLibrary.value = libraryContextStore.getCurrentLibrary()
+        val history = libraryContextStore.getHistory()
+        val sortedHistory = history.sortedByDescending { it.lastUsedAt }
+        _libraryHistory.value = sortedHistory
+        
+        // 从已加载的历史中查找当前库，避免重复读取
+        val currentId = libraryContextStore.getCurrentLibraryId()
+        _currentLibrary.value = if (currentId != null) {
+            sortedHistory.firstOrNull { it.id == currentId }
+        } else {
+            null
+        }
     }
 
     /**
