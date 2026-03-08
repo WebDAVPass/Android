@@ -24,7 +24,7 @@ enum class PasswordListMode {
 internal class PasswordListModeSubViewModel(
     private val repository: KdbxTokenRepository,
     private val scope: CoroutineScope,
-    private val accessProvider: () -> PasswordDataAccess,
+    private var accessProvider: () -> PasswordDataAccess,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) {
     private val _passwordListMode = MutableStateFlow(PasswordListMode.ALL_PASSWORDS)
@@ -32,6 +32,13 @@ internal class PasswordListModeSubViewModel(
 
     private val _recentDeletedCount = MutableStateFlow(0)
     val recentDeletedCount: StateFlow<Int> = _recentDeletedCount.asStateFlow()
+
+    /**
+     * 更新数据访问提供者
+     */
+    fun updateAccessProvider(provider: () -> PasswordDataAccess) {
+        accessProvider = provider
+    }
 
     fun setPasswordListMode(mode: PasswordListMode): Boolean {
         if (_passwordListMode.value == mode) {

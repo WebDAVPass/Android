@@ -30,7 +30,7 @@ internal const val PasswordFolderIndexLabel = "文件夹"
 internal class PasswordPagingSubViewModel(
     private val repository: KdbxTokenRepository,
     private val scope: CoroutineScope,
-    private val accessProvider: () -> PasswordDataAccess,
+    private var accessProvider: () -> PasswordDataAccess,
     private val listModeProvider: () -> PasswordListMode,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val pageSectionSize: Int = 4
@@ -62,6 +62,13 @@ internal class PasswordPagingSubViewModel(
     private val pagingMutex = Mutex()
     private var allSections: List<IndexedSection> = emptyList()
     private var loadedSectionCount: Int = 0
+
+    /**
+     * 更新数据访问提供者
+     */
+    fun updateAccessProvider(provider: () -> PasswordDataAccess) {
+        accessProvider = provider
+    }
 
     suspend fun reloadInitialPasswordData() {
         val access = accessProvider()
