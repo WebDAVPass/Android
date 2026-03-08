@@ -78,7 +78,8 @@ fun PasswordListScreen(
     emptyStateText: String,
     emptySearchStateText: String,
     enableGroupNavigation: Boolean,
-    onEntryClick: (Long) -> Unit
+    onEntryClick: (Long) -> Unit,
+    onNavigateBack: () -> Unit
 ) {
     val focusManager = LocalFocusManager.current
     val entries by tokenViewModel.passwordEntries.collectAsState(emptyList())
@@ -250,6 +251,15 @@ fun PasswordListScreen(
                             Icon(
                                 imageVector = MiuixIcons.Back,
                                 contentDescription = "返回上一级"
+                            )
+                        }
+                    } else {
+                        IconButton(
+                            onClick = onNavigateBack
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Back,
+                                contentDescription = "返回"
                             )
                         }
                     }

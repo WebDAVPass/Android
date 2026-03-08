@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,12 +41,15 @@ import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
 import xzynine.WebDAVPass.Android.ui.Dialog.ScanTokenScreen
 import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
 import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
+import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
+import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
+import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberDecoratedNavEntries
 import androidx.navigation3.ui.NavDisplay
-import androidx.navigation3.ui.PredictivePopTransitionSpec
 import androidx.compose.runtime.mutableStateListOf
 import top.yukonga.miuix.kmp.icon.extended.Back
 
@@ -52,6 +57,9 @@ sealed interface AppScreen : NavKey {
     data object Home : AppScreen
     data object Settings : AppScreen
     data object Welcome : AppScreen
+    data object TokenList : AppScreen
+    data class PasswordList(val listMode: PasswordListMode) : AppScreen
+    data class PasswordEntryDetail(val entryId: Long) : AppScreen
 }
 
 class MainActivity : FragmentActivity() {
@@ -157,7 +165,13 @@ fun MainScreen() {
                                     .padding(paddingValues)
                             ) {
                                 HomeScreen(
-                                    tokenViewModel = tokenViewModel
+                                    tokenViewModel = tokenViewModel,
+                                    onNavigateToPasswordList = { listMode ->
+                                        backStack.add(AppScreen.PasswordList(listMode))
+                                    },
+                                    onNavigateToTokenList = {
+                                        backStack.add(AppScreen.TokenList)
+                                    }
                                 )
                             }
                         }
@@ -167,13 +181,47 @@ fun MainScreen() {
                 }
             }
             entry(AppScreen.Settings) {
-                // 基于Miuix Scaffold的设置界面
+                Box(modifier = Modifier.fillMaxSize()) {
+                    SettingsScreen(
+                        viewModel = tokenViewModel,
+                        onCloudBindingClick = {
+                            if (currentLibrary == null) {
+                                ToastUtils.showShortToast(context, "请先选择数据库文件")
+                            } else {
+                                showCloudBindingDialog.value = true
+                            }
+                        },
+                        onSwitchLibraryClick = {
+                            tokenViewModel.clearCurrentLibrarySelection()
+                            backStack.clear()
+                            backStack.add(AppScreen.Welcome)
+                            showWelcome = true
+                        },
+                        onNavigateBack = {
+                            backStack.removeAt(backStack.lastIndex)
+                        }
+                    )
+                    MiuixPopupHost()
+                }
+            }
+            entry(AppScreen.TokenList) {
+                val isLibraryUnlocked by tokenViewModel.isLibraryUnlocked.collectAsState(false)
+                val lib by tokenViewModel.currentLibrary.collectAsState(null)
+
+                LaunchedEffect(isLibraryUnlocked, lib) {
+                    if (!isLibraryUnlocked || lib == null) {
+                        backStack.clear()
+                        backStack.add(AppScreen.Welcome)
+                        showWelcome = true
+                    }
+                }
+
                 Box(modifier = Modifier.fillMaxSize()) {
                     Scaffold(
                         popupHost = {},
                         topBar = {
                             TopAppBar(
-                                title = "设置",
+                                title = "令牌列表",
                                 navigationIcon = {
                                     IconButton(onClick = {
                                         backStack.removeAt(backStack.lastIndex)
@@ -193,26 +241,86 @@ fun MainScreen() {
                                     .fillMaxSize()
                                     .padding(paddingValues)
                             ) {
-                                SettingsScreen(
-                                    viewModel = tokenViewModel,
-                                    onCloudBindingClick = {
-                                        if (currentLibrary == null) {
-                                            ToastUtils.showShortToast(context, "请先选择数据库文件")
-                                        } else {
-                                            showCloudBindingDialog.value = true
-                                        }
-                                    },
-                                    onSwitchLibraryClick = {
-                                        tokenViewModel.clearCurrentLibrarySelection()
-                                        backStack.clear()
-                                        backStack.add(AppScreen.Welcome)
-                                        showWelcome = true
+                                TokenListScreen(
+                                    tokenViewModel = tokenViewModel,
+                                    onEntryClick = { entryId ->
+                                        backStack.add(AppScreen.PasswordEntryDetail(entryId))
                                     }
                                 )
                             }
                         }
                     )
-                    // 在 Scaffold 外部放置 MiuixPopupHost
+                    MiuixPopupHost()
+                }
+            }
+            entry<AppScreen.PasswordList> { key ->
+                val listMode = key.listMode
+                val isLibraryUnlocked by tokenViewModel.isLibraryUnlocked.collectAsState(false)
+                val lib by tokenViewModel.currentLibrary.collectAsState(null)
+
+                LaunchedEffect(listMode) {
+                    tokenViewModel.setPasswordListMode(listMode, refreshNow = true)
+                    tokenViewModel.refreshRecentDeletedCount()
+                }
+
+                LaunchedEffect(isLibraryUnlocked, lib) {
+                    if (!isLibraryUnlocked || lib == null) {
+                        backStack.clear()
+                        backStack.add(AppScreen.Welcome)
+                        showWelcome = true
+                    }
+                }
+
+                DisposableEffect(listMode) {
+                    onDispose {
+                        tokenViewModel.resetPasswordGroupStackOnly()
+                        if (listMode == PasswordListMode.RECENT_DELETED) {
+                            tokenViewModel.setPasswordListMode(PasswordListMode.ALL_PASSWORDS, refreshNow = true)
+                        }
+                    }
+                }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    PasswordListScreen(
+                        tokenViewModel = tokenViewModel,
+                        title = if (listMode == PasswordListMode.RECENT_DELETED) "最近删除" else "全部密码",
+                        emptyStateText = if (listMode == PasswordListMode.RECENT_DELETED) "暂无最近删除条目" else "暂无条目",
+                        emptySearchStateText = "无匹配条目",
+                        enableGroupNavigation = listMode == PasswordListMode.ALL_PASSWORDS,
+                        onEntryClick = { entryId ->
+                            backStack.add(AppScreen.PasswordEntryDetail(entryId))
+                        },
+                        onNavigateBack = {
+                            backStack.removeAt(backStack.lastIndex)
+                        }
+                    )
+                    MiuixPopupHost()
+                }
+            }
+            entry<AppScreen.PasswordEntryDetail> { key ->
+                val entryId = key.entryId
+                val isLibraryUnlocked by tokenViewModel.isLibraryUnlocked.collectAsState(false)
+                val lib by tokenViewModel.currentLibrary.collectAsState(null)
+
+                LaunchedEffect(isLibraryUnlocked, lib) {
+                    if (!isLibraryUnlocked || lib == null) {
+                        backStack.clear()
+                        backStack.add(AppScreen.Welcome)
+                        showWelcome = true
+                    }
+                }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    PasswordEntryDetailScreen(
+                        tokenViewModel = tokenViewModel,
+                        entryId = entryId,
+                        onNavigateBack = {
+                            backStack.removeAt(backStack.lastIndex)
+                        },
+                        onDeleted = {
+                            backStack.removeAt(backStack.lastIndex)
+                        }
+                    )
                     MiuixPopupHost()
                 }
             }
@@ -228,7 +336,6 @@ fun MainScreen() {
     // 渲染导航场景
     NavDisplay(
         entries = entries,
-        predictivePopTransitionSpec = PredictivePopTransitionSpec(),
         onBack = {
             if (showCloudBindingDialog.value) {
                 showCloudBindingDialog.value = false

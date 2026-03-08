@@ -1,6 +1,5 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
-import android.content.Intent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
@@ -10,7 +9,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -23,8 +21,6 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
-import xzynine.WebDAVPass.Android.ui.activity.PasswordDetailActivity
-import xzynine.WebDAVPass.Android.ui.activity.TokenDetailActivity
 
 /**
  * 功能卡片组件
@@ -70,8 +66,11 @@ fun FeatureCard(
  * 首页块状布局界面
  */
 @Composable
-fun HomeScreen(tokenViewModel: TokenViewModel) {
-    val context = LocalContext.current
+fun HomeScreen(
+    tokenViewModel: TokenViewModel,
+    onNavigateToPasswordList: (PasswordListMode) -> Unit,
+    onNavigateToTokenList: () -> Unit
+) {
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val passwordTotalCount by tokenViewModel.passwordTotalCount.collectAsState(0)
     val recentDeletedCount by tokenViewModel.recentDeletedCount.collectAsState(0)
@@ -101,11 +100,7 @@ fun HomeScreen(tokenViewModel: TokenViewModel) {
                         title = "密码",
                         value = "$passwordTotalCount",
                         onClick = {
-                            val intent = PasswordDetailActivity.createIntent(
-                                context,
-                                PasswordListMode.ALL_PASSWORDS
-                            )
-                            context.startActivity(intent)
+                            onNavigateToPasswordList(PasswordListMode.ALL_PASSWORDS)
                         },
                         modifier = Modifier.weight(1f)
                     )
@@ -115,9 +110,7 @@ fun HomeScreen(tokenViewModel: TokenViewModel) {
                         title = "动态令牌",
                         value = "$tokenCount",
                         onClick = {
-                            // 跳转到令牌列表
-                            val intent = Intent(context, TokenDetailActivity::class.java)
-                            context.startActivity(intent)
+                            onNavigateToTokenList()
                         },
                         modifier = Modifier.weight(1f)
                     )
@@ -145,11 +138,7 @@ fun HomeScreen(tokenViewModel: TokenViewModel) {
                         title = "最近删除",
                         value = "$recentDeletedCount",
                         onClick = {
-                            val intent = PasswordDetailActivity.createIntent(
-                                context,
-                                PasswordListMode.RECENT_DELETED
-                            )
-                            context.startActivity(intent)
+                            onNavigateToPasswordList(PasswordListMode.RECENT_DELETED)
                         },
                         modifier = Modifier.weight(1f)
                     )

@@ -42,6 +42,7 @@ import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
@@ -49,6 +50,7 @@ import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.extra.SuperSwitch
 import top.yukonga.miuix.kmp.extra.WindowDropdown
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Download
@@ -66,7 +68,8 @@ import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 fun SettingsScreen(
     viewModel: TokenViewModel,
     onCloudBindingClick: () -> Unit,
-    onSwitchLibraryClick: () -> Unit
+    onSwitchLibraryClick: () -> Unit,
+    onNavigateBack: () -> Unit
 ) {
     // 获取统一的圆角半径
     val cornerRadius = getAppRoundedCorner()
@@ -244,7 +247,16 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = "设置",
-                navigationIcon = {},
+                navigationIcon = {
+                    IconButton(
+                        onClick = onNavigateBack
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Back,
+                            contentDescription = "返回"
+                        )
+                    }
+                },
                 actions = {},
                 defaultWindowInsetsPadding = true
             )

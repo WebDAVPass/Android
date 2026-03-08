@@ -48,18 +48,6 @@
             android:name=".ui.AutofillPickerActivity"
             android:exported="false" />
 
-        <activity
-            android:name=".ui.activity.TokenDetailActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".ui.activity.PasswordDetailActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".ui.activity.PasswordEntryDetailActivity"
-            android:exported="false" />
-
     </application>
 
 </manifest>

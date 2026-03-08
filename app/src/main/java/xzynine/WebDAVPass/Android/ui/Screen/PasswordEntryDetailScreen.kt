@@ -48,6 +48,7 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
@@ -69,6 +70,7 @@ import xzynine.WebDAVPass.Android.util.QrCodeUtil
 fun PasswordEntryDetailScreen(
     tokenViewModel: TokenViewModel,
     entryId: Long,
+    onNavigateBack: () -> Unit,
     onDeleted: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -125,7 +127,16 @@ fun PasswordEntryDetailScreen(
         topBar = {
             TopAppBar(
                 title = selectedEntry?.title ?: "密码详情",
-                navigationIcon = {},
+                navigationIcon = {
+                    IconButton(
+                        onClick = onNavigateBack
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Back,
+                            contentDescription = "返回"
+                        )
+                    }
+                },
                 actions = {
                     if (selectedEntry != null) {
                         if (isEditing) {
