@@ -13,10 +13,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.asImageBitmap
@@ -54,18 +58,23 @@ fun EntryIcon(
 
     /**
      * 1) 优先渲染 KeePass 自定义图标（二进制）。
+     * 在后台线程解码，避免主线程阻塞导致滚动卡顿。
      */
-    val customBitmap = remember(customIconBytes) {
-        customIconBytes?.let { bytes ->
-            runCatching {
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
-            }.getOrNull()
+    val customBitmap: Bitmap? by produceState<Bitmap?>(initialValue = null, key1 = customIconBytes) {
+        value = if (customIconBytes != null) {
+            withContext(Dispatchers.Default) {
+                runCatching {
+                    BitmapFactory.decodeByteArray(customIconBytes, 0, customIconBytes.size)
+                }.getOrNull()
+            }
+        } else {
+            null
         }
     }
 
     if (customBitmap != null) {
         Image(
-            bitmap = customBitmap.asImageBitmap(),
+            bitmap = customBitmap!!.asImageBitmap(),
             contentDescription = contentDescription,
             modifier = modifier
         )

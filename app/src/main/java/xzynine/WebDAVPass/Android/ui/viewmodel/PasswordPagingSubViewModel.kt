@@ -62,6 +62,8 @@ internal class PasswordPagingSubViewModel(
     private val pagingMutex = Mutex()
     private var allSections: List<IndexedSection> = emptyList()
     private var loadedSectionCount: Int = 0
+    // 增量累积已加载条目，避免每次翻页都重建全量列表（O(n²) → O(n)）
+    private var accumulatedEntries: List<PasswordEntry> = emptyList()
 
     /**
      * 更新数据访问提供者
@@ -89,12 +91,17 @@ internal class PasswordPagingSubViewModel(
             }
         }
 
+        // 在 IO 线程完成排序/分组，避免首次进入时主线程阻塞导致动画卡顿
+        val sections = withContext(ioDispatcher) {
+            computeSections(topLevelPasswordEntries, "")
+        }
+
         pagingMutex.withLock {
             if (listMode == PasswordListMode.RECENT_DELETED) {
                 _passwordGroupStack.value = emptyList()
             }
             _passwordTotalCount.value = passwordEntryCount
-            replaceSourceLocked(topLevelPasswordEntries, "")
+            applyComputedSectionsLocked(sections)
         }
     }
 
@@ -109,6 +116,7 @@ internal class PasswordPagingSubViewModel(
                     _passwordHasMore.value = false
                     allSections = emptyList()
                     loadedSectionCount = 0
+                    accumulatedEntries = emptyList()
                 }
                 return@launch
             }
@@ -146,8 +154,13 @@ internal class PasswordPagingSubViewModel(
                 }
             }
 
+            // 在 IO 线程完成排序/分组，避免主线程阻塞
+            val sections = withContext(ioDispatcher) {
+                computeSections(source, keyword)
+            }
+
             pagingMutex.withLock {
-                replaceSourceLocked(source, keyword)
+                applyComputedSectionsLocked(sections)
             }
         }
     }
@@ -156,7 +169,8 @@ internal class PasswordPagingSubViewModel(
         if (_isPageLoading.value || !_passwordHasMore.value) {
             return
         }
-        scope.launch {
+        // 在 IO 线程执行 flatMap + list copy，避免主线程阻塞导致快速滚动卡顿
+        scope.launch(ioDispatcher) {
             pagingMutex.withLock {
                 appendNextPageLocked()
             }
@@ -164,20 +178,55 @@ internal class PasswordPagingSubViewModel(
     }
 
     suspend fun ensureSectionLoaded(indexKey: String): Boolean {
-        return pagingMutex.withLock {
+        // 使用短锁+后台计算的模式：在锁内快速预留要加载的分组区间并复制切片引用，
+        // 然后在 IO 线程上完成重的 flatMap 操作，最后再短锁合并结果。
+        var prevCount = -1
+        var sectionsToLoad: List<IndexedSection> = emptyList()
+        var found = false
+
+        pagingMutex.withLock {
             val sectionIndex = allSections.indexOfFirst { it.key == indexKey }
             if (sectionIndex < 0) {
-                return@withLock false
+                // 目标分组不存在
+                return@withLock
             }
-
+            found = true
             val requiredSectionCount = sectionIndex + 1
-            if (requiredSectionCount > loadedSectionCount) {
-                loadedSectionCount = requiredSectionCount.coerceAtMost(allSections.size)
-                _passwordEntries.value = buildLoadedEntriesLocked()
-                _passwordHasMore.value = loadedSectionCount < allSections.size
+            if (requiredSectionCount <= loadedSectionCount) {
+                // 已经加载，无需操作
+                return@withLock
             }
-            true
+            prevCount = loadedSectionCount
+            val realRequired = requiredSectionCount.coerceAtMost(allSections.size)
+            // 复制分组切片（浅拷贝引用），以便在锁外安全地展开 items
+            sectionsToLoad = allSections.subList(prevCount, realRequired).toList()
+            // 预先更新已加载分组计数，防止并发重复加载相同区间
+            loadedSectionCount = realRequired
         }
+
+        if (!found) return false
+        if (prevCount == -1) return true
+
+        // 在 IO 线程展开新增分组的 items（heavy），避免阻塞持锁区
+        val gapEntries = withContext(ioDispatcher) {
+            sectionsToLoad.flatMap { it.items }
+        }
+
+        // 合并到累积列表：再短锁验证/合并，若并发引起差异则安全降级为重建已加载区
+        pagingMutex.withLock {
+            // 计算预期的先前条目数（仅统计大小，开销远小于复制所有元素）
+            val expectedPrevEntriesCount = allSections.take(prevCount).sumOf { it.items.size }
+            if (accumulatedEntries.size != expectedPrevEntriesCount) {
+                // 出现并发变更：重建到当前 loadedSectionCount 的累积列表以保证一致性
+                accumulatedEntries = allSections.take(loadedSectionCount).flatMap { it.items }
+            } else {
+                accumulatedEntries = accumulatedEntries + gapEntries
+            }
+            _passwordEntries.value = accumulatedEntries
+            _passwordHasMore.value = loadedSectionCount < allSections.size
+        }
+
+        return true
     }
 
     suspend fun getHeaderScrollIndex(indexKey: String): Int? {
@@ -251,10 +300,15 @@ internal class PasswordPagingSubViewModel(
             }
             allSections = emptyList()
             loadedSectionCount = 0
+            accumulatedEntries = emptyList()
         }
     }
 
-    private fun replaceSourceLocked(source: List<PasswordEntry>, keyword: String) {
+    /**
+     * 纯计算：对数据源进行过滤、排序、分组，返回有序分组列表。
+     * 可在任意线程安全调用（无副作用）。
+     */
+    private fun computeSections(source: List<PasswordEntry>, keyword: String): List<IndexedSection> {
         val values = source
             .asSequence()
             .filter { item ->
@@ -267,7 +321,7 @@ internal class PasswordPagingSubViewModel(
             }
             .toList()
 
-        allSections = values
+        return values
             .groupBy { it.toPasswordIndexKey() }
             .toList()
             .sortedWith(
@@ -282,17 +336,24 @@ internal class PasswordPagingSubViewModel(
                 }
             )
             .map { (key, items) -> IndexedSection(key = key, items = items) }
+    }
 
-        _passwordIndexKeys.value = allSections.map { it.key }
+    /**
+     * 应用已在 IO 线程预计算好的分组列表，必须在 pagingMutex 持有时调用。
+     */
+    private fun applyComputedSectionsLocked(sections: List<IndexedSection>) {
+        allSections = sections
+        _passwordIndexKeys.value = sections.map { it.key }
         loadedSectionCount = 0
+        accumulatedEntries = emptyList()
         _passwordEntries.value = emptyList()
-        _passwordHasMore.value = allSections.isNotEmpty()
-
+        _passwordHasMore.value = sections.isNotEmpty()
         appendNextPageLocked()
     }
 
     private fun appendNextPageLocked() {
         if (allSections.isEmpty()) {
+            accumulatedEntries = emptyList()
             _passwordEntries.value = emptyList()
             _passwordHasMore.value = false
             _isPageLoading.value = false
@@ -306,16 +367,14 @@ internal class PasswordPagingSubViewModel(
         }
 
         _isPageLoading.value = true
+        val prevCount = loadedSectionCount
         loadedSectionCount = (loadedSectionCount + pageSectionSize).coerceAtMost(allSections.size)
-        _passwordEntries.value = buildLoadedEntriesLocked()
+        // 只 flatMap 新增分组，拼接到已有列表，避免从头重建
+        val newEntries = allSections.subList(prevCount, loadedSectionCount).flatMap { it.items }
+        accumulatedEntries = accumulatedEntries + newEntries
+        _passwordEntries.value = accumulatedEntries
         _passwordHasMore.value = loadedSectionCount < allSections.size
         _isPageLoading.value = false
-    }
-
-    private fun buildLoadedEntriesLocked(): List<PasswordEntry> {
-        return allSections
-            .take(loadedSectionCount)
-            .flatMap { section -> section.items }
     }
 }
 

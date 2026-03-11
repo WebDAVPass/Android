@@ -174,8 +174,18 @@ fun PasswordListScreen(
         }
     }
 
+    // 搜索是否曾被激活；仅用于区分「初次进入空查询」与「用户清空搜索」两种场景
+    val isSearchEverEnabled = remember { mutableStateOf(false) }
     LaunchedEffect(searchQuery) {
-        tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = searchQuery)
+        if (searchQuery.isNotBlank()) {
+            // 搜索词非空：激活标志并触发搜索
+            isSearchEverEnabled.value = true
+            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = searchQuery)
+        } else if (isSearchEverEnabled.value) {
+            // 搜索词被清空：恢复全量列表
+            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = "")
+        }
+        // 初次进入（searchQuery="" 且搜索未激活）：跳过，reloadInitialPasswordData 已完成加载
     }
 
     LaunchedEffect(passwordGroupStack, searchQuery) {
@@ -190,7 +200,8 @@ fun PasswordListScreen(
             val lastVisibleIndex = layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
             lastVisibleIndex to layoutInfo.totalItemsCount
         }.collect { (lastVisibleIndex, totalCount) ->
-            if (passwordHasMore && totalCount > 0 && lastVisibleIndex >= totalCount - 4) {
+            // 提前 15 项开始预加载，给 IO 线程留出充裕时间，减少滚动到底部时的加载卡顿
+            if (passwordHasMore && totalCount > 0 && lastVisibleIndex >= totalCount - 15) {
                 tokenViewModel.passwordViewModel.loadNextPasswordPage()
             }
         }
@@ -208,22 +219,24 @@ fun PasswordListScreen(
         derivedStateOf { indexLetters.toSet() }
     }
 
-    val activeLetter by remember(listState, groupedEntries) {
+    // groupedEntries 改变时才重新计算各分区标题的起始下标（含标题行本身）
+    // data: List<Pair<startIndex, letter>>，用于 activeLetter 的 O(n) 定位
+    val sectionBoundaries = remember(groupedEntries) {
+        var idx = 0
+        groupedEntries.map { (letter, items) ->
+            val start = idx
+            idx += 1 + items.size  // 1 个标题行 + N 个条目行
+            start to letter
+        }
+    }
+
+    // activeLetter：每帧只做整数比较，不再访问 groupedEntries 内部结构
+    val activeLetter by remember(listState, sectionBoundaries) {
         derivedStateOf {
-            if (groupedEntries.isEmpty()) {
-                null
-            } else {
-                val visibleItemIndex = listState.firstVisibleItemIndex
-                var currentIndex = 0
-                groupedEntries.firstOrNull { (_, itemsInSection) ->
-                    val sectionStart = currentIndex
-                    val sectionEnd = currentIndex + itemsInSection.size
-                    currentIndex = sectionEnd + 1
-                    visibleItemIndex in sectionStart..sectionEnd
-                }?.first?.let { letter ->
-                    if (letter == PasswordFolderIndexLabel) FolderIndexBarLabel else letter
-                }
-            }
+            val v = listState.firstVisibleItemIndex
+            sectionBoundaries.lastOrNull { (start, _) -> v >= start }
+                ?.second
+                ?.let { letter -> if (letter == PasswordFolderIndexLabel) FolderIndexBarLabel else letter }
         }
     }
 
@@ -419,31 +432,41 @@ fun PasswordListScreen(
                         }
                     }
 
+                    // 去抖 + 即时粗略滚动（解耦索引与实际组加载），提高拖动响应性
+                    var indexEnsureJob by remember { mutableStateOf<kotlinx.coroutines.Job?>(null) }
                     AlphabetIndexScrollbar(
                         context = context,
                         letters = indexLetters,
                         enabledLetters = enabledIndexLetters,
                         activeLetter = activeLetter,
                         onLetterSelected = { letter ->
-                            coroutineScope.launch {
-                                val targetKey = if (letter == FolderIndexBarLabel) {
-                                    PasswordFolderIndexLabel
-                                } else {
-                                    letter
-                                }
+                            val targetKey = if (letter == FolderIndexBarLabel) PasswordFolderIndexLabel else letter
 
-                                // 确保目标分段数据已加载到 entries
+                            // 立即给出粗略反馈：若目标分组已加载则跳到分组标题，否则按分组比例跳到当前已加载区域的近似位置
+                            coroutineScope.launch {
+                                val immediateIndex = sectionBoundaries.firstOrNull { it.second == targetKey }?.first
+                                    ?: run {
+                                        val headerPos = passwordIndexKeys.indexOf(targetKey)
+                                        val headerCount = passwordIndexKeys.size.coerceAtLeast(1)
+                                        val loadedCount = listState.layoutInfo.totalItemsCount
+                                        if (loadedCount <= 0) 0 else (loadedCount * headerPos / headerCount).coerceIn(0, loadedCount - 1)
+                                    }
+                                listState.scrollToItem(immediateIndex)
+                            }
+
+                            // 去抖：等待短暂静止后再触发真实加载与精确跳转
+                            indexEnsureJob?.cancel()
+                            indexEnsureJob = coroutineScope.launch {
+                                kotlinx.coroutines.delay(120L)
+
+                                // 后台确保目标分组被加载（SubViewModel 已将重计算移动到 IO 调度器）
                                 val loaded = tokenViewModel.passwordViewModel.ensurePasswordIndexLoaded(targetKey)
-                                if (!loaded) {
-                                    return@launch
-                                }
+                                if (!loaded) return@launch
 
                                 val targetIndex = tokenViewModel.passwordViewModel.getPasswordHeaderScrollIndex(targetKey)
                                     ?: return@launch
 
-                                // ensurePasswordIndexLoaded 更新了 StateFlow，但 Compose 重组是异步的：
-                                // 等待 LazyColumn 的 totalItemsCount 确实覆盖 targetIndex 后再滚动，
-                                // 否则 scrollToItem 会因越界崩溃
+                                // 等待 LazyColumn totalItemsCount 覆盖目标下标后再精确滚动
                                 snapshotFlow { listState.layoutInfo.totalItemsCount }
                                     .first { count -> count > targetIndex }
 
