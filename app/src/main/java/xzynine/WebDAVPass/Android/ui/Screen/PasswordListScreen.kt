@@ -28,6 +28,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
@@ -153,20 +154,23 @@ fun PasswordListScreen(
         tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
     }
 
+    // entries 已由 ViewModel 层排好 section 顺序，直接线性扫描 O(n) 即可，无需重新 groupBy + sortedWith
     val groupedEntries by remember(entries) {
         derivedStateOf {
-            entries.groupBy { item -> item.toPasswordIndexKey() }
-                .toList()
-                .sortedWith(compareBy<Pair<String, List<PasswordEntry>>> { (letter, _) ->
-                    when (letter) {
-                        PasswordFolderIndexLabel -> 0
-                        "#" -> 1
-                        else -> 2
+            if (entries.isEmpty()) {
+                emptyList()
+            } else {
+                val result = mutableListOf<Pair<String, MutableList<PasswordEntry>>>()
+                entries.forEach { entry ->
+                    val key = entry.toPasswordIndexKey()
+                    if (result.isEmpty() || result.last().first != key) {
+                        result.add(key to mutableListOf(entry))
+                    } else {
+                        result.last().second.add(entry)
                     }
-                }.thenBy { (letter, _) ->
-                    if (letter == PasswordFolderIndexLabel) "" else letter
                 }
-                )
+                result.map { (k, v) -> k to (v as List<PasswordEntry>) }
+            }
         }
     }
 
@@ -188,21 +192,6 @@ fun PasswordListScreen(
         }.collect { (lastVisibleIndex, totalCount) ->
             if (passwordHasMore && totalCount > 0 && lastVisibleIndex >= totalCount - 4) {
                 tokenViewModel.passwordViewModel.loadNextPasswordPage()
-            }
-        }
-    }
-
-    val headerIndexMap by remember(groupedEntries) {
-        derivedStateOf {
-            buildMap {
-                var currentIndex = 0
-                groupedEntries.forEach { (letter, itemsInSection) ->
-                    put(letter, currentIndex)
-                    if (letter == PasswordFolderIndexLabel) {
-                        put(FolderIndexBarLabel, currentIndex)
-                    }
-                    currentIndex += 1 + itemsInSection.size
-                }
             }
         }
     }
@@ -443,15 +432,20 @@ fun PasswordListScreen(
                                     letter
                                 }
 
+                                // 确保目标分段数据已加载到 entries
                                 val loaded = tokenViewModel.passwordViewModel.ensurePasswordIndexLoaded(targetKey)
                                 if (!loaded) {
                                     return@launch
                                 }
 
                                 val targetIndex = tokenViewModel.passwordViewModel.getPasswordHeaderScrollIndex(targetKey)
-                                    ?: headerIndexMap[letter]
-                                    ?: headerIndexMap[targetKey]
                                     ?: return@launch
+
+                                // ensurePasswordIndexLoaded 更新了 StateFlow，但 Compose 重组是异步的：
+                                // 等待 LazyColumn 的 totalItemsCount 确实覆盖 targetIndex 后再滚动，
+                                // 否则 scrollToItem 会因越界崩溃
+                                snapshotFlow { listState.layoutInfo.totalItemsCount }
+                                    .first { count -> count > targetIndex }
 
                                 listState.scrollToItem(targetIndex)
                             }

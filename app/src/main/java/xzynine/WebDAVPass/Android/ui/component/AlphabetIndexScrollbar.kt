@@ -157,7 +157,7 @@ fun AlphabetIndexScrollbar(
             Box(
                 modifier = Modifier
                     .align(Alignment.TopStart)
-                    .padding(top = currentYDp - 20.dp, end = 24.dp) // 调整气泡位置，使其对准当前触摸的字母
+                    .padding(top = (currentYDp - 20.dp).coerceAtLeast(0.dp), end = 24.dp) // 调整气泡位置，使其对准当前触摸的字母
                     .background(
                         color = MiuixTheme.colorScheme.primary,
                         shape = RoundedCornerShape(24.dp) // 更圆润的气泡形状

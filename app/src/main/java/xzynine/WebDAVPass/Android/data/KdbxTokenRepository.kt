@@ -26,6 +26,8 @@ import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
 import kotlin.math.abs
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
 
 class KdbxTokenRepository(context: Context) {
 
@@ -106,12 +108,26 @@ class KdbxTokenRepository(context: Context) {
             val location = resolveLocation(localPath)
             ensureLocationInitialized(location, masterPassword)
 
+            // 此路径已有缓存实例，直接验证可访问性，无需重新解密
+            val existing = DatabaseManager.tryGet(localPath)
+            if (existing != null) {
+                existing.first.rootGroup
+                return@runCatching true
+            }
+
+            // 关闭其他路径的旧缓存
+            DatabaseManager.close()
+
+            // 打开数据库后缓存，不立即关闭，供后续操作复用
             val (database, cacheDirectory) = openDatabase(location, masterPassword)
             try {
-                database.rootGroup
-            } finally {
+                database.rootGroup // 验证根组可访问
+            } catch (e: Exception) {
+                // 打开成功但验证失败时，释放资源
                 database.clearAndClose(cacheDirectory)
+                throw e
             }
+            DatabaseManager.store(localPath, masterPassword, database, cacheDirectory)
             true
         }.onFailure {
             val hint = buildLocationHint(resolveLocation(localPath))
@@ -129,6 +145,21 @@ class KdbxTokenRepository(context: Context) {
             val entries = collectEntriesOutsideRecycleBin(db, db.rootGroup)
             entries.mapNotNull { entry -> toToken(entry) }
                 .sortedBy { it.ordinal }
+        }
+    }
+
+    /**
+     * 流式加载令牌。
+     *
+     * 对比 [loadTokens]：此方法以 Flow 形式逐条发射，调用方可在收集过程中增量更新 UI；
+     * 若 [DatabaseManager] 已有缓存实例，则跳过解密直接读取，性能更优。
+     */
+    fun loadTokensFlow(localPath: String, masterPassword: String): Flow<OtpToken> = channelFlow {
+        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            collectEntriesOutsideRecycleBin(db, db.rootGroup)
+                .mapNotNull { entry -> toToken(entry) }
+                .sortedBy { it.ordinal }
+                .forEach { token -> trySend(token) }
         }
     }
 
@@ -425,6 +456,64 @@ class KdbxTokenRepository(context: Context) {
             }
             db.recycle(group, resolveRecycleBinTitle(db))
             true
+        }
+    }
+
+    /**
+     * 一次性加载一级密码条目及全局总计数。
+     *
+     * 对比分别调用 [loadPasswordEntriesByTopLevel] 和 [countPasswordEntries]，
+     * 此方法只打开一次数据库（或复用缓存），避免重复解密。
+     *
+     * @return Pair<顶级列表, 全局总条目数>
+     */
+    fun loadPasswordEntriesByTopLevelWithCount(
+        localPath: String,
+        masterPassword: String
+    ): Pair<List<PasswordEntry>, Int> {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val rootGroup = db.rootGroup
+            val childEntries = rootGroup?.getChildEntries()
+                ?.filterNot { entry -> isEntryInRecycleBin(db, entry) }
+                ?: emptyList()
+            val childGroups = rootGroup?.getChildGroups()
+                ?.filterNot { group -> db.groupIsInRecycleBin(group) }
+                ?: emptyList()
+            val topLevelList = buildPasswordEntries(
+                database = db,
+                entries = childEntries,
+                groups = childGroups,
+                includeFieldDetails = false
+            )
+            // 一次遍历同时统计全局总数
+            val totalCount = collectEntriesOutsideRecycleBin(db, rootGroup).size
+            topLevelList to totalCount
+        }
+    }
+
+    /**
+     * 一次性加载回收站密码条目及总计数。
+     *
+     * 对比分别调用 [loadRecentDeletedPasswordEntries] 和 [countRecentDeletedPasswordEntries]，
+     * 此方法只打开一次数据库（或复用缓存），避免重复解密。
+     *
+     * @return Pair<回收站列表, 总计数>
+     */
+    fun loadRecentDeletedPasswordEntriesWithCount(
+        localPath: String,
+        masterPassword: String
+    ): Pair<List<PasswordEntry>, Int> {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val recycleBin = db.recycleBin
+                ?: return@withDatabase emptyList<PasswordEntry>() to 0
+            val entries = collectEntries(recycleBin)
+            val list = buildPasswordEntries(
+                database = db,
+                entries = entries,
+                groups = emptyList(),
+                includeFieldDetails = false
+            )
+            list to entries.size
         }
     }
 
@@ -930,9 +1019,21 @@ class KdbxTokenRepository(context: Context) {
     }
 
     private fun <T> withDatabase(localPath: String, masterPassword: String, saveAfter: Boolean, block: (Database) -> T): T {
+        // 优先使用已缓存的数据库实例，避免重复解密
+        val cachedPair = DatabaseManager.tryGet(localPath)
+        if (cachedPair != null) {
+            val (database, cacheDirectory) = cachedPair
+            val result = block(database)
+            if (saveAfter && database.dataModifiedSinceLastLoading) {
+                val location = resolveLocation(localPath)
+                saveDatabase(database, location, masterPassword, cacheDirectory)
+            }
+            return result
+        }
+
+        // 缓存未命中：打开数据库，执行操作后关闭（兼容未解锁状态）
         val location = resolveLocation(localPath)
         ensureLocationInitialized(location, masterPassword)
-
         val (database, cacheDirectory) = openDatabase(location, masterPassword)
         try {
             val result = block(database)

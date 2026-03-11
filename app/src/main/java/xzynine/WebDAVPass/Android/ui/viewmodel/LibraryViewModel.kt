@@ -8,6 +8,7 @@ import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.LibraryContextStore
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
+import xzynine.WebDAVPass.Android.data.DatabaseManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -253,6 +254,8 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
         currentLibraryMasterPassword = ""
         isCurrentLibraryMasterPasswordManualVerified = false
         _isLibraryUnlocked.value = false
+        // 切换或清除库时关闭缓存的数据库实例，释放内存中的解密数据
+        DatabaseManager.close()
     }
 
     /**

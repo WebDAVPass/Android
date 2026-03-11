@@ -6,6 +6,7 @@ import android.net.Uri
 import xzylib.base.util.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import xzynine.WebDAVPass.Android.data.DatabaseManager
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.OtpToken
@@ -239,8 +240,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 return false
             }
 
-            val loadedTokens = withContext(Dispatchers.IO) {
-                kdbxTokenRepository.loadTokens(localPath, masterPassword)
+            // 使用 Flow 版本加载，底层复用 DatabaseManager 中已缓存的数据库实例
+            val loadedTokens = mutableListOf<OtpToken>()
+            withContext(Dispatchers.IO) {
+                kdbxTokenRepository.loadTokensFlow(localPath, masterPassword)
+                    .collect { token -> loadedTokens.add(token) }
             }
             _tokens.value = loadedTokens
 
@@ -627,6 +631,16 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             libraryViewModel.getMasterPasswordInternal(),
             force
         )
+    }
+
+    /**
+     * ViewModel 销毁时关闭缓存的数据库实例，释放内存中的解密数据。
+     *
+     * 说明：TokenViewModel 以共享单例形式存在，此方法在最后一个持有者销毁时被调用。
+     */
+    override fun onCleared() {
+        super.onCleared()
+        DatabaseManager.close()
     }
 
     /**

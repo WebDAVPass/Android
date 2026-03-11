@@ -81,16 +81,11 @@ internal class PasswordPagingSubViewModel(
         val masterPassword = access.masterPassword
         val listMode = listModeProvider()
 
-        val topLevelPasswordEntries = withContext(ioDispatcher) {
+        // 使用合并方法一次性加载列表与计数，避免同一数据库被打开两次
+        val (topLevelPasswordEntries, passwordEntryCount) = withContext(ioDispatcher) {
             when (listMode) {
-                PasswordListMode.ALL_PASSWORDS -> repository.loadPasswordEntriesByTopLevel(localPath, masterPassword)
-                PasswordListMode.RECENT_DELETED -> repository.loadRecentDeletedPasswordEntries(localPath, masterPassword)
-            }
-        }
-        val passwordEntryCount = withContext(ioDispatcher) {
-            when (listMode) {
-                PasswordListMode.ALL_PASSWORDS -> repository.countPasswordEntries(localPath, masterPassword)
-                PasswordListMode.RECENT_DELETED -> repository.countRecentDeletedPasswordEntries(localPath, masterPassword)
+                PasswordListMode.ALL_PASSWORDS -> repository.loadPasswordEntriesByTopLevelWithCount(localPath, masterPassword)
+                PasswordListMode.RECENT_DELETED -> repository.loadRecentDeletedPasswordEntriesWithCount(localPath, masterPassword)
             }
         }
 
