@@ -1,0 +1,223 @@
+package xzynine.WebDAVPass.Android.autofill
+
+import android.app.Activity
+import android.app.PendingIntent
+import android.app.assist.AssistStructure
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.os.Bundle
+import android.service.autofill.Dataset
+import android.service.autofill.FillResponse
+import android.util.Log
+import android.view.autofill.AutofillManager
+import android.view.autofill.AutofillValue
+import android.widget.RemoteViews
+import androidx.annotation.RequiresApi
+import xzynine.WebDAVPass.Android.R
+import xzynine.WebDAVPass.Android.model.SearchInfo
+
+@RequiresApi(api = Build.VERSION_CODES.O)
+object AutofillHelper {
+    private const val TAG = "AutofillHelper"
+
+    private const val KEY_PENDING_INTENT_BUNDLE = "xzynine.WebDAVPass.Android.extra.BUNDLE"
+    private const val KEY_SPECIAL_MODE = "xzynine.WebDAVPass.Android.extra.SPECIAL_MODE"
+    private const val KEY_SEARCH_INFO = "xzynine.WebDAVPass.Android.extra.SEARCH_INFO"
+    private const val KEY_BASE_STRUCTURE = "xzynine.WebDAVPass.Android.autofill.BASE_STRUCTURE"
+    private const val KEY_INLINE_SUGGESTIONS_REQUEST = "xzynine.WebDAVPass.Android.autofill.INLINE_SUGGESTIONS_REQUEST"
+
+    fun Intent.retrieveSelectionBundle(): Bundle? {
+        return this.getBundleExtra(KEY_PENDING_INTENT_BUNDLE)
+    }
+
+    fun Bundle.getSpecialMode(): SpecialMode {
+        val modeName = this.getString(KEY_SPECIAL_MODE)
+        return try {
+            if (modeName != null) SpecialMode.valueOf(modeName) else SpecialMode.DEFAULT
+        } catch (e: Exception) {
+            SpecialMode.DEFAULT
+        }
+    }
+
+    fun Bundle.getSearchInfo(): SearchInfo? {
+        @Suppress("DEPRECATION")
+        return this.getParcelable(KEY_SEARCH_INFO)
+    }
+
+    fun Bundle.getAutofillComponent(): AutofillComponent? {
+        return getAutofillComponentFromBundle(this)
+    }
+
+    fun getAutofillComponentFromBundle(bundle: Bundle): AutofillComponent? {
+        @Suppress("DEPRECATION")
+        bundle.getParcelable<AssistStructure>(KEY_BASE_STRUCTURE)?.let { assistStructure ->
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                @Suppress("DEPRECATION")
+                val inlineRequest = bundle.getParcelable<android.view.inputmethod.InlineSuggestionsRequest>(
+                    KEY_INLINE_SUGGESTIONS_REQUEST
+                )
+                AutofillComponent(
+                    assistStructure,
+                    inlineRequest?.let { CompatInlineSuggestionsRequest(it) }
+                )
+            } else {
+                AutofillComponent(assistStructure, null)
+            }
+        }
+        return null
+    }
+
+    fun Bundle.addSpecialMode(specialMode: SpecialMode): Bundle {
+        this.putString(KEY_SPECIAL_MODE, specialMode.name)
+        return this
+    }
+
+    fun Bundle.addSearchInfo(searchInfo: SearchInfo?): Bundle {
+        searchInfo?.let {
+            this.putParcelable(KEY_SEARCH_INFO, it)
+        }
+        return this
+    }
+
+    fun Bundle.addAutofillComponent(autofillComponent: AutofillComponent?): Bundle {
+        autofillComponent?.let {
+            this.putParcelable(KEY_BASE_STRUCTURE, it.assistStructure)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                it.compatInlineSuggestionsRequest?.inlineSuggestionsRequest?.let { request ->
+                    this.putParcelable(KEY_INLINE_SUGGESTIONS_REQUEST, request)
+                }
+            }
+        }
+        return this
+    }
+
+    fun getPendingIntentForSelection(
+        context: Context,
+        searchInfo: SearchInfo?,
+        autofillComponent: AutofillComponent
+    ): PendingIntent? {
+        return try {
+            val tempBundle = Bundle().apply {
+                addSpecialMode(SpecialMode.SELECTION)
+                addSearchInfo(searchInfo)
+                addAutofillComponent(autofillComponent)
+            }
+            val intent = Intent(context, AutofillPickerActivity::class.java).apply {
+                putExtra(KEY_PENDING_INTENT_BUNDLE, tempBundle)
+            }
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
+            } else {
+                PendingIntent.FLAG_CANCEL_CURRENT
+            }
+            PendingIntent.getActivity(context, (System.currentTimeMillis() and 0xFFFF).toInt(), intent, flags)
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "Unable to create pending intent for selection", e)
+            null
+        }
+    }
+
+    fun buildDatasetForEntry(
+        context: Context,
+        entry: AutofillEntryInfo,
+        parseResult: StructureParser.Result
+    ): Dataset {
+        val title = if (entry.title.isNotEmpty() && entry.username.isNotEmpty()) {
+            "${entry.title} (${entry.username})"
+        } else if (entry.title.isNotEmpty()) {
+            entry.title
+        } else {
+            entry.username
+        }
+
+        val presentation = RemoteViews(context.packageName, R.layout.item_autofill_entry).apply {
+            setTextViewText(R.id.autofill_entry_text, title)
+        }
+
+        val builder = Dataset.Builder(presentation)
+        builder.setId(entry.id.toString())
+
+        parseResult.usernameId?.let { id ->
+            builder.setValue(id, AutofillValue.forText(entry.username))
+        }
+        parseResult.passwordId?.let { id ->
+            builder.setValue(id, AutofillValue.forText(entry.password))
+        }
+        parseResult.otpTokenId?.let { id ->
+            entry.otpToken?.let { token ->
+                builder.setValue(id, AutofillValue.forText(token))
+            }
+        }
+
+        return builder.build()
+    }
+
+    fun buildFillResponse(
+        context: Context,
+        entries: List<AutofillEntryInfo>,
+        parseResult: StructureParser.Result,
+        autofillComponent: AutofillComponent?
+    ): FillResponse? {
+        if (entries.isEmpty()) return null
+
+        val builder = FillResponse.Builder()
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            parseResult.webDomain?.let { domain ->
+                val header = RemoteViews(context.packageName, R.layout.item_autofill_web_domain).apply {
+                    setTextViewText(R.id.autofill_web_domain_text, domain)
+                }
+                builder.setHeader(header)
+            } ?: parseResult.applicationId?.let { appId ->
+                val header = RemoteViews(context.packageName, R.layout.item_autofill_app_id).apply {
+                    setTextViewText(R.id.autofill_app_id_text, appId)
+                }
+                builder.setHeader(header)
+            }
+        }
+
+        entries.forEach { entry ->
+            try {
+                builder.addDataset(buildDatasetForEntry(context, entry, parseResult))
+            } catch (e: Exception) {
+                Log.e(TAG, "Unable to add dataset for entry: ${entry.title}", e)
+            }
+        }
+
+        return try {
+            builder.build()
+        } catch (e: Exception) {
+            Log.e(TAG, "Unable to build fill response", e)
+            null
+        }
+    }
+
+    fun Activity.setAutofillResult(fillResponse: FillResponse?) {
+        val replyIntent = Intent().putExtra(
+            AutofillManager.EXTRA_AUTHENTICATION_RESULT,
+            fillResponse
+        )
+        setResult(Activity.RESULT_OK, replyIntent)
+    }
+
+    fun Activity.cancelAutofillResult() {
+        setResult(Activity.RESULT_CANCELED)
+    }
+}
+
+data class AutofillEntryInfo(
+    val id: Long,
+    val title: String,
+    val username: String = "",
+    val password: String = "",
+    val url: String = "",
+    val otpToken: String? = null
+)
+
+enum class SpecialMode {
+    DEFAULT,
+    SEARCH,
+    SELECTION,
+    REGISTRATION;
+}

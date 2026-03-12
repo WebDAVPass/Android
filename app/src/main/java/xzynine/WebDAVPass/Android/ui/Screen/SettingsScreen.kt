@@ -4,6 +4,7 @@ import android.app.Activity
 import android.content.ComponentName
 import android.content.Intent
 import android.provider.Settings
+import xzynine.WebDAVPass.Android.autofill.KeeAutofillService
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -37,7 +38,6 @@ import kotlinx.coroutines.delay
 import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
-import xzynine.WebDAVPass.Android.service.TwoFasAutofillService
 import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
@@ -294,7 +294,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     val requestIntent = Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
                         putExtra(
                             autofillServiceExtra,
-                            ComponentName(context, TwoFasAutofillService::class.java)
+                            ComponentName(context, KeeAutofillService::class.java)
                         )
                     }
                     val credentialsPickerIntent = Intent().apply {

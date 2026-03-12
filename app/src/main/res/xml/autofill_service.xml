@@ -1,3 +1,44 @@
 <?xml version="1.0" encoding="utf-8"?>
 <autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
-    android:description="@string/autofill_service_description" />
+    xmlns:tools="http://schemas.android.com/tools"
+    android:description="@string/autofill_service_description"
+    android:settingsActivity="xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen"
+    android:supportsInlineSuggestions="true"
+    tools:ignore="UnusedAttribute">
+    <compatibility-package
+        android:name="com.android.chrome"
+        android:maxLongVersionCode="711900039" />
+    <compatibility-package
+        android:name="com.chrome.beta"
+        android:maxLongVersionCode="711900039" />
+    <compatibility-package
+        android:name="com.google.android.apps.chrome"
+        android:maxLongVersionCode="10000000000" />
+    <compatibility-package
+        android:name="org.mozilla.firefox"
+        android:maxLongVersionCode="2015836711" />
+    <compatibility-package
+        android:name="org.mozilla.firefox_beta"
+        android:maxLongVersionCode="2015849447" />
+    <compatibility-package
+        android:name="com.brave.browser"
+        android:maxLongVersionCode="427912623" />
+    <compatibility-package
+        android:name="com.microsoft.emmx"
+        android:maxLongVersionCode="10000000000" />
+    <compatibility-package
+        android:name="com.opera.browser"
+        android:maxLongVersionCode="10000000000" />
+    <compatibility-package
+        android:name="com.vivaldi.browser"
+        android:maxLongVersionCode="10000000000" />
+    <compatibility-package
+        android:name="com.sec.android.app.sbrowser"
+        android:maxLongVersionCode="10000000000" />
+    <compatibility-package
+        android:name="com.kiwibrowser.browser"
+        android:maxLongVersionCode="10000000000" />
+    <compatibility-package
+        android:name="com.ecosia.android"
+        android:maxLongVersionCode="10000000000" />
+</autofill-service>
