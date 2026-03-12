@@ -1,5 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.ViewModel
 
+import android.os.Parcelable
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -8,12 +9,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.parcelize.Parcelize
+import kotlinx.serialization.Serializable
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 
-/**
- * 密码列表模式。
- */
-enum class PasswordListMode {
+@Parcelize
+@Serializable
+enum class PasswordListMode : Parcelable {
     ALL_PASSWORDS,
     RECENT_DELETED
 }

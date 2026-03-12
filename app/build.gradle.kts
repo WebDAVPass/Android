@@ -1,8 +1,9 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
-    // 添加Compose插件
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+    id("kotlin-parcelize")
     id("kotlin-kapt")
 }
 
@@ -164,7 +165,9 @@ dependencies {
     // 导航库依赖
     implementation(libs.androidx.navigation3.runtime)
     implementation(libs.miuix.navigation3.ui)
-    implementation(libs.jetbrains.androidx.navigationevent) // Miuix 弹窗组件需要的导航事件库
+    implementation(libs.androidx.navigationevent.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
+    implementation(libs.dev.rikka.parcelablelist)
     
     // Coroutines 相关依赖
     implementation(libs.kotlinx.coroutines.core)

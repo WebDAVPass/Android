@@ -6,7 +6,14 @@ import android.os.Bundle
 import android.util.Log
 import android.view.autofill.AutofillManager
 import androidx.appcompat.app.AppCompatActivity
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import xzynine.WebDAVPass.Android.R
+import xzynine.WebDAVPass.Android.data.PasswordEntry
+import xzynine.WebDAVPass.Android.data.RemainingValueType
+import xzynine.WebDAVPass.Android.model.SearchInfo
+import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 
 class AutofillPickerActivity : AppCompatActivity() {
     
@@ -26,6 +33,7 @@ class AutofillPickerActivity : AppCompatActivity() {
             return
         }
 
+        val searchInfo = AutofillHelper.getSearchInfoFromBundle(bundle)
         val autofillComponent = AutofillHelper.getAutofillComponentFromBundle(bundle)
         if (autofillComponent == null) {
             Log.w(TAG, "No autofill component provided")
@@ -42,23 +50,112 @@ class AutofillPickerActivity : AppCompatActivity() {
             return
         }
 
-        val response = AutofillHelper.buildFillResponse(
-            context = this,
-            entries = emptyList(),
-            parseResult = parseResult,
-            autofillComponent = autofillComponent
-        )
-        
-        if (response != null) {
-            val replyIntent = Intent().putExtra(
-                AutofillManager.EXTRA_AUTHENTICATION_RESULT,
-                response
-            )
-            setResult(Activity.RESULT_OK, replyIntent)
-        } else {
-            setResult(Activity.RESULT_CANCELED)
+        loadEntriesAndRespond(searchInfo, parseResult, autofillComponent)
+    }
+
+    private fun loadEntriesAndRespond(
+        searchInfo: SearchInfo?,
+        parseResult: StructureParser.Result,
+        autofillComponent: AutofillComponent
+    ) {
+        lifecycleScope.launch {
+            try {
+                val tokenViewModel = TokenViewModel.getSharedInstance(applicationContext)
+                val passwordViewModel = tokenViewModel.passwordViewModel
+                
+                val entries = passwordViewModel.passwordEntries.first()
+                Log.d(TAG, "Loaded ${entries.size} entries from database")
+                
+                val autofillEntries = convertToAutofillEntries(entries, searchInfo)
+                Log.d(TAG, "Converted to ${autofillEntries.size} autofill entries")
+                
+                if (autofillEntries.isEmpty()) {
+                    Log.w(TAG, "No matching entries found")
+                    cancelAndFinish()
+                    return@launch
+                }
+                
+                val response = AutofillHelper.buildFillResponse(
+                    context = this@AutofillPickerActivity,
+                    entries = autofillEntries,
+                    parseResult = parseResult,
+                    autofillComponent = autofillComponent
+                )
+                
+                if (response != null) {
+                    Log.d(TAG, "Successfully built fill response with ${autofillEntries.size} entries")
+                    val replyIntent = Intent().putExtra(
+                        AutofillManager.EXTRA_AUTHENTICATION_RESULT,
+                        response
+                    )
+                    setResult(Activity.RESULT_OK, replyIntent)
+                } else {
+                    Log.w(TAG, "Failed to build fill response")
+                    setResult(Activity.RESULT_CANCELED)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error loading entries", e)
+                setResult(Activity.RESULT_CANCELED)
+            }
+            finish()
         }
-        finish()
+    }
+
+    private fun convertToAutofillEntries(
+        entries: List<PasswordEntry>,
+        searchInfo: SearchInfo?
+    ): List<AutofillEntryInfo> {
+        val autofillEntries = entries.mapNotNull { entry ->
+            if (entry.isFolderGroup) return@mapNotNull null
+            
+            val username = entry.keyValues.find { 
+                it.valueType == RemainingValueType.TEXT && 
+                (it.fieldName.equals("username", ignoreCase = true) || 
+                 it.fieldName.equals("user", ignoreCase = true) ||
+                 it.fieldName.equals("email", ignoreCase = true))
+            }?.rawValue ?: ""
+            
+            val password = entry.keyValues.find { 
+                it.valueType == RemainingValueType.PASSWORD 
+            }?.rawValue ?: ""
+            
+            val url = entry.keyValues.find { 
+                it.valueType == RemainingValueType.URL 
+            }?.rawValue ?: ""
+            
+            val otpToken = entry.keyValues.find { 
+                it.valueType == RemainingValueType.OTP 
+            }?.rawValue
+
+            AutofillEntryInfo(
+                id = entry.entryId,
+                title = entry.title,
+                username = username,
+                password = password,
+                url = url,
+                otpToken = otpToken
+            )
+        }
+
+        if (searchInfo == null || searchInfo.containsOnlyNullValues()) {
+            return autofillEntries
+        }
+
+        val domain = searchInfo.webDomain
+        val appId = searchInfo.applicationId
+
+        return autofillEntries.filter { entry ->
+            if (!domain.isNullOrEmpty()) {
+                entry.url.contains(domain, ignoreCase = true) ||
+                entry.title.contains(domain, ignoreCase = true) ||
+                entry.username.contains(domain, ignoreCase = true)
+            } else if (!appId.isNullOrEmpty()) {
+                entry.title.contains(appId, ignoreCase = true) ||
+                entry.url.contains(appId, ignoreCase = true)
+            } else {
+                true
+            }
+        }
     }
 
     private fun cancelAndFinish() {

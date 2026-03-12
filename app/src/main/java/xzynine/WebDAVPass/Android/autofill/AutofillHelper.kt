@@ -27,26 +27,9 @@ object AutofillHelper {
     private const val KEY_BASE_STRUCTURE = "xzynine.WebDAVPass.Android.autofill.BASE_STRUCTURE"
     private const val KEY_INLINE_SUGGESTIONS_REQUEST = "xzynine.WebDAVPass.Android.autofill.INLINE_SUGGESTIONS_REQUEST"
 
-    fun Intent.retrieveSelectionBundle(): Bundle? {
-        return this.getBundleExtra(KEY_PENDING_INTENT_BUNDLE)
-    }
-
-    fun Bundle.getSpecialMode(): SpecialMode {
-        val modeName = this.getString(KEY_SPECIAL_MODE)
-        return try {
-            if (modeName != null) SpecialMode.valueOf(modeName) else SpecialMode.DEFAULT
-        } catch (e: Exception) {
-            SpecialMode.DEFAULT
-        }
-    }
-
-    fun Bundle.getSearchInfo(): SearchInfo? {
+    fun getSearchInfoFromBundle(bundle: Bundle): SearchInfo? {
         @Suppress("DEPRECATION")
-        return this.getParcelable(KEY_SEARCH_INFO)
-    }
-
-    fun Bundle.getAutofillComponent(): AutofillComponent? {
-        return getAutofillComponentFromBundle(this)
+        return bundle.getParcelable(KEY_SEARCH_INFO)
     }
 
     fun getAutofillComponentFromBundle(bundle: Bundle): AutofillComponent? {
@@ -68,30 +51,6 @@ object AutofillHelper {
         return null
     }
 
-    fun Bundle.addSpecialMode(specialMode: SpecialMode): Bundle {
-        this.putString(KEY_SPECIAL_MODE, specialMode.name)
-        return this
-    }
-
-    fun Bundle.addSearchInfo(searchInfo: SearchInfo?): Bundle {
-        searchInfo?.let {
-            this.putParcelable(KEY_SEARCH_INFO, it)
-        }
-        return this
-    }
-
-    fun Bundle.addAutofillComponent(autofillComponent: AutofillComponent?): Bundle {
-        autofillComponent?.let {
-            this.putParcelable(KEY_BASE_STRUCTURE, it.assistStructure)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                it.compatInlineSuggestionsRequest?.inlineSuggestionsRequest?.let { request ->
-                    this.putParcelable(KEY_INLINE_SUGGESTIONS_REQUEST, request)
-                }
-            }
-        }
-        return this
-    }
-
     fun getPendingIntentForSelection(
         context: Context,
         searchInfo: SearchInfo?,
@@ -99,9 +58,16 @@ object AutofillHelper {
     ): PendingIntent? {
         return try {
             val tempBundle = Bundle().apply {
-                addSpecialMode(SpecialMode.SELECTION)
-                addSearchInfo(searchInfo)
-                addAutofillComponent(autofillComponent)
+                putString(KEY_SPECIAL_MODE, SpecialMode.SELECTION.name)
+                searchInfo?.let {
+                    putParcelable(KEY_SEARCH_INFO, it)
+                }
+                putParcelable(KEY_BASE_STRUCTURE, autofillComponent.assistStructure)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    autofillComponent.compatInlineSuggestionsRequest?.inlineSuggestionsRequest?.let { request ->
+                        putParcelable(KEY_INLINE_SUGGESTIONS_REQUEST, request)
+                    }
+                }
             }
             val intent = Intent(context, AutofillPickerActivity::class.java).apply {
                 putExtra(KEY_PENDING_INTENT_BUNDLE, tempBundle)
@@ -191,18 +157,6 @@ object AutofillHelper {
             Log.e(TAG, "Unable to build fill response", e)
             null
         }
-    }
-
-    fun Activity.setAutofillResult(fillResponse: FillResponse?) {
-        val replyIntent = Intent().putExtra(
-            AutofillManager.EXTRA_AUTHENTICATION_RESULT,
-            fillResponse
-        )
-        setResult(Activity.RESULT_OK, replyIntent)
-    }
-
-    fun Activity.cancelAutofillResult() {
-        setResult(Activity.RESULT_CANCELED)
     }
 }
 

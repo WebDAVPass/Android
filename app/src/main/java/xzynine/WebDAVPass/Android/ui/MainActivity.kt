@@ -4,12 +4,12 @@ import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -32,7 +32,12 @@ import top.yukonga.miuix.kmp.extra.SuperBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
+import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
+import xzynine.WebDAVPass.Android.ui.navigation.Navigator
+import xzynine.WebDAVPass.Android.ui.navigation.Route
+import xzynine.WebDAVPass.Android.ui.navigation.rememberNavigator
 import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
@@ -46,21 +51,9 @@ import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
-import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberDecoratedNavEntries
+import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
-import androidx.compose.runtime.mutableStateListOf
-import top.yukonga.miuix.kmp.icon.extended.Back
-
-sealed interface AppScreen : NavKey {
-    data object Home : AppScreen
-    data object Settings : AppScreen
-    data object Welcome : AppScreen
-    data object TokenList : AppScreen
-    data class PasswordList(val listMode: PasswordListMode) : AppScreen
-    data class PasswordEntryDetail(val entryId: Long) : AppScreen
-}
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -77,279 +70,254 @@ class MainActivity : FragmentActivity() {
 @Composable
 fun MainScreen() {
     val context = LocalContext.current
-    // 在顶层创建并共享一个 TokenViewModel，传递给各子界面。
-    // 这里不交给 viewModel() 管理，避免多 Activity 共享同一实例时被任一 ViewModelStore 提前 clear。
     val tokenViewModel: TokenViewModel = remember(context.applicationContext) {
         TokenViewModel.getSharedInstance(context.applicationContext)
     }
 
-    // 控制当前库云端绑定弹窗的显示与隐藏
     val showCloudBindingDialog = remember { mutableStateOf(false) }
-
-    // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
     var showWelcome by rememberSaveable { mutableStateOf(true) }
     val currentLibrary by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-    // 控制扫描界面的显示与隐藏
     val showScanBottomSheet = remember { mutableStateOf(false) }
 
-    // Navigation3 导航栈
-    val backStack = remember {
-        if (showWelcome) {
-            mutableStateListOf<NavKey>(AppScreen.Welcome)
-        } else {
-            mutableStateListOf<NavKey>(AppScreen.Home)
-        }
+    val startRoute = remember(showWelcome) {
+        if (showWelcome) Route.Welcome else Route.Home
     }
+    val navigator = rememberNavigator(startRoute)
 
-    // 导航条目提供者
-    val entryProvider = remember(backStack) {
-        entryProvider<NavKey> {
-            entry(AppScreen.Welcome) {
-                WelcomeScreen(
-                    tokenViewModel = tokenViewModel,
-                    onEnterLibrary = {
-                        backStack.clear()
-                        backStack.add(AppScreen.Home)
-                        showWelcome = false
-                    },
-                    onBackPressed = {
-                        if (backStack.size > 1) {
-                            backStack.removeAt(backStack.lastIndex)
-                            true
-                        } else {
-                            false
-                        }
-                    }
-                )
-            }
-            entry(AppScreen.Home) {
-                // 基于Miuix Scaffold的主界面
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Scaffold(
-                        popupHost = {},
-                        topBar = {
-                            TopAppBar(
-                                title = currentLibrary?.displayName ?: "WebDAVPass",
-                                navigationIcon = {},
-                                actions = {
-                                    // 设置按钮
-                                    IconButton(onClick = {
-                                        backStack.add(AppScreen.Settings)
-                                    }) {
-                                        Icon(
-                                            imageVector = MiuixIcons.Settings,
-                                            contentDescription = "设置"
-                                        )
-                                    }
-                                }
-                            )
-                        },
-                        floatingActionButton = {
-                            FloatingActionButton(
-                                onClick = {
-                                    showScanBottomSheet.value = true
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Scan,
-                                    contentDescription = "扫描二维码"
-                                )
-                            }
-                        },
-                        floatingActionButtonPosition = FabPosition.Companion.End,
-                        content = { paddingValues ->
-                            Box(
-                                modifier = Modifier.Companion
-                                    .fillMaxSize()
-                                    .padding(paddingValues)
-                            ) {
-                                HomeScreen(
-                                    tokenViewModel = tokenViewModel,
-                                    onNavigateToPasswordList = { listMode ->
-                                        backStack.add(AppScreen.PasswordList(listMode))
-                                    },
-                                    onNavigateToTokenList = {
-                                        backStack.add(AppScreen.TokenList)
-                                    }
-                                )
-                            }
-                        }
-                    )
-                    // 在 Scaffold 外部放置 MiuixPopupHost
-                    MiuixPopupHost()
+    CompositionLocalProvider(LocalNavigator provides navigator) {
+        NavDisplay(
+            backStack = navigator.backStack,
+            entryDecorators = listOf(
+                rememberSaveableStateHolderNavEntryDecorator()
+            ),
+            onBack = {
+                if (showCloudBindingDialog.value) {
+                    showCloudBindingDialog.value = false
+                    return@NavDisplay
                 }
-            }
-            entry(AppScreen.Settings) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    SettingsScreen(
-                        viewModel = tokenViewModel,
-                        onCloudBindingClick = {
-                            if (currentLibrary == null) {
-                                ToastUtils.showShortToast(context, "请先选择数据库文件")
+                if (showScanBottomSheet.value) {
+                    showScanBottomSheet.value = false
+                    return@NavDisplay
+                }
+                if (navigator.backStackSize() > 1) {
+                    navigator.pop()
+                }
+            },
+            entryProvider = entryProvider {
+                entry<Route.Welcome> {
+                    WelcomeScreen(
+                        tokenViewModel = tokenViewModel,
+                        onEnterLibrary = {
+                            navigator.replaceAll(listOf(Route.Home))
+                            showWelcome = false
+                        },
+                        onBackPressed = {
+                            if (navigator.backStackSize() > 1) {
+                                navigator.pop()
+                                true
                             } else {
-                                showCloudBindingDialog.value = true
+                                false
                             }
-                        },
-                        onSwitchLibraryClick = {
-                            tokenViewModel.libraryViewModel.clearCurrentLibrarySelection()
-                            backStack.clear()
-                            backStack.add(AppScreen.Welcome)
-                            showWelcome = true
-                        },
-                        onNavigateBack = {
-                            backStack.removeAt(backStack.lastIndex)
                         }
                     )
-                    MiuixPopupHost()
                 }
-            }
-            entry(AppScreen.TokenList) {
-                val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
-
-                LaunchedEffect(isLibraryUnlocked, lib) {
-                    if (!isLibraryUnlocked || lib == null) {
-                        backStack.clear()
-                        backStack.add(AppScreen.Welcome)
-                        showWelcome = true
-                    }
-                }
-
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Scaffold(
-                        popupHost = {},
-                        topBar = {
-                            TopAppBar(
-                                title = "令牌列表",
-                                navigationIcon = {
-                                    IconButton(onClick = {
-                                        backStack.removeAt(backStack.lastIndex)
-                                    }) {
-                                        Icon(
-                                            imageVector = MiuixIcons.Back,
-                                            contentDescription = "返回"
-                                        )
-                                    }
-                                },
-                                actions = {}
-                            )
-                        },
-                        content = { paddingValues ->
-                            Box(
-                                modifier = Modifier.Companion
-                                    .fillMaxSize()
-                                    .padding(paddingValues)
-                            ) {
-                                TokenListScreen(
-                                    tokenViewModel = tokenViewModel,
-                                    onEntryClick = { entryId ->
-                                        backStack.add(AppScreen.PasswordEntryDetail(entryId))
+                entry<Route.Home> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Scaffold(
+                            popupHost = {},
+                            topBar = {
+                                TopAppBar(
+                                    title = currentLibrary?.displayName ?: "WebDAVPass",
+                                    navigationIcon = {},
+                                    actions = {
+                                        IconButton(onClick = {
+                                            navigator.push(Route.Settings)
+                                        }) {
+                                            Icon(
+                                                imageVector = MiuixIcons.Settings,
+                                                contentDescription = "设置"
+                                            )
+                                        }
                                     }
                                 )
+                            },
+                            floatingActionButton = {
+                                FloatingActionButton(
+                                    onClick = {
+                                        showScanBottomSheet.value = true
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Scan,
+                                        contentDescription = "扫描二维码"
+                                    )
+                                }
+                            },
+                            floatingActionButtonPosition = FabPosition.Companion.End,
+                            content = { paddingValues ->
+                                Box(
+                                    modifier = Modifier.Companion
+                                        .fillMaxSize()
+                                        .padding(paddingValues)
+                                ) {
+                                    HomeScreen(
+                                        tokenViewModel = tokenViewModel,
+                                        onNavigateToPasswordList = { listMode ->
+                                            navigator.push(Route.PasswordList(listMode))
+                                        },
+                                        onNavigateToTokenList = {
+                                            navigator.push(Route.TokenList)
+                                        }
+                                    )
+                                }
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.Settings> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        SettingsScreen(
+                            viewModel = tokenViewModel,
+                            onCloudBindingClick = {
+                                if (currentLibrary == null) {
+                                    ToastUtils.showShortToast(context, "请先选择数据库文件")
+                                } else {
+                                    showCloudBindingDialog.value = true
+                                }
+                            },
+                            onSwitchLibraryClick = {
+                                tokenViewModel.libraryViewModel.clearCurrentLibrarySelection()
+                                navigator.replaceAll(listOf(Route.Welcome))
+                                showWelcome = true
+                            },
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.TokenList> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Scaffold(
+                            popupHost = {},
+                            topBar = {
+                                TopAppBar(
+                                    title = "令牌列表",
+                                    navigationIcon = {
+                                        IconButton(onClick = {
+                                            navigator.pop()
+                                        }) {
+                                            Icon(
+                                                imageVector = MiuixIcons.Back,
+                                                contentDescription = "返回"
+                                            )
+                                        }
+                                    },
+                                    actions = {}
+                                )
+                            },
+                            content = { paddingValues ->
+                                Box(
+                                    modifier = Modifier.Companion
+                                        .fillMaxSize()
+                                        .padding(paddingValues)
+                                ) {
+                                    TokenListScreen(
+                                        tokenViewModel = tokenViewModel,
+                                        onEntryClick = { entryId ->
+                                            navigator.push(Route.PasswordEntryDetail(entryId))
+                                        }
+                                    )
+                                }
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.PasswordList> { key ->
+                    val listMode = key.listMode
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+
+                    LaunchedEffect(listMode) {
+                        tokenViewModel.passwordViewModel.setPasswordListMode(listMode, refreshNow = true)
+                        tokenViewModel.passwordViewModel.refreshRecentDeletedCount()
+                    }
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    }
+
+                    DisposableEffect(listMode) {
+                        onDispose {
+                            tokenViewModel.passwordViewModel.resetPasswordGroupStackOnly()
+                            if (listMode == PasswordListMode.RECENT_DELETED) {
+                                tokenViewModel.passwordViewModel.setPasswordListMode(PasswordListMode.ALL_PASSWORDS, refreshNow = true)
                             }
                         }
-                    )
-                    MiuixPopupHost()
-                }
-            }
-            entry<AppScreen.PasswordList> { key ->
-                val listMode = key.listMode
-                val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    }
 
-                LaunchedEffect(listMode) {
-                    tokenViewModel.passwordViewModel.setPasswordListMode(listMode, refreshNow = true)
-                    tokenViewModel.passwordViewModel.refreshRecentDeletedCount()
-                }
-
-                LaunchedEffect(isLibraryUnlocked, lib) {
-                    if (!isLibraryUnlocked || lib == null) {
-                        backStack.clear()
-                        backStack.add(AppScreen.Welcome)
-                        showWelcome = true
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        PasswordListScreen(
+                            tokenViewModel = tokenViewModel,
+                            title = if (listMode == PasswordListMode.RECENT_DELETED) "最近删除" else "全部密码",
+                            emptyStateText = if (listMode == PasswordListMode.RECENT_DELETED) "暂无最近删除条目" else "暂无条目",
+                            emptySearchStateText = "无匹配条目",
+                            enableGroupNavigation = listMode == PasswordListMode.ALL_PASSWORDS,
+                            onEntryClick = { entryId ->
+                                navigator.push(Route.PasswordEntryDetail(entryId))
+                            },
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
                     }
                 }
+                entry<Route.PasswordEntryDetail> { key ->
+                    val entryId = key.entryId
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
 
-                DisposableEffect(listMode) {
-                    onDispose {
-                        tokenViewModel.passwordViewModel.resetPasswordGroupStackOnly()
-                        if (listMode == PasswordListMode.RECENT_DELETED) {
-                            tokenViewModel.passwordViewModel.setPasswordListMode(PasswordListMode.ALL_PASSWORDS, refreshNow = true)
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
                         }
                     }
-                }
 
-                Box(modifier = Modifier.fillMaxSize()) {
-                    PasswordListScreen(
-                        tokenViewModel = tokenViewModel,
-                        title = if (listMode == PasswordListMode.RECENT_DELETED) "最近删除" else "全部密码",
-                        emptyStateText = if (listMode == PasswordListMode.RECENT_DELETED) "暂无最近删除条目" else "暂无条目",
-                        emptySearchStateText = "无匹配条目",
-                        enableGroupNavigation = listMode == PasswordListMode.ALL_PASSWORDS,
-                        onEntryClick = { entryId ->
-                            backStack.add(AppScreen.PasswordEntryDetail(entryId))
-                        },
-                        onNavigateBack = {
-                            backStack.removeAt(backStack.lastIndex)
-                        }
-                    )
-                    MiuixPopupHost()
-                }
-            }
-            entry<AppScreen.PasswordEntryDetail> { key ->
-                val entryId = key.entryId
-                val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
-
-                LaunchedEffect(isLibraryUnlocked, lib) {
-                    if (!isLibraryUnlocked || lib == null) {
-                        backStack.clear()
-                        backStack.add(AppScreen.Welcome)
-                        showWelcome = true
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        PasswordEntryDetailScreen(
+                            tokenViewModel = tokenViewModel,
+                            entryId = entryId,
+                            onNavigateBack = {
+                                navigator.pop()
+                            },
+                            onDeleted = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
                     }
                 }
-
-                Box(modifier = Modifier.fillMaxSize()) {
-                    PasswordEntryDetailScreen(
-                        tokenViewModel = tokenViewModel,
-                        entryId = entryId,
-                        onNavigateBack = {
-                            backStack.removeAt(backStack.lastIndex)
-                        },
-                        onDeleted = {
-                            backStack.removeAt(backStack.lastIndex)
-                        }
-                    )
-                    MiuixPopupHost()
-                }
             }
-        }
+        )
     }
-
-    // 装饰导航条目
-    val entries = rememberDecoratedNavEntries(
-        backStack = backStack,
-        entryProvider = entryProvider
-    )
-
-    // 渲染导航场景
-    NavDisplay(
-        entries = entries,
-        onBack = {
-            if (showCloudBindingDialog.value) {
-                showCloudBindingDialog.value = false
-                return@NavDisplay
-            }
-            if (showScanBottomSheet.value) {
-                showScanBottomSheet.value = false
-                return@NavDisplay
-            }
-            if (backStack.size > 1) {
-                backStack.removeAt(backStack.lastIndex)
-            }
-        }
-    )
 
     if (showCloudBindingDialog.value) {
         CloudLibraryDialog(
@@ -372,7 +340,6 @@ fun MainScreen() {
     }
 
     if (!showWelcome) {
-        // 扫描二维码底部抽屉
         SuperBottomSheet(
             show = showScanBottomSheet,
             title = "扫描二维码",
@@ -380,16 +347,14 @@ fun MainScreen() {
                 showScanBottomSheet.value = false
             },
             content = {
-                // 扫描界面内容
                 Box(
                     modifier = Modifier.Companion
                         .fillMaxWidth()
-                        .height(500.dp) // 设置固定高度，避免全屏显示
+                        .height(500.dp)
                 ) {
                     ScanTokenScreen(
                         tokenViewModel = tokenViewModel,
                         onTokenScanned = {
-                            // 关闭抽屉，令牌列表将通过同一个 ViewModel 自动刷新
                             showScanBottomSheet.value = false
                         },
                         onDismiss = {
