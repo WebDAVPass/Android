@@ -1,0 +1,3 @@
+[submodule "checkupdates"]
+	path = checkupdates
+	url = git@github.com:xzy-nine-common/checkupdata-android.git
