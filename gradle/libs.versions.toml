@@ -1,5 +1,5 @@
 [versions]
-agp = "8.13.1"
+agp = "9.1.0"
 kotlin = "2.2.21"
 coreKtx = "1.10.1"
 junit = "4.13.2"
@@ -90,10 +90,14 @@ kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-cor
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
 kotlinx-coroutines-compose = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-compose", version.ref = "kotlinxCoroutinesCompose" }
 
+[bundles]
+kotlinx-coroutines = ["kotlinx-coroutines-core", "kotlinx-coroutines-android"]
+
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
+ksp = { id = "com.google.devtools.ksp", version = "2.3.7" }
 
