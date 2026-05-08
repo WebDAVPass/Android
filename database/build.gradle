@@ -1,5 +1,7 @@
-apply plugin: 'com.android.library'
-apply plugin: 'kotlin-parcelize'
+plugins {
+    id 'com.android.library'
+    id 'org.jetbrains.kotlin.plugin.parcelize'
+}
 
 android {
     namespace 'com.kunzisoft.keepass.database'

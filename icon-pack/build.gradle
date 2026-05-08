@@ -16,6 +16,6 @@ android {
 }
 
 dependencies {
-    implementation project(path: ':icon-pack:classic')
-    implementation project(path: ':icon-pack:material')
+    api project(path: ':icon-pack:classic')
+    api project(path: ':icon-pack:material')
 }
