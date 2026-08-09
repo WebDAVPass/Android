@@ -42,7 +42,6 @@ import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
-import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -54,13 +53,12 @@ import top.yukonga.miuix.kmp.preference.SwitchPreference
 import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
-import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
-import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Settings
-import top.yukonga.miuix.kmp.icon.extended.UploadCloud
+import github.xzynine.webdav.ui.WebDavSyncStatusSection
+import github.xzynine.webdav.ui.WebDavSyncUiState
 
 /**
  * 设置界面组件
@@ -597,92 +595,20 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                 modifier = Modifier.padding(8.dp)
             )
 
-            // 备份状态显示（包含当前库云端摘要）
-            val combinedBackupSummary = run {
-                val statusText = backupStatus.value
-                if (statusText.isBlank()) cloudBindingSummary else if (cloudBindingSummary.isBlank()) statusText else "$statusText | $cloudBindingSummary"
-            }
-            ArrowPreference(
-                title = "备份状态",
-                summary = combinedBackupSummary,
-                startAction = {
-                    Icon(
-                        modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.Backup,
-                        contentDescription = "备份状态",
-                    )
-                },
-                onClick = onCloudBindingClick,
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.Companion.height(8.dp))
-
-            // 备份按钮
-            ArrowPreference(
-                title = if (isBackupInProgress.value) "备份中..." else if (isCurrentLibraryCloudBound) "备份令牌" else "绑定后可备份",
-                summary = if (isBackupInProgress.value) {
-                    "正在备份到WebDAV服务器... ${backupProgress.value}%"
-                } else if (isCurrentLibraryCloudBound) {
-                    "点击开始备份"
-                } else {
-                    "当前库未绑定云端 .kdbx"
-                },
-                startAction = {
-                    if (isBackupInProgress.value) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(end = 16.dp)
-                        )
-                    } else {
-                        Icon(
-                            modifier = Modifier.padding(end = 16.dp),
-                            imageVector = MiuixIcons.UploadCloud,
-                            contentDescription = "备份令牌",
-                        )
-                    }
-                },
-                onClick = {
-                    if (!isBackupInProgress.value && isCurrentLibraryCloudBound) {
-                        viewModel.backupTokens(force = true)
-                    }
-                },
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // 手动恢复按钮
-            ArrowPreference(
-                title = if (isRestoreInProgress.value) "恢复中..." else if (isCurrentLibraryCloudBound) "手动恢复" else "绑定后可恢复",
-                summary = if (isRestoreInProgress.value) {
-                    "正在从WebDAV服务器恢复... ${restoreProgress.value}%"
-                } else if (isCurrentLibraryCloudBound) {
-                    "点击开始手动恢复"
-                } else {
-                    "当前库未绑定云端 .kdbx"
-                },
-                startAction = {
-                    if (isRestoreInProgress.value) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(end = 16.dp)
-                        )
-                    } else {
-                        Icon(
-                            modifier = Modifier.padding(end = 16.dp),
-                            imageVector = MiuixIcons.Download,
-                            contentDescription = "手动恢复",
-                        )
-                    }
-                },
-                onClick = {
-                    if (!isRestoreInProgress.value && isCurrentLibraryCloudBound) {
-                        viewModel.manualRestoreTokens()
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
+            // 子模块提供的同步状态区块（含备份状态、备份与手动恢复条目）
+            WebDavSyncStatusSection(
+                state = WebDavSyncUiState(
+                    isBackupInProgress = isBackupInProgress.value,
+                    isRestoreInProgress = isRestoreInProgress.value,
+                    backupStatus = backupStatus.value,
+                    backupProgress = backupProgress.value,
+                    restoreProgress = restoreProgress.value,
+                    isCloudBound = isCurrentLibraryCloudBound,
+                    cloudBindingSummary = cloudBindingSummary
+                ),
+                onCloudBindingClick = onCloudBindingClick,
+                onBackupClick = { viewModel.backupTokens(force = true) },
+                onRestoreClick = { viewModel.manualRestoreTokens() }
             )
 
             Spacer(modifier = Modifier.height(8.dp))

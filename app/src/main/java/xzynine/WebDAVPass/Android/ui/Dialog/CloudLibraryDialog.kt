@@ -4,7 +4,6 @@ import xzylib.base.util.Logger
 import xzylib.base.util.ToastUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -31,13 +30,13 @@ import java.net.URLEncoder
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import github.xzynine.webdav.Authorization
 import github.xzynine.webdav.WebDav
+import github.xzynine.webdav.ui.WebDavBrowseMode
+import github.xzynine.webdav.ui.WebDavFileBrowserDialog
 
 /**
  * 云端库操作模式
@@ -83,15 +82,15 @@ fun CloudLibraryDialog(
     val isImportMode = mode == CloudMode.IMPORT
     val isCreateMode = mode == CloudMode.CREATE
     val isBindMode = mode == CloudMode.BIND
-        val isCloudBound = initialLibraryContext?.sourceType == xzynine.WebDAVPass.Android.data.LibrarySourceType.CLOUD
-            && !initialLibraryContext.remoteBaseUrl.isNullOrBlank()
-            && !initialLibraryContext.remoteFilePath.isNullOrBlank()
-            && !initialLibraryContext.username.isNullOrBlank()
-            && !initialLibraryContext.password.isNullOrBlank()
-        val isCloudBindingStable = initialLibraryContext?.lastSyncStatus == "success"
-            || initialLibraryContext?.lastSyncStatus == "merged"
-            || (initialLibraryContext?.lastSyncAt ?: 0L) > 0L
-        val isBindReadOnly = isBindMode && isCloudBound && isCloudBindingStable
+    val isCloudBound = initialLibraryContext?.sourceType == xzynine.WebDAVPass.Android.data.LibrarySourceType.CLOUD
+        && !initialLibraryContext.remoteBaseUrl.isNullOrBlank()
+        && !initialLibraryContext.remoteFilePath.isNullOrBlank()
+        && !initialLibraryContext.username.isNullOrBlank()
+        && !initialLibraryContext.password.isNullOrBlank()
+    val isCloudBindingStable = initialLibraryContext?.lastSyncStatus == "success"
+        || initialLibraryContext?.lastSyncStatus == "merged"
+        || (initialLibraryContext?.lastSyncAt ?: 0L) > 0L
+    val isBindReadOnly = isBindMode && isCloudBound && isCloudBindingStable
 
     val initialServerUrl = initialLibraryContext?.remoteBaseUrl
         ?.takeIf { it.isNotBlank() }
@@ -119,15 +118,6 @@ fun CloudLibraryDialog(
             }
         )
     }
-    var currentDirectory by remember(mode, initialLibraryContext) {
-        mutableStateOf(
-            if (isBindMode) {
-                initialRemoteRelativePath.substringBeforeLast('/', "")
-            } else {
-                ""
-            }
-        )
-    }
     var status by remember(mode, initialLibraryContext) {
         mutableStateOf(
             if (isBindMode && !initialLibraryContext?.remoteFilePath.isNullOrBlank()) {
@@ -137,25 +127,14 @@ fun CloudLibraryDialog(
             }
         )
     }
-    var directoryListing by remember { mutableStateOf<List<String>>(emptyList()) }
-    var listing by remember { mutableStateOf<List<String>>(emptyList()) }
-    var isConnectedForBrowse by remember(mode) { mutableStateOf(mode == CloudMode.CREATE) }
     var createPassword by remember(mode) { mutableStateOf(createMasterPassword) }
     var createPasswordConfirm by remember(mode) { mutableStateOf(createMasterPassword) }
     var accountPasswordVisible by remember(mode) { mutableStateOf(false) }
     var masterPasswordVisible by remember(mode) { mutableStateOf(false) }
+    var showBrowser by remember(mode) { mutableStateOf(false) }
 
     fun normalizeServerRootUrl(raw: String): String {
         return if (raw.endsWith('/')) raw else "$raw/"
-    }
-
-    suspend fun listKdbxFiles(baseUrl: String, user: String, pass: String): List<String> {
-        return withContext(Dispatchers.IO) {
-            val webDav = WebDav(baseUrl, Authorization(user, pass))
-            webDav.listFiles()
-                .filter { !it.isDir && it.displayName.endsWith(".kdbx", ignoreCase = true) }
-                .map { it.displayName }
-        }
     }
 
     fun normalizeRelativePath(path: String): String {
@@ -169,58 +148,6 @@ fun CloudLibraryDialog(
             .joinToString("/") {
                 URLEncoder.encode(it, Charsets.UTF_8.name()).replace("+", "%20")
             }
-    }
-
-    fun effectiveDirectory(): String {
-        val current = normalizeRelativePath(currentDirectory)
-        if (current.isNotBlank()) return current
-        return normalizeRelativePath(folder)
-    }
-
-    fun buildDirectoryUrl(baseUrl: String, relativeDirectory: String): String {
-        val rel = encodeRelativePath(relativeDirectory)
-        return if (rel.isBlank()) baseUrl else "$baseUrl$rel/"
-    }
-
-    suspend fun listCurrentDirectory(baseUrl: String, user: String, pass: String, relativeDirectory: String): Pair<List<String>, List<String>> {
-        return withContext(Dispatchers.IO) {
-            val auth = Authorization(user, pass)
-            val dirUrl = buildDirectoryUrl(baseUrl, relativeDirectory)
-            Logger.d(SEARCH_LOG_TAG, "listCurrentDirectory start, baseUrl=$baseUrl, relativeDirectory=$relativeDirectory, dirUrl=$dirUrl")
-            val entries = WebDav(dirUrl, auth).listFiles()
-            Logger.d(SEARCH_LOG_TAG, "listCurrentDirectory entries=${entries.size}, dirUrl=$dirUrl")
-
-            val dirPrefix = normalizeRelativePath(relativeDirectory)
-            val dirs = entries
-                .filter { it.isDir }
-                .map {
-                    val segment = it.urlName.trim('/').substringAfterLast('/').ifBlank {
-                        it.displayName.trim('/').substringAfterLast('/')
-                    }
-                    normalizeRelativePath(
-                        if (dirPrefix.isBlank()) segment else "$dirPrefix/$segment"
-                    )
-                }
-                .distinct()
-                .sorted()
-
-            val files = entries
-                .filter { !it.isDir && it.displayName.endsWith(".kdbx", ignoreCase = true) }
-                .map {
-                    val segment = it.urlName.trim('/').substringAfterLast('/').ifBlank {
-                        it.displayName.trim('/').substringAfterLast('/')
-                    }
-                    normalizeRelativePath(
-                        if (dirPrefix.isBlank()) segment else "$dirPrefix/$segment"
-                    )
-                }
-                .distinct()
-                .sorted()
-
-            Logger.d(SEARCH_LOG_TAG, "listCurrentDirectory done, dirs=${dirs.size}, files=${files.size}, relativeDirectory=$relativeDirectory")
-
-            dirs to files
-        }
     }
 
     suspend fun importRemote(baseUrl: String, path: String, user: String, pass: String): LibraryContext? {
@@ -311,95 +238,71 @@ fun CloudLibraryDialog(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if ((isImportMode && !isConnectedForBrowse) || isBindMode) {
+            TextField(
+                value = serverUrl,
+                onValueChange = { if (!isBindReadOnly) serverUrl = it },
+                label = "WebDAV地址",
+                readOnly = isBindReadOnly,
+                enabled = true
+            )
+            TextField(
+                value = username,
+                onValueChange = { if (!isBindReadOnly) username = it },
+                label = "用户名",
+                readOnly = isBindReadOnly,
+                enabled = true
+            )
+            TextField(
+                value = password,
+                onValueChange = { if (!isBindReadOnly) password = it },
+                label = "密码",
+                visualTransformation = if (accountPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                singleLine = true,
+                readOnly = isBindReadOnly,
+                enabled = true
+            )
+            Button(
+                onClick = {
+                    accountPasswordVisible = !accountPasswordVisible
+                },
+                enabled = true
+            ) {
+                Text(if (accountPasswordVisible) "隐藏密码" else "显示密码")
+            }
+            if (isBindMode) {
                 TextField(
-                    value = serverUrl,
-                    onValueChange = { if (!isBindReadOnly) serverUrl = it },
-                    label = "WebDAV地址",
+                    value = manualPath,
+                    onValueChange = { if (!isBindReadOnly) manualPath = it },
+                    label = "远端文件路径（可手动输入）",
                     readOnly = isBindReadOnly,
                     enabled = true
                 )
+                if (isBindReadOnly) {
+                    Text("当前库已完成云端连接并同步，配置已锁定为只读。")
+                }
+            }
+            if (isCreateMode) {
+                TextField(value = folder, onValueChange = { folder = it }, label = "目录（默认 WebDavPass）")
                 TextField(
-                    value = username,
-                    onValueChange = { if (!isBindReadOnly) username = it },
-                    label = "用户名",
-                    readOnly = isBindReadOnly,
-                    enabled = true
+                    value = manualPath,
+                    onValueChange = { manualPath = it },
+                    label = "新建文件名（.kdbx）"
                 )
-                TextField(
-                    value = password,
-                    onValueChange = { if (!isBindReadOnly) password = it },
-                    label = "密码",
-                    visualTransformation = if (accountPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true,
-                    readOnly = isBindReadOnly,
-                    enabled = true
-                )
+            }
+
+            if (isImportMode || isBindMode) {
                 Button(
                     onClick = {
-                        accountPasswordVisible = !accountPasswordVisible
+                        if (isBindReadOnly) {
+                            ToastUtils.showShortToast(context, "当前配置已锁定，不允许编辑")
+                        } else {
+                            showBrowser = true
+                        }
                     },
                     enabled = true
                 ) {
-                    Text(if (accountPasswordVisible) "隐藏密码" else "显示密码")
-                }
-                if (isBindMode) {
-                    TextField(
-                        value = manualPath,
-                        onValueChange = { if (!isBindReadOnly) manualPath = it },
-                        label = "远端文件路径（可手动输入）",
-                        readOnly = isBindReadOnly,
-                        enabled = true
-                    )
-                    if (isBindReadOnly) {
-                        Text("当前库已完成云端连接并同步，配置已锁定为只读。")
-                    }
-                }
-
-                Button(onClick = {
-                    coroutineScope.launch {
-                        try {
-                            status = "正在连接并加载根目录..."
-                            val baseUrl = normalizeServerRootUrl(serverUrl)
-                            currentDirectory = ""
-                            val (dirs, files) = listCurrentDirectory(baseUrl, username, password, "")
-                            directoryListing = dirs
-                            listing = files
-                            isConnectedForBrowse = true
-                            status = "已连接，当前为根目录"
-                        } catch (e: Exception) {
-                            val msg = e.message.orEmpty()
-                            Logger.e(SEARCH_LOG_TAG, "UI connectAndBrowseRoot failed, message=$msg", e)
-                            status = "连接失败：$msg"
-                        }
-                    }
-                }) {
                     Text("连接并浏览")
-                }
-            }
-
-            if (isCreateMode || isConnectedForBrowse || isBindMode) {
-                if (isCreateMode) {
-                    TextField(value = serverUrl, onValueChange = { serverUrl = it }, label = "WebDAV地址")
-                    TextField(value = username, onValueChange = { username = it }, label = "用户名")
-                    TextField(
-                        value = password,
-                        onValueChange = { password = it },
-                        label = "密码",
-                        visualTransformation = if (accountPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                        singleLine = true
-                    )
-                    Button(onClick = { accountPasswordVisible = !accountPasswordVisible }) {
-                        Text(if (accountPasswordVisible) "隐藏密码" else "显示密码")
-                    }
-                    TextField(value = folder, onValueChange = { folder = it }, label = "目录（默认 WebDavPass）")
-                    TextField(
-                        value = manualPath,
-                        onValueChange = { manualPath = it },
-                        label = "新建文件名（.kdbx）"
-                    )
                 }
             }
 
@@ -422,117 +325,6 @@ fun CloudLibraryDialog(
                 )
                 Button(onClick = { masterPasswordVisible = !masterPasswordVisible }) {
                     Text(if (masterPasswordVisible) "隐藏主密码" else "显示主密码")
-                }
-            }
-
-            if ((isImportMode || isBindMode) && isConnectedForBrowse) {
-                Text(text = "当前目录: /${normalizeRelativePath(currentDirectory)}")
-
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = {
-                        coroutineScope.launch {
-                            try {
-                                currentDirectory = ""
-                                val baseUrl = normalizeServerRootUrl(serverUrl)
-                                val (dirs, files) = listCurrentDirectory(baseUrl, username, password, "")
-                                directoryListing = dirs
-                                listing = files
-                                status = "已切换到根目录"
-                            } catch (e: Exception) {
-                                val msg = e.message.orEmpty()
-                                Logger.e(SEARCH_LOG_TAG, "UI goRoot failed, message=$msg", e)
-                                status = "加载失败：$msg"
-                            }
-                        }
-                    }, modifier = Modifier.weight(1f)) {
-                        Text("回到根目录")
-                    }
-
-                    if (normalizeRelativePath(currentDirectory).isNotBlank()) {
-                        Button(onClick = {
-                            coroutineScope.launch {
-                                try {
-                                    val current = normalizeRelativePath(currentDirectory)
-                                    val parent = current.substringBeforeLast('/', "")
-                                    val baseUrl = normalizeServerRootUrl(serverUrl)
-                                    val (dirs, files) = listCurrentDirectory(baseUrl, username, password, parent)
-                                    currentDirectory = parent
-                                    directoryListing = dirs
-                                    listing = files
-                                    status = "已返回上级目录"
-                                } catch (e: Exception) {
-                                    val msg = e.message.orEmpty()
-                                    Logger.e(SEARCH_LOG_TAG, "UI goParent failed, message=$msg", e)
-                                    status = "加载失败：$msg"
-                                }
-                            }
-                        }, modifier = Modifier.weight(1f)) {
-                            Text("返回上级目录")
-                        }
-                    }
-                }
-
-                Text("子目录")
-                directoryListing.forEach { dirPath ->
-                    val dirName = dirPath.substringAfterLast('/')
-                    ArrowPreference(
-                        title = "📁 $dirName",
-                        summary = dirPath,
-                        onClick = {
-                            coroutineScope.launch {
-                                try {
-                                    val baseUrl = normalizeServerRootUrl(serverUrl)
-                                    val (dirs, files) = listCurrentDirectory(baseUrl, username, password, dirPath)
-                                    currentDirectory = dirPath
-                                    directoryListing = dirs
-                                    listing = files
-                                    status = "已进入目录：/$dirPath"
-                                } catch (e: Exception) {
-                                    val msg = e.message.orEmpty()
-                                    Logger.e(SEARCH_LOG_TAG, "UI openDir failed, dirPath=$dirPath, message=$msg", e)
-                                    status = "目录加载失败：$msg"
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-
-                Text("选择远端文件")
-                listing.forEach { filePath ->
-                    ArrowPreference(
-                        title = filePath.substringAfterLast('/'),
-                        summary = filePath,
-                        onClick = {
-                            if (isBindMode) {
-                                if (isBindReadOnly) {
-                                    return@ArrowPreference
-                                }
-                                manualPath = filePath
-                                status = "已选择远端文件：$filePath"
-                                return@ArrowPreference
-                            }
-
-                            coroutineScope.launch {
-                                val baseUrl = normalizeServerRootUrl(serverUrl)
-                                val selected = try {
-                                    importRemote(baseUrl, filePath, username, password)
-                                } catch (e: Exception) {
-                                    val msg = e.message.orEmpty()
-                                    Logger.e(SEARCH_LOG_TAG, "UI importFromList failed, filePath=$filePath, message=$msg", e)
-                                    null
-                                }
-
-                                if (selected == null) {
-                                    ToastUtils.showShortToast(context, "导入失败：$filePath")
-                                    return@launch
-                                }
-
-                                onSelected(selected, null)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
                 }
             }
 
@@ -633,7 +425,47 @@ fun CloudLibraryDialog(
                     }
                 )
             }
+
+            Spacer(modifier = Modifier.height(4.dp))
         }
+    }
+
+    // 子模块提供的 WebDAV 文件浏览弹窗
+    if (showBrowser) {
+        WebDavFileBrowserDialog(
+            initialServerUrl = serverUrl,
+            initialUsername = username,
+            initialPassword = password,
+            initialDirectory = if (isBindMode) initialRemoteRelativePath.substringBeforeLast('/', "") else "",
+            mode = WebDavBrowseMode.PICK_FILE,
+            fileExtensionFilter = ".kdbx",
+            title = if (isImportMode) "选择云端 .kdbx 文件" else "选择远端文件",
+            onDismiss = { showBrowser = false },
+            onSelected = { baseUrl, relativePath ->
+                showBrowser = false
+                if (isBindMode) {
+                    manualPath = relativePath
+                    status = "已选择远端文件：$relativePath"
+                } else {
+                    coroutineScope.launch {
+                        val selected = try {
+                            importRemote(baseUrl, relativePath, username, password)
+                        } catch (e: Exception) {
+                            val msg = e.message.orEmpty()
+                            Logger.e(SEARCH_LOG_TAG, "UI importFromBrowser failed, path=$relativePath, message=$msg", e)
+                            null
+                        }
+
+                        if (selected == null) {
+                            ToastUtils.showShortToast(context, "导入失败：$relativePath")
+                            return@launch
+                        }
+
+                        onSelected(selected, null)
+                    }
+                }
+            }
+        )
     }
 }
 
