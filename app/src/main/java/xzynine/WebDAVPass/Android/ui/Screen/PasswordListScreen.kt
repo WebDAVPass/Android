@@ -44,7 +44,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.extra.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.AddFolder
@@ -602,7 +602,7 @@ private fun PasswordEntryEditorDialog(
 ) {
     WindowDialog(
         title = title,
-        show = show,
+        show = show.value,
         onDismissRequest = onDismiss
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -685,7 +685,7 @@ private fun PasswordGroupEditorDialog(
 ) {
     WindowDialog(
         title = title,
-        show = show,
+        show = show.value,
         onDismissRequest = onDismiss
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {

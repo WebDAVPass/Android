@@ -66,7 +66,7 @@ import top.yukonga.miuix.kmp.icon.extended.Scan
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.Executors
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.extra.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowDialog
 import androidx.activity.compose.BackHandler
 import kotlinx.coroutines.DelicateCoroutinesApi
 
@@ -345,7 +345,7 @@ fun ScanTokenScreen(
     WindowDialog(
         title = "手动输入密钥",
         summary = "请输入完整 otpauth:// 链接",
-        show = showManualInput,
+        show = showManualInput.value,
         onDismissRequest = {
             showManualInput.value = false
         }

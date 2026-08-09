@@ -46,8 +46,8 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.extra.SuperArrow
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
@@ -285,7 +285,7 @@ fun PasswordEntryDetailScreen(
 
                 if (showOtpSecret && otpSecretField != null) {
                     item {
-                        SuperArrow(
+                        ArrowPreference(
                             title = "OTP 键值",
                             summary = otpSecretField.rawValue,
                             modifier = Modifier.fillMaxWidth(),
@@ -397,7 +397,7 @@ fun PasswordEntryDetailScreen(
                                         .padding(horizontal = 12.dp, vertical = 8.dp)
                                 )
                             } else {
-                                SuperArrow(
+                                ArrowPreference(
                                     title = "账号",
                                     summary = usernameValue,
                                     modifier = Modifier.fillMaxWidth(),
@@ -431,7 +431,7 @@ fun PasswordEntryDetailScreen(
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         } else {
-                            SuperArrow(
+                            ArrowPreference(
                                 title = "密码",
                                 summary = when {
                                     passwordValue == "--" -> "--"
@@ -440,7 +440,7 @@ fun PasswordEntryDetailScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 onClick = {
-                                    if (passwordValue == "--") return@SuperArrow
+                                    if (passwordValue == "--") return@ArrowPreference
                                     if (!isPasswordVisible) {
                                         copySensitiveToClipboard(
                                             context = context,
@@ -470,7 +470,7 @@ fun PasswordEntryDetailScreen(
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         } else {
-                            SuperArrow(
+                            ArrowPreference(
                                 title = "网站",
                                 summary = urlValue,
                                 modifier = Modifier.fillMaxWidth(),
@@ -493,7 +493,7 @@ fun PasswordEntryDetailScreen(
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         } else {
-                            SuperArrow(
+                            ArrowPreference(
                                 title = "备注",
                                 summary = notesValue,
                                 modifier = Modifier.fillMaxWidth(),

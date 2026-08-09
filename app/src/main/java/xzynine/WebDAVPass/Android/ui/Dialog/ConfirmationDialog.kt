@@ -15,7 +15,7 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.extra.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * 通用确认对话框
@@ -42,7 +42,7 @@ fun ConfirmationDialog(
     WindowDialog(
         title = title,
         summary = summary,
-        show = show,
+        show = show.value,
         onDismissRequest = onDismiss
     ) {
         Row(

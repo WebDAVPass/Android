@@ -43,14 +43,15 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.SuperSwitch
-import top.yukonga.miuix.kmp.extra.WindowDropdown
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.SwitchPreference
+import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Backup
@@ -278,7 +279,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                 modifier = Modifier.padding(8.dp)
             )
 
-            SuperArrow(
+            ArrowPreference(
                 title = "设置为自动填充器",
                 summary = "跳转到系统自动填充设置",
                 startAction = {
@@ -320,7 +321,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
 
             Spacer(modifier = Modifier.Companion.height(8.dp))
 
-            SuperArrow(
+            ArrowPreference(
                 title = "切换数据库文件",
                 summary = "返回欢迎页，选择其他 .kdbx",
                 startAction = {
@@ -346,7 +347,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
             val isAutoUnlockEnabled = currentLib?.autoUnlockEnabled == true
             val isAutoUnlockInvalidated = currentLib?.autoUnlockInvalidated == true
 
-            SuperSwitch(
+            SwitchPreference(
                 title = "自动解锁",
                 summary = when {
                     currentLib == null -> "请先选择数据库文件"
@@ -367,7 +368,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     if (currentLib == null) {
                         xzylib.base.util.ToastUtils.showShortToast(context, "请先选择数据库文件")
                         autoUnlockSwitchChecked = false
-                        return@SuperSwitch
+                        return@SwitchPreference
                     }
 
                     if (!checked) {
@@ -378,7 +379,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                                 viewModel.libraryViewModel.persistLibraryMetadata(it)
                             }
                         }
-                        return@SuperSwitch
+                        return@SwitchPreference
                     }
 
                     autoUnlockSwitchChecked = true
@@ -395,14 +396,14 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
             if (autoUnlockSwitchChecked) {
                 Spacer(modifier = Modifier.height(8.dp))
 
-                WindowDropdown(
+                WindowSpinnerPreference(
                     title = "认证方式",
                     summary = if (autoUnlockSelectedIndex >= 0) {
                         "当前：${autoUnlockModeItems[autoUnlockSelectedIndex]}"
                     } else {
                         "请选择认证方式，选择后将触发身份验证"
                     },
-                    items = autoUnlockModeItems,
+                    items = autoUnlockModeItems.map { DropdownItem(text = it) },
                     selectedIndex = if (autoUnlockSelectedIndex >= 0) autoUnlockSelectedIndex else 0,
                     showValue = autoUnlockSelectedIndex >= 0,
                     enabled = currentLib != null,
@@ -446,7 +447,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     onSelectedIndexChange = { selectedIndex ->
                         val selectedLibrary = currentLibraryState
                         if (selectedLibrary == null) {
-                            return@WindowDropdown
+                            return@WindowSpinnerPreference
                         }
 
                         autoUnlockSelectedIndex = selectedIndex
@@ -454,7 +455,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
 
                         if (context !is FragmentActivity) {
                             xzylib.base.util.ToastUtils.showShortToast(context, "当前页面无法发起认证")
-                            return@WindowDropdown
+                            return@WindowSpinnerPreference
                         }
 
                         val masterPassword = viewModel.libraryViewModel.getCurrentLibraryMasterPassword()
@@ -465,7 +466,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                             } else {
                                 -1
                             }
-                            return@WindowDropdown
+                            return@WindowSpinnerPreference
                         }
 
                         val cipher = viewModel.autoUnlockViewModel.getCipherForEnrollment(selectedLibrary)
@@ -476,7 +477,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                             } else {
                                 -1
                             }
-                            return@WindowDropdown
+                            return@WindowSpinnerPreference
                         }
 
                         viewModel.autoUnlockViewModel.biometricKeyStoreManager.authenticate(
@@ -537,7 +538,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     nowMillis = manualUnlockClockMillis
                 )
 
-                SuperSwitch(
+                SwitchPreference(
                     title = "48小时需手动主密码一次",
                     summary = when {
                         !manualUnlockWindowSwitchChecked -> "已关闭48小时主密码校验"
@@ -601,7 +602,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                 val statusText = backupStatus.value
                 if (statusText.isBlank()) cloudBindingSummary else if (cloudBindingSummary.isBlank()) statusText else "$statusText | $cloudBindingSummary"
             }
-            SuperArrow(
+            ArrowPreference(
                 title = "备份状态",
                 summary = combinedBackupSummary,
                 startAction = {
@@ -619,7 +620,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
             Spacer(modifier = Modifier.Companion.height(8.dp))
 
             // 备份按钮
-            SuperArrow(
+            ArrowPreference(
                 title = if (isBackupInProgress.value) "备份中..." else if (isCurrentLibraryCloudBound) "备份令牌" else "绑定后可备份",
                 summary = if (isBackupInProgress.value) {
                     "正在备份到WebDAV服务器... ${backupProgress.value}%"
@@ -653,7 +654,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
             Spacer(modifier = Modifier.height(8.dp))
 
             // 手动恢复按钮
-            SuperArrow(
+            ArrowPreference(
                 title = if (isRestoreInProgress.value) "恢复中..." else if (isCurrentLibraryCloudBound) "手动恢复" else "绑定后可恢复",
                 summary = if (isRestoreInProgress.value) {
                     "正在从WebDAV服务器恢复... ${restoreProgress.value}%"

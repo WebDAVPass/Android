@@ -31,9 +31,9 @@ import java.net.URLEncoder
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.webdav.Authorization
@@ -300,7 +300,7 @@ fun CloudLibraryDialog(
         } else {
             "支持列表选择与手动路径"
         },
-        show = remember { mutableStateOf(true) },
+        show = true,
         onDismissRequest = onDismiss,
         defaultWindowInsetsPadding = true
     ) {
@@ -475,7 +475,7 @@ fun CloudLibraryDialog(
                 Text("子目录")
                 directoryListing.forEach { dirPath ->
                     val dirName = dirPath.substringAfterLast('/')
-                    SuperArrow(
+                    ArrowPreference(
                         title = "📁 $dirName",
                         summary = dirPath,
                         onClick = {
@@ -500,17 +500,17 @@ fun CloudLibraryDialog(
 
                 Text("选择远端文件")
                 listing.forEach { filePath ->
-                    SuperArrow(
+                    ArrowPreference(
                         title = filePath.substringAfterLast('/'),
                         summary = filePath,
                         onClick = {
                             if (isBindMode) {
                                 if (isBindReadOnly) {
-                                    return@SuperArrow
+                                    return@ArrowPreference
                                 }
                                 manualPath = filePath
                                 status = "已选择远端文件：$filePath"
-                                return@SuperArrow
+                                return@ArrowPreference
                             }
 
                             coroutineScope.launch {
