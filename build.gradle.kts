@@ -2,5 +2,5 @@
 plugins {
     alias(libs.plugins.android.application) apply false
     alias(libs.plugins.android.library) apply false
-    id("org.jetbrains.kotlin.plugin.parcelize") version "2.2.21" apply false
+    id("org.jetbrains.kotlin.plugin.parcelize") version "2.4.10" apply false
 }
