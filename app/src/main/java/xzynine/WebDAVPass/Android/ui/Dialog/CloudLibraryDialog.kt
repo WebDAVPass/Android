@@ -273,245 +273,248 @@ fun CloudLibraryDialog(
             it.username == username && it.password == password
     }
 
-    WindowDialog(
-        title = when {
-            isImportMode -> "云端导入 .kdbx"
-            isCreateMode -> "云端新建 .kdbx"
-            else -> "当前库云端设置"
-        },
-        summary = if (isBindMode) {
-            if (isBindReadOnly) "当前配置已验证成功，仅可浏览" else "为当前库绑定或更新云端 .kdbx"
-        } else {
-            "支持列表选择与手动路径"
-        },
-        show = true,
-        onDismissRequest = onDismiss,
-        defaultWindowInsetsPadding = true
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+    // 打开浏览器时隐藏配置弹窗，避免窗口层叠；关闭浏览器后恢复
+    if (!showBrowser) {
+        WindowDialog(
+            title = when {
+                isImportMode -> "云端导入 .kdbx"
+                isCreateMode -> "云端新建 .kdbx"
+                else -> "当前库云端设置"
+            },
+            summary = if (isBindMode) {
+                if (isBindReadOnly) "当前配置已验证成功，仅可浏览" else "为当前库绑定或更新云端 .kdbx"
+            } else {
+                "支持列表选择与手动路径"
+            },
+            show = true,
+            onDismissRequest = onDismiss,
+            defaultWindowInsetsPadding = true
         ) {
-            if (savedAccounts.isNotEmpty()) {
-                WindowSpinnerPreference(
-                    title = "已保存的 WebDAV 账号",
-                    summary = if (selectedAccountIndex >= 0) {
-                        "当前：${savedAccounts[selectedAccountIndex].name}"
-                    } else {
-                        "选择已保存账号自动填入表单"
-                    },
-                    items = savedAccounts.map { DropdownItem(text = it.name) },
-                    selectedIndex = selectedAccountIndex.coerceAtLeast(0),
-                    showValue = selectedAccountIndex >= 0,
-                    enabled = !isBindReadOnly,
-                    onSelectedIndexChange = { index ->
-                        val account = savedAccounts[index]
-                        serverUrl = normalizeServerRootUrl(account.url)
-                        username = account.username
-                        password = account.password
-                        val dir = account.directory?.trim()?.trim('/')
-                        manualPath = if (dir.isNullOrBlank()) "WebDavPass.kdbx" else "$dir/WebDavPass.kdbx"
-                        if (isBindMode) {
-                            status = "已选择账号：${account.name}"
-                        }
-                    }
-                )
-            }
-            TextField(
-                value = serverUrl,
-                onValueChange = { if (!isBindReadOnly) serverUrl = it },
-                label = "WebDAV地址",
-                readOnly = isBindReadOnly,
-                enabled = true
-            )
-            TextField(
-                value = username,
-                onValueChange = { if (!isBindReadOnly) username = it },
-                label = "用户名",
-                readOnly = isBindReadOnly,
-                enabled = true
-            )
-            TextField(
-                value = password,
-                onValueChange = { if (!isBindReadOnly) password = it },
-                label = "密码",
-                visualTransformation = if (accountPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                singleLine = true,
-                readOnly = isBindReadOnly,
-                enabled = true
-            )
-            Button(
-                onClick = {
-                    accountPasswordVisible = !accountPasswordVisible
-                },
-                enabled = true
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                Text(if (accountPasswordVisible) "隐藏密码" else "显示密码")
-            }
-            if (isBindMode) {
+                if (savedAccounts.isNotEmpty()) {
+                    WindowSpinnerPreference(
+                        title = "已保存的 WebDAV 账号",
+                        summary = if (selectedAccountIndex >= 0) {
+                            "当前：${savedAccounts[selectedAccountIndex].name}"
+                        } else {
+                            "选择已保存账号自动填入表单"
+                        },
+                        items = savedAccounts.map { DropdownItem(text = it.name) },
+                        selectedIndex = selectedAccountIndex.coerceAtLeast(0),
+                        showValue = selectedAccountIndex >= 0,
+                        enabled = !isBindReadOnly,
+                        onSelectedIndexChange = { index ->
+                            val account = savedAccounts[index]
+                            serverUrl = normalizeServerRootUrl(account.url)
+                            username = account.username
+                            password = account.password
+                            val dir = account.directory?.trim()?.trim('/')
+                            manualPath = if (dir.isNullOrBlank()) "WebDavPass.kdbx" else "$dir/WebDavPass.kdbx"
+                            if (isBindMode) {
+                                status = "已选择账号：${account.name}"
+                            }
+                        }
+                    )
+                }
                 TextField(
-                    value = manualPath,
-                    onValueChange = { if (!isBindReadOnly) manualPath = it },
-                    label = "远端文件路径（可手动输入）",
+                    value = serverUrl,
+                    onValueChange = { if (!isBindReadOnly) serverUrl = it },
+                    label = "WebDAV地址",
                     readOnly = isBindReadOnly,
                     enabled = true
                 )
-                if (isBindReadOnly) {
-                    Text("当前库已完成云端连接并同步，配置已锁定为只读。")
-                }
-            }
-            if (isCreateMode) {
-                TextField(value = folder, onValueChange = { folder = it }, label = "目录（默认 WebDavPass）")
                 TextField(
-                    value = manualPath,
-                    onValueChange = { manualPath = it },
-                    label = "新建文件名（.kdbx）"
+                    value = username,
+                    onValueChange = { if (!isBindReadOnly) username = it },
+                    label = "用户名",
+                    readOnly = isBindReadOnly,
+                    enabled = true
                 )
-            }
-
-            if (isImportMode || isBindMode) {
+                TextField(
+                    value = password,
+                    onValueChange = { if (!isBindReadOnly) password = it },
+                    label = "密码",
+                    visualTransformation = if (accountPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                    singleLine = true,
+                    readOnly = isBindReadOnly,
+                    enabled = true
+                )
                 Button(
                     onClick = {
-                        if (isBindReadOnly) {
-                            ToastUtils.showShortToast(context, "当前配置已锁定，不允许编辑")
-                        } else {
-                            showBrowser = true
-                        }
+                        accountPasswordVisible = !accountPasswordVisible
                     },
                     enabled = true
                 ) {
-                    Text("连接并浏览")
+                    Text(if (accountPasswordVisible) "隐藏密码" else "显示密码")
                 }
-            }
-
-            if (isCreateMode) {
-                TextField(
-                    value = createPassword,
-                    onValueChange = { createPassword = it },
-                    label = "主密码",
-                    visualTransformation = if (masterPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true
-                )
-                TextField(
-                    value = createPasswordConfirm,
-                    onValueChange = { createPasswordConfirm = it },
-                    label = "确认主密码",
-                    visualTransformation = if (masterPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true
-                )
-                Button(onClick = { masterPasswordVisible = !masterPasswordVisible }) {
-                    Text(if (masterPasswordVisible) "隐藏主密码" else "显示主密码")
+                if (isBindMode) {
+                    TextField(
+                        value = manualPath,
+                        onValueChange = { if (!isBindReadOnly) manualPath = it },
+                        label = "远端文件路径（可手动输入）",
+                        readOnly = isBindReadOnly,
+                        enabled = true
+                    )
+                    if (isBindReadOnly) {
+                        Text("当前库已完成云端连接并同步，配置已锁定为只读。")
+                    }
                 }
-            }
+                if (isCreateMode) {
+                    TextField(value = folder, onValueChange = { folder = it }, label = "目录（默认 WebDavPass）")
+                    TextField(
+                        value = manualPath,
+                        onValueChange = { manualPath = it },
+                        label = "新建文件名（.kdbx）"
+                    )
+                }
 
-            if (status.isNotBlank()) {
-                Text(status)
-            }
+                if (isImportMode || isBindMode) {
+                    Button(
+                        onClick = {
+                            if (isBindReadOnly) {
+                                ToastUtils.showShortToast(context, "当前配置已锁定，不允许编辑")
+                            } else {
+                                showBrowser = true
+                            }
+                        },
+                        enabled = true
+                    ) {
+                        Text("连接并浏览")
+                    }
+                }
 
-            Button(onClick = {
-                coroutineScope.launch {
-                    if (isBindMode) {
-                        if (isBindReadOnly) {
-                            ToastUtils.showShortToast(context, "当前配置已锁定，不允许编辑")
+                if (isCreateMode) {
+                    TextField(
+                        value = createPassword,
+                        onValueChange = { createPassword = it },
+                        label = "主密码",
+                        visualTransformation = if (masterPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true
+                    )
+                    TextField(
+                        value = createPasswordConfirm,
+                        onValueChange = { createPasswordConfirm = it },
+                        label = "确认主密码",
+                        visualTransformation = if (masterPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                        singleLine = true
+                    )
+                    Button(onClick = { masterPasswordVisible = !masterPasswordVisible }) {
+                        Text(if (masterPasswordVisible) "隐藏主密码" else "显示主密码")
+                    }
+                }
+
+                if (status.isNotBlank()) {
+                    Text(status)
+                }
+
+                Button(onClick = {
+                    coroutineScope.launch {
+                        if (isBindMode) {
+                            if (isBindReadOnly) {
+                                ToastUtils.showShortToast(context, "当前配置已锁定，不允许编辑")
+                                return@launch
+                            }
+                            if (serverUrl.isBlank() || username.isBlank() || password.isBlank() || manualPath.isBlank()) {
+                                ToastUtils.showShortToast(context, "请填写地址、用户名、密码和远端文件路径")
+                                return@launch
+                            }
+
+                            val baseUrl = normalizeServerRootUrl(serverUrl)
+                            val normalizedPath = if (manualPath.endsWith(".kdbx", ignoreCase = true)) {
+                                manualPath
+                            } else {
+                                "$manualPath.kdbx"
+                            }
+                            val remoteFilePath = if (normalizedPath.startsWith("http://") || normalizedPath.startsWith("https://")) {
+                                normalizedPath
+                            } else {
+                                val encoded = encodeRelativePath(normalizedPath)
+                                "$baseUrl$encoded"
+                            }
+
+                            val current = initialLibraryContext
+                            if (current == null) {
+                                ToastUtils.showShortToast(context, "当前未选择库，无法保存")
+                                return@launch
+                            }
+
+                            // 绑定成功后将账号保存到已保存账号表，供下拉选择复用
+                            autoSaveWebDavAccount(baseUrl, remoteFilePath, username, password, current.displayName)
+
+                            onSelected(
+                                current.copy(
+                                    // 本地升级云同步时保持原本地定位，不迁移文件位置。
+                                    localPath = current.localPath,
+                                    sourceType = xzynine.WebDAVPass.Android.data.LibrarySourceType.CLOUD,
+                                    remoteBaseUrl = baseUrl,
+                                    remoteFilePath = remoteFilePath,
+                                    username = username,
+                                    password = password,
+                                    autoSyncEnabled = true,
+                                    lastSyncStatus = current.lastSyncStatus ?: "idle",
+                                    lastSyncError = null
+                                ),
+                                null
+                            )
                             return@launch
                         }
-                        if (serverUrl.isBlank() || username.isBlank() || password.isBlank() || manualPath.isBlank()) {
-                            ToastUtils.showShortToast(context, "请填写地址、用户名、密码和远端文件路径")
-                            return@launch
+
+                        if (isCreateMode) {
+                            if (createPassword.isBlank()) {
+                                ToastUtils.showShortToast(context, "请输入主密码")
+                                return@launch
+                            }
+                            if (createPassword != createPasswordConfirm) {
+                                ToastUtils.showShortToast(context, "两次主密码不一致")
+                                return@launch
+                            }
                         }
 
                         val baseUrl = normalizeServerRootUrl(serverUrl)
-                        val normalizedPath = if (manualPath.endsWith(".kdbx", ignoreCase = true)) {
-                            manualPath
-                        } else {
+                        val path = if (isCreateMode && !manualPath.endsWith(".kdbx", ignoreCase = true)) {
                             "$manualPath.kdbx"
-                        }
-                        val remoteFilePath = if (normalizedPath.startsWith("http://") || normalizedPath.startsWith("https://")) {
-                            normalizedPath
                         } else {
-                            val encoded = encodeRelativePath(normalizedPath)
-                            "$baseUrl$encoded"
+                            manualPath
                         }
 
-                        val current = initialLibraryContext
-                        if (current == null) {
-                            ToastUtils.showShortToast(context, "当前未选择库，无法保存")
-                            return@launch
-                        }
-
-                        // 绑定成功后将账号保存到已保存账号表，供下拉选择复用
-                        autoSaveWebDavAccount(baseUrl, remoteFilePath, username, password, current.displayName)
-
-                        onSelected(
-                            current.copy(
-                                // 本地升级云同步时保持原本地定位，不迁移文件位置。
-                                localPath = current.localPath,
-                                sourceType = xzynine.WebDAVPass.Android.data.LibrarySourceType.CLOUD,
-                                remoteBaseUrl = baseUrl,
-                                remoteFilePath = remoteFilePath,
-                                username = username,
-                                password = password,
-                                autoSyncEnabled = true,
-                                lastSyncStatus = current.lastSyncStatus ?: "idle",
-                                lastSyncError = null
-                            ),
+                        val selected = try {
+                            if (isImportMode) {
+                                importRemote(baseUrl, path, username, password)
+                            } else {
+                                createRemote(baseUrl, path, username, password, createPassword)
+                            }
+                        } catch (e: Exception) {
                             null
-                        )
-                        return@launch
-                    }
+                        }
 
-                    if (isCreateMode) {
-                        if (createPassword.isBlank()) {
-                            ToastUtils.showShortToast(context, "请输入主密码")
+                        if (selected == null) {
+                            ToastUtils.showShortToast(context, "操作失败，请检查路径和账号信息")
                             return@launch
                         }
-                        if (createPassword != createPasswordConfirm) {
-                            ToastUtils.showShortToast(context, "两次主密码不一致")
-                            return@launch
+
+                        onSelected(selected, if (isCreateMode) createPassword else null)
+                    }
+                }, enabled = isCreateMode || (isBindMode && !isBindReadOnly)) {
+                    Text(
+                        when {
+                            isBindMode && isBindReadOnly -> "配置已锁定"
+                            isBindMode -> "保存云端绑定"
+                            else -> "新建并进入"
                         }
-                    }
-
-                    val baseUrl = normalizeServerRootUrl(serverUrl)
-                    val path = if (isCreateMode && !manualPath.endsWith(".kdbx", ignoreCase = true)) {
-                        "$manualPath.kdbx"
-                    } else {
-                        manualPath
-                    }
-
-                    val selected = try {
-                        if (isImportMode) {
-                            importRemote(baseUrl, path, username, password)
-                        } else {
-                            createRemote(baseUrl, path, username, password, createPassword)
-                        }
-                    } catch (e: Exception) {
-                        null
-                    }
-
-                    if (selected == null) {
-                        ToastUtils.showShortToast(context, "操作失败，请检查路径和账号信息")
-                        return@launch
-                    }
-
-                    onSelected(selected, if (isCreateMode) createPassword else null)
+                    )
                 }
-            }, enabled = isCreateMode || (isBindMode && !isBindReadOnly)) {
-                Text(
-                    when {
-                        isBindMode && isBindReadOnly -> "配置已锁定"
-                        isBindMode -> "保存云端绑定"
-                        else -> "新建并进入"
-                    }
-                )
-            }
 
-            Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(4.dp))
+            }
         }
     }
 
