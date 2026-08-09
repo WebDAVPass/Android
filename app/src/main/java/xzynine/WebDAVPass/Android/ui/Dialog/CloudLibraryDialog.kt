@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,8 +29,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.URLEncoder
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
@@ -133,12 +136,52 @@ fun CloudLibraryDialog(
     var masterPasswordVisible by remember(mode) { mutableStateOf(false) }
     var showBrowser by remember(mode) { mutableStateOf(false) }
 
+    // 已保存的 WebDAV 账号列表（数据库解密后的数据源）
+    val savedConfigs by tokenViewModel.webDavConfigViewModel.webDavConfigs.collectAsState(emptyList())
+    val savedAccounts = remember(savedConfigs) {
+        savedConfigs.distinctBy { it.url to it.username }
+    }
+
     fun normalizeServerRootUrl(raw: String): String {
         return if (raw.endsWith('/')) raw else "$raw/"
     }
 
     fun normalizeRelativePath(path: String): String {
         return path.trim().trim('/').replace("//", "/")
+    }
+
+    /**
+     * 提取服务器主机名用于账号命名
+     */
+    fun extractHost(raw: String): String {
+        return runCatching { java.net.URI(raw).host }.getOrNull() ?: raw
+    }
+
+    /**
+     * 自动保存云端账号到已保存账号表。
+     *
+     * 说明：导入/新建/绑定成功后调用，账号数据从远端完整路径推导目录后落库，
+     * 下次打开弹窗可直接从下拉选择。
+     */
+    suspend fun autoSaveWebDavAccount(baseUrl: String, fullRemotePath: String, user: String, pass: String, name: String) {
+        runCatching {
+            // 仅当远端路径以根地址开头时推导目录；手填完整 URL 等异常场景目录留空（url 整体充当）
+            val relative = if (fullRemotePath.startsWith(baseUrl)) {
+                fullRemotePath.removePrefix(baseUrl).trimStart('/')
+            } else {
+                ""
+            }
+            val directory = relative.substringBeforeLast('/', "")
+                .trim('/')
+                .takeIf { it.isNotBlank() }
+            tokenViewModel.webDavConfigViewModel.autoSaveAccount(
+                baseUrl = baseUrl,
+                directory = directory,
+                username = user,
+                password = pass,
+                name = name.ifBlank { extractHost(baseUrl) }
+            )
+        }
     }
 
     fun encodeRelativePath(path: String): String {
@@ -166,6 +209,10 @@ fun CloudLibraryDialog(
 
             val localFileName = normalized.substringAfterLast('/').ifBlank { "WebDavPass.kdbx" }
             val localPath = tokenViewModelSaveRemoteToLocal(context, remote, localFileName)
+            // 导入成功后将账号保存到已保存账号表，供下拉选择复用
+            if (localPath != null) {
+                autoSaveWebDavAccount(baseUrl, normalized, user, pass, localFileName)
+            }
             return@withContext localPath?.let {
                 LibraryContext(
                     displayName = localFileName,
@@ -199,6 +246,10 @@ fun CloudLibraryDialog(
 
             val localFileName = normalized.substringAfterLast('/').ifBlank { "WebDavPass.kdbx" }
             val localPath = tokenViewModelSaveRemoteToLocal(context, remote, localFileName)
+            // 新建成功后将账号保存到已保存账号表，供下拉选择复用
+            if (localPath != null) {
+                autoSaveWebDavAccount(baseUrl, normalized, user, pass, localFileName)
+            }
             return@withContext localPath?.let {
                 LibraryContext(
                     displayName = localFileName,
@@ -214,6 +265,12 @@ fun CloudLibraryDialog(
                 )
             }
         }
+    }
+
+    // 派生当前表单对应的已保存账号索引（无额外状态，手动编辑字段后自动回到未选中态）
+    val selectedAccountIndex = savedAccounts.indexOfFirst {
+        normalizeServerRootUrl(it.url) == normalizeServerRootUrl(serverUrl) &&
+            it.username == username && it.password == password
     }
 
     WindowDialog(
@@ -238,6 +295,31 @@ fun CloudLibraryDialog(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
+            if (savedAccounts.isNotEmpty()) {
+                WindowSpinnerPreference(
+                    title = "已保存的 WebDAV 账号",
+                    summary = if (selectedAccountIndex >= 0) {
+                        "当前：${savedAccounts[selectedAccountIndex].name}"
+                    } else {
+                        "选择已保存账号自动填入表单"
+                    },
+                    items = savedAccounts.map { DropdownItem(text = it.name) },
+                    selectedIndex = selectedAccountIndex.coerceAtLeast(0),
+                    showValue = selectedAccountIndex >= 0,
+                    enabled = !isBindReadOnly,
+                    onSelectedIndexChange = { index ->
+                        val account = savedAccounts[index]
+                        serverUrl = normalizeServerRootUrl(account.url)
+                        username = account.username
+                        password = account.password
+                        val dir = account.directory?.trim()?.trim('/')
+                        manualPath = if (dir.isNullOrBlank()) "WebDavPass.kdbx" else "$dir/WebDavPass.kdbx"
+                        if (isBindMode) {
+                            status = "已选择账号：${account.name}"
+                        }
+                    }
+                )
+            }
             TextField(
                 value = serverUrl,
                 onValueChange = { if (!isBindReadOnly) serverUrl = it },
@@ -362,6 +444,9 @@ fun CloudLibraryDialog(
                             ToastUtils.showShortToast(context, "当前未选择库，无法保存")
                             return@launch
                         }
+
+                        // 绑定成功后将账号保存到已保存账号表，供下拉选择复用
+                        autoSaveWebDavAccount(baseUrl, remoteFilePath, username, password, current.displayName)
 
                         onSelected(
                             current.copy(
