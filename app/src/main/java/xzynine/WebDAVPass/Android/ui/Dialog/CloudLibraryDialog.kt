@@ -36,8 +36,8 @@ import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
-import xzynine.WebDAVPass.webdav.Authorization
-import xzynine.WebDAVPass.webdav.WebDav
+import github.xzynine.webdav.Authorization
+import github.xzynine.webdav.WebDav
 
 /**
  * 云端库操作模式

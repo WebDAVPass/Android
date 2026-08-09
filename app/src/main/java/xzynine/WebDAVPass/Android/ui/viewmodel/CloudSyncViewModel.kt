@@ -9,8 +9,8 @@ import androidx.lifecycle.viewModelScope
 import androidx.documentfile.provider.DocumentFile
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
-import xzynine.WebDAVPass.webdav.WebDav
-import xzynine.WebDAVPass.webdav.Authorization
+import github.xzynine.webdav.WebDav
+import github.xzynine.webdav.Authorization
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay

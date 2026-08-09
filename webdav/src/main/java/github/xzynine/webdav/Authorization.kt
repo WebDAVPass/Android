@@ -1,4 +1,4 @@
-package xzynine.WebDAVPass.webdav
+package github.xzynine.webdav
 
 import okhttp3.Credentials
 import java.nio.charset.Charset

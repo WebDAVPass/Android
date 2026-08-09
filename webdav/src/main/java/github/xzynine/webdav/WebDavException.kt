@@ -1,4 +1,4 @@
-package xzynine.WebDAVPass.webdav
+package github.xzynine.webdav
 
 open class WebDavException(msg: String) : Exception(msg) {
     override fun fillInStackTrace(): Throwable {

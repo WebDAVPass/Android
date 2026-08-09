@@ -1,4 +1,4 @@
-package xzynine.WebDAVPass.webdav
+package github.xzynine.webdav
 
 import android.annotation.SuppressLint
 import cn.hutool.core.net.URLDecoder

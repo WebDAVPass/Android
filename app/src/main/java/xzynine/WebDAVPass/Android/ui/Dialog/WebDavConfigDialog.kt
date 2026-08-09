@@ -21,8 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.DpSize
 import xzynine.WebDAVPass.Android.data.WebDavConfig
-import xzynine.WebDAVPass.webdav.Authorization
-import xzynine.WebDAVPass.webdav.WebDav
+import github.xzynine.webdav.Authorization
+import github.xzynine.webdav.WebDav
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
