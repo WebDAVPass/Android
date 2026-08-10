@@ -77,9 +77,12 @@ class WebDavConfigViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun addWebDavConfig(config: WebDavConfig): Long {
         val lastSortNumber = database.webDavConfigDao().getLastSortNumber()
-        config.sortNumber = (lastSortNumber ?: 0) + 1
+        val nextSortNumber = (lastSortNumber ?: 0) + 1
 
-        val encrypted = config.copy(password = WebDavPasswordCipher.encrypt(config.password))
+        val encrypted = config.copy(
+            sortNumber = nextSortNumber,
+            password = WebDavPasswordCipher.encrypt(config.password)
+        )
         val id = database.webDavConfigDao().insert(encrypted)
         refreshWebDavConfigList()
         return id
@@ -91,9 +94,16 @@ class WebDavConfigViewModel(private val context: Context) : ViewModel() {
      */
     fun updateWebDavConfig(config: WebDavConfig) {
         viewModelScope.launch {
-            database.webDavConfigDao().update(config.copy(password = WebDavPasswordCipher.encrypt(config.password)))
-            refreshWebDavConfigList()
+            updateWebDavConfigInternal(config)
         }
+    }
+
+    /**
+     * 同步落库更新实现（供 [updateWebDavConfig] 与 [autoSaveAccount] 直接等待）。
+     */
+    private suspend fun updateWebDavConfigInternal(config: WebDavConfig) {
+        database.webDavConfigDao().update(config.copy(password = WebDavPasswordCipher.encrypt(config.password)))
+        refreshWebDavConfigList()
     }
 
     /**
@@ -124,7 +134,7 @@ class WebDavConfigViewModel(private val context: Context) : ViewModel() {
         if (existing != null) {
             val currentPlain = WebDavPasswordCipher.decrypt(existing.password)
             if (currentPlain == null || currentPlain != password || existing.name != name) {
-                updateWebDavConfig(existing.copy(name = name, password = password))
+                updateWebDavConfigInternal(existing.copy(name = name, password = password))
             }
             return
         }

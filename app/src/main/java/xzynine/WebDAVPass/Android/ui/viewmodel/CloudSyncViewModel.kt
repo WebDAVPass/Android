@@ -241,10 +241,23 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
             SYNC_LOG_TAG,
             "开始下载云端库: 本地路径=${cloudLibrary.localPath}, 远端路径=${cloudLibrary.remoteFilePath.orEmpty()}"
         )
+        val remoteFilePath = cloudLibrary.remoteFilePath
+        val username = cloudLibrary.username
+        val password = cloudLibrary.password
+        if (remoteFilePath.isNullOrBlank() || username.isNullOrBlank() || password.isNullOrBlank()) {
+            Logger.e(SYNC_LOG_TAG, "下载云端库失败：凭据不完整（远端路径/账号/密码缺失）")
+            libraryViewModel.updateCloudSyncState(
+                status = SYNC_STATUS_FAILED,
+                errorMessage = "云端库凭据不完整，请重新绑定或检查账号信息",
+                remoteModifiedAt = null,
+                syncAt = System.currentTimeMillis()
+            )
+            return false
+        }
         val outcome = syncEngine.download(
-            remotePath = cloudLibrary.remoteFilePath!!,
-            username = cloudLibrary.username!!,
-            password = cloudLibrary.password!!,
+            remotePath = remoteFilePath,
+            username = username,
+            password = password,
             localPath = cloudLibrary.localPath
         )
         return when {
@@ -292,10 +305,21 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
             return false
         }
 
+        val remoteFilePath = cloudLibrary.remoteFilePath
+        val username = cloudLibrary.username
+        val password = cloudLibrary.password
+        if (remoteFilePath.isNullOrBlank() || username.isNullOrBlank() || password.isNullOrBlank()) {
+            Logger.e(SYNC_LOG_TAG, "上传云端库失败：凭据不完整（远端路径/账号/密码缺失）")
+            libraryViewModel.updateCloudSyncState(
+                status = SYNC_STATUS_FAILED,
+                errorMessage = "云端库凭据不完整，请重新绑定或检查账号信息"
+            )
+            return false
+        }
         val outcome = syncEngine.upload(
-            remotePath = cloudLibrary.remoteFilePath!!,
-            username = cloudLibrary.username!!,
-            password = cloudLibrary.password!!,
+            remotePath = remoteFilePath,
+            username = username,
+            password = password,
             localPath = cloudLibrary.localPath,
             masterPassword = masterPassword,
             merge = SyncMergeCallback { localPath, masterPassword, remoteBytes ->

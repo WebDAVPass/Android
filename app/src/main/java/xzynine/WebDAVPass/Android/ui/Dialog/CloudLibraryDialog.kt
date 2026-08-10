@@ -499,6 +499,7 @@ fun CloudLibraryDialog(
                                 createRemote(baseUrl, path, username, password, createPassword)
                             }
                         } catch (e: Exception) {
+                            Logger.e(SEARCH_LOG_TAG, "云端库操作失败（import/create/bind），path=$path", e)
                             null
                         }
 

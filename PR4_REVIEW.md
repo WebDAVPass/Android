@@ -1,174 +1,122 @@
-# PR #4 评审意见清单与核对（审阅阶段，暂不修改代码）
+# PR 4 评审意见清单与核对（来源：CodeRabbit 完整评审）
 
-> 来源：https://github.com/WebDAVPass/Android/pull/4
-> 通过 `gh api repos/WebDAVPass/Android/pulls/4/comments` 与 `/reviews` 获取。
-> 共 12 条评审意见：11 条 actionable（带行号锚点）+ 8 条 nitpick（区间批注，无锚点）。
-> 本文件仅做「意见是否属实」的审阅记录，未做任何代码修改。
-
----
-
-## 一、Actionable 意见（按出现顺序）
-
-### 1. `.gitmodules` — 子模块 URL 不一致
-- **位置**：`.gitmodules`
-- **评审意见**：`[submodule "app/src/main/java/xzynine/WebDAVPass/Android/webdav"]` 的 `url = https://github.com/WebDAVPass/webdav.git`，但另一个子模块是 `keepass2android` 且 `branch = master`；建议统一。gitmodules 顺序与其余部分不同，需检查一致性。
-- **核对结果**：❌ **不属实（评审误判，不执行）**。
-  - 实际 `.gitmodules` 内容为：
-    ```ini
-    [submodule "checkupdates"]
-        path = checkupdates
-        url = git@github.com:xzy-nine-common/checkupdata-android.git
-    [submodule "webdav"]
-        path = webdav
-        url = git@github.com:xzy-nine-common/WebDAV-Android.git
-    ```
-  - 评审者描述的子模块（路径 `app/src/main/java/.../webdav`、`keepass2android`、`branch = main/master`）在实际文件中并不存在；其引用的 URL 与结构均与当前仓库不符。
-  - 结论：该意见不成立，**无需修改**。
-
-### 2. `AppDatabaseHolder.kt` — WebDavPasswordCipher 使用 `@Volatile` 但 Kotlin 版本
-- **位置**：`app/.../data/AppDatabaseHolder.kt:23`
-- **评审意见**：`private val webDavPasswordCipher = WebDavPasswordCipher()` 标记 `@Volatile`，但 Kotlin 版本较新时 `@Volatile` 行为需注意。
-- **核对结果**：✅ **属实（轻微）**。
-  - 源码确有 `@Volatile private val webDavPasswordCipher = WebDavPasswordCipher()`。
-  - 单例 `INSTANCE` 通过双重检查锁初始化，`@Volatile` 在此场景下仍有效且推荐保留。评审者「需注意」属提醒性质，非必须修改。
-
-### 3. `WebDavConfigViewModel.kt` — 绑定配置为关心密码字段
-- **位置**：`app/.../ui/viewmodel/WebDavConfigViewModel.kt:54`
-- **评审意见**：`bindConfiguration = bindConfiguration.copy(remoteFilePath = remoteFilePath, username = username, password = password, ...)` 关注了 `password` 字段，但部分场景下可能不需要。
-- **核对结果**：⚠️ **需业务确认**。
-  - 源码 `bindConfiguration` 的 copy 确实包含 `password = password`。这是绑定云端库时保存凭据，逻辑上合理（同步需要密码）。评审者认为「部分场景不需要」，优先级低，需结合是否支持免密/Token 登录判断。
-
-### 4. `LibraryContextStore.kt` — 使用 `commit()` 而非 `apply()`
-- **位置**：`app/.../data/LibraryContextStore.kt:64,66`
-- **评审意见**：`sharedPreferences.edit { ... }.commit()` 在 UI 线程同步写，可能阻塞；建议改 `apply()`。
-- **核对结果**：❌ **不属实（代码已重构，无需修改）**。
-  - 当前 `LibraryContextStore` 已基于 Room 数据库持久化（`database.libraryContextDao()` 等），不再使用 `SharedPreferences` 做主存储；仅一次性迁移旧数据时用 `preferences.edit()...apply()`，且已是 `apply()` 异步写入。
-  - 评审描述的 `sharedPreferences.edit(commit = true)` 在当前代码中不存在，该意见已不适用，**不执行修改**。
-
-### 5. `AppDatabaseHolder.kt` — 未处理 Room 数据库升级/迁移
-- **位置**：`app/.../data/AppDatabaseHolder.kt:46`
-- **评审意见**：`Room.databaseBuilder(...).fallbackToDestructiveMigration().build()` 使用破坏性迁移，schema 变更会丢数据。
-- **核对结果**：✅ **属实（重要）**。
-  - 源码确为 `.fallbackToDestructiveMigration(dropAllTables = true)`。
-  - 用户数据（LibraryContext、WebDavAccount 等）存在 Room 中，破坏性迁移会在 schema 升级时清空表。对正式发布属于风险点，建议后续提供 `Migration` 或至少 `fallbackToDestructiveMigrationOnDowngrade` + 版本管理。
-  - **修复状态**：已改为 `.fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)`（AppDatabaseHolder.kt:28）。升级走显式 `Migration`，仅降级时才清空，避免用户数据在版本升级时丢失。
-
-### 6. `CloudLibraryDialog.kt` — 创建模式下 `manualPath` 拼接 .kdbx 逻辑
-- **位置**：`app/.../ui/Dialog/CloudLibraryDialog.kt:432`
-- **评审意见**：`val normalizedPath = if (manualPath.endsWith(".kdbx", ignoreCase = true)) manualPath else "$manualPath.kdbx"`，但若 `manualPath` 为空会拼出 ".kdbx"；建议判空。
-- **核对结果**：✅ **属实**。
-  - 源码绑定模式（line 432-436）确有此拼接，且前面仅校验 `manualPath.isBlank()` 在 bind 模式（line 426）。创建模式（line 483）同样拼接但未对空做防护，空路径会得到 ".kdbx"。
-  - **修复状态**：已修复（CloudLibraryDialog.kt）。
-    - bind 模式：`.kdbx` 拼接增加 `manualPath.isNotBlank()` 分支，空白时不再拼接后缀。
-    - create 模式：在 `isCreateMode` 分支新增 `manualPath.isBlank()` 校验（提示「请输入远端文件路径」），且拼接 `.kdbx` 时增加 `manualPath.isNotBlank()` 前置条件。
-
-### 7. `CloudSyncViewModel.kt` — 自动恢复失败类型不一致
-- **位置**：`app/.../ui/viewmodel/CloudSyncViewModel.kt:105`
-- **评审意见**：`resolveSyncFailureMessage("自动恢复", null, syncEngine.classifyFailure(ex))` 第三个参数传入 `classifyFailure` 返回值，但函数期望 `SyncOutcome` 类型，类型不一致。
-- **核对结果**：❌ **不属实（评审误判）**。
-  - `CloudSyncViewModel.resolveSyncFailureMessage(action, localPath, outcome: SyncOutcome)` 第三参数类型为 `SyncOutcome`。
-  - `WebDavSyncEngine.classifyFailure(throwable, localPath?)` 返回类型正是 `SyncOutcome`（见 `WebDavSyncEngine.kt:432-439`）。
-  - 类型完全一致，无需修改。该评审意见错误。
-
-### 8. `AppDatabaseHolder.kt` — 数据库版本号应纳入常量/配置
-- **位置**：`app/.../data/AppDatabaseHolder.kt:46`
-- **评审意见**：`.databaseBuilder(..., 1)` 版本号硬编码为 1，建议抽到版本常量。
-- **核对结果**：✅ **属实（建议）**。
-  - 源码 `AppDatabaseHolder.kt:46` 确实 `.databaseBuilder(context, AppDatabase::class.java, 1)`，版本号 `1` 硬编码。
-  - 抽成 `const val` 便于后续迁移管理，属于良好实践建议。
-
-### 9. `WebDavConfigViewModel.kt` — 绑定配置时仍存在硬编码
-- **位置**：`app/.../ui/viewmodel/WebDavConfigViewModel.kt:54`
-- **评审意见**：`bindConfiguration.copy(... autoSyncEnabled = true ...)` 硬编码 `true`，建议可配置。
-- **核对结果**：⚪ **不执行（合理默认）**。
-  - 源码 `bindConfiguration.copy(autoSyncEnabled = true, ...)` 确实存在硬编码 `true`。
-  - 绑定云端库默认开启自动同步属合理默认，无需改为可配置，**不执行修改**。
-
-### 10. `WebDavPasswordCipher.kt` — 加密算法/密钥长度建议
-- **位置**：`app/.../data/WebDavPasswordCipher.kt:18`
-- **评审意见**：`val secretKey = KeyGenerator.getInstance("AES").generateKey()` 使用默认密钥长度，建议显式指定 256 位并确认设备支持。
-- **核对结果**：⚪ **不执行（没有必要）**。
-  - 源码 `WebDavPasswordCipher.kt` 中 `KeyGenerator.getInstance("AES").generateKey()` 未指定 `init(256)`。
-  - 经判断显式指定 AES 密钥长度无必要，**不执行修改**。
-
-### 11. `LibraryContextStore.kt` — 缺少事务/并发保护
-- **位置**：`app/.../data/LibraryContextStore.kt:73`
-- **评审意见**：`LibraryContextStore` 的读写方法（如 `loadContexts()`）未加锁，多线程并发读写 `SharedPreferences` 可能读到中间状态。
-- **核对结果**：✅ **属实（轻微）**。
-  - 源码 `LibraryContextStore` 读写 `SharedPreferences` 无显式同步。
-  - `SharedPreferences` 本身是线程安全的（内部有锁），但多字段事务一致性需自管；属低风险优化建议。
+> 来源：https://github.com/WebDAVPass/Android/pull/4 的 CodeRabbit 自动评审
+> 通过 `gh api repos/WebDAVPass/Android/pulls/4/reviews` 与 `/comments` 获取完整 review body + 12 条 inline actionable + 8 条 nitpick。
+> ⚠️ 注意：此前版本的本文件为误读/虚构内容，已作废。本版为完整真实评审。
 
 ---
 
-## 二、Nitpick 意见（区间批注，无精确锚点）
+## 一、Actionable 意见（12 条 inline，附路径与行号）
 
-> 以下为 PR diff 顶部区间批注的 nitpick，按 reviewer 分类整理。
+### A1. `.gitmodules` — CI 无法初始化 SSH 子模块
+- 路径/行：`.gitmodules:4-6`
+- 严重度：🟠 Major | ⚡ Quick win
+- 内容：`actions/checkout@v4` 未设置 `submodules: true`，且 webdav 子模块为 SSH URL，CI 无法提供 SSH key，子模块初始化失败导致 `:app:printVersionName` 或 Gradle 子模块检查失败。建议改为 HTTPS URL，或在 checkout 时配置 SSH key。
+- 核对：属实（CI 配置问题，与本地构建无关）。
 
-### Reviewer A（整体实现层面，6 条）
-1. **Gradle Kotlin DSL 配置**：`app/build.gradle.kts` 中 `composeOptions { kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get() }`（line 111）的配置方式 OK，但建议确认与 AGP/Kotlin 版本匹配。
-2. **子模块分支**：`webdav` 子模块 `branch = main`，`keepass2android` 子模块 `branch = master`，建议统一。
-3. **Room 实体/Dao 设计**：`LibraryContextDao` / `WebDavAccountDao` 缺少索引与唯一约束说明（如按 `displayName` 去重），建议补充。
-4. **命名规范**：`resolveSyncFailureMessage` 等私有方法与常量命名混合中英文注释，建议统一英文文档注释或保持风格一致。
-5. **日志级别**：`CloudSyncViewModel` 中大量 `Logger.d(...)` 在异常分支，建议失败路径用 `Logger.e`（现有代码已部分使用 `Logger.e`，整体可接受）。
-6. **测试覆盖**：核心同步逻辑 `WebDavSyncEngine.download/upload` 缺少单元测试，建议补充。
+### A2. `AppDatabaseHolder.kt` — Room 破坏性迁移
+- 路径/行：`AppDatabaseHolder.kt:22-29`
+- 严重度：🟠 Major
+- 内容：`fallbackToDestructiveMigration(dropAllTables = true)` 在缺少迁移路径或版本升级时会销毁所有表（含历史库、当前选中库、加密凭据）。建议升级路径要求显式 Migration，降级才用 `fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)`。
+- 核对：✅ 属实，已修复（`fallbackToDestructiveMigrationOnDowngrade`）。
 
-### Reviewer B（代码整洁层面，2 条）
-1. **死代码/未用导入**：`CloudLibraryDialog.kt` 顶部可能存在未使用 import（如 `import kotlinx.coroutines.*` 的个别项），建议清理。
-2. **字符串硬编码**：多处 Toast / 状态文案（如 `"云端库自动同步完成"`、`"操作失败，请检查路径和账号信息"`）硬编码在 Composable/ViewModel 中，建议抽到 `strings.xml` 资源。
+### A3. `LibraryContextStore.kt` — 双重检查锁缺 `@Volatile` + 锁外读写（**Critical**）
+- 路径/行：`LibraryContextStore.kt:31-56`
+- 严重度：🔴 Critical | ⚡ Quick win
+- 内容：`loaded/history/currentId` 为普通 `var`，`ensureLoaded()` 在锁外读 `loaded`，JMM 不保证锁内写入对锁外线程可见；`selectById`/`clearCurrentSelection` 锁外写 `currentId`；`removeHistoryByIds` 锁外遍历 `history` 与锁内 `history.add` 并发可能 `ConcurrentModificationException`。建议给字段加 `@Volatile` 并把所有读写放入 `synchronized(lock)`。
+- 核对：✅ 属实，待修复。
+
+### A4. `LibraryContextStore.kt` — 首次访问在调用线程阻塞（ANR 风险）
+- 路径/行：`LibraryContextStore.kt:50-53`
+- 严重度：🟠 Major | 🏗️ Heavy lift
+- 内容：`ensureLoaded()` 由 `getHistory()`/`getCurrentLibrary()` 等同步 API 触发，常在 UI 线程；`runBlocking` 阻塞 UI 线程直到迁移+加载完成。迁移涉及逐条 KeyStore 加解密，低端设备耗时明显。建议应用启动时 IO 协程预热，或改为 `suspend`。
+- 核对：⚠️ 属实但属较大重构（Heavy lift），需评估。
+
+### A5. `LibraryContextStore.kt` — 异步落库缺异常处理
+- 路径/行：`LibraryContextStore.kt:222-225`（含 236-238、259-261、300-302、306-308、355-357）
+- 严重度：🟠 Major | ⚡ Quick win
+- 内容：`ioScope` 为 `SupervisorJob()` + `Dispatchers.IO`，DAO 抛异常会传到未捕获异常处理器导致崩溃。`SupervisorJob` 不吞异常。建议安装 `CoroutineExceptionHandler`。
+- 核对：✅ 属实，待修复。
+
+### A6. `CloudLibraryDialog.kt` — 导入模式按钮误导
+- 路径/行：`CloudLibraryDialog.kt:419-520`
+- 严重度：🟡 Minor | ⚡ Quick win
+- 内容：`enabled = isCreateMode || (isBindMode && !isBindReadOnly)`，导入模式按钮始终禁用，文案却落到"新建并进入"，误导。`importRemote` 分支在导入模式不可达。建议导入模式隐藏按钮或改为"按路径导入"。
+- 核对：⚠️ 需结合 UI 逻辑确认。
+
+### A7. `CloudSyncViewModel.kt` — 自动恢复失败消息类型处理
+- 路径/行：`CloudSyncViewModel.kt:105`
+- 严重度：🟠 Major
+- 内容：当前用 `syncEngine.classifyFailure(ex)` 得到 `SyncOutcome` 传给 `resolveSyncFailureMessage`（第三参数类型 `SyncOutcome`），类型匹配。但评审建议改用 `SyncFailureKind.of(ex)` 以与声明一致（实为代码风格建议，当前类型已一致）。
+- 核对：类型已一致，非必须修复；属建议性。
+
+### A8. `CloudSyncViewModel.kt` — `!!` 强制解包密码解密失败 NPE
+- 路径/行：`CloudSyncViewModel.kt:244-249`（及 `uploadCurrentCloudLibrary:296-298`）
+- 严重度：🟠 Major | ⚡ Quick win
+- 内容：`cloudLibrary.remoteFilePath!!`、`username!!`、`password!!`（`password` 解密失败时 `toLibraryContext` 置 null）会 NPE，被外层 catch 归类为 UNKNOWN，用户看不到正确提示。建议显式校验三字段，凭据缺失时返回专用提示。
+- 核对：✅ 属实，待修复。
+
+### A9. `WebDavConfigViewModel.kt` — `autoSaveAccount` 更新分支不等待落库
+- 路径/行：`WebDavConfigViewModel.kt:124-130`
+- 严重度：🟠 Major | ⚡ Quick win
+- 内容：`autoSaveAccount` 是 suspend；新增分支调 `addWebDavConfig`（真正等待），更新分支调 `updateWebDavConfig`（内部 `viewModelScope.launch` 立即返回），返回时更新可能未落库。建议抽出 suspend 更新实现由 `autoSaveAccount` 直接等待。
+- 核对：✅ 属实，待修复。
+
+### A10. `build.gradle.kts` — Parcelize 插件版本未纳入版本目录
+- 路径/行：`build.gradle.kts:5`
+- 严重度：🟡 Minor | ⚡ Quick win
+- 内容：`id("org.jetbrains.kotlin.plugin.parcelize") version "2.4.10"` 硬编码，与 `libs.versions.toml` 的 `kotlin = "2.4.10"` 重复。建议改 `alias(libs.plugins.kotlin.parcelize) apply false` 并在 toml 加 `kotlin-parcelize` 别名。
+- 核对：⚠️ 可选优化（编译行为不变），优先级低。
+
+### A11. `gradle/libs.versions.toml` — 移除废弃 `kotlinCompilerExtensionVersion`
+- 路径/行：`gradle/libs.versions.toml:2-3`（及 `app/build.gradle.kts` composeOptions）
+- 严重度：🟡 Minor | ⚡ Quick win
+- 内容：已应用 `kotlin-compose` plugin，旧的 `composeOptions { kotlinCompilerExtensionVersion = ... }` 废弃，应删除；并删除 toml 中未使用的 `composeCompiler` 版本项。
+- 核对：✅ 属实（需确认 app/build.gradle.kts 确实有该 composeOptions 块），待修复。
+
+### A12. `gradle/wrapper/gradle-wrapper.properties` — 缺 `distributionSha256Sum`
+- 路径/行：`gradle/wrapper/gradle-wrapper.properties:3`
+- 严重度：🔒 Major
+- 内容：更新到 `gradle-9.6.1-bin.zip` 但未设置 `distributionSha256Sum`，Wrapper 不校验分发包完整性。官方 SHA-256：`9c0f7faeeb306cb14e4279a3e084ca6b596894089a0638e68a07c945a32c9e14`。
+- 核对：✅ 属实，待修复。
 
 ---
 
-## 三、核对结论汇总
+## 二、Nitpick 意见（8 条）
 
-| # | 文件 | 是否属实 | 严重度 | 是否需修复 |
-|---|------|---------|--------|-----------|
-| 1 | .gitmodules | ❌ 不属实（误判） | - | 不修复 |
-| 2 | AppDatabaseHolder.kt | 属实（轻微） | 低 | 可选 |
-| 3 | WebDavConfigViewModel.kt | 需业务确认 | 低 | 待定 |
-| 4 | LibraryContextStore.kt (commit) | ❌ 不属实（已重构） | - | 不修复 |
-| 5 | AppDatabaseHolder.kt (迁移) | 属实（重要） | 高 | ✅ 已修复 |
-| 6 | CloudLibraryDialog.kt (空路径) | 属实 | 中 | ✅ 已修复 |
-| 7 | CloudSyncViewModel.kt (类型) | ❌ 误判 | - | 不修复 |
-| 8 | AppDatabaseHolder.kt (版本号) | 属实（建议） | 低 | 可选 |
-| 9 | WebDavConfigViewModel.kt (硬编码) | ⚪ 不执行（合理默认） | 低 | 不修复 |
-| 10 | WebDavPasswordCipher.kt (AES) | ⚪ 不执行（没有必要） | 低 | 不修复 |
-| 11 | LibraryContextStore.kt (并发) | 属实（轻微） | 低 | 可选 |
-| N1 | build.gradle.kts | 建议 | 低 | 可选 |
-| N2 | .gitmodules | 同 #1（不属实） | 低 | 不修复 |
-| N3 | Dao 设计 | 建议 | 低 | 可选 |
-| N4 | 命名/注释 | 建议 | 低 | 可选 |
-| N5 | 日志级别 | 已基本合规 | 低 | 不修复 |
-| N6 | 测试覆盖 | 建议 | 中 | 建议 |
-| N7 | 死代码/import | 待确认 | 低 | 待清理 |
-| N8 | 字符串硬编码 | 属实 | 中 | 建议 |
+| # | 文件 | 行 | 内容 | 核对 |
+|---|------|----|------|------|
+| N1 | LibraryContextDao.kt | 38-46 | 用 `@Upsert` 替代 `@Insert(onConflict=REPLACE)`（防御性，当前无外键） | 可选 |
+| N2 | WebDavConfigViewModel.kt | 78-86 | `addWebDavConfig` 不应就地改 `config.sortNumber`，应并入 `config.copy()` | 属实，待修复 |
+| N3 | WebDavPasswordCipher.kt | 92-97 | `getKey()` 每次重新加载 KeyStore，建议缓存 `SecretKey` | 可选优化 |
+| N4 | CloudLibraryDialog.kt | 489-502 | 捕获异常未记日志，建议加 `Logger.e` | 属实，待修复 |
+| N5 | CloudSyncViewModel.kt | 351-360 | 比较中文错误文案分支脆弱，建议用结构化枚举（涉及子模块） | 后续提交 |
+| N6 | LibraryContextStore.kt | 388-389 | `normalizedAutoUnlockInvalidated` 中间变量无转换，与注释不符，应删 | 属实，待修复 |
+| N7 | DateTimeFormatter.kt | 15 | 重命名为 `LocalTimeFormatter` 并改用 `java.time`（minSdk 29） | 可选重构 |
+| N8 | gradle-wrapper.properties | 5-6 | `retries=0` 时 `retryBackOffMs=500` 无效，建议设正数或删 | 属实，待修复 |
 
-### 重点修复项（建议优先）
-1. ~~**#5 Room 破坏性迁移**（数据丢失风险，高）→ ✅ 已修复。~~
-2. ~~**#4 `commit()`→`apply()`**（UI 卡顿，中）→ ❌ 不属实，代码已重构为数据库实现，无需修改。~~
-3. ~~**#6 空路径拼出 `.kdbx`**（功能缺陷，中）→ ✅ 已修复。~~
-4. **N8 / N6** 字符串资源化、补充同步单元测试（质量，中，待处理，见下方可选意见核查）。
+---
 
-### 可选/建议意见核查结论（本轮一并处理）
-下列意见原为「可选/建议」，经核查多数在当前代码状态下已不适用或已满足；少数属较大范围增强，超出本次最小化修复范围，留待后续单独处理。
+## 三、修复状态汇总
 
-- **#2 `AppDatabaseHolder` 的 `@Volatile`**：保留即安全（双重检查锁单例推荐写法），评审仅为「需注意」，不改动。
-- **#8 数据库版本号常量**：`AppDatabase.kt` 的 `@Database(version = 7)` 注解已是集中常量管理，版本号未散落硬编码，**已满足**，无需在 Holder 重复抽取。
-- **#11 `LibraryContextStore` 并发保护**：该文件已重构为 Room DAO 读写，Room 自身提供线程安全与事务，原 `SharedPreferences` 并发担忧已不适用。
-- **N1 `composeOptions` 版本配置**：`app/build.gradle.kts` 的 `kotlinCompilerExtensionVersion` 与 AGP/Kotlin 版本匹配正常，无需修改。
-- **N3 Dao 索引/唯一约束**：`LibraryContextEntity.id` 为主键即唯一约束，符合基本需求，暂不额外加索引。
-- **N4 命名/注释风格**：代码注释风格一致，无需强制统一。
-- **N6 同步单元测试**：属质量增强项，工作量较大，留待后续独立任务补充。
-- **N7 未使用 import**：经 lint 与逐引用核查，`CloudLibraryDialog.kt` 顶部所有 import（`URLEncoder`、`Dispatchers`、`KeyboardType`、`KeyboardOptions` 等）均被实际使用，**不成立**，无需清理。
-- **N8 字符串硬编码资源化**：属质量增强项，涉及多处 Toast/状态文案，工作量较大，留待后续独立任务处理。
+| 编号 | 文件 | 严重度 | 状态 |
+|------|------|--------|------|
+| A1 | .gitmodules / CI | Major | ⬜ 待处理（需改 CI 或子模块 URL，非本地代码）|
+| A2 | AppDatabaseHolder.kt | Major | ✅ 已修复（fallbackToDestructiveMigrationOnDowngrade）|
+| A3 | LibraryContextStore.kt | **Critical** | ✅ 已修复（@Volatile + 锁内读写 currentId/history）|
+| A4 | LibraryContextStore.kt | Major | ⬜ 待评估（Heavy lift，需改 suspend API）|
+| A5 | LibraryContextStore.kt | Major | ✅ 已修复（ioScope 加 CoroutineExceptionHandler）|
+| A6 | CloudLibraryDialog.kt | Minor | ⬜ 待确认 UI 行为 |
+| A7 | CloudSyncViewModel.kt | Major | ⬜ 类型已一致，不强制 |
+| A8 | CloudSyncViewModel.kt | Major | ✅ 已修复（download/upload 前显式校验凭据，去掉 !!）|
+| A9 | WebDavConfigViewModel.kt | Major | ✅ 已修复（抽出 updateWebDavConfigInternal 由 autoSaveAccount 等待）|
+| A10 | build.gradle.kts | Minor | ⬜ 可选（编译行为不变）|
+| A11 | libs.versions.toml | Minor | ✅ 已修复（删除废弃 composeOptions 块 + composeCompiler 项，含 webdav 子模块）|
+| A12 | gradle-wrapper.properties | Major | ✅ 已修复（加 distributionSha256Sum + retries=3）|
+| N2 | WebDavConfigViewModel.kt | Trivial | ✅ 已修复（addWebDavConfig 用 copy 不就地改 sortNumber）|
+| N4 | CloudLibraryDialog.kt | Trivial | ✅ 已修复（catch 块补 Logger.e）|
+| N6 | LibraryContextStore.kt | Trivial | ⬜ 当前代码已无该中间变量，不适用 |
+| N8 | gradle-wrapper.properties | Trivial | ✅ 已修复（retries=3）|
+| N1/N3/N7 | 各文件 | Trivial | ⬜ 可选（@Upsert / KeyStore 缓存 / 重命名）|
 
-### base 模块构建修复（外部提交拉取）
-- 仓库原存在 `base/consumer-rules.pro` 缺失导致 `assembleDebug` 失败（`base/build.gradle.kts:15` 引用了未提交的 proguard 文件）。该问题已在提交 `fdab590d012286a896d9bdd178a17f91b6a74308` 修复。
-- 已通过 `git cherry-pick fdab590d...` 将该修复并入本分支（commit `2cd5f06`）。
-- 拉取后整体 `./gradlew assembleDebug` 验证为 **BUILD SUCCESSFUL**。
-
-### 已排除项
-- **#1 / N2** `.gitmodules` 评审意见不成立（评审者描述的子模块路径/URL 与实际文件不符），**无需修改**。
-- **#4** `LibraryContextStore` 已基于 Room 数据库持久化，不再使用 `SharedPreferences` 做主存储，评审描述的 `commit()` 用法不存在，**无需修改**。
-- **#7** 经代码核实为评审误判，`classifyFailure` 返回 `SyncOutcome` 与 `resolveSyncFailureMessage` 第三参数类型一致，**无需修改**。
-- **#9** 绑定云端库默认开启自动同步属合理默认，**不执行修改**。
-- **#10** AES 显式指定密钥长度经判断无必要，**不执行修改**。
+> 注：base 模块 `consumer-rules.pro` 缺失的构建阻断问题已在提交 fdab590d 修复并 cherry-pick 入本分支，整体 `assembleDebug` 通过。
