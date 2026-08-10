@@ -41,6 +41,8 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
+import xzynine.WebDAVPass.Android.util.PasswordStrength
+import xzynine.WebDAVPass.Android.util.strengthLabel
 import java.io.ByteArrayOutputStream
 
 /** 密钥文件大小上限（1 MiB）。 */
@@ -75,6 +77,12 @@ fun CreateMasterPasswordDialog(
     var keyFileName by remember { mutableStateOf("") }
     var keyFileData by remember { mutableStateOf<ByteArray?>(null) }
     var keyFileUri by remember { mutableStateOf<String?>(null) }
+    // 弱密码二次确认：首次确认时提示弱密码，需再次点击才允许继续
+    var weakPasswordAcknowledged by remember { mutableStateOf(false) }
+
+    // 实时密码强度（bits）：仅当选择了密钥文件时不强制要求主密码强度
+    val passwordStrengthBits = remember(password) { PasswordStrength.estimateBits(password) }
+    val passwordIsWeak = password.isNotEmpty() && PasswordStrength.isWeak(password)
 
     val keyFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -133,12 +141,28 @@ fun CreateMasterPasswordDialog(
                 onValueChange = {
                     password = it
                     status = ""
+                    weakPasswordAcknowledged = false
                 },
                 label = "主密码",
                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 singleLine = true
             )
+            if (password.isNotEmpty()) {
+                val bits = passwordStrengthBits
+                val label = strengthLabel(bits)
+                val color = when {
+                    bits < 30.0 -> MiuixTheme.colorScheme.error
+                    bits < 60.0 -> MiuixTheme.colorScheme.error
+                    bits < 100.0 -> MiuixTheme.colorScheme.primary
+                    else -> MiuixTheme.colorScheme.primary
+                }
+                Text(
+                    text = "强度：$label（${bits.toInt()} bits）",
+                    fontSize = 12.sp,
+                    color = color
+                )
+            }
             TextField(
                 value = confirmPassword,
                 onValueChange = {
@@ -211,12 +235,17 @@ fun CreateMasterPasswordDialog(
                         when {
                             password.isBlank() -> status = "请输入主密码"
                             password != confirmPassword -> status = "两次主密码不一致"
+                            // 未选择密钥文件时，弱密码需二次确认
+                            keyFileData == null && passwordIsWeak && !weakPasswordAcknowledged -> {
+                                weakPasswordAcknowledged = true
+                                status = "主密码强度较低（${passwordStrengthBits.toInt()} bits），建议增加长度或组合大小写/数字/符号；再次点击「继续」可强制使用。"
+                            }
                             else -> onConfirm(password, keyFileData, keyFileUri)
                         }
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("继续")
+                    Text(if (keyFileData == null && passwordIsWeak && weakPasswordAcknowledged) "确认使用弱密码" else "继续")
                 }
             }
         }
