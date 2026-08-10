@@ -606,6 +606,19 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 将当前数据库导出到指定 Uri（CreateDocument 产物）。
+     */
+    suspend fun exportCurrentDatabase(uri: Uri): Boolean {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
+        return kdbxTokenRepository.exportDatabaseTo(
+            localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        ) {
+            context.contentResolver.openOutputStream(uri, "wt")
+        }
+    }
+
+    /**
      * 写入成功后的统一刷新链路。
      */
     private fun onPasswordWriteSuccess() {

@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +36,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
@@ -54,6 +56,7 @@ import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
+import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Settings
@@ -84,6 +87,7 @@ fun SettingsScreen(
     val restoreProgress = viewModel.cloudSyncViewModel.restoreProgress.collectAsState()
     val currentLibraryState by viewModel.libraryViewModel.currentLibrary.collectAsState()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val autoUnlockModeItems = remember { listOf("默认", "生物识别", "PIN") }
     val currentLib = currentLibraryState
 
@@ -206,6 +210,23 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
             manualUnlockClockMillis = System.currentTimeMillis()
         }
     }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        onResult = { uri ->
+            if (uri == null) {
+                return@rememberLauncherForActivityResult
+            }
+            coroutineScope.launch {
+                val ok = viewModel.exportCurrentDatabase(uri)
+                if (ok) {
+                    xzylib.base.util.ToastUtils.showShortToast(context, "数据库已导出")
+                } else {
+                    xzylib.base.util.ToastUtils.showShortToast(context, "导出失败")
+                }
+            }
+        }
+    )
 
     /**
      * 当前库是否已具备云端同步所需信息。
@@ -349,6 +370,24 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     )
                 },
                 onClick = onDatabaseSettingsClick,
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+            )
+
+            // 导出数据库
+            ArrowPreference(
+                title = "导出数据库",
+                summary = "将当前库另存为 .kdbx 文件",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Download,
+                        contentDescription = "导出数据库",
+                    )
+                },
+                onClick = {
+                    exportLauncher.launch("WebDavPass-导出.kdbx")
+                },
                 modifier = Modifier.Companion
                     .fillMaxWidth()
             )

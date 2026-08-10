@@ -813,6 +813,50 @@ class KdbxTokenRepository(context: Context) {
     }
 
     /**
+     * 将当前数据库导出到指定输出流（含删除历史/历史记录/附件等全部内容）。
+     *
+     * 复用标准保存序列化路径，凭据与当前库一致，不修改内存中的数据库对象。
+     *
+     * @return 是否成功
+     */
+    fun exportDatabaseTo(
+        localPath: String,
+        masterPassword: String,
+        outputStreamProvider: () -> OutputStream?
+    ): Boolean {
+        return runCatching {
+            val location = resolveLocation(localPath)
+            // 优先复用已解锁的缓存实例，避免重复解密
+            val cachedPair = DatabaseManager.tryGet(localPath)
+            val (database, cacheDirectory) = if (cachedPair != null) {
+                cachedPair
+            } else {
+                openDatabase(location, masterPassword)
+            }
+            try {
+                val cacheFile = File.createTempFile("kdbx-export-", ".tmp", cacheDirectory)
+                database.saveData(
+                    cacheFile = cacheFile,
+                    databaseOutputStream = outputStreamProvider,
+                    isNewLocation = true,
+                    masterCredential = MasterCredential(
+                        password = masterPassword,
+                        keyFileData = DatabaseManager.getKeyFileData()
+                    ),
+                    challengeResponseRetriever = emptyChallengeResponseRetriever
+                )
+                true
+            } finally {
+                if (cachedPair == null) {
+                    database.clearAndClose(cacheDirectory)
+                }
+            }
+        }.onFailure {
+            Logger.e(LOG_TAG, "exportDatabaseTo failed, path=$localPath, message=${it.message}", it)
+        }.getOrDefault(false)
+    }
+
+    /**
      * 一次性加载一级密码条目及全局总计数。
      *
      * 对比分别调用 [loadPasswordEntriesByTopLevel] 和 [countPasswordEntries]，
