@@ -45,6 +45,9 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
 import xzynine.WebDAVPass.Android.ui.Dialog.PasswordInputDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
+import xzynine.WebDAVPass.Android.BuildConfig
+import github.xzynine.checkupdata.CheckUpdateManager
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -234,6 +237,10 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
 
     var pendingMergeUri by remember { mutableStateOf<android.net.Uri?>(null) }
     var mergeLoading by remember { mutableStateOf(false) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var updateResult by remember {
+        mutableStateOf<github.xzynine.checkupdata.model.UpdateResult?>(null)
+    }
 
     val mergeLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument(),
@@ -443,6 +450,33 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                 },
                 onClick = {
                     mergeLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                },
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+            )
+
+            // 检查更新
+            ArrowPreference(
+                title = "检查更新",
+                summary = "从 GitHub Releases 检查新版本",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Download,
+                        contentDescription = "检查更新",
+                    )
+                },
+                onClick = {
+                    coroutineScope.launch {
+                        checkingUpdate = true
+                        val result = CheckUpdateManager(context).checkUpdate(
+                            owner = "WebDAVPass",
+                            repo = "Android",
+                            currentVersion = BuildConfig.VERSION_NAME
+                        )
+                        checkingUpdate = false
+                        updateResult = result
+                    }
                 },
                 modifier = Modifier.Companion
                     .fillMaxWidth()
@@ -773,5 +807,59 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                 }
             }
         )
+    }
+
+    when (val result = updateResult) {        is github.xzynine.checkupdata.model.UpdateResult.HasUpdate -> {
+            val release = result.releaseInfo
+            val assetFilter: ((github.xzynine.checkupdata.model.ReleaseInfo.ReleaseAsset) -> Boolean)? = null
+            ConfirmationDialog(
+                title = "发现新版本 ${release.version}",
+                summary = buildString {
+                    append("当前版本：${result.currentVersion}\n")
+                    if (release.releaseNotes.isNotBlank()) {
+                        append("更新说明：\n${release.releaseNotes.take(500)}")
+                    }
+                },
+                show = remember { mutableStateOf(true) },
+                onDismiss = { updateResult = null },
+                confirmButtonText = "下载更新",
+                onConfirm = {
+                    updateResult = null
+                    coroutineScope.launch {
+                        val downloadResult = CheckUpdateManager(context).downloadRelease(release, assetFilter = assetFilter)
+                        when (downloadResult) {
+                            is github.xzynine.checkupdata.download.SystemDownloader.DownloadResult.Success ->
+                                xzylib.base.util.ToastUtils.showShortToast(context, "已开始下载：${downloadResult.fileName}")
+
+                            else -> xzylib.base.util.ToastUtils.showShortToast(context, "下载失败，请到 GitHub Releases 手动下载")
+                        }
+                    }
+                }
+            )
+        }
+
+        is github.xzynine.checkupdata.model.UpdateResult.NoUpdate -> {
+            ConfirmationDialog(
+                title = "已是最新版本",
+                summary = "当前版本：${result.currentVersion}",
+                show = remember { mutableStateOf(true) },
+                onDismiss = { updateResult = null },
+                confirmButtonText = "确定",
+                onConfirm = { updateResult = null }
+            )
+        }
+
+        is github.xzynine.checkupdata.model.UpdateResult.Error -> {
+            ConfirmationDialog(
+                title = "检查更新失败",
+                summary = result.message,
+                show = remember { mutableStateOf(true) },
+                onDismiss = { updateResult = null },
+                confirmButtonText = "确定",
+                onConfirm = { updateResult = null }
+            )
+        }
+
+        null -> {}
     }
 }
