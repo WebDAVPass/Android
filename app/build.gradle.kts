@@ -127,6 +127,8 @@ dependencies {
     implementation(libs.miuix.android) // Miuix UI 库
     implementation(libs.miuix.icons)
     implementation(libs.miuix.preference)
+    // 日期选择器等系统组件（Material3 DatePicker/TimePicker）
+    implementation(libs.compose.material3)
     implementation(libs.okhttp) // OkHttp3 网络库
     implementation(libs.jsoup) // Jsoup XML解析库
     implementation(libs.hutool.core) // Hutool工具库

@@ -7,11 +7,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -24,6 +23,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
@@ -35,39 +35,96 @@ import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 
 /**
  * 过期时间编辑器（详情页与列表页创建对话框共用）。
+ *
+ * 日期部分使用系统 Material3 日期选择器，避免手写日期导致的边界情况；
+ * 选定的过期时间取当日 23:59。
  */
+@OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
 @Composable
 fun ExpiryTimeEditor(
     value: Long?,
     onValueChange: (Long?) -> Unit
 ) {
-    var text by rememberSaveable {
-        mutableStateOf(value?.let { formatExpiry(it, false) } ?: "")
+    var showDatePicker by remember { mutableStateOf(false) }
+
+    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "过期时间",
+                fontSize = 13.sp,
+                color = MiuixTheme.colorScheme.onSurfaceSecondary
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                TextButton(
+                    text = if (value == null) "设置" else "修改",
+                    onClick = { showDatePicker = true }
+                )
+                if (value != null) {
+                    TextButton(
+                        text = "清除",
+                        onClick = { onValueChange(null) }
+                    )
+                }
+            }
+        }
+        Text(
+            text = value?.let { formatExpiry(it, false) } ?: "未设置（永不过期）",
+            fontSize = 14.sp,
+            color = if (value == null) MiuixTheme.colorScheme.onSurfaceSecondary
+            else MiuixTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(top = 6.dp)
+        )
     }
-    // 仅当外部强制改变（如重新进入编辑、取消重进）且与当前输入不一致时才同步文本，
-    // 避免用户手动输入中间串（解析失败）时文本框被清空。
-    LaunchedEffect(value) {
-        if (parseExpiry(text) != value) {
-            text = value?.let { formatExpiry(it, false) } ?: ""
+
+    if (showDatePicker) {
+        val datePickerState = androidx.compose.material3.rememberDatePickerState(
+            initialSelectedDateMillis = value?.let { millisToUtcDateMillis(it) }
+        )
+        androidx.compose.material3.DatePickerDialog(
+            onDismissRequest = { showDatePicker = false },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        datePickerState.selectedDateMillis?.let { utcMillis ->
+                            // 选择器返回 UTC 午夜：转为本地日期后取当日 23:59 作为过期时间
+                            val localDate = java.time.Instant.ofEpochMilli(utcMillis)
+                                .atZone(java.time.ZoneOffset.UTC)
+                                .toLocalDate()
+                            val localMillis = localDate.atTime(23, 59)
+                                .atZone(java.time.ZoneId.systemDefault())
+                                .toInstant()
+                                .toEpochMilli()
+                            onValueChange(localMillis)
+                        }
+                        showDatePicker = false
+                    }
+                ) {
+                    androidx.compose.material3.Text("确定")
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showDatePicker = false }) {
+                    androidx.compose.material3.Text("取消")
+                }
+            }
+        ) {
+            androidx.compose.material3.DatePicker(state = datePickerState)
         }
     }
-    Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)) {
-        Text(
-            text = "过期时间",
-            fontSize = 13.sp,
-            color = MiuixTheme.colorScheme.onSurfaceSecondary
-        )
-        TextField(
-            value = text,
-            onValueChange = {
-                text = it
-                onValueChange(parseExpiry(it))
-            },
-            label = "yyyy-MM-dd HH:mm（留空表示不过期）",
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp)
-        )
-    }
+}
+
+/**
+ * 将本地时间毫秒转换为日期选择器所需的 UTC 当日零点毫秒。
+ */
+private fun millisToUtcDateMillis(millis: Long): Long {
+    val localDate = java.time.Instant.ofEpochMilli(millis)
+        .atZone(java.time.ZoneId.systemDefault())
+        .toLocalDate()
+    return localDate.atStartOfDay(java.time.ZoneOffset.UTC).toInstant().toEpochMilli()
 }
 
 /**

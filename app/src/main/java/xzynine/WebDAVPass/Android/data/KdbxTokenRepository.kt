@@ -947,29 +947,32 @@ class KdbxTokenRepository(context: Context) {
                 val expired = mutableListOf<SecurityIssueEntry>()
                 val weak = mutableListOf<SecurityIssueEntry>()
 
-                collectEntriesOutsideRecycleBin(db, db.rootGroup).forEach { entry ->
-                    val entryId = toStableId(entry)
-                    val title = entry.title
-                        .takeIf { it.isNotBlank() }
-                        ?: entry.url.takeIf { it.isNotBlank() }
-                        ?: entry.username.takeIf { it.isNotBlank() }
-                        ?: entryId.toString()
-                    val account = entry.username.takeIf { it.isNotBlank() } ?: ""
-                    val expiryMillis = entry.expiryTime.toMilliseconds()
-                    val password = entry.password
-                    val strengthBits = PasswordStrength.estimateBits(password)
+            collectEntriesOutsideRecycleBin(db, db.rootGroup).forEach { entry ->
+                val entryId = toStableId(entry)
+                val title = entry.title
+                    .takeIf { it.isNotBlank() }
+                    ?: entry.url.takeIf { it.isNotBlank() }
+                    ?: entry.username.takeIf { it.isNotBlank() }
+                    ?: entryId.toString()
+                val account = entry.username.takeIf { it.isNotBlank() } ?: ""
+                // 仅当条目显式标记为过期时才参与过期判定：
+                // 无过期设置的条目 expiryTime 可能是过去的占位值（如默认「当前时间+30天」），
+                // 直接比较时间戳会把从未设置过期的条目误判为已过期
+                val expiryMillis = if (entry.expires) entry.expiryTime.toMilliseconds() else 0L
+                val password = entry.password
+                val strengthBits = PasswordStrength.estimateBits(password)
 
-                    if (expiryMillis > 0L && expiryMillis < nowMillis) {
-                        expired.add(
-                            SecurityIssueEntry(
-                                entryId = entryId,
-                                title = title,
-                                account = account,
-                                passwordStrengthBits = strengthBits,
-                                expiryTime = expiryMillis
-                            )
+                if (expiryMillis > 0L && expiryMillis < nowMillis) {
+                    expired.add(
+                        SecurityIssueEntry(
+                            entryId = entryId,
+                            title = title,
+                            account = account,
+                            passwordStrengthBits = strengthBits,
+                            expiryTime = expiryMillis
                         )
-                    }
+                    )
+                }
                     if (PasswordStrength.isWeak(password)) {
                         weak.add(
                             SecurityIssueEntry(
@@ -1980,6 +1983,10 @@ class KdbxTokenRepository(context: Context) {
             entryInfo.expiryTime = DateInstant.fromMilliseconds(draft.expiryTime)
         } else {
             entryInfo.expires = false
+            // 必须显式重置为「永不过期」：EntryInfo 默认值是「当前时间+30天」，
+            // setEntryInfo 会无条件写入，若不重置会导致无过期条目的 expiryTime
+            // 被写成过去的时刻，被安全性检查误判为已过期
+            entryInfo.expiryTime = DateInstant.NEVER_EXPIRES
         }
         val newCustomIconBytes = draft.newCustomIconBytes
         if (newCustomIconBytes != null) {
