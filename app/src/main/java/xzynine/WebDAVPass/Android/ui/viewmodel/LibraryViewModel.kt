@@ -210,8 +210,14 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
             return false
         }
 
-        // 解锁成功后登记密钥文件，供后续重新加密保存时复用
-        DatabaseManager.setKeyFileData(keyFileData)
+        // 解锁成功后登记密钥文件，供后续重新加密保存时复用。
+        // 注意：仓库层 validatePassword 内部已根据 effectiveKeyFileData 登记过一次；
+        // 当调用方明确传入 keyFileData（手动解锁路径）时覆盖为调用方的值，
+        // 否则（生物识别自动解锁 keyFileData==null）保留仓库层登记值，
+        // 避免刚登记的密钥文件被立即置 null 导致后续写操作静默丢失密钥文件保护。
+        if (keyFileData != null) {
+            DatabaseManager.setKeyFileData(keyFileData)
+        }
 
         lastUnlockErrorMessage = null
         currentLibraryMasterPassword = masterPassword
