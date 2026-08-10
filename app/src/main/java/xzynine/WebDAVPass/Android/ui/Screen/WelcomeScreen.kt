@@ -213,7 +213,8 @@ fun WelcomeScreen(
                     inlineUnlockLoading = true
                     val unlocked = tokenViewModel.unlockCurrentLibrary(
                         masterPassword = pendingPassword,
-                        isManualUnlock = true
+                        isManualUnlock = true,
+                        keyFileData = inlineKeyFileData
                     )
                     inlineUnlockLoading = false
                     if (!unlocked) {
@@ -434,7 +435,8 @@ fun WelcomeScreen(
                 val plainPassword = inlineUnlockPassword
                 val verified = tokenViewModel.verifyCurrentLibraryPassword(
                     masterPassword = plainPassword,
-                    updateManualTimestamp = true
+                    updateManualTimestamp = true,
+                    keyFileData = inlineKeyFileData
                 )
                 inlineUnlockLoading = false
                 if (!verified) {
@@ -473,7 +475,8 @@ fun WelcomeScreen(
                             inlineUnlockLoading = true
                             val unlocked = tokenViewModel.unlockCurrentLibrary(
                                 masterPassword = plainPassword,
-                                isManualUnlock = true
+                                isManualUnlock = true,
+                                keyFileData = inlineKeyFileData
                             )
                             inlineUnlockLoading = false
                             if (!unlocked) {

@@ -148,6 +148,9 @@ class KdbxTokenRepository(context: Context) {
                 throw e
             }
             DatabaseManager.store(localPath, masterPassword, database, cacheDirectory)
+            // 登记密钥文件凭据，使后续 saveDatabase/mergeRemoteDatabaseBytes/exportDatabaseTo
+            // 的默认凭据能取到正确的密钥文件（与 LibraryViewModel 解锁后登记保持一致）
+            DatabaseManager.setKeyFileData(effectiveKeyFileData)
             true
         }.onFailure {
             val hint = buildLocationHint(resolveLocation(localPath))
