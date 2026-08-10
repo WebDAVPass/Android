@@ -93,11 +93,14 @@ fun CreateMasterPasswordDialog(
         keyFileData = null
         keyFileUri = null
         runCatching {
-            // 获取只读持久权限，使后续解锁可自动加载密钥文件
-            context.contentResolver.takePersistableUriPermission(
-                uri,
-                Intent.FLAG_GRANT_READ_URI_PERMISSION
-            )
+            // 持久化权限仅用于后续自动加载，失败不影响本次选择；
+            // 部分 provider 不支持 takePersistableUriPermission，不能因此让用户无法选文件。
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    uri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION
+                )
+            }
             context.contentResolver.openInputStream(uri)?.use { input ->
                 val buffer = ByteArrayOutputStream(8 * 1024)
                 val chunk = ByteArray(8 * 1024)
