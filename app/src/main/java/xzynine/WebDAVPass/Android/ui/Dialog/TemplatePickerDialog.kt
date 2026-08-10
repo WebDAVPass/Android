@@ -75,7 +75,7 @@ fun TemplatePickerDialog(
             ) {
                 items(templates, key = { it.uuid.toString() }) { template ->
                     val fieldLabels = template.sections
-                        .flatMap { section -> section.attributes.map { it.label } }
+                        .flatMap { section -> section.attributes.map { localizeTemplateLabel(it.label) } }
                         .distinct()
                         .joinToString(" / ")
                     Card(
@@ -95,13 +95,13 @@ fun TemplatePickerDialog(
                             EntryIcon(
                                 customIconBytes = null,
                                 standardIconId = template.icon.standard.id,
-                                primary = template.title,
+                                primary = localizeTemplateLabel(template.title),
                                 secondary = null,
                                 modifier = Modifier.size(36.dp)
                             )
                         Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
                             Text(
-                                text = template.title,
+                                text = localizeTemplateLabel(template.title),
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MiuixTheme.colorScheme.onSurface
@@ -166,5 +166,42 @@ fun TemplatePickerDialog(
                 )
             }
         }
+    }
+}
+
+/**
+ * 将模板标题与字段标签映射为中文显示文本。
+ * 仅影响界面展示，不修改实际写入数据库的字段名。
+ */
+private fun localizeTemplateLabel(label: String): String {
+    return when (label) {
+        "Email" -> "电子邮件"
+        "Email address" -> "邮箱地址"
+        "Wi-Fi" -> "无线网络"
+        "Secure Note" -> "安全笔记"
+        "ID Card" -> "身份证"
+        "Debit / Credit Card" -> "银行卡"
+        "Bank" -> "银行"
+        "Cryptocurrency wallet" -> "加密货币钱包"
+        "Membership" -> "会员"
+        "Title" -> "标题"
+        "Username" -> "用户名"
+        "Password" -> "密码"
+        "URL" -> "网址"
+        "Expires" -> "过期时间"
+        "Notes" -> "备注"
+        "Holder" -> "持有人"
+        "Number" -> "号码"
+        "Name" -> "姓名"
+        "Place of issue" -> "签发地"
+        "Date of issue" -> "签发日期"
+        "SSID" -> "SSID"
+        "Type" -> "类型"
+        "Token" -> "代币"
+        "Public key" -> "公钥"
+        "Private key" -> "私钥"
+        "Seed" -> "助记词"
+        "Account" -> "账户"
+        else -> label
     }
 }
