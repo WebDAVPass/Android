@@ -937,6 +937,8 @@ class KdbxTokenRepository(context: Context) {
                 true
             }
         }.onFailure {
+            // 合并可能已部分改动内存实例，丢弃缓存以免污染状态被写回磁盘
+            DatabaseManager.close()
             Logger.e(LOG_TAG, "mergeLocalDatabaseFile failed, path=$localPath, message=${it.message}", it)
         }.getOrDefault(false)
     }
@@ -1112,6 +1114,8 @@ class KdbxTokenRepository(context: Context) {
         }.onSuccess {
             Logger.d(SYNC_LOG_TAG, "远端数据库合并成功：本地路径=$localPath")
         }.onFailure {
+            // 合并可能已部分改动内存实例，丢弃缓存以免污染状态被写回磁盘
+            DatabaseManager.close()
             Logger.e(SYNC_LOG_TAG, "远端数据库合并失败：${it.message}", it)
         }.getOrDefault(false)
     }
