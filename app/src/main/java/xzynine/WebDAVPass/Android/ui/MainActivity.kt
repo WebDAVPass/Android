@@ -21,6 +21,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import xzylib.base.util.ToastUtils
 import top.yukonga.miuix.kmp.basic.FabPosition
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
@@ -74,6 +75,9 @@ class MainActivity : FragmentActivity() {
     }
 }
 
+/** 后台自动锁定阈值：退到后台超过该时长，回到前台即锁定。 */
+private const val BACKGROUND_LOCK_THRESHOLD_MS = 30_000L
+
 @Composable
 fun MainScreen() {
     val context = LocalContext.current
@@ -81,9 +85,13 @@ fun MainScreen() {
         TokenViewModel.getSharedInstance(context.applicationContext)
     }
 
-    // 超时锁定：应用退到后台后计时，回到前台超过阈值则锁定
+    // 超时锁定：
+    // 1) 后台自动锁定：退到后台超过 30 秒（开关开启时）回到前台即锁定；
+    // 2) 单纯超时：前台连续停留超过设定分钟数（默认 5 分钟）即锁定，与是否后台无关。
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var lastBackgroundAt by remember { mutableStateOf(0L) }
+    var foregroundSince by remember { mutableStateOf(System.currentTimeMillis()) }
+
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             when (event) {
@@ -92,15 +100,16 @@ fun MainScreen() {
                 }
 
                 androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                    // 后台自动锁定：退后台 ≥30 秒则锁定
                     val backgroundAt = lastBackgroundAt
                     lastBackgroundAt = 0L
-                    val timeoutMinutes = tokenViewModel.lockTimeoutMinutes.value
-                    val timeoutMs = timeoutMinutes * 60_000L
-                    if (backgroundAt > 0L && timeoutMs > 0L &&
-                        System.currentTimeMillis() - backgroundAt >= timeoutMs
+                    if (backgroundAt > 0L && tokenViewModel.lockOnBackground.value &&
+                        System.currentTimeMillis() - backgroundAt >= BACKGROUND_LOCK_THRESHOLD_MS
                     ) {
                         tokenViewModel.libraryViewModel.lockCurrentLibrary()
                     }
+                    // 重置单纯超时的前台计时起点
+                    foregroundSince = System.currentTimeMillis()
                 }
 
                 else -> {}
@@ -109,6 +118,22 @@ fun MainScreen() {
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // 单纯超时：前台停留超过设定分钟数即锁定（每 30 秒检查一次）
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L)
+            val timeoutMinutes = tokenViewModel.lockTimeoutMinutes.value
+            val timeoutMs = timeoutMinutes * 60_000L
+            if (timeoutMs > 0L && foregroundSince > 0L &&
+                System.currentTimeMillis() - foregroundSince >= timeoutMs
+            ) {
+                tokenViewModel.libraryViewModel.lockCurrentLibrary()
+                // 锁定后重新计时，避免解锁页停留期间反复触发
+                foregroundSince = System.currentTimeMillis()
+            }
         }
     }
 

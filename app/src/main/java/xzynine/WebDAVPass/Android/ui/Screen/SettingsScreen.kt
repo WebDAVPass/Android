@@ -723,7 +723,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                 val lockTimeoutIndex = lockTimeoutValues.indexOf(lockTimeoutMinutes).coerceAtLeast(0)
                 WindowSpinnerPreference(
                     title = "应用超时锁定",
-                    summary = "退到后台超过该时长后自动锁定，需重新输入主密码",
+                    summary = "应用在前后台连续停留超过该时长后自动锁定，需重新输入主密码",
                     items = lockTimeoutItems.map { DropdownItem(text = it) },
                     selectedIndex = lockTimeoutIndex,
                     showValue = lockTimeoutMinutes > 0,
@@ -736,6 +736,24 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     },
                     onSelectedIndexChange = { index ->
                         viewModel.setLockTimeoutMinutes(lockTimeoutValues[index])
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                val lockOnBackground by viewModel.lockOnBackground.collectAsState()
+                SwitchPreference(
+                    title = "后台自动锁定",
+                    summary = "退到后台 30 秒后回到应用时自动锁定",
+                    checked = lockOnBackground,
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Lock,
+                            contentDescription = "后台自动锁定"
+                        )
+                    },
+                    onCheckedChange = { checked ->
+                        viewModel.setLockOnBackground(checked)
                     },
                     modifier = Modifier.fillMaxWidth()
                 )

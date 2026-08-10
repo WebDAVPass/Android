@@ -42,6 +42,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         private const val UNLOCK_LOAD_RETRY_DELAY_MS = 250L
         private const val SYNC_LOG_TAG = "同步"
         private const val SETTING_KEY_LOCK_TIMEOUT_MINUTES = "lock_timeout_minutes"
+        private const val SETTING_KEY_LOCK_ON_BACKGROUND = "lock_on_background"
+        private const val DEFAULT_LOCK_TIMEOUT_MINUTES = 5
 
         @Volatile
         private var SHARED_VIEW_MODEL: TokenViewModel? = null
@@ -84,9 +86,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val _currentTimeMillis = MutableStateFlow(System.currentTimeMillis())
     val currentTimeMillis: StateFlow<Long> = _currentTimeMillis.asStateFlow()
 
-    /** 应用超时锁定分钟数（0 表示不锁定），持久化于 app_settings。 */
-    private val _lockTimeoutMinutes = MutableStateFlow(0)
+    /** 应用超时锁定分钟数（0 表示不锁定），持久化于 app_settings，默认 5 分钟。 */
+    private val _lockTimeoutMinutes = MutableStateFlow(DEFAULT_LOCK_TIMEOUT_MINUTES)
     val lockTimeoutMinutes: StateFlow<Int> = _lockTimeoutMinutes.asStateFlow()
+
+    /** 后台自动锁定开关（退到后台 30 秒后锁定），默认开启。 */
+    private val _lockOnBackground = MutableStateFlow(true)
+    val lockOnBackground: StateFlow<Boolean> = _lockOnBackground.asStateFlow()
 
     init {
         startTokenRefreshTimer()
@@ -98,6 +104,15 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     ?.value
                     ?.toIntOrNull()
             }.getOrNull()?.takeIf { it >= 0 }?.let { _lockTimeoutMinutes.value = it }
+
+            runCatching {
+                AppDatabaseHolder.getInstance(context)
+                    .appSettingsDao()
+                    .getValue(SETTING_KEY_LOCK_ON_BACKGROUND)
+                    ?.value
+            }.getOrNull()?.let { value ->
+                _lockOnBackground.value = value != "false"
+            }
         }
     }
 
@@ -115,6 +130,25 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                         xzynine.WebDAVPass.Android.data.AppSetting(
                             SETTING_KEY_LOCK_TIMEOUT_MINUTES,
                             safe.toString()
+                        )
+                    )
+            }
+        }
+    }
+
+    /**
+     * 设置后台自动锁定开关。
+     */
+    fun setLockOnBackground(enabled: Boolean) {
+        _lockOnBackground.value = enabled
+        viewModelScope.launch {
+            runCatching {
+                AppDatabaseHolder.getInstance(context)
+                    .appSettingsDao()
+                    .put(
+                        xzynine.WebDAVPass.Android.data.AppSetting(
+                            SETTING_KEY_LOCK_ON_BACKGROUND,
+                            enabled.toString()
                         )
                     )
             }
