@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -80,6 +81,7 @@ import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
+import com.kunzisoft.keepass.model.PasskeyEntryFields
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryHistoryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
@@ -348,7 +350,21 @@ fun PasswordEntryDetailScreen(
                 || item == urlField
                 || item == notesField
             || (selectedToken != null && isOtpField(item))
+        }.filterNot { item ->
+            // Passkey 字段在下方独立区块展示
+            PasskeyEntryFields.FIELD_USERNAME == item.fieldName
+                || PasskeyEntryFields.FIELD_PRIVATE_KEY == item.fieldName
+                || PasskeyEntryFields.FIELD_CREDENTIAL_ID == item.fieldName
+                || PasskeyEntryFields.FIELD_USER_HANDLE == item.fieldName
+                || PasskeyEntryFields.FIELD_RELYING_PARTY == item.fieldName
+                || PasskeyEntryFields.FIELD_FLAG_BE == item.fieldName
+                || PasskeyEntryFields.FIELD_FLAG_BS == item.fieldName
         }
+        val passkeyValues = entry.keyValues.associate { it.fieldName to it.rawValue }
+        val passkeyRelyingParty = passkeyValues[PasskeyEntryFields.FIELD_RELYING_PARTY]
+        val passkeyUsername = passkeyValues[PasskeyEntryFields.FIELD_USERNAME]
+        val passkeyCredentialId = passkeyValues[PasskeyEntryFields.FIELD_CREDENTIAL_ID]
+        val hasPasskey = passkeyValues.containsKey(PasskeyEntryFields.FIELD_CREDENTIAL_ID)
         val usernameValue = when {
             entry.account.isNotBlank() -> entry.account
             usernameField?.rawValue?.isNotBlank() == true -> usernameField.rawValue
@@ -716,6 +732,54 @@ fun PasswordEntryDetailScreen(
                 }
             }
 
+            // Passkey（非编辑态展示）
+            if (!isEditing && hasPasskey) {
+                item {
+                    SmallTitle(text = "Passkey")
+                }
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                width = 0.5.dp,
+                                color = cardBorderColor,
+                                shape = RoundedCornerShape(cornerRadius)
+                            ),
+                        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
+                        cornerRadius = cornerRadius,
+                        pressFeedbackType = PressFeedbackType.None,
+                        showIndication = false,
+                        onClick = {}
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            PasskeyInfoRow(
+                                label = "依赖方",
+                                value = passkeyRelyingParty?.ifBlank { "--" } ?: "--"
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                thickness = 0.5.dp
+                            )
+                            PasskeyInfoRow(
+                                label = "用户名",
+                                value = passkeyUsername?.ifBlank { "--" } ?: "--"
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                thickness = 0.5.dp
+                            )
+                            PasskeyInfoRow(
+                                label = "凭据 ID",
+                                value = passkeyCredentialId?.let {
+                                    if (it.length > 24) it.take(10) + "…" + it.takeLast(10) else it
+                                } ?: "--"
+                            )
+                        }
+                    }
+                }
+            }
+
             // 自定义字段（编辑态可增删改，非编辑态在附加信息中已展示，这里提供编辑入口）
             if (isEditing) {
                 item {
@@ -1060,6 +1124,35 @@ private fun displayFieldName(name: String): String {
         name.removePrefix("[").removeSuffix("]")
     } else {
         name
+    }
+}
+
+/**
+ * Passkey 信息行（依赖方/用户名/凭据 ID 展示）。
+ */
+@Composable
+private fun PasskeyInfoRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = label,
+            fontSize = 13.sp,
+            color = MiuixTheme.colorScheme.onSurfaceSecondary,
+            modifier = Modifier.width(72.dp)
+        )
+        Text(
+            text = value,
+            fontSize = 14.sp,
+            color = MiuixTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
     }
 }
 
