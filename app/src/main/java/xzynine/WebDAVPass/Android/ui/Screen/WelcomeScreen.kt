@@ -77,7 +77,8 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 import xzynine.WebDAVPass.Android.util.DateTimeFormatter
 
-
+/** 密钥文件大小上限（1 MiB），与 CreateMasterPasswordDialog 保持一致。 */
+private const val MAX_KEY_FILE_BYTES = 1024 * 1024
 
 /**
  * 欢迎界面
@@ -719,6 +720,9 @@ fun WelcomeScreen(
             if (uri == null) {
                 return@rememberLauncherForActivityResult
             }
+            // 先清除上一次选择，避免读取失败时仍显示旧文件名
+            inlineKeyFileName = ""
+            inlineKeyFileData = null
             runCatching {
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     val buffer = java.io.ByteArrayOutputStream(8 * 1024)
@@ -728,18 +732,17 @@ fun WelcomeScreen(
                         val read = input.read(chunk)
                         if (read < 0) break
                         total += read
-                        if (total > 1024 * 1024) {
+                        if (total > MAX_KEY_FILE_BYTES) {
                             throw IllegalStateException("密钥文件过大")
                         }
                         buffer.write(chunk, 0, read)
                     }
                     val bytes = buffer.toByteArray()
                     if (bytes.isNotEmpty()) {
-                        inlineKeyFileName = uri.lastPathSegment?.substringAfterLast('/')
-                            ?.takeIf { it.isNotBlank() } ?: "keyfile"
+                        inlineKeyFileName = resolveUriDisplayName(uri)
                         inlineKeyFileData = bytes
                     }
-                }
+                } ?: throw IllegalStateException("无法读取所选文件")
             }.onFailure {
                 ToastUtils.showShortToast(context, "密钥文件读取失败：${it.message ?: "未知错误"}")
             }
