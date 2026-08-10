@@ -39,6 +39,7 @@ import xzynine.WebDAVPass.Android.ui.navigation.Navigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
 import xzynine.WebDAVPass.Android.ui.navigation.rememberNavigator
 import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
+import xzynine.WebDAVPass.Android.ui.Screen.DatabaseSettingsScreen
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
@@ -191,6 +192,20 @@ fun MainScreen() {
                                 navigator.replaceAll(listOf(Route.Welcome))
                                 showWelcome = true
                             },
+                            onDatabaseSettingsClick = {
+                                navigator.push(Route.DatabaseSettings)
+                            },
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.DatabaseSettings> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        DatabaseSettingsScreen(
+                            viewModel = tokenViewModel,
                             onNavigateBack = {
                                 navigator.pop()
                             }

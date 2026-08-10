@@ -4,11 +4,13 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import xzylib.base.util.Logger
+import com.kunzisoft.keepass.database.crypto.kdf.KdfFactory
 import com.kunzisoft.keepass.database.element.Database
 import com.kunzisoft.keepass.database.element.DateInstant
 import com.kunzisoft.keepass.database.element.Entry
 import com.kunzisoft.keepass.database.element.Attachment
 import com.kunzisoft.keepass.database.element.Field
+import com.kunzisoft.keepass.database.element.database.CompressionAlgorithm
 import com.kunzisoft.keepass.database.element.icon.IconImage
 import com.kunzisoft.keepass.database.element.Group
 import com.kunzisoft.keepass.database.element.MasterCredential
@@ -712,6 +714,102 @@ class KdbxTokenRepository(context: Context) {
             current = current.parent
         }
         return false
+    }
+
+    /**
+     * 修改数据库安全设置（主密码 / 密钥文件 / KDF / 压缩）并重新加密保存。
+     *
+     * @param masterPassword 当前主密码（用于打开数据库）
+     * @param newMasterPassword 新主密码（与当前相同表示仅修改其他设置）
+     * @param newKeyFileData 新密钥文件字节，null 表示沿用当前密钥文件
+     * @param kdfEngineName KDF 类型：AES / Argon2d / Argon2id，null 表示不修改
+     * @param keyRounds KDF 轮数（仅 AES-KDF 有效）
+     * @param memoryUsage KDF 内存占用（字节，仅 Argon2 有效）
+     * @param parallelism KDF 并行度（仅 Argon2 有效）
+     * @param isCompressionEnabled 是否启用压缩，null 表示不修改
+     * @return 是否成功
+     */
+    fun changeDatabaseSettings(
+        localPath: String,
+        masterPassword: String,
+        newMasterPassword: String,
+        newKeyFileData: ByteArray?,
+        kdfEngineName: String? = null,
+        keyRounds: Long? = null,
+        memoryUsage: Long? = null,
+        parallelism: Long? = null,
+        isCompressionEnabled: Boolean? = null
+    ): Boolean {
+        return runCatching {
+            val location = resolveLocation(localPath)
+            // 优先复用已解锁的缓存实例，避免重复解密
+            val cachedPair = DatabaseManager.tryGet(localPath)
+            val (database, cacheDirectory) = if (cachedPair != null) {
+                cachedPair
+            } else {
+                openDatabase(location, masterPassword)
+            }
+            try {
+                kdfEngineName?.let { name ->
+                    val engine = when (name) {
+                        "Argon2d" -> KdfFactory.argon2dKdf
+                        "Argon2id" -> KdfFactory.argon2idKdf
+                        else -> KdfFactory.aesKdf
+                    }
+                    database.kdfEngine = engine
+                }
+                keyRounds?.let { database.numberKeyEncryptionRounds = it }
+                memoryUsage?.let { database.memoryUsage = it }
+                parallelism?.let { database.parallelism = it }
+                isCompressionEnabled?.let { enabled ->
+                    database.compressionAlgorithm =
+                        if (enabled) CompressionAlgorithm.GZIP else CompressionAlgorithm.NONE
+                }
+                val effectiveKeyFile = newKeyFileData ?: DatabaseManager.getKeyFileData()
+                saveDatabase(
+                    database = database,
+                    location = location,
+                    masterPassword = newMasterPassword,
+                    cacheDirectory = cacheDirectory,
+                    keyFileData = effectiveKeyFile
+                )
+                // 登记新密钥文件，供后续重新加密保存复用
+                DatabaseManager.setKeyFileData(effectiveKeyFile)
+                true
+            } finally {
+                if (cachedPair == null) {
+                    database.clearAndClose(cacheDirectory)
+                }
+            }
+        }.onFailure {
+            Logger.e(LOG_TAG, "changeDatabaseSettings failed, path=$localPath, message=${it.message}", it)
+        }.getOrDefault(false)
+    }
+
+    /**
+     * 读取数据库当前安全设置（供设置页展示）。
+     */
+    fun loadDatabaseSettingsInfo(
+        localPath: String,
+        masterPassword: String
+    ): DatabaseSettingsInfo {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val kdfName = db.kdfEngine?.let {
+                when {
+                    it.uuid == KdfFactory.aesKdf.uuid -> "AES"
+                    it.uuid == KdfFactory.argon2dKdf.uuid -> "Argon2d"
+                    it.uuid == KdfFactory.argon2idKdf.uuid -> "Argon2id"
+                    else -> it.toString()
+                }
+            } ?: "未知"
+            DatabaseSettingsInfo(
+                kdfEngineName = kdfName,
+                keyRounds = db.numberKeyEncryptionRounds,
+                memoryUsage = db.memoryUsage,
+                parallelism = db.parallelism,
+                isCompressionEnabled = db.compressionAlgorithm == CompressionAlgorithm.GZIP
+            )
+        }
     }
 
     /**

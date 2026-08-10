@@ -91,3 +91,14 @@ data class GroupNodeInfo(
     val title: String,
     val depth: Int
 )
+
+/**
+ * 数据库当前安全设置信息（设置页展示用）。
+ */
+data class DatabaseSettingsInfo(
+    val kdfEngineName: String,
+    val keyRounds: Long,
+    val memoryUsage: Long,
+    val parallelism: Long,
+    val isCompressionEnabled: Boolean
+)

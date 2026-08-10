@@ -280,6 +280,15 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 数据库设置变更（如修改主密码）后更新内存中的主密码。
+     */
+    internal fun updateMasterPasswordInternal(newMasterPassword: String) {
+        if (newMasterPassword.isNotBlank()) {
+            currentLibraryMasterPassword = newMasterPassword
+        }
+    }
+
+    /**
      * 判断当前库是否开启自动同步。
      */
     fun shouldAutoSyncCurrentLibrary(): Boolean {

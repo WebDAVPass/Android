@@ -7,6 +7,7 @@ import xzylib.base.util.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import xzynine.WebDAVPass.Android.data.DatabaseManager
+import xzynine.WebDAVPass.Android.data.DatabaseSettingsInfo
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.LibraryContext
@@ -555,6 +556,53 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             onPasswordWriteSuccess()
         }
         return copied
+    }
+
+    /**
+     * 修改数据库安全设置（主密码 / 密钥文件 / KDF / 压缩）。
+     *
+     * @return 是否成功；成功后内存中的主密码同步更新为新值
+     */
+    suspend fun changeDatabaseSettings(
+        newMasterPassword: String,
+        newKeyFileData: ByteArray? = null,
+        kdfEngineName: String? = null,
+        keyRounds: Long? = null,
+        memoryUsage: Long? = null,
+        parallelism: Long? = null,
+        isCompressionEnabled: Boolean? = null
+    ): Boolean {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
+        val oldPassword = libraryViewModel.getMasterPasswordInternal()
+        val ok = kdbxTokenRepository.changeDatabaseSettings(
+            localPath = localPath,
+            masterPassword = oldPassword,
+            newMasterPassword = newMasterPassword,
+            newKeyFileData = newKeyFileData,
+            kdfEngineName = kdfEngineName,
+            keyRounds = keyRounds,
+            memoryUsage = memoryUsage,
+            parallelism = parallelism,
+            isCompressionEnabled = isCompressionEnabled
+        )
+        if (ok) {
+            libraryViewModel.updateMasterPasswordInternal(newMasterPassword)
+            if (newKeyFileData != null) {
+                DatabaseManager.setKeyFileData(newKeyFileData)
+            }
+        }
+        return ok
+    }
+
+    /**
+     * 读取当前库的安全设置信息。
+     */
+    suspend fun loadDatabaseSettingsInfo(): DatabaseSettingsInfo? {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return null
+        return kdbxTokenRepository.loadDatabaseSettingsInfo(
+            localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
     }
 
     /**

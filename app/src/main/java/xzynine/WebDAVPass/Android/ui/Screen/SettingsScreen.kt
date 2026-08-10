@@ -70,6 +70,7 @@ fun SettingsScreen(
     viewModel: TokenViewModel,
     onCloudBindingClick: () -> Unit,
     onSwitchLibraryClick: () -> Unit,
+    onDatabaseSettingsClick: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     // 获取统一的圆角半径
@@ -330,6 +331,24 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     )
                 },
                 onClick = onSwitchLibraryClick,
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.Companion.height(16.dp))
+
+            // 数据库设置
+            ArrowPreference(
+                title = "数据库设置",
+                summary = "修改主密码、KDF 算法与压缩设置",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Settings,
+                        contentDescription = "数据库设置",
+                    )
+                },
+                onClick = onDatabaseSettingsClick,
                 modifier = Modifier.Companion
                     .fillMaxWidth()
             )
