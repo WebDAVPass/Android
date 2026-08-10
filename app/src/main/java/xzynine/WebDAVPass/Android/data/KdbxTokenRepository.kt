@@ -666,17 +666,21 @@ class KdbxTokenRepository(context: Context) {
             if (db.groupIsInRecycleBin(target)) {
                 return@withDatabase 0
             }
+            // 一次性建立稳定 ID → 节点的索引，避免对每个 ID 都全树遍历（O(n×m) → O(n+m)）
+            val entryIndex = collectEntriesOutsideRecycleBin(db, db.rootGroup)
+                .associateBy { toStableId(it) }
+            val groupIndex = collectAllGroups(db.rootGroup)
+                .associateBy { toStableGroupId(it) }
             var moved = 0
             entryIds.forEach { entryId ->
-                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
-                    ?: return@forEach
+                val entry = entryIndex[entryId] ?: return@forEach
                 if (entry.parent != target) {
                     db.moveEntryTo(entry, target)
                     moved++
                 }
             }
             groupIds.forEach { groupId ->
-                val group = findGroupByStableId(db.rootGroup, groupId) ?: return@forEach
+                val group = groupIndex[groupId] ?: return@forEach
                 if (group.parent != target && !isGroupInSubtree(group, target)) {
                     db.moveGroupTo(group, target)
                     moved++
@@ -705,17 +709,21 @@ class KdbxTokenRepository(context: Context) {
             if (db.groupIsInRecycleBin(target)) {
                 return@withDatabase 0
             }
+            // 一次性建立稳定 ID → 节点的索引，避免对每个 ID 都全树遍历（O(n×m) → O(n+m)）
+            val entryIndex = collectEntriesOutsideRecycleBin(db, db.rootGroup)
+                .associateBy { toStableId(it) }
+            val groupIndex = collectAllGroups(db.rootGroup)
+                .associateBy { toStableGroupId(it) }
             var copied = 0
             entryIds.forEach { entryId ->
-                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
-                    ?: return@forEach
+                val entry = entryIndex[entryId] ?: return@forEach
                 if (entry.parent != target) {
                     db.copyEntryTo(entry, target)
                     copied++
                 }
             }
             groupIds.forEach { groupId ->
-                val group = findGroupByStableId(db.rootGroup, groupId) ?: return@forEach
+                val group = groupIndex[groupId] ?: return@forEach
                 if (!isGroupInSubtree(group, target)) {
                     copyGroupRecursive(db, group, target)
                     copied++
@@ -1509,6 +1517,21 @@ class KdbxTokenRepository(context: Context) {
         list.addAll(group.getChildEntries())
         group.getChildGroups().forEach { child ->
             list.addAll(collectEntries(child))
+        }
+        return list
+    }
+
+    /**
+     * 收集 [group] 下所有后代分组（不含 [group] 自身），用于批量操作时一次性建立索引。
+     */
+    private fun collectAllGroups(group: Group?): List<Group> {
+        if (group == null) {
+            return emptyList()
+        }
+        val list = mutableListOf<Group>()
+        group.getChildGroups().forEach { child ->
+            list.add(child)
+            list.addAll(collectAllGroups(child))
         }
         return list
     }
