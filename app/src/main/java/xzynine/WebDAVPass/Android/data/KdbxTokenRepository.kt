@@ -116,7 +116,6 @@ class KdbxTokenRepository(context: Context) {
                 outputStream.toByteArray()
             } finally {
                 runCatching { database.clearAndClose() }
-                runCatching { cacheFile.delete() }
             }
         }
     }
@@ -892,24 +891,19 @@ class KdbxTokenRepository(context: Context) {
             } else {
                 openDatabase(location, masterPassword)
             }
+            val cacheFile = File.createTempFile("kdbx-export-", ".tmp", cacheDirectory)
             try {
-                val cacheFile = File.createTempFile("kdbx-export-", ".tmp", cacheDirectory)
-                try {
-                    database.saveData(
-                        cacheFile = cacheFile,
-                        databaseOutputStream = outputStreamProvider,
-                        isNewLocation = true,
-                        masterCredential = MasterCredential(
-                            password = masterPassword,
-                            keyFileData = DatabaseManager.getKeyFileData()
-                        ),
-                        challengeResponseRetriever = emptyChallengeResponseRetriever
-                    )
-                    true
-                } finally {
-                    // 导出临时文件含数据库副本，及时删除避免敏感数据残留与磁盘泄漏
-                    runCatching { cacheFile.delete() }
-                }
+                database.saveData(
+                    cacheFile = cacheFile,
+                    databaseOutputStream = outputStreamProvider,
+                    isNewLocation = true,
+                    masterCredential = MasterCredential(
+                        password = masterPassword,
+                        keyFileData = DatabaseManager.getKeyFileData()
+                    ),
+                    challengeResponseRetriever = emptyChallengeResponseRetriever
+                )
+                true
             } finally {
                 if (cachedPair == null) {
                     database.clearAndClose(cacheDirectory)
@@ -1713,42 +1707,19 @@ class KdbxTokenRepository(context: Context) {
         keyFileData: ByteArray? = DatabaseManager.getKeyFileData()
     ) {
         val cacheFile = File.createTempFile("kdbx-save-", ".tmp", cacheDirectory)
-        try {
-            when (location) {
-                is DatabaseLocation.FileLocation -> {
-                    // 原子写入：saveData 先把完整数据库写入 cacheFile，再复制到同目录临时文件；
-                    // 成功后用 rename 原子替换目标，避免写入中途失败导致原数据库被截断/覆盖成不完整内容。
-                    val target = location.file
-                    val parent = target.parentFile ?: File(System.getProperty("java.io.tmpdir") ?: ".")
-                    if (!parent.exists()) parent.mkdirs()
-                    val tempFile = File(parent, target.name + ".save.tmp")
-                    try {
-                        database.saveData(
-                            cacheFile = cacheFile,
-                            databaseOutputStream = { tempFile.outputStream() },
-                            isNewLocation = true,
-                            masterCredential = MasterCredential(
-                                password = masterPassword,
-                                keyFileData = keyFileData
-                            ),
-                            challengeResponseRetriever = emptyChallengeResponseRetriever
-                        )
-                        // 同文件系统下 rename 原子替换目标；失败（如跨卷）则回退到整文件复制
-                        if (!tempFile.renameTo(target)) {
-                            tempFile.copyTo(target, overwrite = true)
-                            tempFile.delete()
-                        }
-                    } finally {
-                        runCatching { tempFile.delete() }
-                    }
-                }
-
-                is DatabaseLocation.UriLocation -> {
-                    // SAF 不支持原子替换：saveData 先将完整数据库写入 cacheFile，
-                    // 再复制到目标 Uri。复制失败会抛出，调用方捕获（SAF 固有限制下原 Uri 可能被截断）。
+        // Database.saveData 内部 finally 会删除 cacheFile，无需外层重复处理
+        when (location) {
+            is DatabaseLocation.FileLocation -> {
+                // 原子写入：saveData 先把完整数据库写入 cacheFile，再复制到同目录临时文件；
+                // 成功后用 rename 原子替换目标，避免写入中途失败导致原数据库被截断/覆盖成不完整内容。
+                val target = location.file
+                val parent = target.parentFile ?: File(System.getProperty("java.io.tmpdir") ?: ".")
+                if (!parent.exists()) parent.mkdirs()
+                val tempFile = File(parent, target.name + ".save.tmp")
+                try {
                     database.saveData(
                         cacheFile = cacheFile,
-                        databaseOutputStream = { openOutputStream(location) },
+                        databaseOutputStream = { tempFile.outputStream() },
                         isNewLocation = true,
                         masterCredential = MasterCredential(
                             password = masterPassword,
@@ -1756,11 +1727,30 @@ class KdbxTokenRepository(context: Context) {
                         ),
                         challengeResponseRetriever = emptyChallengeResponseRetriever
                     )
+                    // 同文件系统下 rename 原子替换目标；失败（如跨卷）则回退到整文件复制
+                    if (!tempFile.renameTo(target)) {
+                        tempFile.copyTo(target, overwrite = true)
+                        tempFile.delete()
+                    }
+                } finally {
+                    runCatching { tempFile.delete() }
                 }
             }
-        } finally {
-            // 保存临时文件含数据库副本，及时删除避免敏感数据残留与磁盘泄漏
-            runCatching { cacheFile.delete() }
+
+            is DatabaseLocation.UriLocation -> {
+                // SAF 不支持原子替换：saveData 先将完整数据库写入 cacheFile，
+                // 再复制到目标 Uri。复制失败会抛出，调用方捕获（SAF 固有限制下原 Uri 可能被截断）。
+                database.saveData(
+                    cacheFile = cacheFile,
+                    databaseOutputStream = { openOutputStream(location) },
+                    isNewLocation = true,
+                    masterCredential = MasterCredential(
+                        password = masterPassword,
+                        keyFileData = keyFileData
+                    ),
+                    challengeResponseRetriever = emptyChallengeResponseRetriever
+                )
+            }
         }
     }
 
