@@ -107,7 +107,7 @@
 | A4 | LibraryContextStore.kt | Major | ✅ 已修复（新增 warmUp() 预热，LibraryViewModel init 改 IO 协程异步刷新）|
 | A5 | LibraryContextStore.kt | Major | ✅ 已修复（ioScope 加 CoroutineExceptionHandler）|
 | A6 | CloudLibraryDialog.kt | Minor | ✅ 已修复（导入模式按钮启用 + 文案"导入并进入"）|
-| A7 | CloudSyncViewModel.kt | Major | ⬜ 类型已一致，不强制 |
+| A7 | CloudSyncViewModel.kt | Major | ✅ 已修复（SyncFailureKind.of(ex) + buildFailureOutcome，含子模块）|
 | A8 | CloudSyncViewModel.kt | Major | ✅ 已修复（download/upload 前显式校验凭据，去掉 !!）|
 | A9 | WebDavConfigViewModel.kt | Major | ✅ 已修复（抽出 updateWebDavConfigInternal 由 autoSaveAccount 等待）|
 | A10 | build.gradle.kts | Minor | ✅ 已修复（parcelize 插件改 alias 入版本目录）|
@@ -117,7 +117,7 @@
 | N4 | CloudLibraryDialog.kt | Trivial | ✅ 已修复（catch 块补 Logger.e）|
 | N6 | LibraryContextStore.kt | Trivial | ✅ 已修复（删除冗余 normalizedAutoUnlockInvalidated 中间变量）|
 | N8 | gradle-wrapper.properties | Trivial | ✅ 已修复（retries=3）|
-| N1/N3/N7 | 各文件 | Trivial | ⬜ 可选（KeyStore 缓存 / 重命名）；N1 已修复（@Upsert）|
+| N1/N3/N7 | 各文件 | Trivial | ✅ 全部已修复（@Upsert / KeyStore 缓存 / LocalTimeFormatter）|
 
 > 注：base 模块 `consumer-rules.pro` 缺失的构建阻断问题已在提交 fdab590d 修复并 cherry-pick 入本分支，整体 `assembleDebug` 通过。
 
@@ -151,13 +151,9 @@
 - 按钮文案 `when` 增加 `isImportMode -> "导入并进入"` 分支。
 - onClick 内 line 496-497 已有 `isImportMode -> importRemote(...)` 分支，按钮启用后导入功能可达。
 
-### A7 `CloudSyncViewModel` 失败消息类型风格（Major）
-**现状核实**：`resolveSyncFailureMessage(action, localPath, outcome: SyncOutcome)` 第三参数类型为 `SyncOutcome`；line 105 调用 `syncEngine.classifyFailure(ex)` 返回正为 `SyncOutcome`，**类型已一致，编译无误**。
-**评审真实意图**：CodeRabbit 建议用 `SyncFailureKind.of(ex)` 替代 `classifyFailure(ex)`，使「捕获异常 → 失败类型」的映射与 `SyncFailureKind` 枚举声明保持一致（风格/一致性建议，非 bug）。
-**方案**：
-- 在 `webdav` 子模块 `WebDavSyncEngine.kt` 的 `SyncFailureKind` 上新增 `companion object { fun of(t: Throwable): SyncFailureKind }`（按 `classifyFailure` 相同规则分类）。
-- 将 line 105 改为 `resolveSyncFailureMessage("自动恢复", null, syncEngine.buildOutcomeFromFailure(SyncFailureKind.of(ex), ex.message))`，或直接让 `classifyFailure` 内部委托 `SyncFailureKind.of`。
-- 因涉及子模块改动需同步提交 `webdav`，且当前类型已正确，**优先级低，可作可选一致性改进**。
+### A7 `CloudSyncViewModel` 失败消息类型风格（Major）— ✅ 已执行（含子模块）
+- 子模块 `WebDavSyncEngine.kt`：`SyncFailureKind` 新增 `companion object { fun of(t: Throwable): SyncFailureKind }`（FILE_NOT_FOUND / NETWORK / UNKNOWN 分类，含 UnknownHostException）；新增 `buildFailureOutcome(kind, message)`；`classifyFailureInternal` 委托 `SyncFailureKind.of`，删除私有 `isNetworkIssue`。
+- `CloudSyncViewModel` 三处 catch（自动恢复/手动恢复/备份，line 105/158/218）改为 `syncEngine.buildFailureOutcome(SyncFailureKind.of(ex), ex.message)`。
 
 ### A8 `CloudSyncViewModel` 密码 `!!` NPE（Major）— ✅ 已执行
 - `downloadCurrentCloudLibrary`（line 244-249）与 `uploadCurrentCloudLibrary`（line ~296）前增加凭据显式校验：`remoteFilePath/username/password` 任一 `isNullOrBlank()` 时，记录 `Logger.e` 并 `updateCloudSyncState(SYNC_STATUS_FAILED, "云端库凭据不完整，请重新绑定或检查账号信息")` 后 `return false`，不再使用 `!!`。
@@ -184,9 +180,9 @@
 ### Nitpick 方案摘要
 - **N1** `LibraryContextDao`：`@Insert(onConflict=REPLACE)` → `@Upsert`（Room 2.5+ 支持）— ✅ 已执行。
 - **N2** `WebDavConfigViewModel.addWebDavConfig`：已改为 `config.copy(sortNumber=next)`，不再就地改入参 — ✅ 已执行。
-- **N3** `WebDavPasswordCipher.getKey()`：缓存 `SecretKey` 避免每次 `KeyStore.getKey`，可选性能优化。
+- **N3** `WebDavPasswordCipher.getKey()`：已缓存 `SecretKey`（@Volatile cachedKey，getOrCreateKey 生成后写入）— ✅ 已执行。
 - **N4** `CloudLibraryDialog` catch 静默：已补 `Logger.e` — ✅ 已执行。
-- **N5** `CloudSyncViewModel` 比较中文错误文案分支脆弱：改为基于 `outcome.errorKind` 结构化枚举判断（涉及子模块），留后续提交。
+- **N5** `CloudSyncViewModel` 比较中文错误文案分支脆弱：子模块 `SyncOutcome` 新增 `absenceSource: FileAbsenceSource`（REMOTE/LOCAL/NONE），download/upload 显式标注，`resolveSyncFailureMessage` 按枚举分支，已移除文案比较 — ✅ 已执行（含子模块）。
 - **N6** `LibraryContextStore.normalizedAutoUnlockInvalidated` 中间变量：已删除，直接使用 `item.autoUnlockInvalidated` — ✅ 已执行。
-- **N7** `DateTimeFormatter` 重命名为 `LocalTimeFormatter` 并改用 `java.time`（minSdk 29 支持）：可选重构。
+- **N7** `DateTimeFormatter` 已重命名为 `LocalTimeFormatter` 并改用 `java.time`（`DateTimeFormatter.ofPattern` + `ZoneId.systemDefault()`，minSdk 29 支持）— ✅ 已执行。
 - **N8** `gradle-wrapper.properties` retries：已改 `retries=3` — ✅ 已执行。
