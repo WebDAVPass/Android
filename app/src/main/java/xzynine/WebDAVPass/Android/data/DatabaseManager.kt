@@ -38,11 +38,23 @@ object DatabaseManager {
     fun currentSaveGeneration(): Long = saveGeneration.get()
 
     /**
-     * 由 [KdbxTokenRepository.saveDatabase] 在每次成功落盘后调用，递增代次。
+     * 由 [KdbxTokenRepository.saveDatabase] 在每次成功落盘后调用。
+     *
+     * 推进写入代次，并在保存的实例正是当前缓存实例时同步刷新缓存条目的代次快照：
+     * 常规写路径（withDatabase 命中缓存 → 修改 → 保存）中缓存内容与磁盘一致，
+     * 若只推进代次而不刷新快照，下一次 tryGet 会把刚保存过的缓存误判为过期丢弃，
+     * 导致会话退化为每次操作重新 KDF 开库。其他实例（并发/未缓存路径）的写入
+     * 只推进代次，缓存快照保持不变，tryGet 仍能识别过期。
      */
-    fun incrementSaveGeneration() {
+    @Synchronized
+    fun onDatabaseSaved(database: Database) {
         val new = saveGeneration.incrementAndGet()
         Logger.d(LOG_TAG, "写入代次推进: $new")
+        val c = cached
+        if (c != null && c.database === database) {
+            cached = c.copy(storeGeneration = new)
+            Logger.d(LOG_TAG, "缓存代次快照已同步: $new")
+        }
     }
 
     /**

@@ -1711,9 +1711,9 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 将数据库保存回定位目标。
      *
-     * 成功落盘后通过 [DatabaseManager.incrementSaveGeneration] 推进写入代次，
+     * 成功落盘后通过 [DatabaseManager.onDatabaseSaved] 推进写入代次并同步缓存快照，
      * 让缓存代次快照机制能识别「其他实例在此期间写入过磁盘」的场景，
-     * 避免过期缓存回滚并发修改。
+     * 避免过期缓存回滚并发修改；自身实例的写入不会把缓存误判为过期。
      */
     private fun saveDatabase(
         database: Database,
@@ -1770,7 +1770,7 @@ class KdbxTokenRepository(context: Context) {
         }
         // 所有写入分支完成、未抛异常 = 磁盘已更新。
         // 代次推进必须在写入成功之后，否则代次前进但磁盘仍是旧内容会产生反向"过期"误判。
-        DatabaseManager.incrementSaveGeneration()
+        DatabaseManager.onDatabaseSaved(database)
     }
 
     /**
