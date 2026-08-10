@@ -1,9 +1,8 @@
 package xzynine.WebDAVPass.Android.data
 
 import androidx.room.Dao
-import androidx.room.Insert
-import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Upsert
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -35,14 +34,14 @@ interface LibraryContextDao {
      * 插入或替换历史库（按主键 id）
      * @param entity 历史库实体
      */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsert(entity: LibraryContextEntity)
 
     /**
      * 批量插入或替换历史库（按主键 id）
      * @param entities 历史库实体列表
      */
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    @Upsert
     suspend fun upsertAll(entities: List<LibraryContextEntity>)
 
     /**

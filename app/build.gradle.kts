@@ -108,9 +108,6 @@ android {
         compose = true
         buildConfig = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get()
-    }
     
     // 配置 16KB 页面大小 LOAD 段对齐
     packaging {

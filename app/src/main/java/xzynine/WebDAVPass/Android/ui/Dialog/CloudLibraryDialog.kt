@@ -442,8 +442,10 @@ fun CloudLibraryDialog(
                             val baseUrl = normalizeServerRootUrl(serverUrl)
                             val normalizedPath = if (manualPath.endsWith(".kdbx", ignoreCase = true)) {
                                 manualPath
-                            } else {
+                            } else if (manualPath.isNotBlank()) {
                                 "$manualPath.kdbx"
+                            } else {
+                                manualPath
                             }
                             val remoteFilePath = if (normalizedPath.startsWith("http://") || normalizedPath.startsWith("https://")) {
                                 normalizedPath
@@ -480,6 +482,10 @@ fun CloudLibraryDialog(
                         }
 
                         if (isCreateMode) {
+                            if (manualPath.isBlank()) {
+                                ToastUtils.showShortToast(context, "请输入远端文件路径")
+                                return@launch
+                            }
                             if (createPassword.isBlank()) {
                                 ToastUtils.showShortToast(context, "请输入主密码")
                                 return@launch
@@ -491,7 +497,7 @@ fun CloudLibraryDialog(
                         }
 
                         val baseUrl = normalizeServerRootUrl(serverUrl)
-                        val path = if (isCreateMode && !manualPath.endsWith(".kdbx", ignoreCase = true)) {
+                        val path = if (isCreateMode && manualPath.isNotBlank() && !manualPath.endsWith(".kdbx", ignoreCase = true)) {
                             "$manualPath.kdbx"
                         } else {
                             manualPath
@@ -504,6 +510,7 @@ fun CloudLibraryDialog(
                                 createRemote(baseUrl, path, username, password, createPassword, createKeyFileData, createKeyFileUri)
                             }
                         } catch (e: Exception) {
+                            Logger.e(SEARCH_LOG_TAG, "云端库操作失败（import/create/bind），path=$path", e)
                             null
                         }
 
@@ -514,11 +521,12 @@ fun CloudLibraryDialog(
 
                         onSelected(selected, if (isCreateMode) createPassword else null)
                     }
-                }, enabled = isCreateMode || (isBindMode && !isBindReadOnly)) {
+                }, enabled = isCreateMode || isImportMode || (isBindMode && !isBindReadOnly)) {
                     Text(
                         when {
                             isBindMode && isBindReadOnly -> "配置已锁定"
                             isBindMode -> "保存云端绑定"
+                            isImportMode -> "导入并进入"
                             else -> "新建并进入"
                         }
                     )

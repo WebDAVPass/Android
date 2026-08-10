@@ -61,20 +61,10 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     private val cacheRebuildJobRef: AtomicReference<Job?> = AtomicReference(null)
 
     init {
-        refreshLibraryHistory()
-        // 订阅 DatabaseManager 的缓存失效事件。
-        // 触发时机：invalidateCacheKeepKeyFile（合并/改密失败路径）或 close（切库/锁定）。
-        // 与"在 getMasterPasswordInternal 里与操作并发调度"不同，这里的调度发生在
-        // 失败路径 onFailure 回调返回之前——此时用户还没有发起下一次操作，
-        // 预重建与后续用户操作之间是「先重建、再使用」的串行关系，不会并发打开
-        // 两个实例导致缓存 S0/磁盘 S1 的代次竞争。
-        viewModelScope.launch {
-            // DatabaseManager.cacheInvalidatedEvents 是 SharedFlow<Unit>，按本条 collect：
-            // - 生命周期跟随 viewModelScope；
-            // - tryEmit + DROP_OLDEST 保证发射永不阻塞 onFailure 同步回调。
-            DatabaseManager.cacheInvalidatedEvents.collect {
-                scheduleCacheRebuildIfNeeded()
-            }
+        // 预热库缓存：迁移与数据库加载移到 IO 协程，避免首次访问在 UI 线程同步阻塞
+        libraryContextStore.warmUp()
+        viewModelScope.launch(Dispatchers.IO) {
+            refreshLibraryHistory()
         }
     }
 

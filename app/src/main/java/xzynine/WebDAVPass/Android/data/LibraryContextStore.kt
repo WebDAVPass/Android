@@ -5,11 +5,13 @@ import android.content.Intent
 import android.net.Uri
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import xzylib.base.util.Logger
 
 /**
  * 库上下文存储（数据库实现）
@@ -24,13 +26,21 @@ class LibraryContextStore(private val context: Context) {
     private val database = AppDatabaseHolder.getInstance(context)
 
     /**
-     * 异步落库协程作用域（与应用同生命周期，随单例 ViewModel 存活）
+     * 异步落库协程作用域（与应用同生命周期，随单例 ViewModel 存活）。
+     * 安装 [CoroutineExceptionHandler] 以捕获 DAO 写入异常，避免异常传播到未捕获处理器导致崩溃。
      */
-    private val ioScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val ioScope = CoroutineScope(
+        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, throwable ->
+            Logger.e("LibraryContextStore", "异步落库失败", throwable)
+        }
+    )
 
     private val lock = Any()
+    @Volatile
     private var loaded = false
+    @Volatile
     private var history = mutableListOf<LibraryContext>()
+    @Volatile
     private var currentId: String? = null
 
     /**
@@ -53,6 +63,14 @@ class LibraryContextStore(private val context: Context) {
             }
             loaded = true
         }
+    }
+
+    /**
+     * 应用启动预热：在 IO 协程中提前完成迁移与数据库加载，
+     * 使首次用户操作前的缓存已就绪，避免 UI 线程触发 [ensureLoaded] 的同步阻塞。
+     */
+    fun warmUp() {
+        ioScope.launch { ensureLoaded() }
     }
 
     /**
@@ -231,8 +249,11 @@ class LibraryContextStore(private val context: Context) {
      */
     fun selectById(id: String): LibraryContext? {
         ensureLoaded()
-        val item = history.firstOrNull { it.id == id } ?: return null
-        currentId = item.id
+        val item: LibraryContext
+        synchronized(lock) {
+            item = history.firstOrNull { it.id == id } ?: return null
+            currentId = item.id
+        }
         ioScope.launch {
             database.appSettingsDao().put(AppSetting(KEY_CURRENT_ID, item.id))
         }
@@ -287,22 +308,26 @@ class LibraryContextStore(private val context: Context) {
         }
         ensureLoaded()
 
-        val removedItems = history.filter { ids.contains(it.id) }
-        val filtered = history.filterNot { ids.contains(it.id) }
-        val removedCount = history.size - filtered.size
-        if (removedCount <= 0) {
-            return 0
-        }
-
+        val removedItems: List<LibraryContext>
+        val filtered: List<LibraryContext>
+        val removedCurrentId: Boolean
         synchronized(lock) {
+            removedItems = history.filter { ids.contains(it.id) }
+            filtered = history.filterNot { ids.contains(it.id) }
+            val removedCount = history.size - filtered.size
+            if (removedCount <= 0) {
+                return 0
+            }
             history = filtered.toMutableList()
+            removedCurrentId = !currentId.isNullOrBlank() && ids.contains(currentId)
+            if (removedCurrentId) {
+                currentId = null
+            }
         }
         ioScope.launch {
             database.libraryContextDao().deleteByIds(ids)
         }
-
-        if (!currentId.isNullOrBlank() && ids.contains(currentId)) {
-            currentId = null
+        if (removedCurrentId) {
             ioScope.launch {
                 database.appSettingsDao().delete(KEY_CURRENT_ID)
             }
@@ -310,7 +335,7 @@ class LibraryContextStore(private val context: Context) {
 
         // 清理已不再被历史引用的 Uri 权限。
         releaseObsoleteUriPermissions(removedItems, filtered)
-        return removedCount
+        return history.size - filtered.size
     }
 
     /**
@@ -351,7 +376,9 @@ class LibraryContextStore(private val context: Context) {
      */
     fun clearCurrentSelection() {
         ensureLoaded()
-        currentId = null
+        synchronized(lock) {
+            currentId = null
+        }
         ioScope.launch {
             database.appSettingsDao().delete(KEY_CURRENT_ID)
         }
@@ -385,14 +412,11 @@ class LibraryContextStore(private val context: Context) {
         // 兼容旧版本：缺省视为启用48小时手动主密码策略。
         val normalizedForceManualUnlock = item.forceManualUnlockEvery48Hours ?: true
 
-        // 兼容旧版本：缺省视为未失效。
-        val normalizedAutoUnlockInvalidated = item.autoUnlockInvalidated
-
         return item.copy(
             autoSyncEnabled = normalizedAutoSync,
             autoUnlockAuthMode = normalizedAuthMode,
             forceManualUnlockEvery48Hours = normalizedForceManualUnlock,
-            autoUnlockInvalidated = normalizedAutoUnlockInvalidated
+            autoUnlockInvalidated = item.autoUnlockInvalidated
         )
     }
 

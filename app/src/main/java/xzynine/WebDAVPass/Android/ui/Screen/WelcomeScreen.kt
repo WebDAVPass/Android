@@ -75,8 +75,7 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
-import xzynine.WebDAVPass.Android.util.DateTimeFormatter
-import xzynine.WebDAVPass.Android.util.resolveDisplayName
+import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 
 /** 密钥文件大小上限（1 MiB），与 CreateMasterPasswordDialog 保持一致。 */
 private const val MAX_KEY_FILE_BYTES = 1024 * 1024
@@ -959,7 +958,7 @@ fun WelcomeScreen(
                             else -> "未同步"
                         }
                         // 毫秒级时间戳按设备时区格式化为本地时间，避免直接显示原始数字
-                        val syncAtText = DateTimeFormatter.formatLocalDateTime(item.lastSyncAt)
+                        val syncAtText = LocalTimeFormatter.formatLocalDateTime(item.lastSyncAt)
                             .takeIf { it.isNotEmpty() }
                             ?.let { "，上次: $it" }
                             .orEmpty()

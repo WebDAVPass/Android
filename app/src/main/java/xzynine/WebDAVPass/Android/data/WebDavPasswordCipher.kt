@@ -32,6 +32,9 @@ object WebDavPasswordCipher {
 
     private val lock = Any()
 
+    @Volatile
+    private var cachedKey: SecretKey? = null
+
     /**
      * 加密明文密码。
      *
@@ -85,15 +88,16 @@ object WebDavPasswordCipher {
     }
 
     /**
-     * 从 AndroidKeyStore 读取密钥。
+     * 从 AndroidKeyStore 读取密钥（带缓存，避免每次跨进程访问 keystore）。
      *
      * @return 密钥；不存在或不可恢复时返回 null
      */
     private fun getKey(): SecretKey? {
+        cachedKey?.let { return it }
         return runCatching {
             val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
             keyStore.getKey(KEY_ALIAS, null) as? SecretKey
-        }.getOrNull()
+        }.getOrNull()?.also { cachedKey = it }
     }
 
     /**
@@ -113,7 +117,7 @@ object WebDavPasswordCipher {
                     .setKeySize(256)
                     .build()
             )
-            return keyGenerator.generateKey()
+            return keyGenerator.generateKey().also { cachedKey = it }
         }
     }
 }
