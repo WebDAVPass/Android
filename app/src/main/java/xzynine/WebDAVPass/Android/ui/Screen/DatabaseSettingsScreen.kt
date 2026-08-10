@@ -156,6 +156,7 @@ fun DatabaseSettingsScreen(
     fun save() {
         // 仅对用户实际选中的 KDF 校验参数；未知 KDF（-1）时不修改 KDF，跳过参数校验
         val selectedKdf = kdfOptions.getOrNull(kdfSelectedIndex)
+        val kdfIsSelected = kdfSelectedIndex >= 0
         val error = when {
             oldPassword.isBlank() -> "请输入当前主密码"
             newPassword.isBlank() -> "请输入新主密码"
@@ -176,10 +177,11 @@ fun DatabaseSettingsScreen(
                     oldPassword = oldPassword,
                     newMasterPassword = newPassword,
                     newKeyFileData = keyFileData,
-                    kdfEngineName = if (kdfSelectedIndex >= 0) kdfOptions[kdfSelectedIndex] else null,
-                    keyRounds = keyRounds.toLongOrNull(),
-                    memoryUsage = memoryUsageMb.toLongOrNull()?.times(1024 * 1024),
-                    parallelism = parallelism.toLongOrNull(),
+                    kdfEngineName = if (kdfIsSelected) kdfOptions[kdfSelectedIndex] else null,
+                    // 未知 KDF 时不传任何 KDF 参数，避免把无关的轮数/内存/并行度应用到当前 KDF
+                    keyRounds = if (kdfIsSelected) keyRounds.toLongOrNull() else null,
+                    memoryUsage = if (kdfIsSelected) memoryUsageMb.toLongOrNull()?.times(1024 * 1024) else null,
+                    parallelism = if (kdfIsSelected) parallelism.toLongOrNull() else null,
                     isCompressionEnabled = isCompressionEnabled
                 )
                 saving = false
@@ -310,40 +312,52 @@ fun DatabaseSettingsScreen(
                         switchKdf(index)
                     }
                 )
-                if (kdfEngineName == "AES") {
-                    TextField(
-                        value = keyRounds,
-                        onValueChange = { keyRounds = it },
-                        label = "加密轮数（AES-KDF）",
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else {
-                    TextField(
-                        value = memoryUsageMb,
-                        onValueChange = { memoryUsageMb = it },
-                        label = "内存占用（MB，Argon2）",
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    TextField(
-                        value = parallelism,
-                        onValueChange = { parallelism = it },
-                        label = "并行度（Argon2）",
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    TextField(
-                        value = keyRounds,
-                        onValueChange = { keyRounds = it },
-                        label = "迭代次数（Argon2）",
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                // 按选中索引决定参数输入框：未知 KDF 隐藏全部参数；AES 仅显示轮数；Argon2 显示全部参数
+                when {
+                    kdfSelectedIndex < 0 -> {
+                        // 未知 KDF：不展示参数输入框，保存时也不会修改 KDF
+                        Text(
+                            text = "当前 KDF 不在可选范围内，保存时将保留原算法与参数",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        )
+                    }
+                    kdfEngineName == "AES" -> {
+                        TextField(
+                            value = keyRounds,
+                            onValueChange = { keyRounds = it },
+                            label = "加密轮数（AES-KDF）",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                    else -> {
+                        TextField(
+                            value = memoryUsageMb,
+                            onValueChange = { memoryUsageMb = it },
+                            label = "内存占用（MB，Argon2）",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        TextField(
+                            value = parallelism,
+                            onValueChange = { parallelism = it },
+                            label = "并行度（Argon2）",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        TextField(
+                            value = keyRounds,
+                            onValueChange = { keyRounds = it },
+                            label = "迭代次数（Argon2）",
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
                 SwitchPreference(
                     title = "启用压缩",
