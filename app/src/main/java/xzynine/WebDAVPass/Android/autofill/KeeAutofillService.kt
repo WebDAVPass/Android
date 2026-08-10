@@ -191,47 +191,52 @@ class KeeAutofillService : AutofillService() {
             callback.onSuccess()
             return
         }
-        var success = false
         val latestStructure = request.fillContexts.last().structure
-        StructureParser(latestStructure).parse(saveValue = true)?.let { parseResult ->
-            if (parseResult.isValid() && autofillAllowedFor(
-                    applicationId = parseResult.applicationId,
-                    applicationIdBlocklist = applicationIdBlocklist,
-                    webDomain = parseResult.webDomain,
-                    webDomainBlocklist = webDomainBlocklist)
-                ) {
-                Log.d(TAG, "autofill onSaveRequest password")
-
-                val passwordText = parseResult.passwordValue?.textValue?.toString()
-                // 密码为空时不拉起注册界面，避免保存无密码条目
-                if (passwordText.isNullOrEmpty()) {
-                    callback.onSuccess()
-                    return
-                }
-
-                val searchInfo = SearchInfo().apply {
-                    applicationId = parseResult.applicationId
-                    webScheme = parseResult.webScheme
-                    webDomain = parseResult.webDomain
-                }
-                val registerInfo = RegisterInfo(
-                    searchInfo = searchInfo,
-                    username = parseResult.usernameValue?.textValue?.toString(),
-                    password = passwordText
-                )
-
-                // 拉起注册界面：展示表单值并选择目标分组后创建条目
-                AutofillHelper.getPendingIntentForRegistration(
-                    this,
-                    registerInfo
-                )?.intentSender?.let { intentSender ->
-                    success = true
-                    callback.onSuccess(intentSender)
-                }
-            }
+        val parseResult = StructureParser(latestStructure).parse(saveValue = true)
+        if (parseResult == null || !parseResult.isValid()) {
+            callback.onFailure("无法解析当前表单结构，暂不支持保存")
+            return
         }
-        if (!success) {
+        val blocklisted = !autofillAllowedFor(
+            applicationId = parseResult.applicationId,
+            applicationIdBlocklist = applicationIdBlocklist,
+            webDomain = parseResult.webDomain,
+            webDomainBlocklist = webDomainBlocklist
+        )
+        if (blocklisted) {
             callback.onFailure("当前应用或网站已被加入黑名单，不允许保存表单")
+            return
+        }
+
+        Log.d(TAG, "autofill onSaveRequest password")
+
+        val passwordText = parseResult.passwordValue?.textValue?.toString()
+        // 密码为空或纯空格时不拉起注册界面，避免保存无意义条目
+        if (passwordText.isNullOrBlank()) {
+            callback.onSuccess()
+            return
+        }
+
+        val searchInfo = SearchInfo().apply {
+            applicationId = parseResult.applicationId
+            webScheme = parseResult.webScheme
+            webDomain = parseResult.webDomain
+        }
+        val registerInfo = RegisterInfo(
+            searchInfo = searchInfo,
+            username = parseResult.usernameValue?.textValue?.toString(),
+            password = passwordText
+        )
+
+        // 拉起注册界面：展示表单值并选择目标分组后创建条目
+        val intentSender = AutofillHelper.getPendingIntentForRegistration(
+            this,
+            registerInfo
+        )?.intentSender
+        if (intentSender != null) {
+            callback.onSuccess(intentSender)
+        } else {
+            callback.onFailure("无法创建保存入口（PendingIntent 构建失败）")
         }
     }
 
