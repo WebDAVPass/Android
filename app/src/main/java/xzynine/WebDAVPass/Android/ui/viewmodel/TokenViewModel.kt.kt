@@ -663,6 +663,18 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             if (newKeyFileData != null) {
                 DatabaseManager.setKeyFileData(newKeyFileData)
             }
+            // 主密码或密钥文件变更后，旧的生物识别自动解锁凭据（用旧主密码加密）已失效，
+            // 需清理以免下次用旧凭据解密失败；仅改 KDF/压缩时不涉及凭据，无需失效。
+            val passwordChanged = newMasterPassword != oldPassword
+            val keyFileChanged = newKeyFileData != null
+            if ((passwordChanged || keyFileChanged)) {
+                val lib = libraryViewModel.currentLibrary.value
+                if (lib?.autoUnlockEnabled == true) {
+                    autoUnlockViewModel.invalidateAutoUnlock(lib) { updated ->
+                        libraryViewModel.persistLibraryMetadata(updated)
+                    }
+                }
+            }
         }
         return ok
     }
