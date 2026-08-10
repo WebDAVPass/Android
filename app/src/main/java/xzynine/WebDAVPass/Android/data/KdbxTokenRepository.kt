@@ -563,8 +563,9 @@ class KdbxTokenRepository(context: Context) {
                         val target = findGroupByUuid(db.rootGroup, recycledGroup.previousParentGroup)
                             ?: db.rootGroup
                             ?: return@withDatabase restored
+                        // 计数按实际恢复的条目数（整组含子分组）
+                        restored += collectEntries(recycledGroup).size
                         db.undoRecycle(recycledGroup, target)
-                        restored++
                     }
                     return@forEach
                 }
@@ -603,8 +604,9 @@ class KdbxTokenRepository(context: Context) {
                         val groupId = toStableGroupId(recycledGroup)
                         if (groupId !in deletedGroups) {
                             deletedGroups.add(groupId)
+                            // 计数按实际删除的条目数（整组含子分组）
+                            deleted += collectEntries(recycledGroup).size
                             db.deleteGroup(recycledGroup)
-                            deleted++
                         }
                     }
                     return@forEach
@@ -749,7 +751,7 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 修改数据库安全设置（主密码 / 密钥文件 / KDF / 压缩）并重新加密保存。
      *
-     * @param masterPassword 当前主密码（用于打开数据库）
+     * @param masterPassword 当前主密码（用户输入，用于验证后打开数据库；即使已有缓存也会先真实解密验证）
      * @param newMasterPassword 新主密码（与当前相同表示仅修改其他设置）
      * @param newKeyFileData 新密钥文件字节，null 表示沿用当前密钥文件
      * @param kdfEngineName KDF 类型：AES / Argon2d / Argon2id，null 表示不修改
@@ -772,12 +774,18 @@ class KdbxTokenRepository(context: Context) {
     ): Boolean {
         return runCatching {
             val location = resolveLocation(localPath)
+            // 用用户输入的旧密码显式打开验证（绕过缓存真实解密），
+            // 防止未锁屏设备上的他人不输旧密码直接改凭据
+            val currentKeyFile = DatabaseManager.getKeyFileData()
+            val (verifyDatabase, verifyCacheDirectory) = openDatabase(location, masterPassword, currentKeyFile)
+            verifyDatabase.clearAndClose(verifyCacheDirectory)
+
             // 优先复用已解锁的缓存实例，避免重复解密
             val cachedPair = DatabaseManager.tryGet(localPath)
             val (database, cacheDirectory) = if (cachedPair != null) {
                 cachedPair
             } else {
-                openDatabase(location, masterPassword)
+                openDatabase(location, masterPassword, currentKeyFile)
             }
             try {
                 kdfEngineName?.let { name ->

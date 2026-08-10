@@ -1062,10 +1062,18 @@ fun PasswordEntryDetailScreen(
             currentCustomIconBytes = editNewCustomIconBytes ?: selectedEntry?.customIconBytes,
             onDismiss = { showIconPicker = false },
             onPick = { standardId, bytes ->
-                editIconStandardId = standardId ?: 0
-                editCustomIconUuid = null
-                editNewCustomIconBytes = bytes
                 showIconPicker = false
+                val currentBytes = selectedEntry?.customIconBytes
+                // 与打开时的图标完全一致视为无改动：保留原自定义图标，避免重复写入图标池
+                val unchanged = bytes != null && currentBytes != null &&
+                    bytes.contentEquals(currentBytes) && standardId == editIconStandardId
+                if (unchanged) {
+                    editNewCustomIconBytes = null
+                } else {
+                    editIconStandardId = standardId ?: 0
+                    editCustomIconUuid = null
+                    editNewCustomIconBytes = bytes
+                }
             }
         )
     }

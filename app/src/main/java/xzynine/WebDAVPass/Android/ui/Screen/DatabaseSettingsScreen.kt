@@ -66,7 +66,6 @@ fun DatabaseSettingsScreen(
 
     var loading by remember { mutableStateOf(true) }
     var saving by remember { mutableStateOf(false) }
-    var kdfEngineName by remember { mutableStateOf("AES") }
     var keyRounds by remember { mutableStateOf("") }
     var memoryUsageMb by remember { mutableStateOf("") }
     var parallelism by remember { mutableStateOf("") }
@@ -81,7 +80,9 @@ fun DatabaseSettingsScreen(
     var status by remember { mutableStateOf("") }
 
     val kdfOptions = listOf("AES", "Argon2d", "Argon2id")
-    var kdfSelectedIndex by remember { mutableStateOf(0) }
+    // -1 表示未知 KDF 或尚未加载：保存时 KDF 传 null（不修改），避免把未知 KDF 静默切到 AES
+    var kdfSelectedIndex by remember { mutableStateOf(-1) }
+    var kdfEngineName by remember { mutableStateOf("未知") }
 
     // Argon2 引擎默认参数（用于切换 KDF 时预填；memoryUsage 单位为字节）
     val argon2Defaults = remember {
@@ -111,7 +112,8 @@ fun DatabaseSettingsScreen(
         val info = viewModel.loadDatabaseSettingsInfo()
         if (info != null) {
             kdfEngineName = info.kdfEngineName
-            kdfSelectedIndex = kdfOptions.indexOfFirst { it == info.kdfEngineName }.takeIf { it >= 0 } ?: 0
+            kdfSelectedIndex = kdfOptions.indexOfFirst { it == info.kdfEngineName }
+                .takeIf { it >= 0 } ?: -1
             keyRounds = info.keyRounds.toString()
             // memoryUsage 单位为字节：换算为 MiB 展示
             memoryUsageMb = if (info.memoryUsage > 0) (info.memoryUsage / 1024 / 1024).toString() else ""
@@ -152,39 +154,42 @@ fun DatabaseSettingsScreen(
     }
 
     fun save() {
+        // 仅对用户实际选中的 KDF 校验参数；未知 KDF（-1）时不修改 KDF，跳过参数校验
+        val selectedKdf = kdfOptions.getOrNull(kdfSelectedIndex)
         val error = when {
             oldPassword.isBlank() -> "请输入当前主密码"
             newPassword.isBlank() -> "请输入新主密码"
             newPassword != confirmPassword -> "两次新主密码不一致"
-            kdfEngineName == "AES" && keyRounds.toLongOrNull() == null -> "轮数必须为数字"
-            kdfEngineName != "AES" && memoryUsageMb.toLongOrNull()?.let { it > 0 } != true -> "内存占用必须为正数"
-            kdfEngineName != "AES" && parallelism.toLongOrNull()?.let { it > 0 } != true -> "并行度必须为正数"
-            kdfEngineName != "AES" && keyRounds.toLongOrNull()?.let { it > 0 } != true -> "迭代次数必须为正数"
+            selectedKdf == "AES" && keyRounds.toLongOrNull()?.let { it > 0 } != true -> "轮数必须为正数"
+            selectedKdf != null && selectedKdf != "AES" && memoryUsageMb.toLongOrNull()?.let { it > 0 } != true -> "内存占用必须为正数"
+            selectedKdf != null && selectedKdf != "AES" && parallelism.toLongOrNull()?.let { it > 0 } != true -> "并行度必须为正数"
+            selectedKdf != null && selectedKdf != "AES" && keyRounds.toLongOrNull()?.let { it > 0 } != true -> "迭代次数必须为正数"
             else -> ""
         }
         status = error
         if (error.isNotBlank()) {
             return
         }
-        coroutineScope.launch {
-            saving = true
-            val ok = viewModel.changeDatabaseSettings(
-                newMasterPassword = newPassword,
-                newKeyFileData = keyFileData,
-                kdfEngineName = if (kdfSelectedIndex >= 0) kdfOptions[kdfSelectedIndex] else null,
-                keyRounds = keyRounds.toLongOrNull(),
-                memoryUsage = memoryUsageMb.toLongOrNull()?.times(1024 * 1024),
-                parallelism = parallelism.toLongOrNull(),
-                isCompressionEnabled = isCompressionEnabled
-            )
-            saving = false
-            if (ok) {
-                ToastUtils.showShortToast(context, "数据库设置已保存")
-                onNavigateBack()
-            } else {
-                status = "保存失败：请检查主密码与 KDF 参数（Argon2 内存/并行度/迭代次数需为正数）"
+            coroutineScope.launch {
+                saving = true
+                val ok = viewModel.changeDatabaseSettings(
+                    oldPassword = oldPassword,
+                    newMasterPassword = newPassword,
+                    newKeyFileData = keyFileData,
+                    kdfEngineName = if (kdfSelectedIndex >= 0) kdfOptions[kdfSelectedIndex] else null,
+                    keyRounds = keyRounds.toLongOrNull(),
+                    memoryUsage = memoryUsageMb.toLongOrNull()?.times(1024 * 1024),
+                    parallelism = parallelism.toLongOrNull(),
+                    isCompressionEnabled = isCompressionEnabled
+                )
+                saving = false
+                if (ok) {
+                    ToastUtils.showShortToast(context, "数据库设置已保存")
+                    onNavigateBack()
+                } else {
+                    status = "保存失败：当前主密码错误或 KDF 参数无效（Argon2 内存/并行度/迭代次数需为正数）"
+                }
             }
-        }
     }
 
     Scaffold(
@@ -292,7 +297,7 @@ fun DatabaseSettingsScreen(
                     title = "KDF 算法",
                     summary = "当前：$kdfEngineName",
                     items = kdfOptions.map { DropdownItem(text = it) },
-                    selectedIndex = kdfSelectedIndex,
+                    selectedIndex = kdfSelectedIndex.coerceAtLeast(0),
                     showValue = true,
                     startAction = {
                         Icon(

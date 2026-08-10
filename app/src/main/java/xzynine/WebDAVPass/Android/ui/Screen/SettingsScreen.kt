@@ -365,7 +365,14 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
 
             Spacer(modifier = Modifier.Companion.height(8.dp))
 
-            var askToSaveChecked by remember { mutableStateOf(xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences.askToSaveData) }
+            var askToSaveChecked by remember {
+                mutableStateOf(xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences.askToSaveData)
+            }
+            // 进入设置页时从本地设置同步（服务可能尚未连接，内存缓存可能过期）
+            LaunchedEffect(Unit) {
+                xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences.load(context)
+                askToSaveChecked = xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences.askToSaveData
+            }
             SwitchPreference(
                 title = "自动填充时提示保存",
                 summary = "在表单提交后询问是否将账号密码保存到密码库",

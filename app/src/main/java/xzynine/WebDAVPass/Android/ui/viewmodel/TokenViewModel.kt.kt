@@ -597,9 +597,11 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     /**
      * 修改数据库安全设置（主密码 / 密钥文件 / KDF / 压缩）。
      *
+     * @param oldPassword 用户输入的当前主密码（用于验证后再修改）
      * @return 是否成功；成功后内存中的主密码同步更新为新值
      */
     suspend fun changeDatabaseSettings(
+        oldPassword: String,
         newMasterPassword: String,
         newKeyFileData: ByteArray? = null,
         kdfEngineName: String? = null,
@@ -609,18 +611,19 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         isCompressionEnabled: Boolean? = null
     ): Boolean {
         val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
-        val oldPassword = libraryViewModel.getMasterPasswordInternal()
-        val ok = kdbxTokenRepository.changeDatabaseSettings(
-            localPath = localPath,
-            masterPassword = oldPassword,
-            newMasterPassword = newMasterPassword,
-            newKeyFileData = newKeyFileData,
-            kdfEngineName = kdfEngineName,
-            keyRounds = keyRounds,
-            memoryUsage = memoryUsage,
-            parallelism = parallelism,
-            isCompressionEnabled = isCompressionEnabled
-        )
+        val ok = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.changeDatabaseSettings(
+                localPath = localPath,
+                masterPassword = oldPassword,
+                newMasterPassword = newMasterPassword,
+                newKeyFileData = newKeyFileData,
+                kdfEngineName = kdfEngineName,
+                keyRounds = keyRounds,
+                memoryUsage = memoryUsage,
+                parallelism = parallelism,
+                isCompressionEnabled = isCompressionEnabled
+            )
+        }
         if (ok) {
             libraryViewModel.updateMasterPasswordInternal(newMasterPassword)
             if (newKeyFileData != null) {
@@ -635,10 +638,12 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun loadDatabaseSettingsInfo(): DatabaseSettingsInfo? {
         val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return null
-        return kdbxTokenRepository.loadDatabaseSettingsInfo(
-            localPath,
-            libraryViewModel.getMasterPasswordInternal()
-        )
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.loadDatabaseSettingsInfo(
+                localPath,
+                libraryViewModel.getMasterPasswordInternal()
+            )
+        }
     }
 
     /**
@@ -646,11 +651,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun exportCurrentDatabase(uri: Uri): Boolean {
         val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
-        return kdbxTokenRepository.exportDatabaseTo(
-            localPath,
-            libraryViewModel.getMasterPasswordInternal()
-        ) {
-            context.contentResolver.openOutputStream(uri, "wt")
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.exportDatabaseTo(
+                localPath,
+                libraryViewModel.getMasterPasswordInternal()
+            ) {
+                context.contentResolver.openOutputStream(uri, "wt")
+            }
         }
     }
 
@@ -659,12 +666,14 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun mergeLocalDatabase(uri: Uri, mergeMasterPassword: String): Boolean {
         val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
-        val ok = kdbxTokenRepository.mergeLocalDatabaseFile(
-            localPath,
-            libraryViewModel.getMasterPasswordInternal(),
-            uri.toString(),
-            mergeMasterPassword
-        )
+        val ok = withContext(Dispatchers.IO) {
+            kdbxTokenRepository.mergeLocalDatabaseFile(
+                localPath,
+                libraryViewModel.getMasterPasswordInternal(),
+                uri.toString(),
+                mergeMasterPassword
+            )
+        }
         if (ok) {
             onPasswordWriteSuccess()
         }
@@ -676,7 +685,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun loadSecurityIssues(): SecurityIssuesInfo {
         val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return SecurityIssuesInfo(emptyList(), emptyList())
-        return kdbxTokenRepository.loadSecurityIssues(localPath, libraryViewModel.getMasterPasswordInternal())
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.loadSecurityIssues(localPath, libraryViewModel.getMasterPasswordInternal())
+        }
     }
 
     /**
