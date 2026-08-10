@@ -63,8 +63,29 @@ data class PasswordEntry(
     val expiryTime: Long? = null,
     val isExpired: Boolean = false,
     val customIconUuid: String? = null,
+    val tags: List<String> = emptyList(),
+    val creationTime: Long = 0L,
+    val modifiedTime: Long = 0L,
     val isFolderGroup: Boolean = false,
     val isFolderPlaceholder: Boolean = false
+)
+
+/**
+ * 条目历史版本摘要（用于历史列表展示）。
+ *
+ * @property index 历史索引（在 KDBX History 列表中的位置，恢复时使用）
+ * @property lastModificationTime 该版本的最后修改时间（毫秒）
+ */
+data class EntryHistoryInfo(
+    val index: Int,
+    val lastModificationTime: Long,
+    val title: String,
+    val username: String,
+    val passwordSet: Boolean,
+    val url: String,
+    val notes: String,
+    val customFieldCount: Int,
+    val attachmentCount: Int
 )
 
 /**

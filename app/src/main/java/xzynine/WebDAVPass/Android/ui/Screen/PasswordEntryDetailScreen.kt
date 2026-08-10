@@ -5,6 +5,7 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.PersistableBundle
 import android.webkit.MimeTypeMap
@@ -27,6 +28,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -61,8 +63,12 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.Hide
+import top.yukonga.miuix.kmp.icon.extended.Lock
+import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -72,14 +78,19 @@ import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.EntryAttachmentInfo
+import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
+import com.kunzisoft.keepass.model.PasskeyEntryFields
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.EntryHistoryDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
+import xzynine.WebDAVPass.Android.util.DateTimeFormatter
 import xzynine.WebDAVPass.Android.util.QrCodeUtil
 
 @Composable
@@ -99,11 +110,16 @@ fun PasswordEntryDetailScreen(
     val showDeleteDialog = remember { mutableStateOf(false) }
     var isEditing by rememberSaveable(entryId) { mutableStateOf(false) }
 
+    // 历史记录（非编辑态展示）
+    var historyItems by remember(entryId) { mutableStateOf<List<EntryHistoryInfo>>(emptyList()) }
+    val showHistoryDialog = remember { mutableStateOf(false) }
+
     var editTitle by rememberSaveable(entryId) { mutableStateOf("") }
     var editUsername by rememberSaveable(entryId) { mutableStateOf("") }
     var editPassword by rememberSaveable(entryId) { mutableStateOf("") }
     var editUrl by rememberSaveable(entryId) { mutableStateOf("") }
     var editNotes by rememberSaveable(entryId) { mutableStateOf("") }
+    var editTagsText by rememberSaveable(entryId) { mutableStateOf("") }
 
     // 附件 / 自定义字段 / 过期时间 / 图标（编辑态）
     // 注意：附件含 ByteArray，不能用 rememberSaveable（无法序列化）
@@ -112,6 +128,8 @@ fun PasswordEntryDetailScreen(
     var editExpiryTime by remember(entryId) { mutableStateOf<Long?>(null) }
     var editIconStandardId by remember(entryId) { mutableStateOf(0) }
     var editCustomIconUuid by remember(entryId) { mutableStateOf<String?>(null) }
+    var editNewCustomIconBytes by remember(entryId) { mutableStateOf<ByteArray?>(null) }
+    var showIconPicker by remember { mutableStateOf(false) }
 
     fun syncEditFields(entry: PasswordEntry) {
         val usernameField = entry.keyValues.firstOrNull { it.fieldName.equals("UserName", ignoreCase = true) }
@@ -146,12 +164,15 @@ fun PasswordEntryDetailScreen(
         editExpiryTime = entry.expiryTime
         editIconStandardId = entry.standardIconId
         editCustomIconUuid = entry.customIconUuid
+        editNewCustomIconBytes = null
+        editTagsText = entry.tags.joinToString(", ")
     }
 
     LaunchedEffect(entryId) {
         detailLoaded = false
         selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
         selectedEntry?.let { entry -> syncEditFields(entry) }
+        historyItems = tokenViewModel.loadEntryHistory(entryId)
         detailLoaded = true
     }
 
@@ -244,11 +265,13 @@ fun PasswordEntryDetailScreen(
                                                 password = editPassword,
                                                 url = editUrl.trim(),
                                                 notes = editNotes,
+                                                tags = parseTagsText(editTagsText),
                                                 customFields = editCustomFields,
                                                 attachments = editAttachments,
                                                 expiryTime = editExpiryTime,
                                                 customIconUuid = editCustomIconUuid,
-                                                iconStandardId = editIconStandardId
+                                                iconStandardId = editIconStandardId,
+                                                newCustomIconBytes = editNewCustomIconBytes
                                             )
                                         )
                                         if (updated) {
@@ -329,7 +352,21 @@ fun PasswordEntryDetailScreen(
                 || item == urlField
                 || item == notesField
             || (selectedToken != null && isOtpField(item))
+        }.filterNot { item ->
+            // Passkey 字段在下方独立区块展示
+            PasskeyEntryFields.FIELD_USERNAME == item.fieldName
+                || PasskeyEntryFields.FIELD_PRIVATE_KEY == item.fieldName
+                || PasskeyEntryFields.FIELD_CREDENTIAL_ID == item.fieldName
+                || PasskeyEntryFields.FIELD_USER_HANDLE == item.fieldName
+                || PasskeyEntryFields.FIELD_RELYING_PARTY == item.fieldName
+                || PasskeyEntryFields.FIELD_FLAG_BE == item.fieldName
+                || PasskeyEntryFields.FIELD_FLAG_BS == item.fieldName
         }
+        val passkeyValues = entry.keyValues.associate { it.fieldName to it.rawValue }
+        val passkeyRelyingParty = passkeyValues[PasskeyEntryFields.FIELD_RELYING_PARTY]
+        val passkeyUsername = passkeyValues[PasskeyEntryFields.FIELD_USERNAME]
+        val passkeyCredentialId = passkeyValues[PasskeyEntryFields.FIELD_CREDENTIAL_ID]
+        val hasPasskey = passkeyValues.containsKey(PasskeyEntryFields.FIELD_CREDENTIAL_ID)
         val usernameValue = when {
             entry.account.isNotBlank() -> entry.account
             usernameField?.rawValue?.isNotBlank() == true -> usernameField.rawValue
@@ -562,7 +599,11 @@ fun PasswordEntryDetailScreen(
                                 title = "网站",
                                 summary = urlValue,
                                 modifier = Modifier.fillMaxWidth(),
-                                onClick = {}
+                                onClick = {
+                                    if (urlValue != "--") {
+                                        openUrl(context, urlValue)
+                                    }
+                                }
                             )
                         }
 
@@ -587,6 +628,72 @@ fun PasswordEntryDetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 onClick = {}
                             )
+                        }
+
+                        if (isEditing) {
+                            TextField(
+                                value = editTagsText,
+                                onValueChange = { editTagsText = it },
+                                label = "标签（逗号分隔）",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showIconPicker = true }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    EntryIcon(
+                                        customIconBytes = editNewCustomIconBytes ?: entry.customIconBytes,
+                                        standardIconId = editIconStandardId,
+                                        primary = entry.account,
+                                        secondary = entry.title,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                    Text(
+                                        text = "  选择图标",
+                                        fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.primary
+                                    )
+                                }
+                                Icon(
+                                    imageVector = MiuixIcons.Edit,
+                                    contentDescription = "选择图标",
+                                    tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                                )
+                            }
+                        } else if (entry.tags.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                entry.tags.forEach { tag ->
+                                    Card(
+                                        modifier = Modifier,
+                                        colors = CardDefaults.defaultColors(
+                                            color = MiuixTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                        ),
+                                        cornerRadius = 12.dp,
+                                        pressFeedbackType = PressFeedbackType.None,
+                                        showIndication = false,
+                                        onClick = {}
+                                    ) {
+                                        Text(
+                                            text = tag,
+                                            fontSize = 12.sp,
+                                            color = MiuixTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -621,6 +728,54 @@ fun PasswordEntryDetailScreen(
                                 summary = formatExpiry(entry.expiryTime, expired),
                                 modifier = Modifier.fillMaxWidth(),
                                 onClick = {}
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Passkey（非编辑态展示）
+            if (!isEditing && hasPasskey) {
+                item {
+                    SmallTitle(text = "Passkey")
+                }
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                width = 0.5.dp,
+                                color = cardBorderColor,
+                                shape = RoundedCornerShape(cornerRadius)
+                            ),
+                        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
+                        cornerRadius = cornerRadius,
+                        pressFeedbackType = PressFeedbackType.None,
+                        showIndication = false,
+                        onClick = {}
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            PasskeyInfoRow(
+                                label = "依赖方",
+                                value = passkeyRelyingParty?.ifBlank { "--" } ?: "--"
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                thickness = 0.5.dp
+                            )
+                            PasskeyInfoRow(
+                                label = "用户名",
+                                value = passkeyUsername?.ifBlank { "--" } ?: "--"
+                            )
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                thickness = 0.5.dp
+                            )
+                            PasskeyInfoRow(
+                                label = "凭据 ID",
+                                value = passkeyCredentialId?.let {
+                                    if (it.length > 24) it.take(10) + "…" + it.takeLast(10) else it
+                                } ?: "--"
                             )
                         }
                     }
@@ -779,8 +934,72 @@ fun PasswordEntryDetailScreen(
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             additionalFields.forEachIndexed { index, item ->
-                                AdditionalFieldRow(item = item)
+                                AdditionalFieldRow(
+                                    item = item,
+                                    onCopy = {
+                                        copySensitiveToClipboard(context, item.fieldName, item.rawValue)
+                                        ToastUtils.showShortToast(context, "已复制到剪贴板")
+                                    }
+                                )
                                 if (index < additionalFields.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 14.dp),
+                                        thickness = 0.5.dp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // 历史记录（非编辑态展示，编辑中不显示以免与保存中的内容混淆）
+            if (!isEditing && historyItems.isNotEmpty()) {
+                item {
+                    SmallTitle(
+                        text = "历史记录 (${historyItems.size})"
+                    )
+                }
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                width = 0.5.dp,
+                                color = cardBorderColor,
+                                shape = RoundedCornerShape(cornerRadius)
+                            ),
+                        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
+                        cornerRadius = cornerRadius,
+                        pressFeedbackType = PressFeedbackType.None,
+                        showIndication = false,
+                        onClick = {}
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // 列表按时间倒序（最新在前）展示
+                            historyItems.asReversed().forEachIndexed { index, history ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showHistoryDialog.value = true }
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = DateTimeFormatter.formatLocalDateTime(history.lastModificationTime),
+                                            fontSize = 14.sp,
+                                            color = MiuixTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = history.title.ifBlank { "（无标题）" },
+                                            fontSize = 12.sp,
+                                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                }
+                                if (index < historyItems.lastIndex) {
                                     HorizontalDivider(
                                         modifier = Modifier.padding(horizontal = 14.dp),
                                         thickness = 0.5.dp
@@ -815,28 +1034,167 @@ fun PasswordEntryDetailScreen(
             }
         )
     }
+
+    EntryHistoryDialog(
+        show = showHistoryDialog,
+        histories = historyItems,
+        onDismiss = {
+            showHistoryDialog.value = false
+        },
+        onRestore = { history ->
+            coroutineScope.launch {
+                val restored = tokenViewModel.restoreEntryFromHistory(entryId, history.index)
+                if (restored) {
+                    ToastUtils.showShortToast(context, "已恢复该历史版本")
+                    // 刷新详情与历史列表（当前版本已进历史，原历史保留）
+                    selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
+                    selectedEntry?.let { syncEditFields(it) }
+                    historyItems = tokenViewModel.loadEntryHistory(entryId)
+                } else {
+                    ToastUtils.showShortToast(context, "恢复失败")
+                }
+            }
+        }
+    )
+
+    if (showIconPicker) {
+        IconPickerDialog(
+            show = showIconPicker,
+            currentStandardIconId = editIconStandardId,
+            currentCustomIconBytes = editNewCustomIconBytes ?: selectedEntry?.customIconBytes,
+            onDismiss = { showIconPicker = false },
+            onPick = { standardId, bytes ->
+                showIconPicker = false
+                val currentBytes = selectedEntry?.customIconBytes
+                // 与打开时的图标完全一致视为无改动：保留原自定义图标，避免重复写入图标池
+                val unchanged = bytes != null && currentBytes != null &&
+                    bytes.contentEquals(currentBytes) && standardId == editIconStandardId
+                if (unchanged) {
+                    editNewCustomIconBytes = null
+                } else {
+                    editIconStandardId = standardId ?: 0
+                    editCustomIconUuid = null
+                    editNewCustomIconBytes = bytes
+                }
+            }
+        )
+    }
 }
 
 @Composable
-private fun AdditionalFieldRow(item: RemainingKeyValue) {
-    Column(
+private fun AdditionalFieldRow(
+    item: RemainingKeyValue,
+    onCopy: () -> Unit
+) {
+    // 受保护字段默认以掩码展示，仅在用户主动切换后显示原值
+    var showProtectedValue by remember { mutableStateOf(false) }
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val displayName = displayFieldName(item.fieldName)
+            Text(
+                text = if (item.isProtected) "$displayName（已保护）" else displayName,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onSurface
+            )
+            Text(
+                text = if (item.isProtected && !showProtectedValue) "••••••" else item.rawValue,
+                fontSize = 13.sp,
+                color = MiuixTheme.colorScheme.onSurfaceSecondary
+            )
+        }
+        if (item.isProtected) {
+            IconButton(onClick = { showProtectedValue = !showProtectedValue }) {
+                Icon(
+                    imageVector = if (showProtectedValue) MiuixIcons.Hide else MiuixIcons.Show,
+                    contentDescription = if (showProtectedValue) "隐藏受保护字段" else "显示受保护字段",
+                    tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                )
+            }
+        }
+        IconButton(onClick = onCopy) {
+            Icon(
+                imageVector = MiuixIcons.Copy,
+                contentDescription = "复制 ${item.fieldName}"
+            )
+        }
+    }
+}
+
+/**
+ * 模板装饰字段名（如 [SSID]）去除括号后展示，普通字段名原样返回。
+ */
+private fun displayFieldName(name: String): String {
+    return if (name.startsWith("[") && name.endsWith("]")) {
+        name.removePrefix("[").removeSuffix("]")
+    } else {
+        name
+    }
+}
+
+/**
+ * Passkey 信息行（依赖方/用户名/凭据 ID 展示）。
+ */
+@Composable
+private fun PasskeyInfoRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = item.fieldName,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onSurface
+            text = label,
+            fontSize = 13.sp,
+            color = MiuixTheme.colorScheme.onSurfaceSecondary,
+            modifier = Modifier.width(72.dp)
         )
         Text(
-            text = item.rawValue,
-            fontSize = 13.sp,
-            color = MiuixTheme.colorScheme.onSurfaceSecondary
+            text = value,
+            fontSize = 14.sp,
+            color = MiuixTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
         )
     }
+}
+
+/**
+ * 通过系统浏览器打开网址，无 scheme 时自动补充 https://。
+ */
+private fun openUrl(context: Context, rawUrl: String) {
+    runCatching {
+        val schemePattern = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
+        val url = if (schemePattern.containsMatchIn(rawUrl)) rawUrl else "https://$rawUrl"
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        if (intent.resolveActivity(context.packageManager) != null) {
+            context.startActivity(Intent.createChooser(intent, "打开网址"))
+        } else {
+            ToastUtils.showShortToast(context, "没有可打开该网址的应用")
+        }
+    }.onFailure {
+        ToastUtils.showShortToast(context, "网址无法打开")
+    }
+}
+
+/**
+ * 将逗号/分号分隔的标签文本解析为去重后的标签列表。
+ */
+private fun parseTagsText(text: String): List<String> {
+    return text.split(',', ';')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
 }
 
 private fun isOtpField(item: RemainingKeyValue): Boolean {

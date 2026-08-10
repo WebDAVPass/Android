@@ -55,13 +55,20 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.AddFolder
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.MoveFile
 import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.Sort
+import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -71,14 +78,23 @@ import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
+import xzynine.WebDAVPass.Android.data.RemainingValueType
+import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.TemplatePickerDialog
+import com.kunzisoft.keepass.database.element.template.Template
+import com.kunzisoft.keepass.database.element.template.TemplateEngine
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
+import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordSortMode
 import xzynine.WebDAVPass.Android.ui.ViewModel.toPasswordIndexKey
 import androidx.compose.ui.platform.LocalContext
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
+import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzylib.base.util.ToastUtils
 
 /** 附件导入大小上限（与仓库 SMALL_BINARY_SIZE 一致），防止无界读入内存导致 OOM。 */
@@ -99,6 +115,7 @@ fun PasswordListScreen(
     emptyStateText: String,
     emptySearchStateText: String,
     enableGroupNavigation: Boolean,
+    enableRecycleBinActions: Boolean = false,
     onEntryClick: (Long) -> Unit,
     onNavigateBack: () -> Unit
 ) {
@@ -110,15 +127,24 @@ fun PasswordListScreen(
     val passwordHasMore by tokenViewModel.passwordViewModel.passwordHasMore.collectAsState(false)
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var searchCaseSensitive by rememberSaveable { mutableStateOf(false) }
+    var sortModeOrdinal by rememberSaveable { mutableStateOf(PasswordSortMode.DEFAULT.ordinal) }
+    var sortAscending by rememberSaveable { mutableStateOf(true) }
+    var hideExpired by rememberSaveable { mutableStateOf(false) }
+    val sortMode = PasswordSortMode.entries.getOrElse(sortModeOrdinal) { PasswordSortMode.DEFAULT }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-    val allowWriteActions = enableGroupNavigation
+    val allowWriteActions = enableGroupNavigation || enableRecycleBinActions
     val isSelectionMode = remember { mutableStateOf(false) }
     val selectedTargets = remember { mutableStateMapOf<Long, Boolean>() }
 
     val showCreateEntryDialog = remember { mutableStateOf(false) }
     val showCreateGroupDialog = remember { mutableStateOf(false) }
     val showDeleteDialog = remember { mutableStateOf(false) }
+    val showPermanentDeleteDialog = remember { mutableStateOf(false) }
+    val showGroupPicker = remember { mutableStateOf(false) }
+    var groupPickerIsMove by remember { mutableStateOf(false) }
+    var pickerGroups by remember { mutableStateOf<List<GroupNodeInfo>>(emptyList()) }
 
     var createEntryTitle by remember { mutableStateOf("") }
     var createEntryUsername by remember { mutableStateOf("") }
@@ -133,6 +159,53 @@ fun PasswordListScreen(
         selectedTargets.clear()
         isSelectionMode.value = false
         showDeleteDialog.value = false
+        showPermanentDeleteDialog.value = false
+    }
+
+    fun restoreSelectedEntries() {
+        coroutineScope.launch {
+            val targets = selectedTargets.keys.toList()
+            if (targets.isEmpty()) {
+                return@launch
+            }
+            val restored = tokenViewModel.restoreRecentDeletedPasswordEntries(targets)
+            if (restored > 0) {
+                ToastUtils.showShortToast(context, "已恢复 $restored 项")
+            } else {
+                ToastUtils.showShortToast(context, "恢复失败")
+            }
+            clearSelectionMode()
+        }
+    }
+
+    fun openGroupPicker(isMove: Boolean) {
+        groupPickerIsMove = isMove
+        coroutineScope.launch {
+            pickerGroups = tokenViewModel.loadAllPasswordGroups()
+            showGroupPicker.value = true
+        }
+    }
+
+    fun moveOrCopySelectedEntries(targetGroupId: Long?) {
+        showGroupPicker.value = false
+        coroutineScope.launch {
+            val entryIds = selectedTargets.keys.filter { selectedTargets[it] == false }
+            val groupIds = selectedTargets.keys.filter { selectedTargets[it] == true }
+            val count = if (groupPickerIsMove) {
+                tokenViewModel.movePasswordTargets(entryIds, groupIds, targetGroupId)
+            } else {
+                tokenViewModel.copyPasswordTargets(entryIds, groupIds, targetGroupId)
+            }
+            if (count > 0) {
+                ToastUtils.showShortToast(
+                    context,
+                    if (groupPickerIsMove) "已移动 $count 项" else "已复制 $count 项"
+                )
+            } else {
+                ToastUtils.showShortToast(context, if (groupPickerIsMove) "移动失败" else "复制失败")
+            }
+            clearSelectionMode()
+        }
     }
 
     fun toggleSelection(item: PasswordEntry) {
@@ -193,18 +266,22 @@ fun PasswordListScreen(
         }
     }
 
-    // 搜索是否曾被激活；仅用于区分「初次进入空查询」与「用户清空搜索」两种场景
-    val isSearchEverEnabled = remember { mutableStateOf(false) }
-    LaunchedEffect(searchQuery) {
-        if (searchQuery.isNotBlank()) {
-            // 搜索词非空：激活标志并触发搜索
-            isSearchEverEnabled.value = true
-            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = searchQuery)
-        } else if (isSearchEverEnabled.value) {
-            // 搜索词被清空：恢复全量列表
-            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = "")
+    // 首次进入且搜索为空时跳过刷新（reloadInitialPasswordData 已完成加载）；
+    // 后续任何搜索/排序/过滤变化均统一在此触发刷新
+    val isFirstComposition = remember { mutableStateOf(true) }
+    LaunchedEffect(searchQuery, searchCaseSensitive, sortModeOrdinal, sortAscending, hideExpired) {
+        if (isFirstComposition.value && searchQuery.isBlank()) {
+            isFirstComposition.value = false
+            return@LaunchedEffect
         }
-        // 初次进入（searchQuery="" 且搜索未激活）：跳过，reloadInitialPasswordData 已完成加载
+        isFirstComposition.value = false
+        tokenViewModel.passwordViewModel.refreshPasswordEntries(
+            searchQuery = searchQuery,
+            caseSensitive = searchCaseSensitive,
+            sortMode = sortMode,
+            ascending = sortAscending,
+            hideExpired = hideExpired
+        )
     }
 
     LaunchedEffect(passwordGroupStack, searchQuery) {
@@ -288,8 +365,67 @@ fun PasswordListScreen(
                     }
                 },
                 actions = {
-                    if (allowWriteActions) {
-                        if (isSelectionMode.value) {
+                    if (isSelectionMode.value) {
+                        if (enableRecycleBinActions) {
+                            IconButton(
+                                onClick = {
+                                    if (selectedTargets.isNotEmpty()) {
+                                        restoreSelectedEntries()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Undo,
+                                    contentDescription = "恢复"
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (selectedTargets.isNotEmpty()) {
+                                        showPermanentDeleteDialog.value = true
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Delete,
+                                    contentDescription = "永久删除"
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    clearSelectionMode()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Close,
+                                    contentDescription = "取消选择"
+                                )
+                            }
+                        } else if (allowWriteActions) {
+                            IconButton(
+                                onClick = {
+                                    if (selectedTargets.isNotEmpty()) {
+                                        openGroupPicker(isMove = true)
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.MoveFile,
+                                    contentDescription = "移动"
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (selectedTargets.isNotEmpty()) {
+                                        openGroupPicker(isMove = false)
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Copy,
+                                    contentDescription = "复制"
+                                )
+                            }
                             IconButton(
                                 onClick = {
                                     if (selectedTargets.isNotEmpty()) {
@@ -312,7 +448,71 @@ fun PasswordListScreen(
                                     contentDescription = "取消选择"
                                 )
                             }
-                        } else {
+                        }
+                    } else {
+                        WindowIconDropdownMenu(
+                            entries = listOf(
+                                DropdownEntry(
+                                    items = listOf(
+                                        DropdownItem(
+                                            text = "默认",
+                                            selected = sortMode == PasswordSortMode.DEFAULT,
+                                            onClick = { sortModeOrdinal = PasswordSortMode.DEFAULT.ordinal }
+                                        ),
+                                        DropdownItem(
+                                            text = "标题",
+                                            selected = sortMode == PasswordSortMode.TITLE,
+                                            onClick = { sortModeOrdinal = PasswordSortMode.TITLE.ordinal }
+                                        ),
+                                        DropdownItem(
+                                            text = "账号",
+                                            selected = sortMode == PasswordSortMode.ACCOUNT,
+                                            onClick = { sortModeOrdinal = PasswordSortMode.ACCOUNT.ordinal }
+                                        ),
+                                        DropdownItem(
+                                            text = "修改时间",
+                                            selected = sortMode == PasswordSortMode.MODIFIED_TIME,
+                                            onClick = { sortModeOrdinal = PasswordSortMode.MODIFIED_TIME.ordinal }
+                                        ),
+                                        DropdownItem(
+                                            text = "创建时间",
+                                            selected = sortMode == PasswordSortMode.CREATED_TIME,
+                                            onClick = { sortModeOrdinal = PasswordSortMode.CREATED_TIME.ordinal }
+                                        )
+                                    )
+                                ),
+                                DropdownEntry(
+                                    items = listOf(
+                                        DropdownItem(
+                                            text = "升序",
+                                            selected = sortAscending,
+                                            onClick = { sortAscending = true }
+                                        ),
+                                        DropdownItem(
+                                            text = "降序",
+                                            selected = !sortAscending,
+                                            onClick = { sortAscending = false }
+                                        )
+                                    )
+                                ),
+                                DropdownEntry(
+                                    items = listOf(
+                                        DropdownItem(
+                                            text = "隐藏过期条目",
+                                            selected = hideExpired,
+                                            onClick = { hideExpired = !hideExpired }
+                                        )
+                                    )
+                                )
+                            ),
+                            collapseOnSelection = false
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Sort,
+                                contentDescription = "排序与过滤"
+                            )
+                        }
+                        if (enableGroupNavigation) {
                             IconButton(
                                 onClick = {
                                     showCreateEntryDialog.value = true
@@ -371,6 +571,22 @@ fun PasswordListScreen(
                     }
                 },
                 outsideEndAction = {
+                    IconButton(
+                        onClick = {
+                            searchCaseSensitive = !searchCaseSensitive
+                        },
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Text(
+                            text = "Aa",
+                            fontWeight = FontWeight.Bold,
+                            color = if (searchCaseSensitive) {
+                                MiuixTheme.colorScheme.primary
+                            } else {
+                                MiuixTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
                     IconButton(
                         onClick = {
                             searchQuery = ""
@@ -563,7 +779,7 @@ fun PasswordListScreen(
         }
     )
 
-    if (allowWriteActions && isSelectionMode.value && selectedTargets.isNotEmpty()) {
+    if (allowWriteActions && !enableRecycleBinActions && isSelectionMode.value && selectedTargets.isNotEmpty()) {
         ConfirmationDialog(
             title = "确认删除",
             summary = "已选 ${selectedTargets.size} 项，将移入回收站。",
@@ -588,6 +804,39 @@ fun PasswordListScreen(
             }
         )
     }
+
+    if (enableRecycleBinActions && isSelectionMode.value && selectedTargets.isNotEmpty()) {
+        ConfirmationDialog(
+            title = "确认永久删除",
+            summary = "已选 ${selectedTargets.size} 项将从回收站永久删除，且不可恢复。",
+            show = showPermanentDeleteDialog,
+            onDismiss = {
+                showPermanentDeleteDialog.value = false
+            },
+            confirmButtonText = "永久删除",
+            isDestructive = true,
+            onConfirm = {
+                coroutineScope.launch {
+                    val targets = selectedTargets.keys.toList()
+                    val deleted = tokenViewModel.permanentlyDeleteRecentDeletedPasswordEntries(targets)
+                    if (deleted > 0) {
+                        ToastUtils.showShortToast(context, "已永久删除 $deleted 项")
+                    } else {
+                        ToastUtils.showShortToast(context, "删除失败")
+                    }
+                    clearSelectionMode()
+                }
+            }
+        )
+    }
+
+    GroupPickerDialog(
+        title = if (groupPickerIsMove) "移动到分组" else "复制到分组",
+        show = showGroupPicker.value,
+        groups = pickerGroups,
+        onDismiss = { showGroupPicker.value = false },
+        onPick = { targetGroupId -> moveOrCopySelectedEntries(targetGroupId) }
+    )
 }
 
 /**
@@ -610,11 +859,15 @@ private fun PasswordEntryEditorDialog(
     var entryPassword by remember { mutableStateOf(initialDraft.password) }
     var entryUrl by remember { mutableStateOf(initialDraft.url) }
     var entryNotes by remember { mutableStateOf(initialDraft.notes) }
+    var entryTagsText by remember { mutableStateOf(initialDraft.tags.joinToString(", ")) }
     var customFields by remember { mutableStateOf(initialDraft.customFields) }
     var attachments by remember { mutableStateOf(initialDraft.attachments.map { it.copy() }) }
     var expiryTime by remember { mutableStateOf(initialDraft.expiryTime) }
     var iconStandardId by remember { mutableStateOf(initialDraft.iconStandardId) }
     var customIconUuid by remember { mutableStateOf(initialDraft.customIconUuid) }
+    var newCustomIconBytes by remember { mutableStateOf<ByteArray?>(initialDraft.newCustomIconBytes) }
+    var showIconPicker by remember { mutableStateOf(false) }
+    var showTemplatePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(show.value) {
         if (show.value) {
@@ -623,11 +876,15 @@ private fun PasswordEntryEditorDialog(
             entryPassword = initialDraft.password
             entryUrl = initialDraft.url
             entryNotes = initialDraft.notes
+            entryTagsText = initialDraft.tags.joinToString(", ")
             customFields = initialDraft.customFields
             attachments = initialDraft.attachments.map { it.copy() }
             expiryTime = initialDraft.expiryTime
             iconStandardId = initialDraft.iconStandardId
             customIconUuid = initialDraft.customIconUuid
+            newCustomIconBytes = initialDraft.newCustomIconBytes
+            showIconPicker = false
+            showTemplatePicker = false
         }
     }
 
@@ -705,8 +962,60 @@ private fun PasswordEntryEditorDialog(
                 label = "备注",
                 modifier = Modifier.fillMaxWidth()
             )
+            TextField(
+                value = entryTagsText,
+                onValueChange = { entryTagsText = it },
+                label = "标签（逗号或分号分隔）",
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showIconPicker = true },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    EntryIcon(
+                        customIconBytes = newCustomIconBytes,
+                        standardIconId = iconStandardId,
+                        primary = null,
+                        secondary = null,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Text(
+                        text = "  选择图标",
+                        fontSize = 14.sp,
+                        color = MiuixTheme.colorScheme.primary
+                    )
+                }
+                Icon(
+                    imageVector = MiuixIcons.Edit,
+                    contentDescription = "选择图标",
+                    tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                )
+            }
 
             SmallTitle(text = "自定义字段")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showTemplatePicker = true },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Edit,
+                    contentDescription = "从模板添加",
+                    tint = MiuixTheme.colorScheme.primary
+                )
+                Text(
+                    text = "  从模板添加字段",
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
             CustomFieldsEditor(fields = customFields) { customFields = it }
 
             ExpiryTimeEditor(value = expiryTime) { expiryTime = it }
@@ -790,11 +1099,16 @@ private fun PasswordEntryEditorDialog(
                                 password = entryPassword,
                                 url = entryUrl.trim(),
                                 notes = entryNotes,
+                                tags = entryTagsText.split(',', ';', '，', '；')
+                                    .map { it.trim() }
+                                    .filter { it.isNotEmpty() }
+                                    .distinct(),
                                 customFields = customFields,
                                 attachments = attachments,
                                 expiryTime = expiryTime,
                                 customIconUuid = customIconUuid,
-                                iconStandardId = iconStandardId
+                                iconStandardId = iconStandardId,
+                                newCustomIconBytes = newCustomIconBytes
                             )
                         )
                     },
@@ -808,6 +1122,84 @@ private fun PasswordEntryEditorDialog(
                 }
             }
         }
+    }
+
+    if (showIconPicker) {
+        IconPickerDialog(
+            show = showIconPicker,
+            currentStandardIconId = iconStandardId,
+            currentCustomIconBytes = newCustomIconBytes,
+            onDismiss = { showIconPicker = false },
+            onPick = { standardId, bytes ->
+                iconStandardId = standardId ?: 0
+                customIconUuid = null
+                newCustomIconBytes = bytes
+                showIconPicker = false
+            }
+        )
+    }
+
+    if (showTemplatePicker) {
+        TemplatePickerDialog(
+            show = showTemplatePicker,
+            onDismiss = { showTemplatePicker = false },
+            onPick = { template ->
+                showTemplatePicker = false
+                if (template != null) {
+                    customFields = customFields.toMutableList().apply {
+                        applyTemplateFields(template)
+                    }
+                }
+            }
+        )
+    }
+}
+
+/**
+ * 将模板字段集应用到当前自定义字段列表。
+ *
+ * 字段名使用 [TemplateEngine.addTemplateDecorator] 装饰（如 [SSID]），
+ * 保证其他支持模板的应用（如 KeePassDX）可识别；已存在的同名字段跳过。
+ *
+ * 字段类型按模板属性保留（如 DATETIME → DATE_TIME），受保护的 TEXT 映射为 PASSWORD；
+ * 逐字段去重，避免同一模板内重复标签进入列表。
+ */
+private fun MutableList<EditableFieldDraft>.applyTemplateFields(template: Template) {
+    val existingNames = this.map { it.name }.toMutableSet()
+    template.sections.forEach { section ->
+        section.attributes.forEach { attribute ->
+            val decoratedName = TemplateEngine.addTemplateDecorator(attribute.label)
+            if (decoratedName !in existingNames) {
+                existingNames.add(decoratedName)
+                add(
+                    EditableFieldDraft(
+                        name = decoratedName,
+                        value = attribute.options.default ?: "",
+                        isProtected = attribute.protected,
+                        valueType = mapTemplateAttributeType(attribute.type, attribute.protected)
+                    )
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 将模板属性类型映射为列表展示用的 [RemainingValueType]。
+ */
+private fun mapTemplateAttributeType(
+    type: com.kunzisoft.keepass.database.element.template.TemplateAttributeType,
+    protected: Boolean
+): RemainingValueType {
+    return when (type) {
+        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.DATETIME ->
+            RemainingValueType.DATE_TIME
+        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.TEXT ->
+            if (protected) RemainingValueType.PASSWORD else RemainingValueType.TEXT
+        // LIST 与 DIVIDER 暂无对应的展示类型，回退为 TEXT
+        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.LIST,
+        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.DIVIDER ->
+            RemainingValueType.TEXT
     }
 }
 

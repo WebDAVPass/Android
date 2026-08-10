@@ -40,6 +40,7 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import xzynine.WebDAVPass.Android.R
+import xzynine.WebDAVPass.Android.model.RegisterInfo
 import xzynine.WebDAVPass.Android.model.SearchInfo
 
 
@@ -48,7 +49,6 @@ class KeeAutofillService : AutofillService() {
 
     private var applicationIdBlocklist: Set<String> = emptySet()
     private var webDomainBlocklist: Set<String> = emptySet()
-    private var askToSaveData: Boolean = false
 
     override fun onConnected() {
         Log.d(TAG, "onConnected")
@@ -60,7 +60,9 @@ class KeeAutofillService : AutofillService() {
     }
 
     private fun getPreferences() {
-        askToSaveData = false
+        // 异步加载，Fill/Save 请求时直接读取 AutofillSavePreferences.askToSaveData，
+        // 不再复制到本地字段，避免读到未完成加载的默认值。
+        AutofillSavePreferences.load(this)
     }
 
     override fun onFillRequest(
@@ -149,7 +151,7 @@ class KeeAutofillService : AutofillService() {
                         RemoteViews(packageName, R.layout.item_autofill_unlock)
                     }
 
-                    if (askToSaveData) {
+                    if (AutofillSavePreferences.askToSaveData) {
                         var types: Int = SaveInfo.SAVE_DATA_TYPE_GENERIC
                         val requiredIds = ArrayList<AutofillId>()
 
@@ -184,7 +186,58 @@ class KeeAutofillService : AutofillService() {
     }
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
-        callback.onSuccess()
+        // 功能关闭或系统版本不支持时静默接受，避免每次表单提交都提示保存失败
+        if (!AutofillSavePreferences.askToSaveData || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            callback.onSuccess()
+            return
+        }
+        val latestStructure = request.fillContexts.last().structure
+        val parseResult = StructureParser(latestStructure).parse(saveValue = true)
+        if (parseResult == null || !parseResult.isValid()) {
+            callback.onFailure("无法解析当前表单结构，暂不支持保存")
+            return
+        }
+        val blocklisted = !autofillAllowedFor(
+            applicationId = parseResult.applicationId,
+            applicationIdBlocklist = applicationIdBlocklist,
+            webDomain = parseResult.webDomain,
+            webDomainBlocklist = webDomainBlocklist
+        )
+        if (blocklisted) {
+            callback.onFailure("当前应用或网站已被加入黑名单，不允许保存表单")
+            return
+        }
+
+        Log.d(TAG, "autofill onSaveRequest password")
+
+        val passwordText = parseResult.passwordValue?.textValue?.toString()
+        // 密码为空或纯空格时不拉起注册界面，避免保存无意义条目
+        if (passwordText.isNullOrBlank()) {
+            callback.onSuccess()
+            return
+        }
+
+        val searchInfo = SearchInfo().apply {
+            applicationId = parseResult.applicationId
+            webScheme = parseResult.webScheme
+            webDomain = parseResult.webDomain
+        }
+        val registerInfo = RegisterInfo(
+            searchInfo = searchInfo,
+            username = parseResult.usernameValue?.textValue?.toString(),
+            password = passwordText
+        )
+
+        // 拉起注册界面：展示表单值并选择目标分组后创建条目
+        val intentSender = AutofillHelper.getPendingIntentForRegistration(
+            this,
+            registerInfo
+        )?.intentSender
+        if (intentSender != null) {
+            callback.onSuccess(intentSender)
+        } else {
+            callback.onFailure("无法创建保存入口（PendingIntent 构建失败）")
+        }
     }
 
     companion object {

@@ -15,6 +15,7 @@ import android.view.autofill.AutofillValue
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
 import xzynine.WebDAVPass.Android.R
+import xzynine.WebDAVPass.Android.model.RegisterInfo
 import xzynine.WebDAVPass.Android.model.SearchInfo
 
 @RequiresApi(api = Build.VERSION_CODES.O)
@@ -24,12 +25,55 @@ object AutofillHelper {
     private const val KEY_PENDING_INTENT_BUNDLE = "xzynine.WebDAVPass.Android.extra.BUNDLE"
     private const val KEY_SPECIAL_MODE = "xzynine.WebDAVPass.Android.extra.SPECIAL_MODE"
     private const val KEY_SEARCH_INFO = "xzynine.WebDAVPass.Android.extra.SEARCH_INFO"
+    private const val KEY_REGISTER_INFO = "xzynine.WebDAVPass.Android.extra.REGISTER_INFO"
     private const val KEY_BASE_STRUCTURE = "xzynine.WebDAVPass.Android.autofill.BASE_STRUCTURE"
     private const val KEY_INLINE_SUGGESTIONS_REQUEST = "xzynine.WebDAVPass.Android.autofill.INLINE_SUGGESTIONS_REQUEST"
+
+    fun getSpecialModeFromBundle(bundle: Bundle): SpecialMode? {
+        return runCatching {
+            bundle.getString(KEY_SPECIAL_MODE)?.let { name ->
+                SpecialMode.valueOf(name)
+            }
+        }.getOrNull()
+    }
 
     fun getSearchInfoFromBundle(bundle: Bundle): SearchInfo? {
         @Suppress("DEPRECATION")
         return bundle.getParcelable(KEY_SEARCH_INFO)
+    }
+
+    fun getRegisterInfoFromBundle(bundle: Bundle): RegisterInfo? {
+        @Suppress("DEPRECATION")
+        return bundle.getParcelable(KEY_REGISTER_INFO)
+    }
+
+    /**
+     * 为「保存表单」创建拉起注册界面的 PendingIntent。
+     */
+    fun getPendingIntentForRegistration(
+        context: Context,
+        registerInfo: RegisterInfo
+    ): PendingIntent? {
+        return try {
+            val tempBundle = Bundle().apply {
+                putString(KEY_SPECIAL_MODE, SpecialMode.REGISTRATION.name)
+                putParcelable(KEY_REGISTER_INFO, registerInfo)
+            }
+            val intent = Intent(context, AutofillPickerActivity::class.java).apply {
+                putExtra(KEY_PENDING_INTENT_BUNDLE, tempBundle)
+            }
+            // 注册意图在创建时已写入专用 Bundle，系统无需补充字段；
+            // 使用 FLAG_IMMUTABLE 收紧权限，避免接收方修改未设置的 Intent 字段。
+            val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
+            } else {
+                PendingIntent.FLAG_CANCEL_CURRENT
+            }
+            PendingIntent.getActivity(context, (System.currentTimeMillis() and 0xFFFF).toInt(), intent, flags)
+        } catch (e: RuntimeException) {
+            Log.e(TAG, "Unable to create pending intent for registration", e)
+            null
+        }
     }
 
     fun getAutofillComponentFromBundle(bundle: Bundle): AutofillComponent? {

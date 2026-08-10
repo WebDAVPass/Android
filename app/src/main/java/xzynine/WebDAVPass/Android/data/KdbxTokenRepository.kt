@@ -4,15 +4,18 @@ import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
 import xzylib.base.util.Logger
+import com.kunzisoft.keepass.database.crypto.kdf.KdfFactory
 import com.kunzisoft.keepass.database.element.Database
 import com.kunzisoft.keepass.database.element.DateInstant
 import com.kunzisoft.keepass.database.element.Entry
 import com.kunzisoft.keepass.database.element.Attachment
 import com.kunzisoft.keepass.database.element.Field
+import com.kunzisoft.keepass.database.element.database.CompressionAlgorithm
 import com.kunzisoft.keepass.database.element.icon.IconImage
 import com.kunzisoft.keepass.database.element.Group
 import com.kunzisoft.keepass.database.element.MasterCredential
 import com.kunzisoft.keepass.database.element.database.DatabaseVersioned
+import com.kunzisoft.keepass.database.element.Tags
 import com.kunzisoft.keepass.database.element.security.ProtectedString
 import com.kunzisoft.keepass.hardware.HardwareKey
 import com.kunzisoft.keepass.model.EntryInfo
@@ -22,6 +25,7 @@ import com.kunzisoft.keepass.otp.OtpEntryFields
 import com.kunzisoft.keepass.otp.OtpEntryFields.isOTP
 import com.kunzisoft.keepass.otp.OtpType
 import com.kunzisoft.keepass.otp.TokenCalculator
+import xzynine.WebDAVPass.Android.util.PasswordStrength
 import java.io.ByteArrayOutputStream
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -66,7 +70,7 @@ class KdbxTokenRepository(context: Context) {
         data class UriLocation(val uri: Uri) : DatabaseLocation
     }
 
-    fun initializeDatabase(localPath: String, masterPassword: String) {
+    fun initializeDatabase(localPath: String, masterPassword: String, keyFileData: ByteArray? = null) {
         val location = resolveLocation(localPath)
         when (location) {
             is DatabaseLocation.FileLocation -> {
@@ -75,7 +79,7 @@ class KdbxTokenRepository(context: Context) {
                 if (file.exists() && file.length() > 0) {
                     return
                 }
-                file.writeBytes(createDatabaseBytes(masterPassword))
+                file.writeBytes(createDatabaseBytes(masterPassword, keyFileData))
             }
 
             is DatabaseLocation.UriLocation -> {
@@ -83,13 +87,13 @@ class KdbxTokenRepository(context: Context) {
                     return
                 }
                 openOutputStream(location).use { output ->
-                    output.write(createDatabaseBytes(masterPassword))
+                    output.write(createDatabaseBytes(masterPassword, keyFileData))
                 }
             }
         }
     }
 
-    fun createDatabaseBytes(masterPassword: String): ByteArray {
+    fun createDatabaseBytes(masterPassword: String, keyFileData: ByteArray? = null): ByteArray {
         val database = Database().apply {
             createData(DATABASE_NAME, ROOT_GROUP_NAME, null)
         }
@@ -101,22 +105,27 @@ class KdbxTokenRepository(context: Context) {
                     cacheFile = cacheFile,
                     databaseOutputStream = { outputStream },
                     isNewLocation = true,
-                    masterCredential = MasterCredential(password = masterPassword),
+                    // 新建库凭据仅由参数决定，不继承当前已解锁库的密钥文件，
+                    // 避免误用旧密钥文件加密导致新库无法用纯密码解锁
+                    masterCredential = MasterCredential(
+                        password = masterPassword,
+                        keyFileData = keyFileData
+                    ),
                     challengeResponseRetriever = emptyChallengeResponseRetriever
                 )
                 outputStream.toByteArray()
             } finally {
                 runCatching { database.clearAndClose() }
-                runCatching { cacheFile.delete() }
             }
         }
     }
 
-    fun validatePassword(localPath: String, masterPassword: String): Boolean {
+    fun validatePassword(localPath: String, masterPassword: String, keyFileData: ByteArray? = null): Boolean {
+        val effectiveKeyFileData = keyFileData ?: DatabaseManager.getKeyFileData()
         lastUnlockErrorMessage = null
         return runCatching {
             val location = resolveLocation(localPath)
-            ensureLocationInitialized(location, masterPassword)
+            ensureLocationInitialized(location, masterPassword, effectiveKeyFileData)
 
             // 此路径已有缓存实例，直接验证可访问性，无需重新解密
             val existing = DatabaseManager.tryGet(localPath)
@@ -129,7 +138,7 @@ class KdbxTokenRepository(context: Context) {
             DatabaseManager.close()
 
             // 打开数据库后缓存，不立即关闭，供后续操作复用
-            val (database, cacheDirectory) = openDatabase(location, masterPassword)
+            val (database, cacheDirectory) = openDatabase(location, masterPassword, effectiveKeyFileData)
             try {
                 database.rootGroup // 验证根组可访问
             } catch (e: Exception) {
@@ -138,6 +147,9 @@ class KdbxTokenRepository(context: Context) {
                 throw e
             }
             DatabaseManager.store(localPath, masterPassword, database, cacheDirectory)
+            // 登记密钥文件凭据，使后续 saveDatabase/mergeRemoteDatabaseBytes/exportDatabaseTo
+            // 的默认凭据能取到正确的密钥文件（与 LibraryViewModel 解锁后登记保持一致）
+            DatabaseManager.setKeyFileData(effectiveKeyFileData)
             true
         }.onFailure {
             val hint = buildLocationHint(resolveLocation(localPath))
@@ -174,15 +186,15 @@ class KdbxTokenRepository(context: Context) {
     }
 
     /**
-     * 读取数据库中全部条目摘要（不包含键值详情）。
+     * 读取数据库中全部条目摘要（默认不包含键值详情，搜索时需要字段详情）。
      */
-    fun loadPasswordEntries(localPath: String, masterPassword: String): List<PasswordEntry> {
+    fun loadPasswordEntries(localPath: String, masterPassword: String, includeFieldDetails: Boolean = false): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             buildPasswordEntries(
                 database = db,
                 entries = collectEntriesOutsideRecycleBin(db, db.rootGroup),
                 groups = emptyList(),
-                includeFieldDetails = false
+                includeFieldDetails = includeFieldDetails
             )
         }
     }
@@ -226,14 +238,18 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 读取回收站中所有条目摘要（仅条目，不包含文件夹占位）。
      */
-    fun loadRecentDeletedPasswordEntries(localPath: String, masterPassword: String): List<PasswordEntry> {
+    fun loadRecentDeletedPasswordEntries(
+        localPath: String,
+        masterPassword: String,
+        includeFieldDetails: Boolean = false
+    ): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val recycleBin = db.recycleBin ?: return@withDatabase emptyList()
             buildPasswordEntries(
                 database = db,
                 entries = collectEntries(recycleBin),
                 groups = emptyList(),
-                includeFieldDetails = false
+                includeFieldDetails = includeFieldDetails
             )
         }
     }
@@ -287,8 +303,70 @@ class KdbxTokenRepository(context: Context) {
                 attachments = attachments,
                 expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
                 customIconUuid = customIconUuid,
-                iconStandardId = entry.icon.standard.id
+                iconStandardId = entry.icon.standard.id,
+                tags = entry.tags.toList()
             )
+        }
+    }
+
+    /**
+     * 读取条目的历史版本摘要列表（按 KDBX 存储顺序返回）。
+     */
+    fun loadEntryHistory(localPath: String, masterPassword: String, entryId: Long): List<EntryHistoryInfo> {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
+                ?: return@withDatabase emptyList()
+            entry.getHistory().mapIndexed { index, historyEntry ->
+                val info = historyEntry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+                EntryHistoryInfo(
+                    index = index,
+                    lastModificationTime = historyEntry.lastModificationTime.toMilliseconds(),
+                    title = info.title,
+                    username = info.username,
+                    passwordSet = info.password.isNotBlank(),
+                    url = info.url,
+                    notes = info.notes,
+                    customFieldCount = info.customFields.size,
+                    attachmentCount = info.attachments.size
+                )
+            }
+        }
+    }
+
+    /**
+     * 将指定历史版本恢复为条目的当前内容。
+     *
+     * 恢复后当前条目内容与历史版本一致；EntryInfo 不含 history 字段，setEntryInfo
+     * 也不会改动历史列表，因此原有历史记录原样保留（不会重复追加）。
+     * 逻辑参照 KeePassDX RestoreEntryHistoryDatabaseRunnable。
+     */
+    fun restoreEntryFromHistory(
+        localPath: String,
+        masterPassword: String,
+        entryId: Long,
+        historyIndex: Int
+    ): Boolean {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
+                ?: return@withDatabase false
+            val history = entry.getHistory()
+            if (historyIndex !in history.indices) {
+                return@withDatabase false
+            }
+            val historyToRestore = history[historyIndex]
+            // 对齐 KeePass 语义：在覆盖前把当前状态作为快照追加进 history，
+            // 避免恢复操作不可逆（用户反悔时仍可回到恢复前的版本）。
+            // copyHistory=false：不要把当前 entry 自身的 history 列表再复制进快照，
+            // 否则会出现 history 嵌套 history 的冗余结构。
+            val snapshotBeforeRestore = Entry(entry, copyHistory = false)
+            // 用历史版本的字段覆盖当前条目；history 列表由 setEntryInfo 保留不动，
+            // 不要把 historyToRestore 再 addEntryToHistory（它已在 history 中，重复追加会自引用污染）。
+            val entryInfo = historyToRestore.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+            entry.setEntryInfo(db, entryInfo)
+            // 追加"恢复前状态"快照到 history 末尾（本次覆盖会让 history 当前版本保持不变）
+            entry.addEntryToHistory(snapshotBeforeRestore)
+            db.updateEntry(entry)
+            true
         }
     }
 
@@ -329,6 +407,7 @@ class KdbxTokenRepository(context: Context) {
                 password = draft.password
                 url = draft.url
                 notes = draft.notes
+                tags = draft.tags.toTags()
                 customFields = mergeCustomFields(db, entry, draft.customFields)
                 attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
                 applyExpiryAndIcon(this, db, draft)
@@ -354,6 +433,7 @@ class KdbxTokenRepository(context: Context) {
                 password = draft.password
                 url = draft.url
                 notes = draft.notes
+                tags = draft.tags.toTags()
                 customFields = mergeCustomFields(db, entry, draft.customFields)
                 attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
                 applyExpiryAndIcon(this, db, draft)
@@ -390,7 +470,9 @@ class KdbxTokenRepository(context: Context) {
             if (!db.canRecycle(entry)) {
                 return@withDatabase false
             }
+            val oldParent = entry.parent
             db.recycle(entry, resolveRecycleBinTitle(db))
+            entry.setPreviousParentGroup(oldParent)
             true
         }
     }
@@ -465,9 +547,477 @@ class KdbxTokenRepository(context: Context) {
             if (!db.canRecycle(group)) {
                 return@withDatabase false
             }
+            val oldParent = group.parent
             db.recycle(group, resolveRecycleBinTitle(db))
+            group.setPreviousParentGroup(oldParent)
             true
         }
+    }
+
+    /**
+     * 从回收站批量恢复条目到原分组，原分组已不存在时恢复到根分组。
+     *
+     * @return 成功恢复的数量
+     */
+    fun restoreRecentDeletedPasswordEntries(localPath: String, masterPassword: String, entryIds: List<Long>): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val recycleBin = db.recycleBin ?: return@withDatabase 0
+            var restored = 0
+            entryIds.forEach { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
+                    ?: return@forEach
+                val parent = entry.parent ?: return@forEach
+                if (recycleBin != parent) {
+                    // 条目位于被回收的分组内：恢复其所属的最外层已回收分组（整组连同子条目一起恢复）
+                    var recycledGroup: Group? = parent
+                    while (recycledGroup?.parent != null && recycledGroup.parent != recycleBin) {
+                        recycledGroup = recycledGroup.parent
+                    }
+                    if (recycledGroup != null && recycledGroup.parent == recycleBin) {
+                        val target = findGroupByUuid(db.rootGroup, recycledGroup.previousParentGroup)
+                            ?: db.rootGroup
+                            ?: return@withDatabase restored
+                        // 计数按实际恢复的条目数（整组含子分组）
+                        restored += collectEntries(recycledGroup).size
+                        db.undoRecycle(recycledGroup, target)
+                    }
+                    return@forEach
+                }
+                val target = findGroupByUuid(db.rootGroup, entry.previousParentGroup)
+                    ?: db.rootGroup
+                    ?: return@withDatabase restored
+                db.undoRecycle(entry, target)
+                restored++
+            }
+            restored
+        }
+    }
+
+    /**
+     * 从回收站批量永久删除条目。
+     *
+     * @return 成功删除的数量
+     */
+    fun permanentlyDeleteRecentDeletedPasswordEntries(localPath: String, masterPassword: String, entryIds: List<Long>): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val recycleBin = db.recycleBin ?: return@withDatabase 0
+            var deleted = 0
+            // 已处理过的回收站分组，避免同组多条条目重复删除
+            val deletedGroups = mutableSetOf<Long>()
+            entryIds.forEach { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
+                    ?: return@forEach
+                val parent = entry.parent ?: return@forEach
+                if (recycleBin != parent) {
+                    // 条目位于被回收的分组内：整组永久删除（其条目无法单独恢复）
+                    var recycledGroup: Group? = parent
+                    while (recycledGroup?.parent != null && recycledGroup.parent != recycleBin) {
+                        recycledGroup = recycledGroup.parent
+                    }
+                    if (recycledGroup != null && recycledGroup.parent == recycleBin) {
+                        val groupId = toStableGroupId(recycledGroup)
+                        if (groupId !in deletedGroups) {
+                            deletedGroups.add(groupId)
+                            // 计数按实际删除的条目数（整组含子分组）
+                            deleted += collectEntries(recycledGroup).size
+                            db.deleteGroup(recycledGroup)
+                        }
+                    }
+                    return@forEach
+                }
+                // 先移除条目再清理附件：removeUnlinkedAttachments 只清理无条目引用的孤儿二进制
+                db.deleteEntry(entry)
+                deleted++
+            }
+            // 统一清理被删除条目遗留的孤儿附件，避免 KDBX 体积膨胀
+            db.removeUnlinkedAttachments()
+            deleted
+        }
+    }
+
+    /**
+     * 加载全部分组树（不含回收站），用于移动/复制的目标分组选择。
+     */
+    fun loadAllPasswordGroups(localPath: String, masterPassword: String): List<GroupNodeInfo> {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val rootGroup = db.rootGroup ?: return@withDatabase emptyList()
+            val result = mutableListOf<GroupNodeInfo>()
+            fun walk(group: Group, depth: Int) {
+                group.getChildGroups().forEach { child ->
+                    if (!db.groupIsInRecycleBin(child)) {
+                        result.add(GroupNodeInfo(groupId = toStableGroupId(child), title = child.title, depth = depth))
+                        walk(child, depth + 1)
+                    }
+                }
+            }
+            walk(rootGroup, 0)
+            result
+        }
+    }
+
+    /**
+     * 批量移动条目/分组到目标分组。
+     *
+     * @return 成功移动的数量（分组按 1 计）
+     */
+    fun movePasswordTargets(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+        groupIds: List<Long>,
+        targetGroupId: Long?
+    ): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val target = resolveParentGroup(db, targetGroupId) ?: return@withDatabase 0
+            if (db.groupIsInRecycleBin(target)) {
+                return@withDatabase 0
+            }
+            // 一次性建立稳定 ID → 节点的索引，避免对每个 ID 都全树遍历（O(n×m) → O(n+m)）
+            val entryIndex = collectEntriesOutsideRecycleBin(db, db.rootGroup)
+                .associateBy { toStableId(it) }
+            val groupIndex = collectAllGroups(db.rootGroup)
+                .associateBy { toStableGroupId(it) }
+            var moved = 0
+            entryIds.forEach { entryId ->
+                val entry = entryIndex[entryId] ?: return@forEach
+                if (entry.parent != target) {
+                    db.moveEntryTo(entry, target)
+                    moved++
+                }
+            }
+            groupIds.forEach { groupId ->
+                val group = groupIndex[groupId] ?: return@forEach
+                if (group.parent != target && !isGroupInSubtree(group, target)) {
+                    db.moveGroupTo(group, target)
+                    moved++
+                }
+            }
+            moved
+        }
+    }
+
+    /**
+     * 批量复制条目/分组到目标分组。
+     *
+     * 复制分组时整棵子树一并复制（标题加 " (~)" 由 [Database.copyEntryTo] 处理）。
+     *
+     * @return 成功复制的数量（分组按 1 计）
+     */
+    fun copyPasswordTargets(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+        groupIds: List<Long>,
+        targetGroupId: Long?
+    ): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val target = resolveParentGroup(db, targetGroupId) ?: return@withDatabase 0
+            if (db.groupIsInRecycleBin(target)) {
+                return@withDatabase 0
+            }
+            // 一次性建立稳定 ID → 节点的索引，避免对每个 ID 都全树遍历（O(n×m) → O(n+m)）
+            val entryIndex = collectEntriesOutsideRecycleBin(db, db.rootGroup)
+                .associateBy { toStableId(it) }
+            val groupIndex = collectAllGroups(db.rootGroup)
+                .associateBy { toStableGroupId(it) }
+            var copied = 0
+            entryIds.forEach { entryId ->
+                val entry = entryIndex[entryId] ?: return@forEach
+                if (entry.parent != target) {
+                    db.copyEntryTo(entry, target)
+                    copied++
+                }
+            }
+            groupIds.forEach { groupId ->
+                val group = groupIndex[groupId] ?: return@forEach
+                if (!isGroupInSubtree(group, target)) {
+                    copyGroupRecursive(db, group, target)
+                    copied++
+                }
+            }
+            copied
+        }
+    }
+
+    /**
+     * 递归复制分组（含其下所有条目与子分组），复制出的分组标题追加 " (~)"。
+     */
+    private fun copyGroupRecursive(database: Database, group: Group, newParent: Group) {
+        val copiedGroup = database.createGroup() ?: return
+        copiedGroup.title = group.title + " (~)"
+        copiedGroup.notes = group.notes
+        copiedGroup.icon = group.icon
+        database.addGroupTo(copiedGroup, newParent)
+        group.getChildEntries().forEach { entry ->
+            database.copyEntryTo(entry, copiedGroup)
+        }
+        group.getChildGroups().forEach { child ->
+            copyGroupRecursive(database, child, copiedGroup)
+        }
+    }
+
+    /**
+     * 判断 [candidate] 是否位于 [group] 的子树内（含自身），用于防止移动到自身/子孙。
+     */
+    private fun isGroupInSubtree(group: Group, candidate: Group): Boolean {
+        var current: Group? = candidate
+        while (current != null) {
+            if (current === group) {
+                return true
+            }
+            current = current.parent
+        }
+        return false
+    }
+
+    /**
+     * 修改数据库安全设置（主密码 / 密钥文件 / KDF / 压缩）并重新加密保存。
+     *
+     * @param masterPassword 当前主密码（用户输入，用于验证后打开数据库；即使已有缓存也会先真实解密验证）
+     * @param newMasterPassword 新主密码（与当前相同表示仅修改其他设置）
+     * @param newKeyFileData 新密钥文件字节，null 表示沿用当前密钥文件
+     * @param kdfEngineName KDF 类型：AES / Argon2d / Argon2id，null 表示不修改
+     * @param keyRounds KDF 轮数（仅 AES-KDF 有效）
+     * @param memoryUsage KDF 内存占用（字节，仅 Argon2 有效）
+     * @param parallelism KDF 并行度（仅 Argon2 有效）
+     * @param isCompressionEnabled 是否启用压缩，null 表示不修改
+     * @return 是否成功
+     */
+    fun changeDatabaseSettings(
+        localPath: String,
+        masterPassword: String,
+        newMasterPassword: String,
+        newKeyFileData: ByteArray?,
+        kdfEngineName: String? = null,
+        keyRounds: Long? = null,
+        memoryUsage: Long? = null,
+        parallelism: Long? = null,
+        isCompressionEnabled: Boolean? = null
+    ): Boolean {
+        return runCatching {
+            val location = resolveLocation(localPath)
+            // 用用户输入的旧密码显式打开验证（绕过缓存真实解密），
+            // 防止未锁屏设备上的他人不输旧密码直接改凭据
+            val currentKeyFile = DatabaseManager.getKeyFileData()
+            val (verifyDatabase, verifyCacheDirectory) = openDatabase(location, masterPassword, currentKeyFile)
+            verifyDatabase.clearAndClose(verifyCacheDirectory)
+
+            // 优先复用已解锁的缓存实例，避免重复解密
+            val cachedPair = DatabaseManager.tryGet(localPath)
+            val (database, cacheDirectory) = if (cachedPair != null) {
+                cachedPair
+            } else {
+                openDatabase(location, masterPassword, currentKeyFile)
+            }
+            try {
+                kdfEngineName?.let { name ->
+                    val engine = when (name) {
+                        "Argon2d" -> KdfFactory.argon2dKdf
+                        "Argon2id" -> KdfFactory.argon2idKdf
+                        else -> KdfFactory.aesKdf
+                    }
+                    database.kdfEngine = engine
+                }
+                keyRounds?.let { database.numberKeyEncryptionRounds = it }
+                memoryUsage?.let { database.memoryUsage = it }
+                parallelism?.let { database.parallelism = it }
+                isCompressionEnabled?.let { enabled ->
+                    database.compressionAlgorithm =
+                        if (enabled) CompressionAlgorithm.GZIP else CompressionAlgorithm.NONE
+                }
+                val effectiveKeyFile = newKeyFileData ?: DatabaseManager.getKeyFileData()
+                saveDatabase(
+                    database = database,
+                    location = location,
+                    masterPassword = newMasterPassword,
+                    cacheDirectory = cacheDirectory,
+                    keyFileData = effectiveKeyFile
+                )
+                // 登记新密钥文件，供后续重新加密保存复用
+                DatabaseManager.setKeyFileData(effectiveKeyFile)
+                true
+            } catch (e: Exception) {
+                // 保存失败：失效缓存实例，防止内存中已变异的 KDF 设置污染后续保存，
+                // 下次操作将从磁盘重新打开（磁盘文件未被改写，旧凭据仍然有效）。
+                // 保留 keyFileData，避免密钥文件保护的库后续静默重开缺失凭据。
+                DatabaseManager.invalidateCacheKeepKeyFile()
+                throw e
+            } finally {
+                if (cachedPair == null) {
+                    database.clearAndClose(cacheDirectory)
+                }
+            }
+        }.onFailure {
+            Logger.e(LOG_TAG, "changeDatabaseSettings failed, path=$localPath, message=${it.message}", it)
+        }.getOrDefault(false)
+    }
+
+    /**
+     * 读取数据库当前安全设置（供设置页展示）。
+     */
+    fun loadDatabaseSettingsInfo(
+        localPath: String,
+        masterPassword: String
+    ): DatabaseSettingsInfo {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val kdfName = db.kdfEngine?.let {
+                when {
+                    it.uuid == KdfFactory.aesKdf.uuid -> "AES"
+                    it.uuid == KdfFactory.argon2dKdf.uuid -> "Argon2d"
+                    it.uuid == KdfFactory.argon2idKdf.uuid -> "Argon2id"
+                    else -> it.toString()
+                }
+            } ?: "未知"
+            DatabaseSettingsInfo(
+                kdfEngineName = kdfName,
+                keyRounds = db.numberKeyEncryptionRounds,
+                memoryUsage = db.memoryUsage,
+                parallelism = db.parallelism,
+                isCompressionEnabled = db.compressionAlgorithm == CompressionAlgorithm.GZIP
+            )
+        }
+    }
+
+    /**
+     * 将当前数据库导出到指定输出流（含删除历史/历史记录/附件等全部内容）。
+     *
+     * 复用标准保存序列化路径，凭据与当前库一致，不修改内存中的数据库对象。
+     *
+     * @return 是否成功
+     */
+    fun exportDatabaseTo(
+        localPath: String,
+        masterPassword: String,
+        outputStreamProvider: () -> OutputStream?
+    ): Boolean {
+        return runCatching {
+            val location = resolveLocation(localPath)
+            // 优先复用已解锁的缓存实例，避免重复解密
+            val cachedPair = DatabaseManager.tryGet(localPath)
+            val (database, cacheDirectory) = if (cachedPair != null) {
+                cachedPair
+            } else {
+                openDatabase(location, masterPassword)
+            }
+            val cacheFile = File.createTempFile("kdbx-export-", ".tmp", cacheDirectory)
+            try {
+                database.saveData(
+                    cacheFile = cacheFile,
+                    databaseOutputStream = outputStreamProvider,
+                    isNewLocation = true,
+                    masterCredential = MasterCredential(
+                        password = masterPassword,
+                        keyFileData = DatabaseManager.getKeyFileData()
+                    ),
+                    challengeResponseRetriever = emptyChallengeResponseRetriever
+                )
+                true
+            } finally {
+                if (cachedPair == null) {
+                    database.clearAndClose(cacheDirectory)
+                }
+            }
+        }.onFailure {
+            Logger.e(LOG_TAG, "exportDatabaseTo failed, path=$localPath, message=${it.message}", it)
+        }.getOrDefault(false)
+    }
+
+    /**
+     * 将本地 .kdbx 文件合并进当前数据库（与云端合并同一语义，KeePassDX mergeData）。
+     *
+     * @param mergeFileUri 待合并的本地 kdbx 文件 Uri（content:// 或文件路径）
+     * @param mergeMasterPassword 待合并文件的主密码（密钥文件与当前库一致）
+     * @return 是否成功
+     */
+    fun mergeLocalDatabaseFile(
+        localPath: String,
+        masterPassword: String,
+        mergeFileUri: String,
+        mergeMasterPassword: String
+    ): Boolean {
+        return runCatching {
+            withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+                val mergeLocation = resolveLocation(mergeFileUri)
+                openInputStream(mergeLocation).use { input ->
+                    db.mergeData(
+                        databaseToMergeStream = input,
+                        // 合并文件的凭据仅使用其主密码（界面只收集密码）；
+                        // 使用密钥文件保护的库暂不支持合并
+                        databaseToMergeMasterCredential = MasterCredential(
+                            password = mergeMasterPassword
+                        ),
+                        databaseToMergeChallengeResponseRetriever = emptyChallengeResponseRetriever,
+                        isRAMSufficient = { true },
+                        progressTaskUpdater = null
+                    )
+                }
+                true
+            }
+        }.onFailure {
+            // 合并可能已部分改动内存实例，丢弃缓存以免污染状态被写回磁盘。
+            // 使用 invalidateCacheKeepKeyFile 而非 close：保留 keyFileData，
+            // 否则密钥文件保护的库后续静默重开会因缺失凭据失败（关联问题 #1/#9）。
+            DatabaseManager.invalidateCacheKeepKeyFile()
+            Logger.e(LOG_TAG, "mergeLocalDatabaseFile failed, path=$localPath, message=${it.message}", it)
+        }.getOrDefault(false)
+    }
+
+    /**
+     * 安全性检查：返回已过期条目与弱密码条目（不含回收站）。
+     *
+     * 弱密码判定使用 [PasswordStrength.isWeak]（熵低于 60 bits）。
+     */
+    fun loadSecurityIssues(localPath: String, masterPassword: String): SecurityIssuesInfo {
+        return runCatching {
+            withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+                val nowMillis = System.currentTimeMillis()
+                val expired = mutableListOf<SecurityIssueEntry>()
+                val weak = mutableListOf<SecurityIssueEntry>()
+
+            collectEntriesOutsideRecycleBin(db, db.rootGroup).forEach { entry ->
+                val entryId = toStableId(entry)
+                val title = entry.title
+                    .takeIf { it.isNotBlank() }
+                    ?: entry.url.takeIf { it.isNotBlank() }
+                    ?: entry.username.takeIf { it.isNotBlank() }
+                    ?: entryId.toString()
+                val account = entry.username.takeIf { it.isNotBlank() } ?: ""
+                // 仅当条目显式标记为过期时才参与过期判定：
+                // 无过期设置的条目 expiryTime 可能是过去的占位值（如默认「当前时间+30天」），
+                // 直接比较时间戳会把从未设置过期的条目误判为已过期
+                val expiryMillis = if (entry.expires) entry.expiryTime.toMilliseconds() else 0L
+                val password = entry.password
+                val strengthBits = PasswordStrength.estimateBits(password)
+
+                if (expiryMillis > 0L && expiryMillis < nowMillis) {
+                    expired.add(
+                        SecurityIssueEntry(
+                            entryId = entryId,
+                            title = title,
+                            account = account,
+                            passwordStrengthBits = strengthBits,
+                            expiryTime = expiryMillis
+                        )
+                    )
+                }
+                    if (PasswordStrength.isWeak(password)) {
+                        weak.add(
+                            SecurityIssueEntry(
+                                entryId = entryId,
+                                title = title,
+                                account = account,
+                                passwordStrengthBits = strengthBits,
+                                expiryTime = expiryMillis.takeIf { it > 0L }
+                            )
+                        )
+                    }
+                }
+
+                SecurityIssuesInfo(expiredEntries = expired, weakPasswordEntries = weak)
+            }
+        }.onFailure {
+            Logger.e(LOG_TAG, "loadSecurityIssues failed, path=$localPath, message=${it.message}", it)
+        }.getOrDefault(SecurityIssuesInfo(emptyList(), emptyList()))
     }
 
     /**
@@ -569,7 +1119,10 @@ class KdbxTokenRepository(context: Context) {
                 ByteArrayInputStream(remoteBytes).use { input ->
                     db.mergeData(
                         databaseToMergeStream = input,
-                        databaseToMergeMasterCredential = MasterCredential(password = masterPassword),
+                        databaseToMergeMasterCredential = MasterCredential(
+                            password = masterPassword,
+                            keyFileData = DatabaseManager.getKeyFileData()
+                        ),
                         databaseToMergeChallengeResponseRetriever = emptyChallengeResponseRetriever,
                         isRAMSufficient = { true },
                         progressTaskUpdater = null
@@ -580,6 +1133,10 @@ class KdbxTokenRepository(context: Context) {
         }.onSuccess {
             Logger.d(SYNC_LOG_TAG, "远端数据库合并成功：本地路径=$localPath")
         }.onFailure {
+            // 合并可能已部分改动内存实例，丢弃缓存以免污染状态被写回磁盘。
+            // 使用 invalidateCacheKeepKeyFile 而非 close：保留 keyFileData，
+            // 否则密钥文件保护的库后续静默重开会因缺失凭据失败（关联问题 #1/#9）。
+            DatabaseManager.invalidateCacheKeepKeyFile()
             Logger.e(SYNC_LOG_TAG, "远端数据库合并失败：${it.message}", it)
         }.getOrDefault(false)
     }
@@ -906,6 +1463,9 @@ class KdbxTokenRepository(context: Context) {
                     expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
                     isExpired = entry.expires && entry.isCurrentlyExpires,
                     customIconUuid = customIconUuid,
+                    tags = entry.tags.toList(),
+                    creationTime = entry.creationTime.toMilliseconds(),
+                    modifiedTime = entry.lastModificationTime.toMilliseconds(),
                     isFolderGroup = false,
                     isFolderPlaceholder = false
                 )
@@ -947,6 +1507,13 @@ class KdbxTokenRepository(context: Context) {
         return values.sortedBy { it.fieldName.lowercase() }
     }
 
+    /**
+     * 将字符串列表转换为 KDBX Tags。
+     */
+    private fun List<String>.toTags(): Tags = Tags().apply {
+        this@toTags.forEach { tag -> put(tag) }
+    }
+
     private fun collectEntries(group: Group?): List<Entry> {
         if (group == null) {
             return emptyList()
@@ -956,6 +1523,21 @@ class KdbxTokenRepository(context: Context) {
         list.addAll(group.getChildEntries())
         group.getChildGroups().forEach { child ->
             list.addAll(collectEntries(child))
+        }
+        return list
+    }
+
+    /**
+     * 收集 [group] 下所有后代分组（不含 [group] 自身），用于批量操作时一次性建立索引。
+     */
+    private fun collectAllGroups(group: Group?): List<Group> {
+        if (group == null) {
+            return emptyList()
+        }
+        val list = mutableListOf<Group>()
+        group.getChildGroups().forEach { child ->
+            list.add(child)
+            list.addAll(collectAllGroups(child))
         }
         return list
     }
@@ -974,6 +1556,26 @@ class KdbxTokenRepository(context: Context) {
 
     private fun resolveRecycleBinTitle(database: Database): String {
         return database.recycleBin?.title?.takeIf { it.isNotBlank() } ?: RECYCLE_BIN_FALLBACK_TITLE
+    }
+
+    /**
+     * 按节点 UUID 查找分组（含自身），用于恢复条目到原分组。
+     */
+    private fun findGroupByUuid(group: Group?, uuid: java.util.UUID): Group? {
+        if (group == null) {
+            return null
+        }
+        val groupUuid = (group.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
+        if (groupUuid != null && groupUuid == uuid) {
+            return group
+        }
+        group.getChildGroups().forEach { child ->
+            val matched = findGroupByUuid(child, uuid)
+            if (matched != null) {
+                return matched
+            }
+        }
+        return null
     }
 
     /**
@@ -1080,13 +1682,20 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 根据定位打开数据库。
      */
-    private fun openDatabase(location: DatabaseLocation, masterPassword: String): Pair<Database, File> {
+    private fun openDatabase(
+        location: DatabaseLocation,
+        masterPassword: String,
+        keyFileData: ByteArray? = DatabaseManager.getKeyFileData()
+    ): Pair<Database, File> {
         val cacheDirectory = buildCacheDirectory(location)
         val database = Database()
         openInputStream(location).use { input ->
             database.loadData(
                 databaseStream = input,
-                masterCredential = MasterCredential(password = masterPassword),
+                masterCredential = MasterCredential(
+                    password = masterPassword,
+                    keyFileData = keyFileData
+                ),
                 challengeResponseRetriever = emptyChallengeResponseRetriever,
                 readOnly = false,
                 allowUserVerification = false,
@@ -1101,16 +1710,67 @@ class KdbxTokenRepository(context: Context) {
 
     /**
      * 将数据库保存回定位目标。
+     *
+     * 成功落盘后通过 [DatabaseManager.onDatabaseSaved] 推进写入代次并同步缓存快照，
+     * 让缓存代次快照机制能识别「其他实例在此期间写入过磁盘」的场景，
+     * 避免过期缓存回滚并发修改；自身实例的写入不会把缓存误判为过期。
      */
-    private fun saveDatabase(database: Database, location: DatabaseLocation, masterPassword: String, cacheDirectory: File) {
+    private fun saveDatabase(
+        database: Database,
+        location: DatabaseLocation,
+        masterPassword: String,
+        cacheDirectory: File,
+        keyFileData: ByteArray? = DatabaseManager.getKeyFileData()
+    ) {
         val cacheFile = File.createTempFile("kdbx-save-", ".tmp", cacheDirectory)
-        database.saveData(
-            cacheFile = cacheFile,
-            databaseOutputStream = { openOutputStream(location) },
-            isNewLocation = true,
-            masterCredential = MasterCredential(password = masterPassword),
-            challengeResponseRetriever = emptyChallengeResponseRetriever
-        )
+        // Database.saveData 内部 finally 会删除 cacheFile，无需外层重复处理
+        when (location) {
+            is DatabaseLocation.FileLocation -> {
+                // 原子写入：saveData 先把完整数据库写入 cacheFile，再复制到同目录临时文件；
+                // 成功后用 rename 原子替换目标，避免写入中途失败导致原数据库被截断/覆盖成不完整内容。
+                val target = location.file
+                val parent = target.parentFile ?: File(System.getProperty("java.io.tmpdir") ?: ".")
+                if (!parent.exists()) parent.mkdirs()
+                val tempFile = File(parent, target.name + ".save.tmp")
+                try {
+                    database.saveData(
+                        cacheFile = cacheFile,
+                        databaseOutputStream = { tempFile.outputStream() },
+                        isNewLocation = true,
+                        masterCredential = MasterCredential(
+                            password = masterPassword,
+                            keyFileData = keyFileData
+                        ),
+                        challengeResponseRetriever = emptyChallengeResponseRetriever
+                    )
+                    // 同文件系统下 rename 原子替换目标；失败（如跨卷）则回退到整文件复制
+                    if (!tempFile.renameTo(target)) {
+                        tempFile.copyTo(target, overwrite = true)
+                        tempFile.delete()
+                    }
+                } finally {
+                    runCatching { tempFile.delete() }
+                }
+            }
+
+            is DatabaseLocation.UriLocation -> {
+                // SAF 不支持原子替换：saveData 先将完整数据库写入 cacheFile，
+                // 再复制到目标 Uri。复制失败会抛出，调用方捕获（SAF 固有限制下原 Uri 可能被截断）。
+                database.saveData(
+                    cacheFile = cacheFile,
+                    databaseOutputStream = { openOutputStream(location) },
+                    isNewLocation = true,
+                    masterCredential = MasterCredential(
+                        password = masterPassword,
+                        keyFileData = keyFileData
+                    ),
+                    challengeResponseRetriever = emptyChallengeResponseRetriever
+                )
+            }
+        }
+        // 所有写入分支完成、未抛异常 = 磁盘已更新。
+        // 代次推进必须在写入成功之后，否则代次前进但磁盘仍是旧内容会产生反向"过期"误判。
+        DatabaseManager.onDatabaseSaved(database)
     }
 
     /**
@@ -1186,18 +1846,18 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 确保定位目标可初始化。
      */
-    private fun ensureLocationInitialized(location: DatabaseLocation, masterPassword: String) {
+    private fun ensureLocationInitialized(location: DatabaseLocation, masterPassword: String, keyFileData: ByteArray? = null) {
         when (location) {
             is DatabaseLocation.FileLocation -> {
                 val file = location.file
                 if (!file.exists() || file.length() == 0L) {
-                    initializeDatabase(file.absolutePath, masterPassword)
+                    initializeDatabase(file.absolutePath, masterPassword, keyFileData)
                 }
             }
 
             is DatabaseLocation.UriLocation -> {
                 if (!hasUriData(location.uri)) {
-                    initializeDatabase(location.uri.toString(), masterPassword)
+                    initializeDatabase(location.uri.toString(), masterPassword, keyFileData)
                 }
             }
         }
@@ -1411,8 +2071,25 @@ class KdbxTokenRepository(context: Context) {
             entryInfo.expiryTime = DateInstant.fromMilliseconds(draft.expiryTime)
         } else {
             entryInfo.expires = false
+            // 必须显式重置为「永不过期」：EntryInfo 默认值是「当前时间+30天」，
+            // setEntryInfo 会无条件写入，若不重置会导致无过期条目的 expiryTime
+            // 被写成过去的时刻，被安全性检查误判为已过期
+            entryInfo.expiryTime = DateInstant.NEVER_EXPIRES
         }
-        if (draft.customIconUuid == null) {
+        val newCustomIconBytes = draft.newCustomIconBytes
+        if (newCustomIconBytes != null) {
+            // 用户新选择的自定义图片：写入数据库自定义图标池
+            database.buildNewCustomIcon { customIcon, binary ->
+                if (customIcon != null && binary != null) {
+                    binary.getOutputDataStream(database.binaryCache).use { output ->
+                        output.write(newCustomIconBytes)
+                    }
+                    entryInfo.icon = IconImage(customIcon)
+                } else {
+                    entryInfo.icon = IconImage(database.getStandardIcon(draft.iconStandardId))
+                }
+            }
+        } else if (draft.customIconUuid == null) {
             entryInfo.icon = IconImage(database.getStandardIcon(draft.iconStandardId))
         }
     }

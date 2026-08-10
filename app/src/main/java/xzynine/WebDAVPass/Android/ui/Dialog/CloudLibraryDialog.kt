@@ -77,6 +77,8 @@ fun CloudLibraryDialog(
     mode: CloudMode,
     initialLibraryContext: LibraryContext? = null,
     createMasterPassword: String = "",
+    createKeyFileData: ByteArray? = null,
+    createKeyFileUri: String? = null,
     onDismiss: () -> Unit,
     onSelected: (LibraryContext, String?) -> Unit
 ) {
@@ -230,7 +232,15 @@ fun CloudLibraryDialog(
         }
     }
 
-    suspend fun createRemote(baseUrl: String, path: String, user: String, pass: String, masterPassword: String): LibraryContext? {
+    suspend fun createRemote(
+        baseUrl: String,
+        path: String,
+        user: String,
+        pass: String,
+        masterPassword: String,
+        keyFileData: ByteArray? = null,
+        keyFileUri: String? = null
+    ): LibraryContext? {
         return withContext(Dispatchers.IO) {
             val normalized = if (path.startsWith("http://") || path.startsWith("https://")) {
                 path
@@ -240,7 +250,7 @@ fun CloudLibraryDialog(
             }
 
             val remote = WebDav(normalized, Authorization(user, pass))
-            val kdbxBytes = tokenViewModel.createEmptyKdbxBytes(masterPassword)
+            val kdbxBytes = tokenViewModel.createEmptyKdbxBytes(masterPassword, keyFileData)
             remote.upload(kdbxBytes, "application/octet-stream")
             val remoteModifiedAt = remote.getWebDavFile()?.lastModify?.takeIf { it > 0 }
 
@@ -261,7 +271,8 @@ fun CloudLibraryDialog(
                     password = pass,
                     autoSyncEnabled = true,
                     lastRemoteModifiedAt = remoteModifiedAt,
-                    lastSyncStatus = "idle"
+                    lastSyncStatus = "idle",
+                    keyFileUri = keyFileUri
                 )
             }
         }
@@ -496,7 +507,7 @@ fun CloudLibraryDialog(
                             if (isImportMode) {
                                 importRemote(baseUrl, path, username, password)
                             } else {
-                                createRemote(baseUrl, path, username, password, createPassword)
+                                createRemote(baseUrl, path, username, password, createPassword, createKeyFileData, createKeyFileUri)
                             }
                         } catch (e: Exception) {
                             Logger.e(SEARCH_LOG_TAG, "云端库操作失败（import/create/bind），path=$path", e)

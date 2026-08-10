@@ -55,6 +55,9 @@ data class EditableAttachmentDraft(
 
 /**
  * 条目编辑草稿。
+ *
+ * 注：[newCustomIconBytes] 为 `ByteArray`，data class 自动生成的 `equals`/`hashCode`
+ * 会退化为引用比较。这里显式覆写，对其使用内容比较，确保两个内容相同的草稿判定为相等。
  */
 data class PasswordEntryEditDraft(
     val entryId: Long? = null,
@@ -68,8 +71,47 @@ data class PasswordEntryEditDraft(
     val attachments: List<EditableAttachmentDraft> = emptyList(),
     val expiryTime: Long? = null,
     val customIconUuid: String? = null,
-    val iconStandardId: Int = 0
-)
+    val iconStandardId: Int = 0,
+    val newCustomIconBytes: ByteArray? = null,
+    val tags: List<String> = emptyList()
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is PasswordEntryEditDraft) return false
+        return entryId == other.entryId &&
+            parentGroupId == other.parentGroupId &&
+            title == other.title &&
+            username == other.username &&
+            password == other.password &&
+            url == other.url &&
+            notes == other.notes &&
+            customFields == other.customFields &&
+            attachments == other.attachments &&
+            expiryTime == other.expiryTime &&
+            customIconUuid == other.customIconUuid &&
+            iconStandardId == other.iconStandardId &&
+            newCustomIconBytes.contentEquals(other.newCustomIconBytes) &&
+            tags == other.tags
+    }
+
+    override fun hashCode(): Int {
+        var result = entryId?.hashCode() ?: 0
+        result = 31 * result + (parentGroupId?.hashCode() ?: 0)
+        result = 31 * result + title.hashCode()
+        result = 31 * result + username.hashCode()
+        result = 31 * result + password.hashCode()
+        result = 31 * result + url.hashCode()
+        result = 31 * result + notes.hashCode()
+        result = 31 * result + customFields.hashCode()
+        result = 31 * result + attachments.hashCode()
+        result = 31 * result + (expiryTime?.hashCode() ?: 0)
+        result = 31 * result + (customIconUuid?.hashCode() ?: 0)
+        result = 31 * result + iconStandardId
+        result = 31 * result + (newCustomIconBytes?.contentHashCode() ?: 0)
+        result = 31 * result + tags.hashCode()
+        return result
+    }
+}
 
 /**
  * 分组编辑草稿。
@@ -80,3 +122,45 @@ data class PasswordGroupEditDraft(
     val title: String,
     val notes: String = ""
 )
+
+/**
+ * 分组选择树节点（用于移动/复制的目标分组选择）。
+ */
+data class GroupNodeInfo(
+    val groupId: Long,
+    val title: String,
+    val depth: Int
+)
+
+/**
+ * 数据库当前安全设置信息（设置页展示用）。
+ */
+data class DatabaseSettingsInfo(
+    val kdfEngineName: String,
+    val keyRounds: Long,
+    val memoryUsage: Long,
+    val parallelism: Long,
+    val isCompressionEnabled: Boolean
+)
+
+/**
+ * 安全性检查条目（过期或弱密码）。
+ */
+data class SecurityIssueEntry(
+    val entryId: Long,
+    val title: String,
+    val account: String,
+    val passwordStrengthBits: Double,
+    val expiryTime: Long?
+)
+
+/**
+ * 安全性检查结果。
+ */
+data class SecurityIssuesInfo(
+    val expiredEntries: List<SecurityIssueEntry>,
+    val weakPasswordEntries: List<SecurityIssueEntry>
+) {
+    val expiredCount: Int get() = expiredEntries.size
+    val weakCount: Int get() = weakPasswordEntries.size
+}

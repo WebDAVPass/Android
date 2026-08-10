@@ -3,9 +3,11 @@ package xzynine.WebDAVPass.Android.ui.Screen
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -68,11 +70,24 @@ fun FeatureCard(
 fun HomeScreen(
     tokenViewModel: TokenViewModel,
     onNavigateToPasswordList: (PasswordListMode) -> Unit,
-    onNavigateToTokenList: () -> Unit
+    onNavigateToTokenList: () -> Unit,
+    onNavigateToSecurityCheck: () -> Unit
 ) {
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val passwordTotalCount by tokenViewModel.passwordViewModel.passwordTotalCount.collectAsState(0)
     val recentDeletedCount by tokenViewModel.passwordViewModel.recentDeletedCount.collectAsState(0)
+    val securityIssueCount = remember { mutableIntStateOf(0) }
+
+    // 密码/回收站计数变化（写入成功后刷新）时重新扫描安全性问题，保证数字不过期。
+    // 直接在 LaunchedEffect 体内调用挂起函数，key 变化时自动取消上一次扫描，
+    // 避免先启动的扫描后完成覆盖较新结果。
+    LaunchedEffect(passwordTotalCount, recentDeletedCount) {
+        val issues = tokenViewModel.loadSecurityIssues()
+        // 以不重复的问题条目计数（同一条目同时过期且弱密码只计一次）
+        securityIssueCount.intValue = (issues.expiredEntries.map { it.entryId } +
+            issues.weakPasswordEntries.map { it.entryId }).distinct().size
+    }
+
     val tokenCount by remember {
         derivedStateOf {
             tokens.size
@@ -125,9 +140,9 @@ fun HomeScreen(
                     // 安全性
                     FeatureCard(
                         title = "安全性",
-                        value = "0",
+                        value = "${securityIssueCount.intValue}",
                         onClick = {
-                            // TODO: tos提示待开发
+                            onNavigateToSecurityCheck()
                         },
                         modifier = Modifier.weight(1f)
                     )

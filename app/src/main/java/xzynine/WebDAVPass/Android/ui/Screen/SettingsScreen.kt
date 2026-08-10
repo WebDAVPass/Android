@@ -27,6 +27,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -35,6 +36,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
@@ -42,6 +44,11 @@ import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
+import xzynine.WebDAVPass.Android.ui.Dialog.PasswordInputDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
+import xzynine.WebDAVPass.Android.BuildConfig
+import github.xzynine.checkupdata.CheckUpdateManager
+import github.xzynine.checkupdata.model.UpdateResult
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -54,9 +61,13 @@ import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
+import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 import github.xzynine.webdav.ui.WebDavSyncStatusSection
 import github.xzynine.webdav.ui.WebDavSyncUiState
 
@@ -70,6 +81,7 @@ fun SettingsScreen(
     viewModel: TokenViewModel,
     onCloudBindingClick: () -> Unit,
     onSwitchLibraryClick: () -> Unit,
+    onDatabaseSettingsClick: () -> Unit,
     onNavigateBack: () -> Unit
 ) {
     // 获取统一的圆角半径
@@ -83,6 +95,7 @@ fun SettingsScreen(
     val restoreProgress = viewModel.cloudSyncViewModel.restoreProgress.collectAsState()
     val currentLibraryState by viewModel.libraryViewModel.currentLibrary.collectAsState()
     val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
     val autoUnlockModeItems = remember { listOf("默认", "生物识别", "PIN") }
     val currentLib = currentLibraryState
 
@@ -206,6 +219,40 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
         }
     }
 
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        onResult = { uri ->
+            if (uri == null) {
+                return@rememberLauncherForActivityResult
+            }
+            coroutineScope.launch {
+                val ok = viewModel.exportCurrentDatabase(uri)
+                if (ok) {
+                    xzylib.base.util.ToastUtils.showShortToast(context, "数据库已导出")
+                } else {
+                    xzylib.base.util.ToastUtils.showShortToast(context, "导出失败")
+                }
+            }
+        }
+    )
+
+    var pendingMergeUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var mergeLoading by remember { mutableStateOf(false) }
+    var checkingUpdate by remember { mutableStateOf(false) }
+    var updateResult by remember {
+        mutableStateOf<github.xzynine.checkupdata.model.UpdateResult?>(null)
+    }
+
+    val mergeLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            if (uri == null) {
+                return@rememberLauncherForActivityResult
+            }
+            pendingMergeUri = uri
+        }
+    )
+
     /**
      * 当前库是否已具备云端同步所需信息。
      */
@@ -319,6 +366,34 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
 
             Spacer(modifier = Modifier.Companion.height(8.dp))
 
+            var askToSaveChecked by remember {
+                mutableStateOf(xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences.askToSaveData)
+            }
+            // 进入设置页时从本地设置同步（服务可能尚未连接，内存缓存可能过期）
+            LaunchedEffect(Unit) {
+                xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences.load(context)
+                askToSaveChecked = xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences.askToSaveData
+            }
+            SwitchPreference(
+                title = "自动填充时提示保存",
+                summary = "在表单提交后询问是否将账号密码保存到密码库",
+                checked = askToSaveChecked,
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Edit,
+                        contentDescription = "自动填充时提示保存"
+                    )
+                },
+                onCheckedChange = { checked ->
+                    askToSaveChecked = checked
+                    xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences.setAskToSaveData(context, checked)
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.Companion.height(8.dp))
+
             ArrowPreference(
                 title = "切换数据库文件",
                 summary = "返回欢迎页，选择其他 .kdbx",
@@ -330,6 +405,88 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     )
                 },
                 onClick = onSwitchLibraryClick,
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.Companion.height(16.dp))
+
+            // 数据库设置
+            ArrowPreference(
+                title = "数据库设置",
+                summary = "修改主密码、KDF 算法与压缩设置",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Settings,
+                        contentDescription = "数据库设置",
+                    )
+                },
+                onClick = onDatabaseSettingsClick,
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+            )
+
+            // 导出数据库
+            ArrowPreference(
+                title = "导出数据库",
+                summary = "将当前库另存为 .kdbx 文件",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Download,
+                        contentDescription = "导出数据库",
+                    )
+                },
+                onClick = {
+                    exportLauncher.launch("WebDavPass-导出.kdbx")
+                },
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+            )
+
+            // 合并数据库
+            ArrowPreference(
+                title = "合并数据库",
+                summary = "将其他 .kdbx 文件的内容合并进当前库",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.UploadCloud,
+                        contentDescription = "合并数据库",
+                    )
+                },
+                onClick = {
+                    mergeLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                },
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+            )
+
+            // 检查更新
+            ArrowPreference(
+                title = "检查更新",
+                summary = if (checkingUpdate) "正在检查..." else "从 GitHub Releases 检查新版本",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Download,
+                        contentDescription = "检查更新",
+                    )
+                },
+                onClick = {
+                    if (checkingUpdate) return@ArrowPreference
+                    coroutineScope.launch {
+                        checkingUpdate = true
+                        val result = CheckUpdateManager(context).checkUpdate(
+                            owner = "WebDAVPass",
+                            repo = "Android",
+                            currentVersion = BuildConfig.VERSION_NAME
+                        )
+                        checkingUpdate = false
+                        updateResult = result
+                    }
+                },
                 modifier = Modifier.Companion
                     .fillMaxWidth()
             )
@@ -562,6 +719,47 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     modifier = Modifier.fillMaxWidth()
                 )
 
+                val lockTimeoutItems = remember { listOf("不锁定", "1 分钟", "5 分钟", "15 分钟", "30 分钟", "60 分钟") }
+                val lockTimeoutValues = listOf(0, 1, 5, 15, 30, 60)
+                val lockTimeoutMinutes by viewModel.lockTimeoutMinutes.collectAsState()
+                val lockTimeoutIndex = lockTimeoutValues.indexOf(lockTimeoutMinutes).coerceAtLeast(0)
+                WindowSpinnerPreference(
+                    title = "应用超时锁定",
+                    summary = "应用在前后台连续停留超过该时长后自动锁定，需重新输入主密码",
+                    items = lockTimeoutItems.map { DropdownItem(text = it) },
+                    selectedIndex = lockTimeoutIndex,
+                    showValue = lockTimeoutMinutes > 0,
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Lock,
+                            contentDescription = "应用超时锁定"
+                        )
+                    },
+                    onSelectedIndexChange = { index ->
+                        viewModel.setLockTimeoutMinutes(lockTimeoutValues[index])
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                val lockOnBackground by viewModel.lockOnBackground.collectAsState()
+                SwitchPreference(
+                    title = "后台自动锁定",
+                    summary = "退到后台 30 秒后回到应用时自动锁定",
+                    checked = lockOnBackground,
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Lock,
+                            contentDescription = "后台自动锁定"
+                        )
+                    },
+                    onCheckedChange = { checked ->
+                        viewModel.setLockOnBackground(checked)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
                 /*
                  * 测试入口（已隐藏）：手动将48小时窗口标记为到期。
                  * 说明：仅注释 UI，后端测试方法保留。
@@ -612,6 +810,106 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
             )
 
             Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+
+    pendingMergeUri?.let { mergeUri ->
+        PasswordInputDialog(
+            show = true,
+            title = "合并数据库",
+            summary = if (mergeLoading) "正在合并..." else "请输入待合并文件的主密码",
+            confirmButtonText = if (mergeLoading) "合并中..." else "合并",
+            onDismiss = { if (!mergeLoading) pendingMergeUri = null },
+            onConfirm = { mergePassword ->
+                if (mergeLoading) return@PasswordInputDialog
+                pendingMergeUri = null
+                coroutineScope.launch {
+                    mergeLoading = true
+                    val ok = viewModel.mergeLocalDatabase(mergeUri, mergePassword)
+                    mergeLoading = false
+                    if (ok) {
+                        xzylib.base.util.ToastUtils.showShortToast(context, "合并完成")
+                    } else {
+                        xzylib.base.util.ToastUtils.showShortToast(context, "合并失败：密码错误或文件无效")
+                    }
+                }
+            }
+        )
+    }
+
+    updateResult?.let { result ->
+        UpdateResultDialog(
+            result = result,
+            onDismiss = { updateResult = null }
+        )
+    }
+}
+
+/**
+ * 更新结果对话框。
+ *
+ * 将原 SettingsScreen 内三个分支重复的 ConfirmationDialog 结构集中到一处，
+ * 下载逻辑自包含协程，避免冗余的 `remember { mutableStateOf(true) }` 状态散落。
+ */
+@Composable
+private fun UpdateResultDialog(
+    result: UpdateResult,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val show = remember { mutableStateOf(true) }
+
+    when (result) {
+        is UpdateResult.HasUpdate -> {
+            val release = result.releaseInfo
+            val assetFilter: ((github.xzynine.checkupdata.model.ReleaseInfo.ReleaseAsset) -> Boolean)? = null
+            ConfirmationDialog(
+                title = "发现新版本 ${release.version}",
+                summary = buildString {
+                    append("当前版本：${result.currentVersion}\n")
+                    if (release.releaseNotes.isNotBlank()) {
+                        append("更新说明：\n${release.releaseNotes.take(500)}")
+                    }
+                },
+                show = show,
+                onDismiss = onDismiss,
+                confirmButtonText = "下载更新",
+                onConfirm = {
+                    onDismiss()
+                    coroutineScope.launch {
+                        val downloadResult = CheckUpdateManager(context).downloadRelease(release, assetFilter = assetFilter)
+                        when (downloadResult) {
+                            is github.xzynine.checkupdata.download.SystemDownloader.DownloadResult.Success ->
+                                xzylib.base.util.ToastUtils.showShortToast(context, "已开始下载：${downloadResult.fileName}")
+
+                            else -> xzylib.base.util.ToastUtils.showShortToast(context, "下载失败，请到 GitHub Releases 手动下载")
+                        }
+                    }
+                }
+            )
+        }
+
+        is UpdateResult.NoUpdate -> {
+            ConfirmationDialog(
+                title = "已是最新版本",
+                summary = "当前版本：${result.currentVersion}",
+                show = show,
+                onDismiss = onDismiss,
+                confirmButtonText = "确定",
+                onConfirm = onDismiss
+            )
+        }
+
+        is UpdateResult.Error -> {
+            ConfirmationDialog(
+                title = "检查更新失败",
+                summary = result.message,
+                show = show,
+                onDismiss = onDismiss,
+                confirmButtonText = "确定",
+                onConfirm = onDismiss
+            )
         }
     }
 }
