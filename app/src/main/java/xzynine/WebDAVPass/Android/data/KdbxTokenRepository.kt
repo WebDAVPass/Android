@@ -105,9 +105,11 @@ class KdbxTokenRepository(context: Context) {
                     cacheFile = cacheFile,
                     databaseOutputStream = { outputStream },
                     isNewLocation = true,
+                    // 新建库凭据仅由参数决定，不继承当前已解锁库的密钥文件，
+                    // 避免误用旧密钥文件加密导致新库无法用纯密码解锁
                     masterCredential = MasterCredential(
                         password = masterPassword,
-                        keyFileData = keyFileData ?: DatabaseManager.getKeyFileData()
+                        keyFileData = keyFileData
                     ),
                     challengeResponseRetriever = emptyChallengeResponseRetriever
                 )
@@ -552,6 +554,18 @@ class KdbxTokenRepository(context: Context) {
                     ?: return@forEach
                 val parent = entry.parent ?: return@forEach
                 if (recycleBin != parent) {
+                    // 条目位于被回收的分组内：恢复其所属的最外层已回收分组（整组连同子条目一起恢复）
+                    var recycledGroup: Group? = parent
+                    while (recycledGroup?.parent != null && recycledGroup.parent != recycleBin) {
+                        recycledGroup = recycledGroup.parent
+                    }
+                    if (recycledGroup != null && recycledGroup.parent == recycleBin) {
+                        val target = findGroupByUuid(db.rootGroup, recycledGroup.previousParentGroup)
+                            ?: db.rootGroup
+                            ?: return@withDatabase restored
+                        db.undoRecycle(recycledGroup, target)
+                        restored++
+                    }
                     return@forEach
                 }
                 val target = findGroupByUuid(db.rootGroup, entry.previousParentGroup)
@@ -580,12 +594,12 @@ class KdbxTokenRepository(context: Context) {
                 if (recycleBin != parent) {
                     return@forEach
                 }
-                entry.getAttachments(db.attachmentPool).forEach { attachment ->
-                    db.removeAttachmentIfNotUsed(attachment)
-                }
+                // 先移除条目再清理附件：removeUnlinkedAttachments 只清理无条目引用的孤儿二进制
                 db.deleteEntry(entry)
                 deleted++
             }
+            // 统一清理被删除条目遗留的孤儿附件，避免 KDBX 体积膨胀
+            db.removeUnlinkedAttachments()
             deleted
         }
     }
@@ -687,11 +701,11 @@ class KdbxTokenRepository(context: Context) {
     }
 
     /**
-     * 递归复制分组（含其下所有条目与子分组）。
+     * 递归复制分组（含其下所有条目与子分组），复制出的分组标题追加 " (~)"。
      */
     private fun copyGroupRecursive(database: Database, group: Group, newParent: Group) {
         val copiedGroup = database.createGroup() ?: return
-        copiedGroup.title = group.title
+        copiedGroup.title = group.title + " (~)"
         copiedGroup.notes = group.notes
         copiedGroup.icon = group.icon
         database.addGroupTo(copiedGroup, newParent)
@@ -777,6 +791,11 @@ class KdbxTokenRepository(context: Context) {
                 // 登记新密钥文件，供后续重新加密保存复用
                 DatabaseManager.setKeyFileData(effectiveKeyFile)
                 true
+            } catch (e: Exception) {
+                // 保存失败：关闭缓存实例，防止内存中已变异的 KDF 设置污染后续保存，
+                // 下次操作将从磁盘重新打开（磁盘文件未被改写，旧凭据仍然有效）
+                DatabaseManager.close()
+                throw e
             } finally {
                 if (cachedPair == null) {
                     database.clearAndClose(cacheDirectory)
@@ -876,9 +895,10 @@ class KdbxTokenRepository(context: Context) {
                 openInputStream(mergeLocation).use { input ->
                     db.mergeData(
                         databaseToMergeStream = input,
+                        // 合并文件的凭据仅使用其主密码（界面只收集密码）；
+                        // 使用密钥文件保护的库暂不支持合并
                         databaseToMergeMasterCredential = MasterCredential(
-                            password = mergeMasterPassword,
-                            keyFileData = DatabaseManager.getKeyFileData()
+                            password = mergeMasterPassword
                         ),
                         databaseToMergeChallengeResponseRetriever = emptyChallengeResponseRetriever,
                         isRAMSufficient = { true },
@@ -898,49 +918,53 @@ class KdbxTokenRepository(context: Context) {
      * 弱密码判定使用 [PasswordStrength.isWeak]（熵低于 60 bits）。
      */
     fun loadSecurityIssues(localPath: String, masterPassword: String): SecurityIssuesInfo {
-        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val nowMillis = System.currentTimeMillis()
-            val expired = mutableListOf<SecurityIssueEntry>()
-            val weak = mutableListOf<SecurityIssueEntry>()
+        return runCatching {
+            withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+                val nowMillis = System.currentTimeMillis()
+                val expired = mutableListOf<SecurityIssueEntry>()
+                val weak = mutableListOf<SecurityIssueEntry>()
 
-            collectEntriesOutsideRecycleBin(db, db.rootGroup).forEach { entry ->
-                val entryId = toStableId(entry)
-                val title = entry.title
-                    .takeIf { it.isNotBlank() }
-                    ?: entry.url.takeIf { it.isNotBlank() }
-                    ?: entry.username.takeIf { it.isNotBlank() }
-                    ?: entryId.toString()
-                val account = entry.username.takeIf { it.isNotBlank() } ?: ""
-                val expiryMillis = entry.expiryTime.toMilliseconds()
-                val password = entry.password
-                val strengthBits = PasswordStrength.estimateBits(password)
+                collectEntriesOutsideRecycleBin(db, db.rootGroup).forEach { entry ->
+                    val entryId = toStableId(entry)
+                    val title = entry.title
+                        .takeIf { it.isNotBlank() }
+                        ?: entry.url.takeIf { it.isNotBlank() }
+                        ?: entry.username.takeIf { it.isNotBlank() }
+                        ?: entryId.toString()
+                    val account = entry.username.takeIf { it.isNotBlank() } ?: ""
+                    val expiryMillis = entry.expiryTime.toMilliseconds()
+                    val password = entry.password
+                    val strengthBits = PasswordStrength.estimateBits(password)
 
-                if (expiryMillis > 0L && expiryMillis < nowMillis) {
-                    expired.add(
-                        SecurityIssueEntry(
-                            entryId = entryId,
-                            title = title,
-                            account = account,
-                            passwordStrengthBits = strengthBits,
-                            expiryTime = expiryMillis
+                    if (expiryMillis > 0L && expiryMillis < nowMillis) {
+                        expired.add(
+                            SecurityIssueEntry(
+                                entryId = entryId,
+                                title = title,
+                                account = account,
+                                passwordStrengthBits = strengthBits,
+                                expiryTime = expiryMillis
+                            )
                         )
-                    )
-                }
-                if (PasswordStrength.isWeak(password)) {
-                    weak.add(
-                        SecurityIssueEntry(
-                            entryId = entryId,
-                            title = title,
-                            account = account,
-                            passwordStrengthBits = strengthBits,
-                            expiryTime = expiryMillis.takeIf { it > 0L }
+                    }
+                    if (PasswordStrength.isWeak(password)) {
+                        weak.add(
+                            SecurityIssueEntry(
+                                entryId = entryId,
+                                title = title,
+                                account = account,
+                                passwordStrengthBits = strengthBits,
+                                expiryTime = expiryMillis.takeIf { it > 0L }
+                            )
                         )
-                    )
+                    }
                 }
+
+                SecurityIssuesInfo(expiredEntries = expired, weakPasswordEntries = weak)
             }
-
-            SecurityIssuesInfo(expiredEntries = expired, weakPasswordEntries = weak)
-        }
+        }.onFailure {
+            Logger.e(LOG_TAG, "loadSecurityIssues failed, path=$localPath, message=${it.message}", it)
+        }.getOrDefault(SecurityIssuesInfo(emptyList(), emptyList()))
     }
 
     /**

@@ -63,6 +63,11 @@ class AutofillPickerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 注册界面会展示明文密码，禁止截屏/录屏
+        window.setFlags(
+            android.view.WindowManager.LayoutParams.FLAG_SECURE,
+            android.view.WindowManager.LayoutParams.FLAG_SECURE
+        )
 
         val bundle = intent.getBundleExtra(KEY_PENDING_INTENT_BUNDLE)
         if (bundle == null) {

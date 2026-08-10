@@ -186,37 +186,40 @@ class KeeAutofillService : AutofillService() {
     }
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
+        // 功能关闭或系统版本不支持时静默接受，避免每次表单提交都提示保存失败
+        if (!askToSaveData || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+            callback.onSuccess()
+            return
+        }
         var success = false
-        if (askToSaveData && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            val latestStructure = request.fillContexts.last().structure
-            StructureParser(latestStructure).parse(saveValue = true)?.let { parseResult ->
-                if (parseResult.isValid() && autofillAllowedFor(
-                        applicationId = parseResult.applicationId,
-                        applicationIdBlocklist = applicationIdBlocklist,
-                        webDomain = parseResult.webDomain,
-                        webDomainBlocklist = webDomainBlocklist)
-                    ) {
-                    Log.d(TAG, "autofill onSaveRequest password")
+        val latestStructure = request.fillContexts.last().structure
+        StructureParser(latestStructure).parse(saveValue = true)?.let { parseResult ->
+            if (parseResult.isValid() && autofillAllowedFor(
+                    applicationId = parseResult.applicationId,
+                    applicationIdBlocklist = applicationIdBlocklist,
+                    webDomain = parseResult.webDomain,
+                    webDomainBlocklist = webDomainBlocklist)
+                ) {
+                Log.d(TAG, "autofill onSaveRequest password")
 
-                    val searchInfo = SearchInfo().apply {
-                        applicationId = parseResult.applicationId
-                        webScheme = parseResult.webScheme
-                        webDomain = parseResult.webDomain
-                    }
-                    val registerInfo = RegisterInfo(
-                        searchInfo = searchInfo,
-                        username = parseResult.usernameValue?.textValue?.toString(),
-                        password = parseResult.passwordValue?.textValue?.toString()
-                    )
+                val searchInfo = SearchInfo().apply {
+                    applicationId = parseResult.applicationId
+                    webScheme = parseResult.webScheme
+                    webDomain = parseResult.webDomain
+                }
+                val registerInfo = RegisterInfo(
+                    searchInfo = searchInfo,
+                    username = parseResult.usernameValue?.textValue?.toString(),
+                    password = parseResult.passwordValue?.textValue?.toString()
+                )
 
-                    // 拉起注册界面：展示表单值并选择目标分组后创建条目
-                    AutofillHelper.getPendingIntentForRegistration(
-                        this,
-                        registerInfo
-                    )?.intentSender?.let { intentSender ->
-                        success = true
-                        callback.onSuccess(intentSender)
-                    }
+                // 拉起注册界面：展示表单值并选择目标分组后创建条目
+                AutofillHelper.getPendingIntentForRegistration(
+                    this,
+                    registerInfo
+                )?.intentSender?.let { intentSender ->
+                    success = true
+                    callback.onSuccess(intentSender)
                 }
             }
         }
