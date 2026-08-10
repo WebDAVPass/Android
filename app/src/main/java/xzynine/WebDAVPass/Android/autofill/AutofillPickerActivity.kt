@@ -321,7 +321,10 @@ private fun RegistrationContent(
                                 val ok = tokenViewModel.unlockCurrentLibrary(masterPassword)
                                 unlockLoading = false
                                 if (!ok) {
-                                    ToastUtils.showShortToast(context, "解锁失败：主密码错误")
+                                    ToastUtils.showShortToast(
+                                        context,
+                                        "解锁失败：主密码错误；若该库使用密钥文件，请先在应用内解锁一次后重试"
+                                    )
                                 }
                             }
                         },

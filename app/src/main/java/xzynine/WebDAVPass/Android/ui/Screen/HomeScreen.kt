@@ -81,7 +81,8 @@ fun HomeScreen(
     val securityIssueCount = remember { mutableIntStateOf(0) }
     val coroutineScope = rememberCoroutineScope()
 
-    LaunchedEffect(Unit) {
+    // 密码/回收站计数变化（写入成功后刷新）时重新扫描安全性问题，保证数字不过期
+    LaunchedEffect(passwordTotalCount, recentDeletedCount) {
         coroutineScope.launch {
             val issues = tokenViewModel.loadSecurityIssues()
             securityIssueCount.intValue = issues.expiredCount + issues.weakCount

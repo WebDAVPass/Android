@@ -83,11 +83,11 @@ fun DatabaseSettingsScreen(
     val kdfOptions = listOf("AES", "Argon2d", "Argon2id")
     var kdfSelectedIndex by remember { mutableStateOf(0) }
 
-    // Argon2 引擎默认参数（用于切换 KDF 时预填）
+    // Argon2 引擎默认参数（用于切换 KDF 时预填；memoryUsage 单位为字节）
     val argon2Defaults = remember {
         val engine = com.kunzisoft.keepass.database.crypto.kdf.KdfFactory.argon2dKdf
         Triple(
-            (engine.defaultMemoryUsage / 1024).coerceAtLeast(1), // KiB → MiB
+            (engine.defaultMemoryUsage / 1024 / 1024).coerceAtLeast(1), // 字节 → MiB
             engine.defaultParallelism.coerceAtLeast(1),
             engine.defaultKeyRounds.coerceAtLeast(1)
         )
@@ -113,8 +113,8 @@ fun DatabaseSettingsScreen(
             kdfEngineName = info.kdfEngineName
             kdfSelectedIndex = kdfOptions.indexOfFirst { it == info.kdfEngineName }.takeIf { it >= 0 } ?: 0
             keyRounds = info.keyRounds.toString()
-            // memoryUsage 为 KiB：换算为 MiB 展示
-            memoryUsageMb = if (info.memoryUsage > 0) (info.memoryUsage / 1024).toString() else ""
+            // memoryUsage 单位为字节：换算为 MiB 展示
+            memoryUsageMb = if (info.memoryUsage > 0) (info.memoryUsage / 1024 / 1024).toString() else ""
             parallelism = if (info.parallelism > 0) info.parallelism.toString() else ""
             isCompressionEnabled = info.isCompressionEnabled
         }
@@ -152,21 +152,18 @@ fun DatabaseSettingsScreen(
     }
 
     fun save() {
-        when {
-            oldPassword.isBlank() -> status = "请输入当前主密码"
-            newPassword.isBlank() -> status = "请输入新主密码"
-            newPassword != confirmPassword -> status = "两次新主密码不一致"
-            kdfEngineName == "AES" && keyRounds.toLongOrNull() == null -> status = "轮数必须为数字"
-            kdfEngineName != "AES" -> {
-                when {
-                    memoryUsageMb.toLongOrNull()?.let { it > 0 } != true -> status = "内存占用必须为正数"
-                    parallelism.toLongOrNull()?.let { it > 0 } != true -> status = "并行度必须为正数"
-                    keyRounds.toLongOrNull()?.let { it > 0 } != true -> status = "迭代次数必须为正数"
-                }
-            }
-            else -> status = ""
+        val error = when {
+            oldPassword.isBlank() -> "请输入当前主密码"
+            newPassword.isBlank() -> "请输入新主密码"
+            newPassword != confirmPassword -> "两次新主密码不一致"
+            kdfEngineName == "AES" && keyRounds.toLongOrNull() == null -> "轮数必须为数字"
+            kdfEngineName != "AES" && memoryUsageMb.toLongOrNull()?.let { it > 0 } != true -> "内存占用必须为正数"
+            kdfEngineName != "AES" && parallelism.toLongOrNull()?.let { it > 0 } != true -> "并行度必须为正数"
+            kdfEngineName != "AES" && keyRounds.toLongOrNull()?.let { it > 0 } != true -> "迭代次数必须为正数"
+            else -> ""
         }
-        if (status.isNotBlank()) {
+        status = error
+        if (error.isNotBlank()) {
             return
         }
         coroutineScope.launch {

@@ -587,11 +587,26 @@ class KdbxTokenRepository(context: Context) {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val recycleBin = db.recycleBin ?: return@withDatabase 0
             var deleted = 0
+            // 已处理过的回收站分组，避免同组多条条目重复删除
+            val deletedGroups = mutableSetOf<Long>()
             entryIds.forEach { entryId ->
                 val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
                     ?: return@forEach
                 val parent = entry.parent ?: return@forEach
                 if (recycleBin != parent) {
+                    // 条目位于被回收的分组内：整组永久删除（其条目无法单独恢复）
+                    var recycledGroup: Group? = parent
+                    while (recycledGroup?.parent != null && recycledGroup.parent != recycleBin) {
+                        recycledGroup = recycledGroup.parent
+                    }
+                    if (recycledGroup != null && recycledGroup.parent == recycleBin) {
+                        val groupId = toStableGroupId(recycledGroup)
+                        if (groupId !in deletedGroups) {
+                            deletedGroups.add(groupId)
+                            db.deleteGroup(recycledGroup)
+                            deleted++
+                        }
+                    }
                     return@forEach
                 }
                 // 先移除条目再清理附件：removeUnlinkedAttachments 只清理无条目引用的孤儿二进制

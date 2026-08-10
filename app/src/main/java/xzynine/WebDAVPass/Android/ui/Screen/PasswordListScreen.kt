@@ -131,7 +131,7 @@ fun PasswordListScreen(
     var sortModeOrdinal by rememberSaveable { mutableStateOf(PasswordSortMode.DEFAULT.ordinal) }
     var sortAscending by rememberSaveable { mutableStateOf(true) }
     var hideExpired by rememberSaveable { mutableStateOf(false) }
-    val sortMode = PasswordSortMode.entries[sortModeOrdinal]
+    val sortMode = PasswordSortMode.entries.getOrElse(sortModeOrdinal) { PasswordSortMode.DEFAULT }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val allowWriteActions = enableGroupNavigation || enableRecycleBinActions
