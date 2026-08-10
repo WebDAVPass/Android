@@ -2,7 +2,7 @@ package xzynine.WebDAVPass.Android.ui.Screen
 
 import android.app.Activity
 import android.net.Uri
-import android.provider.OpenableColumns
+
 import xzylib.base.util.ToastUtils
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -76,6 +76,7 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 import xzynine.WebDAVPass.Android.util.DateTimeFormatter
+import xzynine.WebDAVPass.Android.util.resolveDisplayName
 
 /** 密钥文件大小上限（1 MiB），与 CreateMasterPasswordDialog 保持一致。 */
 private const val MAX_KEY_FILE_BYTES = 1024 * 1024
@@ -611,27 +612,6 @@ fun WelcomeScreen(
         )
     }
 
-    /**
-     * 解析 Uri 展示名称。
-     */
-    fun resolveUriDisplayName(uri: Uri): String {
-        val cursor = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?: return uri.lastPathSegment ?: "未命名.kdbx"
-        return try {
-            if (!cursor.moveToFirst()) {
-                return uri.lastPathSegment ?: "未命名.kdbx"
-            }
-            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (index < 0 || cursor.isNull(index)) {
-                uri.lastPathSegment ?: "未命名.kdbx"
-            } else {
-                cursor.getString(index).ifBlank { uri.lastPathSegment ?: "未命名.kdbx" }
-            }
-        } finally {
-            cursor.close()
-        }
-    }
-
     LaunchedEffect(pendingUnlockLibrary?.id, inlineUnlockFocusNonce) {
         if (pendingUnlockLibrary != null) {
             inlineUnlockFocusRequester.requestFocus()
@@ -663,7 +643,7 @@ fun WelcomeScreen(
                     return@launch
                 }
 
-                val displayName = resolveUriDisplayName(uri)
+                val displayName = uri.resolveDisplayName(context, fallbackIfEmpty = "未命名.kdbx")
 
                 val item = LibraryContext(
                     displayName = displayName,
@@ -689,7 +669,7 @@ fun WelcomeScreen(
                     return@launch
                 }
 
-                val displayName = resolveUriDisplayName(uri)
+                val displayName = uri.resolveDisplayName(context, fallbackIfEmpty = "未命名.kdbx")
 
                 val item = LibraryContext(
                     displayName = displayName,
@@ -739,7 +719,7 @@ fun WelcomeScreen(
                     }
                     val bytes = buffer.toByteArray()
                     if (bytes.isNotEmpty()) {
-                        inlineKeyFileName = resolveUriDisplayName(uri)
+                        inlineKeyFileName = uri.resolveDisplayName(context, fallbackIfEmpty = "未命名.kdbx")
                         inlineKeyFileData = bytes
                     }
                 } ?: throw IllegalStateException("无法读取所选文件")
@@ -1185,18 +1165,7 @@ private suspend fun loadKeyFileFromUri(
     return withContext(kotlinx.coroutines.Dispatchers.IO) {
         runCatching {
             val uri = Uri.parse(uriString)
-            // 解析显示名：优先使用 OpenableColumns.DISPLAY_NAME，回退到 lastPathSegment
-            var name = "keyfile"
-            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-                ?.use { cursor ->
-                    if (cursor.moveToFirst()) {
-                        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                        if (index >= 0) {
-                            val displayName = cursor.getString(index)
-                            if (!displayName.isNullOrBlank()) name = displayName
-                        }
-                    }
-                }
+            val name = uri.resolveDisplayName(context, fallbackIfEmpty = "keyfile")
             context.contentResolver.openInputStream(uri)?.use { input ->
                 val buffer = java.io.ByteArrayOutputStream(8 * 1024)
                 val chunk = ByteArray(8 * 1024)

@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.sp
 import android.content.Intent
 import android.widget.Toast
 import android.net.Uri
-import android.provider.OpenableColumns
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -42,6 +41,7 @@ import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.util.PasswordStrength
+import xzynine.WebDAVPass.Android.util.resolveDisplayName
 import xzynine.WebDAVPass.Android.util.strengthLabel
 import java.io.ByteArrayOutputStream
 
@@ -116,7 +116,7 @@ fun CreateMasterPasswordDialog(
                 }
                 val bytes = buffer.toByteArray()
                 if (bytes.isNotEmpty()) {
-                    keyFileName = resolveDisplayName(context, uri)
+                    keyFileName = uri.resolveDisplayName(context, fallbackIfEmpty = "keyfile")
                     keyFileData = bytes
                     keyFileUri = uri.toString()
                 }
@@ -255,19 +255,4 @@ fun CreateMasterPasswordDialog(
     }
 }
 
-/**
- * 使用 [OpenableColumns.DISPLAY_NAME] 解析 URI 显示名，回退到 lastPathSegment。
- */
-private fun resolveDisplayName(context: android.content.Context, uri: Uri): String {
-    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-        ?.use { cursor ->
-            if (cursor.moveToFirst()) {
-                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                if (index >= 0) {
-                    val name = cursor.getString(index)
-                    if (!name.isNullOrBlank()) return name
-                }
-            }
-        }
-    return uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "keyfile"
-}
+

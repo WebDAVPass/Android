@@ -1,6 +1,8 @@
 package xzynine.WebDAVPass.Android.util
 
+import android.content.Context
 import android.net.Uri
+import android.provider.OpenableColumns
 import okhttp3.MediaType
 import okhttp3.RequestBody
 import okio.BufferedSink
@@ -36,4 +38,30 @@ fun Uri.toRequestBody(contentType: MediaType? = null): RequestBody {
             }
         }
     }
+}
+
+/**
+ * 通过 ContentResolver 查询 [OpenableColumns.DISPLAY_NAME] 获取 URI 展示名称；
+ * 查询失败或名称为空时回退到 `uri.lastPathSegment`，最后回退到 [fallbackIfEmpty]。
+ *
+ * 原来在 WelcomeScreen / CreateMasterPasswordDialog 中内联了三份相同逻辑，统一到此扩展函数。
+ */
+fun Uri.resolveDisplayName(
+    context: Context,
+    fallbackIfEmpty: String = "未命名"
+): String {
+    val queried = runCatching {
+        context.contentResolver.query(this, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+            ?.use { cursor ->
+                if (cursor.moveToFirst()) {
+                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                    if (index >= 0 && !cursor.isNull(index)) {
+                        cursor.getString(index)?.takeIf { it.isNotBlank() }
+                    } else null
+                } else null
+            }
+    }.getOrNull()
+    return queried
+        ?: this.lastPathSegment?.takeIf { it.isNotBlank() }
+        ?: fallbackIfEmpty
 }
