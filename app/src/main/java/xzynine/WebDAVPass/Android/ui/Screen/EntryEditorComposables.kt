@@ -22,11 +22,13 @@ import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
@@ -118,20 +120,28 @@ fun CustomFieldsEditor(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.End
                     ) {
+                        if (field.isProtected) {
+                            Icon(
+                                imageVector = MiuixIcons.Lock,
+                                contentDescription = "已保护",
+                                tint = MiuixTheme.colorScheme.primary,
+                                modifier = Modifier.padding(end = 4.dp)
+                            )
+                        }
                         Text(
                             text = "受保护",
                             fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            color = if (field.isProtected) MiuixTheme.colorScheme.primary
+                            else MiuixTheme.colorScheme.onSurfaceSecondary
                         )
-                        Button(
-                            onClick = {
+                        Switch(
+                            checked = field.isProtected,
+                            onCheckedChange = { checked ->
                                 onFieldsChange(fields.toMutableList().apply {
-                                    this[index] = field.copy(isProtected = !field.isProtected)
+                                    this[index] = field.copy(isProtected = checked)
                                 })
                             }
-                        ) {
-                            Text(if (field.isProtected) "取消保护" else "设为保护")
-                        }
+                        )
                         IconButton(
                             onClick = {
                                 onFieldsChange(fields.filterIndexed { i, _ -> i != index })
