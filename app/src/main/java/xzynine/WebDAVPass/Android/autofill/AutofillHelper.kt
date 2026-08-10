@@ -62,8 +62,10 @@ object AutofillHelper {
             val intent = Intent(context, AutofillPickerActivity::class.java).apply {
                 putExtra(KEY_PENDING_INTENT_BUNDLE, tempBundle)
             }
+            // 注册意图在创建时已写入专用 Bundle，系统无需补充字段；
+            // 使用 FLAG_IMMUTABLE 收紧权限，避免接收方修改未设置的 Intent 字段。
             val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
             } else {
                 PendingIntent.FLAG_CANCEL_CURRENT
             }
