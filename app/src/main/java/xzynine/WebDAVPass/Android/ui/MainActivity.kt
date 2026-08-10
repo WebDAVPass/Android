@@ -279,6 +279,7 @@ fun MainScreen() {
                             emptyStateText = if (listMode == PasswordListMode.RECENT_DELETED) "暂无最近删除条目" else "暂无条目",
                             emptySearchStateText = "无匹配条目",
                             enableGroupNavigation = listMode == PasswordListMode.ALL_PASSWORDS,
+                            enableRecycleBinActions = listMode == PasswordListMode.RECENT_DELETED,
                             onEntryClick = { entryId ->
                                 navigator.push(Route.PasswordEntryDetail(entryId))
                             },

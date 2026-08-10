@@ -441,4 +441,50 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         }
         return deleted
     }
+
+    /**
+     * 从回收站批量恢复条目。
+     */
+    suspend fun restoreRecentDeletedPasswordEntries(
+        entryIds: List<Long>,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): Int {
+        if (entryIds.isEmpty()) {
+            return 0
+        }
+        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
+        if (!access.isReady()) {
+            return 0
+        }
+
+        val path = access.localPath ?: return 0
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.restoreRecentDeletedPasswordEntries(path, access.masterPassword, entryIds)
+        }
+    }
+
+    /**
+     * 从回收站批量永久删除条目。
+     */
+    suspend fun permanentlyDeleteRecentDeletedPasswordEntries(
+        entryIds: List<Long>,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): Int {
+        if (entryIds.isEmpty()) {
+            return 0
+        }
+        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
+        if (!access.isReady()) {
+            return 0
+        }
+
+        val path = access.localPath ?: return 0
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.permanentlyDeleteRecentDeletedPasswordEntries(path, access.masterPassword, entryIds)
+        }
+    }
 }

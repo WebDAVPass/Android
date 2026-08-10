@@ -471,6 +471,38 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 从回收站批量恢复条目。
+     */
+    suspend fun restoreRecentDeletedPasswordEntries(entryIds: List<Long>): Int {
+        val restored = passwordViewModel.restoreRecentDeletedPasswordEntries(
+            entryIds,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+        if (restored > 0) {
+            onPasswordWriteSuccess()
+        }
+        return restored
+    }
+
+    /**
+     * 从回收站批量永久删除条目。
+     */
+    suspend fun permanentlyDeleteRecentDeletedPasswordEntries(entryIds: List<Long>): Int {
+        val deleted = passwordViewModel.permanentlyDeleteRecentDeletedPasswordEntries(
+            entryIds,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+        if (deleted > 0) {
+            onPasswordWriteSuccess()
+        }
+        return deleted
+    }
+
+    /**
      * 写入成功后的统一刷新链路。
      */
     private fun onPasswordWriteSuccess() {

@@ -62,6 +62,7 @@ import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -99,6 +100,7 @@ fun PasswordListScreen(
     emptyStateText: String,
     emptySearchStateText: String,
     enableGroupNavigation: Boolean,
+    enableRecycleBinActions: Boolean = false,
     onEntryClick: (Long) -> Unit,
     onNavigateBack: () -> Unit
 ) {
@@ -112,13 +114,14 @@ fun PasswordListScreen(
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
-    val allowWriteActions = enableGroupNavigation
+    val allowWriteActions = enableGroupNavigation || enableRecycleBinActions
     val isSelectionMode = remember { mutableStateOf(false) }
     val selectedTargets = remember { mutableStateMapOf<Long, Boolean>() }
 
     val showCreateEntryDialog = remember { mutableStateOf(false) }
     val showCreateGroupDialog = remember { mutableStateOf(false) }
     val showDeleteDialog = remember { mutableStateOf(false) }
+    val showPermanentDeleteDialog = remember { mutableStateOf(false) }
 
     var createEntryTitle by remember { mutableStateOf("") }
     var createEntryUsername by remember { mutableStateOf("") }
@@ -133,6 +136,23 @@ fun PasswordListScreen(
         selectedTargets.clear()
         isSelectionMode.value = false
         showDeleteDialog.value = false
+        showPermanentDeleteDialog.value = false
+    }
+
+    fun restoreSelectedEntries() {
+        coroutineScope.launch {
+            val targets = selectedTargets.keys.toList()
+            if (targets.isEmpty()) {
+                return@launch
+            }
+            val restored = tokenViewModel.restoreRecentDeletedPasswordEntries(targets)
+            if (restored > 0) {
+                ToastUtils.showShortToast(context, "已恢复 $restored 项")
+            } else {
+                ToastUtils.showShortToast(context, "恢复失败")
+            }
+            clearSelectionMode()
+        }
     }
 
     fun toggleSelection(item: PasswordEntry) {
@@ -288,8 +308,43 @@ fun PasswordListScreen(
                     }
                 },
                 actions = {
-                    if (allowWriteActions) {
-                        if (isSelectionMode.value) {
+                    if (isSelectionMode.value) {
+                        if (enableRecycleBinActions) {
+                            IconButton(
+                                onClick = {
+                                    if (selectedTargets.isNotEmpty()) {
+                                        restoreSelectedEntries()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Undo,
+                                    contentDescription = "恢复"
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (selectedTargets.isNotEmpty()) {
+                                        showPermanentDeleteDialog.value = true
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Delete,
+                                    contentDescription = "永久删除"
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    clearSelectionMode()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Close,
+                                    contentDescription = "取消选择"
+                                )
+                            }
+                        } else if (allowWriteActions) {
                             IconButton(
                                 onClick = {
                                     if (selectedTargets.isNotEmpty()) {
@@ -312,27 +367,27 @@ fun PasswordListScreen(
                                     contentDescription = "取消选择"
                                 )
                             }
-                        } else {
-                            IconButton(
-                                onClick = {
-                                    showCreateEntryDialog.value = true
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Add,
-                                    contentDescription = "新建条目"
-                                )
+                        }
+                    } else if (allowWriteActions) {
+                        IconButton(
+                            onClick = {
+                                showCreateEntryDialog.value = true
                             }
-                            IconButton(
-                                onClick = {
-                                    showCreateGroupDialog.value = true
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.AddFolder,
-                                    contentDescription = "新建分组"
-                                )
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Add,
+                                contentDescription = "新建条目"
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                showCreateGroupDialog.value = true
                             }
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.AddFolder,
+                                contentDescription = "新建分组"
+                            )
                         }
                     }
                 },
@@ -563,7 +618,7 @@ fun PasswordListScreen(
         }
     )
 
-    if (allowWriteActions && isSelectionMode.value && selectedTargets.isNotEmpty()) {
+    if (allowWriteActions && !enableRecycleBinActions && isSelectionMode.value && selectedTargets.isNotEmpty()) {
         ConfirmationDialog(
             title = "确认删除",
             summary = "已选 ${selectedTargets.size} 项，将移入回收站。",
@@ -582,6 +637,31 @@ fun PasswordListScreen(
                         } else {
                             tokenViewModel.deletePasswordEntry(entryId)
                         }
+                    }
+                    clearSelectionMode()
+                }
+            }
+        )
+    }
+
+    if (enableRecycleBinActions && isSelectionMode.value && selectedTargets.isNotEmpty()) {
+        ConfirmationDialog(
+            title = "确认永久删除",
+            summary = "已选 ${selectedTargets.size} 项将从回收站永久删除，且不可恢复。",
+            show = showPermanentDeleteDialog,
+            onDismiss = {
+                showPermanentDeleteDialog.value = false
+            },
+            confirmButtonText = "永久删除",
+            isDestructive = true,
+            onConfirm = {
+                coroutineScope.launch {
+                    val targets = selectedTargets.keys.toList()
+                    val deleted = tokenViewModel.permanentlyDeleteRecentDeletedPasswordEntries(targets)
+                    if (deleted > 0) {
+                        ToastUtils.showShortToast(context, "已永久删除 $deleted 项")
+                    } else {
+                        ToastUtils.showShortToast(context, "删除失败")
                     }
                     clearSelectionMode()
                 }

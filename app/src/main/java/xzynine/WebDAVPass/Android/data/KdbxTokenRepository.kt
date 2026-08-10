@@ -443,7 +443,9 @@ class KdbxTokenRepository(context: Context) {
             if (!db.canRecycle(entry)) {
                 return@withDatabase false
             }
+            val oldParent = entry.parent
             db.recycle(entry, resolveRecycleBinTitle(db))
+            entry.setPreviousParentGroup(oldParent)
             true
         }
     }
@@ -518,8 +520,62 @@ class KdbxTokenRepository(context: Context) {
             if (!db.canRecycle(group)) {
                 return@withDatabase false
             }
+            val oldParent = group.parent
             db.recycle(group, resolveRecycleBinTitle(db))
+            group.setPreviousParentGroup(oldParent)
             true
+        }
+    }
+
+    /**
+     * 从回收站批量恢复条目到原分组，原分组已不存在时恢复到根分组。
+     *
+     * @return 成功恢复的数量
+     */
+    fun restoreRecentDeletedPasswordEntries(localPath: String, masterPassword: String, entryIds: List<Long>): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val recycleBin = db.recycleBin ?: return@withDatabase 0
+            var restored = 0
+            entryIds.forEach { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
+                    ?: return@forEach
+                val parent = entry.parent ?: return@forEach
+                if (recycleBin != parent) {
+                    return@forEach
+                }
+                val target = findGroupByUuid(db.rootGroup, entry.previousParentGroup)
+                    ?: db.rootGroup
+                    ?: return@withDatabase restored
+                db.undoRecycle(entry, target)
+                restored++
+            }
+            restored
+        }
+    }
+
+    /**
+     * 从回收站批量永久删除条目。
+     *
+     * @return 成功删除的数量
+     */
+    fun permanentlyDeleteRecentDeletedPasswordEntries(localPath: String, masterPassword: String, entryIds: List<Long>): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val recycleBin = db.recycleBin ?: return@withDatabase 0
+            var deleted = 0
+            entryIds.forEach { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
+                    ?: return@forEach
+                val parent = entry.parent ?: return@forEach
+                if (recycleBin != parent) {
+                    return@forEach
+                }
+                entry.getAttachments(db.attachmentPool).forEach { attachment ->
+                    db.removeAttachmentIfNotUsed(attachment)
+                }
+                db.deleteEntry(entry)
+                deleted++
+            }
+            deleted
         }
     }
 
@@ -1027,6 +1083,26 @@ class KdbxTokenRepository(context: Context) {
 
     private fun resolveRecycleBinTitle(database: Database): String {
         return database.recycleBin?.title?.takeIf { it.isNotBlank() } ?: RECYCLE_BIN_FALLBACK_TITLE
+    }
+
+    /**
+     * 按节点 UUID 查找分组（含自身），用于恢复条目到原分组。
+     */
+    private fun findGroupByUuid(group: Group?, uuid: java.util.UUID): Group? {
+        if (group == null) {
+            return null
+        }
+        val groupUuid = (group.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
+        if (groupUuid != null && groupUuid == uuid) {
+            return group
+        }
+        group.getChildGroups().forEach { child ->
+            val matched = findGroupByUuid(child, uuid)
+            if (matched != null) {
+                return matched
+            }
+        }
+        return null
     }
 
     /**
