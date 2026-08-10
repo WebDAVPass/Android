@@ -114,6 +114,7 @@ fun PasswordEntryDetailScreen(
     var editPassword by rememberSaveable(entryId) { mutableStateOf("") }
     var editUrl by rememberSaveable(entryId) { mutableStateOf("") }
     var editNotes by rememberSaveable(entryId) { mutableStateOf("") }
+    var editTagsText by rememberSaveable(entryId) { mutableStateOf("") }
 
     // 附件 / 自定义字段 / 过期时间 / 图标（编辑态）
     // 注意：附件含 ByteArray，不能用 rememberSaveable（无法序列化）
@@ -156,6 +157,7 @@ fun PasswordEntryDetailScreen(
         editExpiryTime = entry.expiryTime
         editIconStandardId = entry.standardIconId
         editCustomIconUuid = entry.customIconUuid
+        editTagsText = entry.tags.joinToString(", ")
     }
 
     LaunchedEffect(entryId) {
@@ -255,6 +257,7 @@ fun PasswordEntryDetailScreen(
                                                 password = editPassword,
                                                 url = editUrl.trim(),
                                                 notes = editNotes,
+                                                tags = parseTagsText(editTagsText),
                                                 customFields = editCustomFields,
                                                 attachments = editAttachments,
                                                 expiryTime = editExpiryTime,
@@ -602,6 +605,44 @@ fun PasswordEntryDetailScreen(
                                 modifier = Modifier.fillMaxWidth(),
                                 onClick = {}
                             )
+                        }
+
+                        if (isEditing) {
+                            TextField(
+                                value = editTagsText,
+                                onValueChange = { editTagsText = it },
+                                label = "标签（逗号分隔）",
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        } else if (entry.tags.isNotEmpty()) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                entry.tags.forEach { tag ->
+                                    Card(
+                                        modifier = Modifier,
+                                        colors = CardDefaults.defaultColors(
+                                            color = MiuixTheme.colorScheme.primary.copy(alpha = 0.12f)
+                                        ),
+                                        cornerRadius = 12.dp,
+                                        pressFeedbackType = PressFeedbackType.None,
+                                        showIndication = false,
+                                        onClick = {}
+                                    ) {
+                                        Text(
+                                            text = tag,
+                                            fontSize = 12.sp,
+                                            color = MiuixTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -978,6 +1019,16 @@ private fun openUrl(context: Context, rawUrl: String) {
     }.onFailure {
         ToastUtils.showShortToast(context, "网址无法打开")
     }
+}
+
+/**
+ * 将逗号/分号分隔的标签文本解析为去重后的标签列表。
+ */
+private fun parseTagsText(text: String): List<String> {
+    return text.split(',', ';')
+        .map { it.trim() }
+        .filter { it.isNotEmpty() }
+        .distinct()
 }
 
 private fun isOtpField(item: RemainingKeyValue): Boolean {

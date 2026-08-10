@@ -68,7 +68,8 @@ data class PasswordEntryEditDraft(
     val attachments: List<EditableAttachmentDraft> = emptyList(),
     val expiryTime: Long? = null,
     val customIconUuid: String? = null,
-    val iconStandardId: Int = 0
+    val iconStandardId: Int = 0,
+    val tags: List<String> = emptyList()
 )
 
 /**

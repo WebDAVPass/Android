@@ -803,6 +803,7 @@ private fun PasswordEntryEditorDialog(
     var entryPassword by remember { mutableStateOf(initialDraft.password) }
     var entryUrl by remember { mutableStateOf(initialDraft.url) }
     var entryNotes by remember { mutableStateOf(initialDraft.notes) }
+    var entryTagsText by remember { mutableStateOf(initialDraft.tags.joinToString(", ")) }
     var customFields by remember { mutableStateOf(initialDraft.customFields) }
     var attachments by remember { mutableStateOf(initialDraft.attachments.map { it.copy() }) }
     var expiryTime by remember { mutableStateOf(initialDraft.expiryTime) }
@@ -816,6 +817,7 @@ private fun PasswordEntryEditorDialog(
             entryPassword = initialDraft.password
             entryUrl = initialDraft.url
             entryNotes = initialDraft.notes
+            entryTagsText = initialDraft.tags.joinToString(", ")
             customFields = initialDraft.customFields
             attachments = initialDraft.attachments.map { it.copy() }
             expiryTime = initialDraft.expiryTime
@@ -896,6 +898,12 @@ private fun PasswordEntryEditorDialog(
                 value = entryNotes,
                 onValueChange = { entryNotes = it },
                 label = "备注",
+                modifier = Modifier.fillMaxWidth()
+            )
+            TextField(
+                value = entryTagsText,
+                onValueChange = { entryTagsText = it },
+                label = "标签（逗号分隔）",
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -983,6 +991,10 @@ private fun PasswordEntryEditorDialog(
                                 password = entryPassword,
                                 url = entryUrl.trim(),
                                 notes = entryNotes,
+                                tags = entryTagsText.split(',', ';')
+                                    .map { it.trim() }
+                                    .filter { it.isNotEmpty() }
+                                    .distinct(),
                                 customFields = customFields,
                                 attachments = attachments,
                                 expiryTime = expiryTime,

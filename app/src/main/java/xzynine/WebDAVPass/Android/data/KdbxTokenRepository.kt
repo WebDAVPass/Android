@@ -13,6 +13,7 @@ import com.kunzisoft.keepass.database.element.icon.IconImage
 import com.kunzisoft.keepass.database.element.Group
 import com.kunzisoft.keepass.database.element.MasterCredential
 import com.kunzisoft.keepass.database.element.database.DatabaseVersioned
+import com.kunzisoft.keepass.database.element.Tags
 import com.kunzisoft.keepass.database.element.security.ProtectedString
 import com.kunzisoft.keepass.hardware.HardwareKey
 import com.kunzisoft.keepass.model.EntryInfo
@@ -287,7 +288,8 @@ class KdbxTokenRepository(context: Context) {
                 attachments = attachments,
                 expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
                 customIconUuid = customIconUuid,
-                iconStandardId = entry.icon.standard.id
+                iconStandardId = entry.icon.standard.id,
+                tags = entry.tags.toList()
             )
         }
     }
@@ -382,6 +384,7 @@ class KdbxTokenRepository(context: Context) {
                 password = draft.password
                 url = draft.url
                 notes = draft.notes
+                tags = draft.tags.toTags()
                 customFields = mergeCustomFields(db, entry, draft.customFields)
                 attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
                 applyExpiryAndIcon(this, db, draft)
@@ -407,6 +410,7 @@ class KdbxTokenRepository(context: Context) {
                 password = draft.password
                 url = draft.url
                 notes = draft.notes
+                tags = draft.tags.toTags()
                 customFields = mergeCustomFields(db, entry, draft.customFields)
                 attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
                 applyExpiryAndIcon(this, db, draft)
@@ -1057,6 +1061,13 @@ class KdbxTokenRepository(context: Context) {
         }
 
         return values.sortedBy { it.fieldName.lowercase() }
+    }
+
+    /**
+     * 将字符串列表转换为 KDBX Tags。
+     */
+    private fun List<String>.toTags(): Tags = Tags().apply {
+        this@toTags.forEach { tag -> put(tag) }
     }
 
     private fun collectEntries(group: Group?): List<Entry> {
