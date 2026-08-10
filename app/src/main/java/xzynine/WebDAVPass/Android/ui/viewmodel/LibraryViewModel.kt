@@ -14,7 +14,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * 库视图模型
@@ -50,6 +52,13 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     private var currentLibraryMasterPassword: String = ""
     private var isCurrentLibraryMasterPasswordManualVerified: Boolean = false
     private var lastUnlockErrorMessage: String? = null
+
+    /**
+     * 正在进行的「缓存丢失后异步重建」任务（若有）。
+     * 原子引用保证多线程并发调用 getMasterPasswordInternal 时只启动一次 IO 协程，
+     * 避免重复跑 KDF（Argon2 64MB+ 代价高）。
+     */
+    private val cacheRebuildJobRef: AtomicReference<Job?> = AtomicReference(null)
 
     init {
         refreshLibraryHistory()
@@ -270,6 +279,8 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
      * 重置解锁状态
      */
     private fun resetUnlockState() {
+        // 取消可能正在进行的缓存重建，避免切库后仍为旧库跑 KDF 或完成后污染状态
+        cacheRebuildJobRef.getAndSet(null)?.cancel()
         currentLibraryMasterPassword = ""
         isCurrentLibraryMasterPasswordManualVerified = false
         _isLibraryUnlocked.value = false
@@ -289,38 +300,71 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     /**
      * 获取主密码（内部使用）
      *
-     * 防御性检查：若 UI 仍显示"已解锁"但数据库缓存已失效（如合并/保存失败路径调用了
-     * [DatabaseManager.invalidateCacheKeepKeyFile]），在调用方真正需要凭据前，
-     * 用已有的内存密码 + 已保留的密钥文件静默重建缓存；若重建失败则回落锁定态。
+     * 若 UI 仍显示"已解锁"但数据库缓存已失效（合并/改密失败路径调用了
+     * [DatabaseManager.invalidateCacheKeepKeyFile]），会立刻在 **IO 后台协程**
+     * 调度一次缓存重建，避免在调用方线程（尤其 Main 线程）上同步执行
+     * Argon2/AES-KDF 造成数秒卡顿甚至 ANR。
+     *
+     * 本函数本身**不挂起、不阻塞**：立即返回内存中的主密码给调用方。
+     * 即使后台重建尚未完成，后续 `withDatabase` 在 IO 上下文内仍会自行
+     * 打开磁盘文件完成操作，只是暂时没有缓存命中。
      */
     internal fun getMasterPasswordInternal(): String {
-        if (_isLibraryUnlocked.value && !DatabaseManager.isOpen()) {
-            val localPath = _currentLibrary.value?.localPath
-            if (!localPath.isNullOrBlank() && currentLibraryMasterPassword.isNotBlank()) {
-                // 缓存失效但凭据仍在：尝试静默重建缓存，不强制用户重新解锁。
-                // 重建失败不抛异常——后续 withDatabase 仍可自行打开/关闭，
-                // 只是无法享受缓存加速；极端情况下再回落锁定态。
+        scheduleCacheRebuildIfNeeded()
+        return currentLibraryMasterPassword
+    }
+
+    /**
+     * 当缓存已失效但凭据仍在时，在后台 IO 协程中重建缓存。
+     *
+     * - 并发安全：[cacheRebuildJobRef] 原子引用保证只启动一个重建协程。
+     * - 非阻塞：调用后立即返回，不会在调用方线程上跑 KDF。
+     * - 失败回落：重建失败则把 UI 切回锁定态，但仍保留密钥文件凭据。
+     *
+     * 可在已知缓存即将失效的时机（如合并/改密失败后）主动调用，
+     * 作为「惰性异步预重建」——多数情况下用户下一次操作前缓存已就绪。
+     */
+    fun scheduleCacheRebuildIfNeeded() {
+        if (!_isLibraryUnlocked.value || DatabaseManager.isOpen()) return
+        val localPath = _currentLibrary.value?.localPath
+        if (localPath.isNullOrBlank() || currentLibraryMasterPassword.isBlank()) return
+
+        // 尝试原子地占用「重建槽位」：已有 Job 在跑就跳过，避免重复 KDF。
+        val existing = cacheRebuildJobRef.get()
+        if (existing != null && existing.isActive) return
+        val newJob = viewModelScope.launch(Dispatchers.IO) {
+            try {
                 val rebuilt = runCatching {
-                    // 借用 validatePassword 的标准打开+缓存路径
+                    // validatePassword 内部会打开数据库并存入 DatabaseManager 缓存
                     KdbxTokenRepository(context).validatePassword(
                         localPath = localPath,
                         masterPassword = currentLibraryMasterPassword,
-                        keyFileData = null  // DatabaseManager 已保留 keyFileData，validatePassword 会读取
+                        keyFileData = null  // 已由 invalidateCacheKeepKeyFile 保留在 DatabaseManager 中
                     )
                 }.getOrDefault(false)
                 if (!rebuilt) {
-                    // 静默重建失败：回落至锁定态，避免 UI 显示"已解锁"但所有操作都失败
-                    Logger.w(
-                        "解锁状态",
-                        "数据库缓存丢失且静默重建失败，回落至锁定态: path=$localPath"
-                    )
-                    resetUnlockStateKeepKeyFile()
+                    // 重建失败（凭据失配/文件损坏/权限失效等）：切回锁定态
+                    // 切 StateFlow 须在 Main 线程；此处无 UI 副作用也可直接赋值，
+                    // 但保持一致用 Main dispatcher 更安全。
+                    withContext(Dispatchers.Main.immediate) {
+                        Logger.w(
+                            "解锁状态",
+                            "数据库缓存丢失且后台重建失败，回落至锁定态: path=$localPath"
+                        )
+                        resetUnlockStateKeepKeyFile()
+                    }
                 } else {
-                    Logger.d("解锁状态", "数据库缓存已静默重建: path=$localPath")
+                    Logger.d("解锁状态", "数据库缓存后台重建完成: path=$localPath")
                 }
+            } finally {
+                // Job 结束（无论成功/失败/取消）后清空引用，下次缓存失效时可再次调度
+                cacheRebuildJobRef.compareAndSet(cacheRebuildJobRef.get(), null)
             }
         }
-        return currentLibraryMasterPassword
+        if (!cacheRebuildJobRef.compareAndSet(existing, newJob)) {
+            // CAS 失败：另一线程刚完成 compareAndSet，取消我们刚创建的 Job
+            newJob.cancel()
+        }
     }
 
     /**
@@ -330,6 +374,8 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
      * 仍然有效（下次手动解锁时不要求用户重新选密钥文件），避免问题 #1 叠加。
      */
     private fun resetUnlockStateKeepKeyFile() {
+        // 取消可能正在进行的缓存重建，避免其结束后把已锁定的 UI 又改成已解锁
+        cacheRebuildJobRef.getAndSet(null)?.cancel()
         currentLibraryMasterPassword = ""
         isCurrentLibraryMasterPasswordManualVerified = false
         _isLibraryUnlocked.value = false
