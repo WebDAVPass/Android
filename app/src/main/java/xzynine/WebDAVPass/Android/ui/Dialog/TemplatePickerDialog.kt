@@ -202,6 +202,13 @@ private fun localizeTemplateLabel(label: String): String {
         "Private key" -> "私钥"
         "Seed" -> "助记词"
         "Account" -> "账户"
+        "CVV" -> "安全码(CVV)"
+        "PIN" -> "PIN码"
+        "BIC" -> "银行识别码(BIC)"
+        "IBAN" -> "国际银行账号(IBAN)"
+        "Standard" -> "标准"
+        "Template" -> "模板"
+        "Version" -> "版本"
         else -> label
     }
 }
