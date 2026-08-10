@@ -1016,6 +1016,8 @@ class KdbxTokenRepository(context: Context) {
                     isExpired = entry.expires && entry.isCurrentlyExpires,
                     customIconUuid = customIconUuid,
                     tags = entry.tags.toList(),
+                    creationTime = entry.creationTime.toMilliseconds(),
+                    modifiedTime = entry.lastModificationTime.toMilliseconds(),
                     isFolderGroup = false,
                     isFolderPlaceholder = false
                 )

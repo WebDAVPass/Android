@@ -64,6 +64,8 @@ data class PasswordEntry(
     val isExpired: Boolean = false,
     val customIconUuid: String? = null,
     val tags: List<String> = emptyList(),
+    val creationTime: Long = 0L,
+    val modifiedTime: Long = 0L,
     val isFolderGroup: Boolean = false,
     val isFolderPlaceholder: Boolean = false
 )

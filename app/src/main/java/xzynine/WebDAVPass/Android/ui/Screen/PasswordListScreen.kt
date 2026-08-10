@@ -55,6 +55,9 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
+import top.yukonga.miuix.kmp.basic.DropdownEntry
+import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.AddFolder
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -62,6 +65,7 @@ import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.Sort
 import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
@@ -76,6 +80,7 @@ import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
+import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordSortMode
 import xzynine.WebDAVPass.Android.ui.ViewModel.toPasswordIndexKey
 import androidx.compose.ui.platform.LocalContext
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar
@@ -113,6 +118,10 @@ fun PasswordListScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
     var searchCaseSensitive by rememberSaveable { mutableStateOf(false) }
+    var sortModeOrdinal by rememberSaveable { mutableStateOf(PasswordSortMode.DEFAULT.ordinal) }
+    var sortAscending by rememberSaveable { mutableStateOf(true) }
+    var hideExpired by rememberSaveable { mutableStateOf(false) }
+    val sortMode = PasswordSortMode.entries[sortModeOrdinal]
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val allowWriteActions = enableGroupNavigation || enableRecycleBinActions
@@ -220,19 +229,35 @@ fun PasswordListScreen(
         if (searchQuery.isNotBlank()) {
             // 搜索词非空：激活标志并触发搜索
             isSearchEverEnabled.value = true
-            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = searchQuery, caseSensitive = searchCaseSensitive)
+            tokenViewModel.passwordViewModel.refreshPasswordEntries(
+                searchQuery = searchQuery,
+                caseSensitive = searchCaseSensitive,
+                sortMode = sortMode,
+                ascending = sortAscending,
+                hideExpired = hideExpired
+            )
         } else if (isSearchEverEnabled.value) {
             // 搜索词被清空：恢复全量列表
-            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = "", caseSensitive = searchCaseSensitive)
+            tokenViewModel.passwordViewModel.refreshPasswordEntries(
+                searchQuery = "",
+                caseSensitive = searchCaseSensitive,
+                sortMode = sortMode,
+                ascending = sortAscending,
+                hideExpired = hideExpired
+            )
         }
         // 初次进入（searchQuery="" 且搜索未激活）：跳过，reloadInitialPasswordData 已完成加载
     }
 
-    // 切换区分大小写时按当前关键词重新搜索
-    LaunchedEffect(searchCaseSensitive) {
-        if (searchQuery.isNotBlank()) {
-            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = searchQuery, caseSensitive = searchCaseSensitive)
-        }
+    // 切换区分大小写/排序/过滤时按当前关键词重新搜索
+    LaunchedEffect(searchCaseSensitive, sortModeOrdinal, sortAscending, hideExpired) {
+        tokenViewModel.passwordViewModel.refreshPasswordEntries(
+            searchQuery = searchQuery,
+            caseSensitive = searchCaseSensitive,
+            sortMode = sortMode,
+            ascending = sortAscending,
+            hideExpired = hideExpired
+        )
     }
 
     LaunchedEffect(passwordGroupStack, searchQuery) {
@@ -376,26 +401,90 @@ fun PasswordListScreen(
                                 )
                             }
                         }
-                    } else if (allowWriteActions) {
-                        IconButton(
-                            onClick = {
-                                showCreateEntryDialog.value = true
-                            }
+                    } else {
+                        WindowIconDropdownMenu(
+                            entries = listOf(
+                                DropdownEntry(
+                                    items = listOf(
+                                        DropdownItem(
+                                            text = "默认",
+                                            selected = sortMode == PasswordSortMode.DEFAULT,
+                                            onClick = { sortModeOrdinal = PasswordSortMode.DEFAULT.ordinal }
+                                        ),
+                                        DropdownItem(
+                                            text = "标题",
+                                            selected = sortMode == PasswordSortMode.TITLE,
+                                            onClick = { sortModeOrdinal = PasswordSortMode.TITLE.ordinal }
+                                        ),
+                                        DropdownItem(
+                                            text = "账号",
+                                            selected = sortMode == PasswordSortMode.ACCOUNT,
+                                            onClick = { sortModeOrdinal = PasswordSortMode.ACCOUNT.ordinal }
+                                        ),
+                                        DropdownItem(
+                                            text = "修改时间",
+                                            selected = sortMode == PasswordSortMode.MODIFIED_TIME,
+                                            onClick = { sortModeOrdinal = PasswordSortMode.MODIFIED_TIME.ordinal }
+                                        ),
+                                        DropdownItem(
+                                            text = "创建时间",
+                                            selected = sortMode == PasswordSortMode.CREATED_TIME,
+                                            onClick = { sortModeOrdinal = PasswordSortMode.CREATED_TIME.ordinal }
+                                        )
+                                    )
+                                ),
+                                DropdownEntry(
+                                    items = listOf(
+                                        DropdownItem(
+                                            text = "升序",
+                                            selected = sortAscending,
+                                            onClick = { sortAscending = true }
+                                        ),
+                                        DropdownItem(
+                                            text = "降序",
+                                            selected = !sortAscending,
+                                            onClick = { sortAscending = false }
+                                        )
+                                    )
+                                ),
+                                DropdownEntry(
+                                    items = listOf(
+                                        DropdownItem(
+                                            text = "隐藏过期条目",
+                                            selected = hideExpired,
+                                            onClick = { hideExpired = !hideExpired }
+                                        )
+                                    )
+                                )
+                            ),
+                            collapseOnSelection = false
                         ) {
                             Icon(
-                                imageVector = MiuixIcons.Add,
-                                contentDescription = "新建条目"
+                                imageVector = MiuixIcons.Sort,
+                                contentDescription = "排序与过滤"
                             )
                         }
-                        IconButton(
-                            onClick = {
-                                showCreateGroupDialog.value = true
+                        if (enableGroupNavigation) {
+                            IconButton(
+                                onClick = {
+                                    showCreateEntryDialog.value = true
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Add,
+                                    contentDescription = "新建条目"
+                                )
                             }
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.AddFolder,
-                                contentDescription = "新建分组"
-                            )
+                            IconButton(
+                                onClick = {
+                                    showCreateGroupDialog.value = true
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.AddFolder,
+                                    contentDescription = "新建分组"
+                                )
+                            }
                         }
                     }
                 },

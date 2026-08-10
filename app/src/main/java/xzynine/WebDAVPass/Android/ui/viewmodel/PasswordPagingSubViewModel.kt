@@ -27,6 +27,13 @@ internal data class PasswordDataAccess(
 
 internal const val PasswordFolderIndexLabel = "文件夹"
 
+/**
+ * 密码列表排序方式。
+ */
+enum class PasswordSortMode {
+    DEFAULT, TITLE, ACCOUNT, MODIFIED_TIME, CREATED_TIME
+}
+
 internal class PasswordPagingSubViewModel(
     private val repository: KdbxTokenRepository,
     private val scope: CoroutineScope,
@@ -105,7 +112,13 @@ internal class PasswordPagingSubViewModel(
         }
     }
 
-    fun refreshPasswordEntries(searchQuery: String = "", caseSensitive: Boolean = false) {
+    fun refreshPasswordEntries(
+        searchQuery: String = "",
+        caseSensitive: Boolean = false,
+        sortMode: PasswordSortMode = PasswordSortMode.DEFAULT,
+        ascending: Boolean = true,
+        hideExpired: Boolean = false
+    ) {
         refreshJob?.cancel()
         refreshJob = scope.launch {
             val access = accessProvider()
@@ -157,7 +170,7 @@ internal class PasswordPagingSubViewModel(
 
             // 在 IO 线程完成排序/分组，避免主线程阻塞
             val sections = withContext(ioDispatcher) {
-                computeSections(source, keyword, caseSensitive)
+                computeSections(source, keyword, caseSensitive, sortMode, ascending, hideExpired)
             }
 
             pagingMutex.withLock {
@@ -309,15 +322,23 @@ internal class PasswordPagingSubViewModel(
      * 纯计算：对数据源进行过滤、排序、分组，返回有序分组列表。
      * 可在任意线程安全调用（无副作用）。
      */
-    private fun computeSections(source: List<PasswordEntry>, keyword: String, caseSensitive: Boolean = false): List<IndexedSection> {
+    private fun computeSections(
+        source: List<PasswordEntry>,
+        keyword: String,
+        caseSensitive: Boolean = false,
+        sortMode: PasswordSortMode = PasswordSortMode.DEFAULT,
+        ascending: Boolean = true,
+        hideExpired: Boolean = false
+    ): List<IndexedSection> {
         val values = source
             .asSequence()
             .filter { item ->
+                if (hideExpired && item.isExpired) {
+                    return@filter false
+                }
                 keyword.isBlank() || matchesKeyword(item, keyword, caseSensitive)
             }
-            .sortedBy { item ->
-                item.title.ifBlank { item.account }.lowercase()
-            }
+            .sortedWith(passwordEntryComparator(sortMode, ascending))
             .toList()
 
         return values
@@ -335,6 +356,21 @@ internal class PasswordPagingSubViewModel(
                 }
             )
             .map { (key, items) -> IndexedSection(key = key, items = items) }
+    }
+
+    /**
+     * 构造排序比较器：文件夹始终置前，再按选定键排序。
+     */
+    private fun passwordEntryComparator(sortMode: PasswordSortMode, ascending: Boolean): Comparator<PasswordEntry> {
+        val byKey: Comparator<PasswordEntry> = when (sortMode) {
+            PasswordSortMode.DEFAULT -> compareBy { it.title.ifBlank { it.account }.lowercase() }
+            PasswordSortMode.TITLE -> compareBy { it.title.lowercase() }
+            PasswordSortMode.ACCOUNT -> compareBy { it.account.lowercase() }
+            PasswordSortMode.MODIFIED_TIME -> compareBy { it.modifiedTime }
+            PasswordSortMode.CREATED_TIME -> compareBy { it.creationTime }
+        }
+        val keyComp = if (ascending) byKey else byKey.reversed()
+        return compareBy<PasswordEntry> { it.isFolderPlaceholder }.then(keyComp)
     }
 
     /**
