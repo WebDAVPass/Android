@@ -48,6 +48,7 @@ import xzynine.WebDAVPass.Android.ui.Dialog.PasswordInputDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.BuildConfig
 import github.xzynine.checkupdata.CheckUpdateManager
+import github.xzynine.checkupdata.model.UpdateResult
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -836,7 +837,31 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
         )
     }
 
-    when (val result = updateResult) {        is github.xzynine.checkupdata.model.UpdateResult.HasUpdate -> {
+    updateResult?.let { result ->
+        UpdateResultDialog(
+            result = result,
+            onDismiss = { updateResult = null }
+        )
+    }
+}
+
+/**
+ * 更新结果对话框。
+ *
+ * 将原 SettingsScreen 内三个分支重复的 ConfirmationDialog 结构集中到一处，
+ * 下载逻辑自包含协程，避免冗余的 `remember { mutableStateOf(true) }` 状态散落。
+ */
+@Composable
+private fun UpdateResultDialog(
+    result: UpdateResult,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val show = remember { mutableStateOf(true) }
+
+    when (result) {
+        is UpdateResult.HasUpdate -> {
             val release = result.releaseInfo
             val assetFilter: ((github.xzynine.checkupdata.model.ReleaseInfo.ReleaseAsset) -> Boolean)? = null
             ConfirmationDialog(
@@ -847,11 +872,11 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                         append("更新说明：\n${release.releaseNotes.take(500)}")
                     }
                 },
-                show = remember { mutableStateOf(true) },
-                onDismiss = { updateResult = null },
+                show = show,
+                onDismiss = onDismiss,
                 confirmButtonText = "下载更新",
                 onConfirm = {
-                    updateResult = null
+                    onDismiss()
                     coroutineScope.launch {
                         val downloadResult = CheckUpdateManager(context).downloadRelease(release, assetFilter = assetFilter)
                         when (downloadResult) {
@@ -865,28 +890,26 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
             )
         }
 
-        is github.xzynine.checkupdata.model.UpdateResult.NoUpdate -> {
+        is UpdateResult.NoUpdate -> {
             ConfirmationDialog(
                 title = "已是最新版本",
                 summary = "当前版本：${result.currentVersion}",
-                show = remember { mutableStateOf(true) },
-                onDismiss = { updateResult = null },
+                show = show,
+                onDismiss = onDismiss,
                 confirmButtonText = "确定",
-                onConfirm = { updateResult = null }
+                onConfirm = onDismiss
             )
         }
 
-        is github.xzynine.checkupdata.model.UpdateResult.Error -> {
+        is UpdateResult.Error -> {
             ConfirmationDialog(
                 title = "检查更新失败",
                 summary = result.message,
-                show = remember { mutableStateOf(true) },
-                onDismiss = { updateResult = null },
+                show = show,
+                onDismiss = onDismiss,
                 confirmButtonText = "确定",
-                onConfirm = { updateResult = null }
+                onConfirm = onDismiss
             )
         }
-
-        null -> {}
     }
 }
