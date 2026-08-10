@@ -202,6 +202,13 @@ class KeeAutofillService : AutofillService() {
                 ) {
                 Log.d(TAG, "autofill onSaveRequest password")
 
+                val passwordText = parseResult.passwordValue?.textValue?.toString()
+                // 密码为空时不拉起注册界面，避免保存无密码条目
+                if (passwordText.isNullOrEmpty()) {
+                    callback.onSuccess()
+                    return
+                }
+
                 val searchInfo = SearchInfo().apply {
                     applicationId = parseResult.applicationId
                     webScheme = parseResult.webScheme
@@ -210,7 +217,7 @@ class KeeAutofillService : AutofillService() {
                 val registerInfo = RegisterInfo(
                     searchInfo = searchInfo,
                     username = parseResult.usernameValue?.textValue?.toString(),
-                    password = parseResult.passwordValue?.textValue?.toString()
+                    password = passwordText
                 )
 
                 // 拉起注册界面：展示表单值并选择目标分组后创建条目
@@ -224,7 +231,7 @@ class KeeAutofillService : AutofillService() {
             }
         }
         if (!success) {
-            callback.onFailure("Saving form values is not allowed")
+            callback.onFailure("当前应用或网站已被加入黑名单，不允许保存表单")
         }
     }
 
