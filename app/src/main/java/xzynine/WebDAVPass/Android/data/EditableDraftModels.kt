@@ -69,6 +69,7 @@ data class PasswordEntryEditDraft(
     val expiryTime: Long? = null,
     val customIconUuid: String? = null,
     val iconStandardId: Int = 0,
+    val newCustomIconBytes: ByteArray? = null,
     val tags: List<String> = emptyList()
 )
 

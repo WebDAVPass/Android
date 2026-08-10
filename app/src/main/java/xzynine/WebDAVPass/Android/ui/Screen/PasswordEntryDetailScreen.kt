@@ -82,6 +82,7 @@ import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryHistoryDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
@@ -123,6 +124,8 @@ fun PasswordEntryDetailScreen(
     var editExpiryTime by remember(entryId) { mutableStateOf<Long?>(null) }
     var editIconStandardId by remember(entryId) { mutableStateOf(0) }
     var editCustomIconUuid by remember(entryId) { mutableStateOf<String?>(null) }
+    var editNewCustomIconBytes by remember(entryId) { mutableStateOf<ByteArray?>(null) }
+    var showIconPicker by remember { mutableStateOf(false) }
 
     fun syncEditFields(entry: PasswordEntry) {
         val usernameField = entry.keyValues.firstOrNull { it.fieldName.equals("UserName", ignoreCase = true) }
@@ -157,6 +160,7 @@ fun PasswordEntryDetailScreen(
         editExpiryTime = entry.expiryTime
         editIconStandardId = entry.standardIconId
         editCustomIconUuid = entry.customIconUuid
+        editNewCustomIconBytes = null
         editTagsText = entry.tags.joinToString(", ")
     }
 
@@ -262,7 +266,8 @@ fun PasswordEntryDetailScreen(
                                                 attachments = editAttachments,
                                                 expiryTime = editExpiryTime,
                                                 customIconUuid = editCustomIconUuid,
-                                                iconStandardId = editIconStandardId
+                                                iconStandardId = editIconStandardId,
+                                                newCustomIconBytes = editNewCustomIconBytes
                                             )
                                         )
                                         if (updated) {
@@ -616,6 +621,34 @@ fun PasswordEntryDetailScreen(
                                     .fillMaxWidth()
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { showIconPicker = true }
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    EntryIcon(
+                                        customIconBytes = editNewCustomIconBytes ?: entry.customIconBytes,
+                                        standardIconId = editIconStandardId,
+                                        primary = entry.account,
+                                        secondary = entry.title,
+                                        modifier = Modifier.size(36.dp)
+                                    )
+                                    Text(
+                                        text = "  选择图标",
+                                        fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.primary
+                                    )
+                                }
+                                Icon(
+                                    imageVector = MiuixIcons.Edit,
+                                    contentDescription = "选择图标",
+                                    tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                                )
+                            }
                         } else if (entry.tags.isNotEmpty()) {
                             Row(
                                 modifier = Modifier
@@ -957,6 +990,21 @@ fun PasswordEntryDetailScreen(
             }
         }
     )
+
+    if (showIconPicker) {
+        IconPickerDialog(
+            show = showIconPicker,
+            currentStandardIconId = editIconStandardId,
+            currentCustomIconBytes = editNewCustomIconBytes ?: selectedEntry?.customIconBytes,
+            onDismiss = { showIconPicker = false },
+            onPick = { standardId, bytes ->
+                editIconStandardId = standardId ?: 0
+                editCustomIconUuid = null
+                editNewCustomIconBytes = bytes
+                showIconPicker = false
+            }
+        )
+    }
 }
 
 @Composable

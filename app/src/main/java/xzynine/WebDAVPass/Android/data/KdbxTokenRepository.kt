@@ -1555,7 +1555,20 @@ class KdbxTokenRepository(context: Context) {
         } else {
             entryInfo.expires = false
         }
-        if (draft.customIconUuid == null) {
+        val newCustomIconBytes = draft.newCustomIconBytes
+        if (newCustomIconBytes != null) {
+            // 用户新选择的自定义图片：写入数据库自定义图标池
+            database.buildNewCustomIcon { customIcon, binary ->
+                if (customIcon != null && binary != null) {
+                    binary.getOutputDataStream(database.binaryCache).use { output ->
+                        output.write(newCustomIconBytes)
+                    }
+                    entryInfo.icon = IconImage(customIcon)
+                } else {
+                    entryInfo.icon = IconImage(database.getStandardIcon(draft.iconStandardId))
+                }
+            }
+        } else if (draft.customIconUuid == null) {
             entryInfo.icon = IconImage(database.getStandardIcon(draft.iconStandardId))
         }
     }

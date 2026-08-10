@@ -78,6 +78,7 @@ import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordSortMode
@@ -85,6 +86,7 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.toPasswordIndexKey
 import androidx.compose.ui.platform.LocalContext
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
+import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzylib.base.util.ToastUtils
 
 /** 附件导入大小上限（与仓库 SMALL_BINARY_SIZE 一致），防止无界读入内存导致 OOM。 */
@@ -809,6 +811,8 @@ private fun PasswordEntryEditorDialog(
     var expiryTime by remember { mutableStateOf(initialDraft.expiryTime) }
     var iconStandardId by remember { mutableStateOf(initialDraft.iconStandardId) }
     var customIconUuid by remember { mutableStateOf(initialDraft.customIconUuid) }
+    var newCustomIconBytes by remember { mutableStateOf<ByteArray?>(initialDraft.newCustomIconBytes) }
+    var showIconPicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(show.value) {
         if (show.value) {
@@ -823,6 +827,8 @@ private fun PasswordEntryEditorDialog(
             expiryTime = initialDraft.expiryTime
             iconStandardId = initialDraft.iconStandardId
             customIconUuid = initialDraft.customIconUuid
+            newCustomIconBytes = initialDraft.newCustomIconBytes
+            showIconPicker = false
         }
     }
 
@@ -906,6 +912,34 @@ private fun PasswordEntryEditorDialog(
                 label = "标签（逗号分隔）",
                 modifier = Modifier.fillMaxWidth()
             )
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showIconPicker = true },
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    EntryIcon(
+                        customIconBytes = newCustomIconBytes,
+                        standardIconId = iconStandardId,
+                        primary = null,
+                        secondary = null,
+                        modifier = Modifier.size(36.dp)
+                    )
+                    Text(
+                        text = "  选择图标",
+                        fontSize = 14.sp,
+                        color = MiuixTheme.colorScheme.primary
+                    )
+                }
+                Icon(
+                    imageVector = MiuixIcons.Edit,
+                    contentDescription = "选择图标",
+                    tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                )
+            }
 
             SmallTitle(text = "自定义字段")
             CustomFieldsEditor(fields = customFields) { customFields = it }
@@ -999,7 +1033,8 @@ private fun PasswordEntryEditorDialog(
                                 attachments = attachments,
                                 expiryTime = expiryTime,
                                 customIconUuid = customIconUuid,
-                                iconStandardId = iconStandardId
+                                iconStandardId = iconStandardId,
+                                newCustomIconBytes = newCustomIconBytes
                             )
                         )
                     },
@@ -1013,6 +1048,21 @@ private fun PasswordEntryEditorDialog(
                 }
             }
         }
+    }
+
+    if (showIconPicker) {
+        IconPickerDialog(
+            show = showIconPicker,
+            currentStandardIconId = iconStandardId,
+            currentCustomIconBytes = newCustomIconBytes,
+            onDismiss = { showIconPicker = false },
+            onPick = { standardId, bytes ->
+                iconStandardId = standardId ?: 0
+                customIconUuid = null
+                newCustomIconBytes = bytes
+                showIconPicker = false
+            }
+        )
     }
 }
 
