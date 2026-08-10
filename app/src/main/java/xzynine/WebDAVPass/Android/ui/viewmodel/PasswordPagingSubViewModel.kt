@@ -370,7 +370,9 @@ internal class PasswordPagingSubViewModel(
             PasswordSortMode.CREATED_TIME -> compareBy { it.creationTime }
         }
         val keyComp = if (ascending) byKey else byKey.reversed()
-        return compareBy<PasswordEntry> { it.isFolderPlaceholder }.then(keyComp)
+        // 文件夹始终置前：Boolean 自然序为 false<true 会把文件夹排到末尾，
+        // 显式映射为 0/1 使文件夹在前，且不受 ascending 反序影响。
+        return compareBy<PasswordEntry> { if (it.isFolderPlaceholder) 0 else 1 }.then(keyComp)
     }
 
     /**
