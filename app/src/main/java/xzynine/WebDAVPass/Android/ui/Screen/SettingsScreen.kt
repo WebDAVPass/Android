@@ -58,6 +58,7 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Download
+import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Months
@@ -353,6 +354,27 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                 },
                 modifier = Modifier.Companion
                     .fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.Companion.height(8.dp))
+
+            var askToSaveChecked by remember { mutableStateOf(xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences.askToSaveData) }
+            SwitchPreference(
+                title = "自动填充时提示保存",
+                summary = "在表单提交后询问是否将账号密码保存到密码库",
+                checked = askToSaveChecked,
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.Edit,
+                        contentDescription = "自动填充时提示保存"
+                    )
+                },
+                onCheckedChange = { checked ->
+                    askToSaveChecked = checked
+                    xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences.setAskToSaveData(context, checked)
+                },
+                modifier = Modifier.fillMaxWidth()
             )
 
             Spacer(modifier = Modifier.Companion.height(8.dp))

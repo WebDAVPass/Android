@@ -40,6 +40,7 @@ import androidx.annotation.RequiresApi
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import xzynine.WebDAVPass.Android.R
+import xzynine.WebDAVPass.Android.model.RegisterInfo
 import xzynine.WebDAVPass.Android.model.SearchInfo
 
 
@@ -60,7 +61,8 @@ class KeeAutofillService : AutofillService() {
     }
 
     private fun getPreferences() {
-        askToSaveData = false
+        AutofillSavePreferences.load(this)
+        askToSaveData = AutofillSavePreferences.askToSaveData
     }
 
     override fun onFillRequest(
@@ -184,7 +186,43 @@ class KeeAutofillService : AutofillService() {
     }
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
-        callback.onSuccess()
+        var success = false
+        if (askToSaveData && Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            val latestStructure = request.fillContexts.last().structure
+            StructureParser(latestStructure).parse(saveValue = true)?.let { parseResult ->
+                if (parseResult.isValid() && autofillAllowedFor(
+                        applicationId = parseResult.applicationId,
+                        applicationIdBlocklist = applicationIdBlocklist,
+                        webDomain = parseResult.webDomain,
+                        webDomainBlocklist = webDomainBlocklist)
+                    ) {
+                    Log.d(TAG, "autofill onSaveRequest password")
+
+                    val searchInfo = SearchInfo().apply {
+                        applicationId = parseResult.applicationId
+                        webScheme = parseResult.webScheme
+                        webDomain = parseResult.webDomain
+                    }
+                    val registerInfo = RegisterInfo(
+                        searchInfo = searchInfo,
+                        username = parseResult.usernameValue?.textValue?.toString(),
+                        password = parseResult.passwordValue?.textValue?.toString()
+                    )
+
+                    // 拉起注册界面：展示表单值并选择目标分组后创建条目
+                    AutofillHelper.getPendingIntentForRegistration(
+                        this,
+                        registerInfo
+                    )?.intentSender?.let { intentSender ->
+                        success = true
+                        callback.onSuccess(intentSender)
+                    }
+                }
+            }
+        }
+        if (!success) {
+            callback.onFailure("Saving form values is not allowed")
+        }
     }
 
     companion object {
