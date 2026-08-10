@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -99,6 +100,7 @@ fun WelcomeScreen(
     var createMode by remember { mutableStateOf(CreateMode.LOCAL) }
     var pendingCreateMasterPassword by remember { mutableStateOf("") }
     var pendingCreateKeyFileData by remember { mutableStateOf<ByteArray?>(null) }
+    var pendingCreateKeyFileUri by remember { mutableStateOf<String?>(null) }
     var pendingUnlockLibrary by remember { mutableStateOf<LibraryContext?>(null) }
     var inlineUnlockPassword by remember { mutableStateOf("") }
     var showInlinePassword by remember { mutableStateOf(false) }
@@ -313,6 +315,7 @@ fun WelcomeScreen(
             showCreateMasterPasswordDialog = false
             pendingCreateMasterPassword = ""
             pendingCreateKeyFileData = null
+            pendingCreateKeyFileUri = null
             return@BackHandler
         }
         if (showDeleteDialog.value) {
@@ -335,6 +338,18 @@ fun WelcomeScreen(
         showInlinePassword = false
         inlineUnlockFocusNonce++
         manualUnlockClockMillis = System.currentTimeMillis()
+        // 若该库持久化了密钥文件 URI，自动加载密钥文件，避免用户每次手动选择
+        val persistedKeyFileUri = libraryContext.keyFileUri
+        if (!persistedKeyFileUri.isNullOrBlank()) {
+            coroutineScope.launch {
+                val loaded = loadKeyFileFromUri(context, persistedKeyFileUri)
+                if (loaded != null) {
+                    inlineKeyFileName = loaded.first
+                    inlineKeyFileData = loaded.second
+                }
+                // 加载失败时不提示，用户仍可手动选择密钥文件
+            }
+        }
     }
 
     /**
@@ -678,7 +693,8 @@ fun WelcomeScreen(
                 val item = LibraryContext(
                     displayName = displayName,
                     sourceType = LibrarySourceType.LOCAL,
-                    localPath = path
+                    localPath = path,
+                    keyFileUri = pendingCreateKeyFileUri
                 )
                 tokenViewModel.libraryViewModel.upsertAndSelectLibrary(item)
                 val plainPassword = pendingCreateMasterPassword
@@ -686,6 +702,7 @@ fun WelcomeScreen(
                 val unlockOk = tokenViewModel.unlockCurrentLibrary(plainPassword, keyFileData = plainKeyFileData)
                 pendingCreateMasterPassword = ""
                 pendingCreateKeyFileData = null
+                pendingCreateKeyFileUri = null
                 if (unlockOk) {
                     tryEnrollAutoUnlockAfterManualUnlock(item, plainPassword)
                     onEnterLibrary()
@@ -1084,6 +1101,7 @@ fun WelcomeScreen(
             mode = CloudMode.CREATE,
             createMasterPassword = pendingCreateMasterPassword,
             createKeyFileData = pendingCreateKeyFileData,
+            createKeyFileUri = pendingCreateKeyFileUri,
             onDismiss = { showCloudCreateDialog = false },
             onSelected = { library, createdMasterPassword ->
                 coroutineScope.launch {
@@ -1094,6 +1112,7 @@ fun WelcomeScreen(
                     val unlockOk = tokenViewModel.unlockCurrentLibrary(password, keyFileData = keyFileData)
                     pendingCreateMasterPassword = ""
                     pendingCreateKeyFileData = null
+                    pendingCreateKeyFileUri = null
                     if (unlockOk) {
                         tryEnrollAutoUnlockAfterManualUnlock(library, password)
                         onEnterLibrary()
@@ -1112,10 +1131,12 @@ fun WelcomeScreen(
                 showCreateMasterPasswordDialog = false
                 pendingCreateMasterPassword = ""
                 pendingCreateKeyFileData = null
+                pendingCreateKeyFileUri = null
             },
-            onConfirm = { password, keyFileData ->
+            onConfirm = { password, keyFileData, keyFileUri ->
                 pendingCreateMasterPassword = password
                 pendingCreateKeyFileData = keyFileData
+                pendingCreateKeyFileUri = keyFileUri
                 showCreateMasterPasswordDialog = false
                 if (createMode == CreateMode.LOCAL) {
                     localCreateLauncher.launch("WebDavPass.kdbx")
@@ -1147,6 +1168,48 @@ fun WelcomeScreen(
                 clearSelectionMode()
             }
         )
+    }
+}
+
+/**
+ * 从持久化的密钥文件 URI 读取密钥文件内容，返回 (显示名, 字节) 对。
+ * 读取失败时返回 null，调用方可让用户手动选择。
+ */
+private suspend fun loadKeyFileFromUri(
+    context: android.content.Context,
+    uriString: String
+): Pair<String, ByteArray>? {
+    return withContext(kotlinx.coroutines.Dispatchers.IO) {
+        runCatching {
+            val uri = Uri.parse(uriString)
+            // 解析显示名：优先使用 OpenableColumns.DISPLAY_NAME，回退到 lastPathSegment
+            var name = "keyfile"
+            context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (index >= 0) {
+                            val displayName = cursor.getString(index)
+                            if (!displayName.isNullOrBlank()) name = displayName
+                        }
+                    }
+                }
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val buffer = java.io.ByteArrayOutputStream(8 * 1024)
+                val chunk = ByteArray(8 * 1024)
+                var total = 0
+                while (true) {
+                    val read = input.read(chunk)
+                    if (read < 0) break
+                    total += read
+                    if (total > 1024 * 1024) return@use null
+                    buffer.write(chunk, 0, read)
+                }
+                val bytes = buffer.toByteArray()
+                if (bytes.isEmpty()) return@use null
+                name to bytes
+            }
+        }.getOrNull()
     }
 }
 

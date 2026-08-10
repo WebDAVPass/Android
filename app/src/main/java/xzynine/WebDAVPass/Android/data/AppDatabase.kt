@@ -10,10 +10,11 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *
  * 说明：
  * - version 6 → 7：新增 library_contexts、app_settings 表，webdav_configs 增加 directory 列。
+ * - version 7 → 8：library_contexts 增加 keyFileUri 列，持久化密钥文件 URI。
  */
 @Database(
     entities = [WebDavConfig::class, LibraryContextEntity::class, AppSetting::class],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 abstract class AppDatabase : RoomDatabase() {
@@ -63,6 +64,16 @@ abstract class AppDatabase : RoomDatabase() {
                         ")"
                 )
                 db.execSQL("ALTER TABLE `webdav_configs` ADD COLUMN `directory` TEXT")
+            }
+        }
+
+        /**
+         * 7 → 8 迁移：
+         * - library_contexts 增加 keyFileUri 列（可空），持久化密钥文件 content URI。
+         */
+        val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE `library_contexts` ADD COLUMN `keyFileUri` TEXT")
             }
         }
     }

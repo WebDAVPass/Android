@@ -78,6 +78,7 @@ fun CloudLibraryDialog(
     initialLibraryContext: LibraryContext? = null,
     createMasterPassword: String = "",
     createKeyFileData: ByteArray? = null,
+    createKeyFileUri: String? = null,
     onDismiss: () -> Unit,
     onSelected: (LibraryContext, String?) -> Unit
 ) {
@@ -237,7 +238,8 @@ fun CloudLibraryDialog(
         user: String,
         pass: String,
         masterPassword: String,
-        keyFileData: ByteArray? = null
+        keyFileData: ByteArray? = null,
+        keyFileUri: String? = null
     ): LibraryContext? {
         return withContext(Dispatchers.IO) {
             val normalized = if (path.startsWith("http://") || path.startsWith("https://")) {
@@ -269,7 +271,8 @@ fun CloudLibraryDialog(
                     password = pass,
                     autoSyncEnabled = true,
                     lastRemoteModifiedAt = remoteModifiedAt,
-                    lastSyncStatus = "idle"
+                    lastSyncStatus = "idle",
+                    keyFileUri = keyFileUri
                 )
             }
         }
@@ -498,7 +501,7 @@ fun CloudLibraryDialog(
                             if (isImportMode) {
                                 importRemote(baseUrl, path, username, password)
                             } else {
-                                createRemote(baseUrl, path, username, password, createPassword, createKeyFileData)
+                                createRemote(baseUrl, path, username, password, createPassword, createKeyFileData, createKeyFileUri)
                             }
                         } catch (e: Exception) {
                             null

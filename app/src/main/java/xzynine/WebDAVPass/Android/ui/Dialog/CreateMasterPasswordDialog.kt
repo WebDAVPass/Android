@@ -27,7 +27,10 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.content.Intent
 import android.widget.Toast
+import android.net.Uri
+import android.provider.OpenableColumns
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -55,13 +58,13 @@ enum class CreateMode {
  * 创建主密码对话框
  * @param mode 创建模式：本地或云端
  * @param onDismiss 关闭回调
- * @param onConfirm 确认回调，返回输入的密码与可选的密钥文件字节
+ * @param onConfirm 确认回调，返回输入的密码、可选的密钥文件字节与密钥文件 URI（用于持久化）
  */
 @Composable
 fun CreateMasterPasswordDialog(
     mode: CreateMode,
     onDismiss: () -> Unit,
-    onConfirm: (password: String, keyFileData: ByteArray?) -> Unit
+    onConfirm: (password: String, keyFileData: ByteArray?, keyFileUri: String?) -> Unit
 ) {
     val context = LocalContext.current
     val show = remember { mutableStateOf(true) }
@@ -71,12 +74,22 @@ fun CreateMasterPasswordDialog(
     var showPassword by remember { mutableStateOf(false) }
     var keyFileName by remember { mutableStateOf("") }
     var keyFileData by remember { mutableStateOf<ByteArray?>(null) }
+    var keyFileUri by remember { mutableStateOf<String?>(null) }
 
     val keyFilePicker = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
     ) { uri ->
         uri ?: return@rememberLauncherForActivityResult
+        // 先清除上一次选择，避免读取失败时仍显示旧文件名
+        keyFileName = ""
+        keyFileData = null
+        keyFileUri = null
         runCatching {
+            // 获取只读持久权限，使后续解锁可自动加载密钥文件
+            context.contentResolver.takePersistableUriPermission(
+                uri,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
             context.contentResolver.openInputStream(uri)?.use { input ->
                 val buffer = ByteArrayOutputStream(8 * 1024)
                 val chunk = ByteArray(8 * 1024)
@@ -92,11 +105,11 @@ fun CreateMasterPasswordDialog(
                 }
                 val bytes = buffer.toByteArray()
                 if (bytes.isNotEmpty()) {
-                    keyFileName = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-                        ?: "keyfile"
+                    keyFileName = resolveDisplayName(context, uri)
                     keyFileData = bytes
+                    keyFileUri = uri.toString()
                 }
-            }
+            } ?: throw IllegalStateException("无法读取所选文件")
         }.onFailure {
             Toast.makeText(context, "密钥文件读取失败：${it.message ?: "未知错误"}", Toast.LENGTH_SHORT).show()
         }
@@ -171,6 +184,7 @@ fun CreateMasterPasswordDialog(
                     IconButton(onClick = {
                         keyFileName = ""
                         keyFileData = null
+                        keyFileUri = null
                     }) {
                         Icon(
                             imageVector = MiuixIcons.Delete,
@@ -197,7 +211,7 @@ fun CreateMasterPasswordDialog(
                         when {
                             password.isBlank() -> status = "请输入主密码"
                             password != confirmPassword -> status = "两次主密码不一致"
-                            else -> onConfirm(password, keyFileData)
+                            else -> onConfirm(password, keyFileData, keyFileUri)
                         }
                     },
                     modifier = Modifier.weight(1f)
@@ -207,4 +221,21 @@ fun CreateMasterPasswordDialog(
             }
         }
     }
+}
+
+/**
+ * 使用 [OpenableColumns.DISPLAY_NAME] 解析 URI 显示名，回退到 lastPathSegment。
+ */
+private fun resolveDisplayName(context: android.content.Context, uri: Uri): String {
+    context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+        ?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (index >= 0) {
+                    val name = cursor.getString(index)
+                    if (!name.isNullOrBlank()) return name
+                }
+            }
+        }
+    return uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() } ?: "keyfile"
 }

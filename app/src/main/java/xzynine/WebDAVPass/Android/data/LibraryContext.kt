@@ -60,5 +60,7 @@ data class LibraryContext(
     val autoUnlockAuthMode: Int = 0,
     val forceManualUnlockEvery48Hours: Boolean? = null,
     val lastManualMasterUnlockAt: Long? = null,
-    val autoUnlockInvalidated: Boolean = false
+    val autoUnlockInvalidated: Boolean = false,
+    /** 密钥文件 content URI 字符串（可为空）。创建库时若选择了密钥文件，持久化其 URI 并获取只读持久权限，使后续解锁可自动加载。 */
+    val keyFileUri: String? = null
 )

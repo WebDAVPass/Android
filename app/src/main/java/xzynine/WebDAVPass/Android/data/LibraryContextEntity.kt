@@ -35,7 +35,8 @@ data class LibraryContextEntity(
     val autoUnlockAuthMode: Int,
     val forceManualUnlockEvery48Hours: Boolean?,
     val lastManualMasterUnlockAt: Long?,
-    val autoUnlockInvalidated: Boolean
+    val autoUnlockInvalidated: Boolean,
+    val keyFileUri: String?
 )
 
 /**
@@ -68,7 +69,8 @@ fun LibraryContextEntity.toLibraryContext(): LibraryContext {
         autoUnlockAuthMode = autoUnlockAuthMode,
         forceManualUnlockEvery48Hours = forceManualUnlockEvery48Hours,
         lastManualMasterUnlockAt = lastManualMasterUnlockAt,
-        autoUnlockInvalidated = autoUnlockInvalidated
+        autoUnlockInvalidated = autoUnlockInvalidated,
+        keyFileUri = keyFileUri
     )
 }
 
@@ -100,6 +102,7 @@ fun LibraryContext.toEntity(): LibraryContextEntity {
         autoUnlockAuthMode = autoUnlockAuthMode,
         forceManualUnlockEvery48Hours = forceManualUnlockEvery48Hours,
         lastManualMasterUnlockAt = lastManualMasterUnlockAt,
-        autoUnlockInvalidated = autoUnlockInvalidated
+        autoUnlockInvalidated = autoUnlockInvalidated,
+        keyFileUri = keyFileUri
     )
 }
