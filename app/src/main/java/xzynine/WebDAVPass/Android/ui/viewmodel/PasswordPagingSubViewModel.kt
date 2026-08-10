@@ -28,6 +28,14 @@ internal data class PasswordDataAccess(
 internal const val PasswordFolderIndexLabel = "文件夹"
 
 /**
+ * 时间排序模式下非文件夹条目使用的单一分组键。
+ *
+ * 按修改/创建时间排序时，字母分组会使整体顺序退化为 A、B、C 分组内各自有序，
+ * 与用户预期不符。此时所有非文件夹条目归入同一分组，保持全局时间序。
+ */
+internal const val PasswordTimeSortedIndexLabel = "时间排序"
+
+/**
  * 密码列表排序方式。
  */
 enum class PasswordSortMode {
@@ -365,18 +373,36 @@ internal class PasswordPagingSubViewModel(
             .sortedWith(passwordEntryComparator(sortMode, ascending))
             .toList()
 
+        // 时间排序时跳过字母分组：所有非文件夹条目归入单一分组，保持全局时间序。
+        // 字母分组会使整体退化为 A、B、C 分组内各自有序，与用户预期不符。
+        val isTimeSort = sortMode == PasswordSortMode.MODIFIED_TIME ||
+                         sortMode == PasswordSortMode.CREATED_TIME
+
         return values
-            .groupBy { it.toPasswordIndexKey() }
+            .groupBy { entry ->
+                if (isTimeSort && !entry.isFolderGroup) {
+                    PasswordTimeSortedIndexLabel
+                } else {
+                    entry.toPasswordIndexKey()
+                }
+            }
             .toList()
             .sortedWith(
-                compareBy<Pair<String, List<PasswordEntry>>> { (letter, _) ->
-                    when (letter) {
-                        PasswordFolderIndexLabel -> 0
-                        "#" -> 1
-                        else -> 2
+                if (isTimeSort) {
+                    // 时间排序：文件夹在前，其余条目作为单一分组在后
+                    compareBy<Pair<String, List<PasswordEntry>>> { (letter, _) ->
+                        if (letter == PasswordFolderIndexLabel) 0 else 1
                     }
-                }.thenBy { (letter, _) ->
-                    if (letter == PasswordFolderIndexLabel) "" else letter
+                } else {
+                    compareBy<Pair<String, List<PasswordEntry>>> { (letter, _) ->
+                        when (letter) {
+                            PasswordFolderIndexLabel -> 0
+                            "#" -> 1
+                            else -> 2
+                        }
+                    }.thenBy { (letter, _) ->
+                        if (letter == PasswordFolderIndexLabel) "" else letter
+                    }
                 }
             )
             .map { (key, items) -> IndexedSection(key = key, items = items) }
