@@ -878,17 +878,22 @@ class KdbxTokenRepository(context: Context) {
             }
             try {
                 val cacheFile = File.createTempFile("kdbx-export-", ".tmp", cacheDirectory)
-                database.saveData(
-                    cacheFile = cacheFile,
-                    databaseOutputStream = outputStreamProvider,
-                    isNewLocation = true,
-                    masterCredential = MasterCredential(
-                        password = masterPassword,
-                        keyFileData = DatabaseManager.getKeyFileData()
-                    ),
-                    challengeResponseRetriever = emptyChallengeResponseRetriever
-                )
-                true
+                try {
+                    database.saveData(
+                        cacheFile = cacheFile,
+                        databaseOutputStream = outputStreamProvider,
+                        isNewLocation = true,
+                        masterCredential = MasterCredential(
+                            password = masterPassword,
+                            keyFileData = DatabaseManager.getKeyFileData()
+                        ),
+                        challengeResponseRetriever = emptyChallengeResponseRetriever
+                    )
+                    true
+                } finally {
+                    // 导出临时文件含数据库副本，及时删除避免敏感数据残留与磁盘泄漏
+                    runCatching { cacheFile.delete() }
+                }
             } finally {
                 if (cachedPair == null) {
                     database.clearAndClose(cacheDirectory)
@@ -1673,16 +1678,21 @@ class KdbxTokenRepository(context: Context) {
         keyFileData: ByteArray? = DatabaseManager.getKeyFileData()
     ) {
         val cacheFile = File.createTempFile("kdbx-save-", ".tmp", cacheDirectory)
-        database.saveData(
-            cacheFile = cacheFile,
-            databaseOutputStream = { openOutputStream(location) },
-            isNewLocation = true,
-            masterCredential = MasterCredential(
-                password = masterPassword,
-                keyFileData = keyFileData
-            ),
-            challengeResponseRetriever = emptyChallengeResponseRetriever
-        )
+        try {
+            database.saveData(
+                cacheFile = cacheFile,
+                databaseOutputStream = { openOutputStream(location) },
+                isNewLocation = true,
+                masterCredential = MasterCredential(
+                    password = masterPassword,
+                    keyFileData = keyFileData
+                ),
+                challengeResponseRetriever = emptyChallengeResponseRetriever
+            )
+        } finally {
+            // 保存临时文件含数据库副本，及时删除避免敏感数据残留与磁盘泄漏
+            runCatching { cacheFile.delete() }
+        }
     }
 
     /**
