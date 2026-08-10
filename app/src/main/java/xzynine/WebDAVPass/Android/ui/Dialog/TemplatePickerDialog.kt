@@ -164,13 +164,6 @@ fun TemplatePickerDialog(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f)
                 )
-                Spacer(modifier = Modifier.width(16.dp))
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text("关闭")
-                }
             }
         }
     }

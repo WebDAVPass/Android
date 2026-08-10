@@ -884,6 +884,7 @@ private fun PasswordEntryEditorDialog(
             customIconUuid = initialDraft.customIconUuid
             newCustomIconBytes = initialDraft.newCustomIconBytes
             showIconPicker = false
+            showTemplatePicker = false
         }
     }
 
