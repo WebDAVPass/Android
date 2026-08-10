@@ -369,7 +369,11 @@ private fun RegistrationContent(
                             color = MiuixTheme.colorScheme.onSurfaceSecondary
                         )
                         Text(
-                            text = "根目录",
+                            text = pickerGroups
+                                .firstOrNull { it.groupId == selectedGroupId }
+                                ?.title
+                                ?.ifBlank { "未命名分组" }
+                                ?: "根目录",
                             fontSize = 14.sp,
                             color = MiuixTheme.colorScheme.primary
                         )
