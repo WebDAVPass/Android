@@ -154,11 +154,12 @@ fun CreateMasterPasswordDialog(
             if (password.isNotEmpty()) {
                 val bits = passwordStrengthBits
                 val label = strengthLabel(bits)
-                val color = when {
-                    bits < 30.0 -> MiuixTheme.colorScheme.error
-                    bits < 60.0 -> MiuixTheme.colorScheme.error
-                    bits < 100.0 -> MiuixTheme.colorScheme.primary
-                    else -> MiuixTheme.colorScheme.primary
+                val color = if (bits < 60.0) {
+                    // strengthLabel 下的「非常弱 / 弱」两档共用 error 色
+                    MiuixTheme.colorScheme.error
+                } else {
+                    // strengthLabel 下的「中等 / 强」两档共用 primary 色
+                    MiuixTheme.colorScheme.primary
                 }
                 Text(
                     text = "强度：$label（${bits.toInt()} bits）",
