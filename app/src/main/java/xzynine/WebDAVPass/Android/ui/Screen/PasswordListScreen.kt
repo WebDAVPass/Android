@@ -964,7 +964,7 @@ private fun PasswordEntryEditorDialog(
             TextField(
                 value = entryTagsText,
                 onValueChange = { entryTagsText = it },
-                label = "标签（逗号分隔）",
+                label = "标签（逗号或分号分隔）",
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -1098,7 +1098,7 @@ private fun PasswordEntryEditorDialog(
                                 password = entryPassword,
                                 url = entryUrl.trim(),
                                 notes = entryNotes,
-                                tags = entryTagsText.split(',', ';')
+                                tags = entryTagsText.split(',', ';', '，', '；')
                                     .map { it.trim() }
                                     .filter { it.isNotEmpty() }
                                     .distinct(),
