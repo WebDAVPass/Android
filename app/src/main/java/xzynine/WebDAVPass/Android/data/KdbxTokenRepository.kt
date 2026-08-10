@@ -330,7 +330,8 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 将指定历史版本恢复为条目的当前内容。
      *
-     * 恢复后当前条目内容与历史版本一致，且原有历史记录全部保留（新版本会追加进历史）。
+     * 恢复后当前条目内容与历史版本一致；EntryInfo 不含 history 字段，setEntryInfo
+     * 也不会改动历史列表，因此原有历史记录原样保留（不会重复追加）。
      * 逻辑参照 KeePassDX RestoreEntryHistoryDatabaseRunnable。
      */
     fun restoreEntryFromHistory(
@@ -347,8 +348,8 @@ class KdbxTokenRepository(context: Context) {
                 return@withDatabase false
             }
             val historyToRestore = history[historyIndex]
-            // 将主条目现有历史复制进待恢复版本，避免恢复操作丢失历史记录
-            entry.getHistory().forEach { historyToRestore.addEntryToHistory(it) }
+            // 用历史版本的字段覆盖当前条目；history 列表由 setEntryInfo 保留不动，
+            // 不要把 historyToRestore 再 addEntryToHistory（它已在 history 中，重复追加会自引用污染）。
             val entryInfo = historyToRestore.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
             entry.setEntryInfo(db, entryInfo)
             db.updateEntry(entry)
