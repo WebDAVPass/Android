@@ -21,8 +21,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.DpSize
 import xzynine.WebDAVPass.Android.data.WebDavConfig
-import xzynine.WebDAVPass.webdav.Authorization
-import xzynine.WebDAVPass.webdav.WebDav
+import github.xzynine.webdav.Authorization
+import github.xzynine.webdav.WebDav
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -33,7 +33,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.extra.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.icon.basic.ArrowRight
 import top.yukonga.miuix.kmp.icon.basic.Check
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -350,7 +350,7 @@ fun WebDavConfigDialog(
     WindowDialog(
         title = if (existingConfig != null) "编辑 WebDAV 配置" else "WebDAV 配置",
         summary = if (existingConfig != null) "修改您的 WebDAV 服务器设置" else "配置 WebDAV 服务器以同步令牌",
-        show = showDialog,
+        show = showDialog.value,
         onDismissRequest = onDismissRequest,
         defaultWindowInsetsPadding = true,
         insideMargin = DpSize(16.dp, 16.dp)

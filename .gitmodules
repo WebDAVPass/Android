@@ -1,3 +1,6 @@
 [submodule "checkupdates"]
 	path = checkupdates
-	url = git@github.com:xzy-nine-common/checkupdata-android.git
+	url = https://github.com/xzy-nine-common/checkupdata-android.git
+[submodule "webdav"]
+	path = webdav
+	url = https://github.com/xzy-nine-common/WebDAV-Android.git

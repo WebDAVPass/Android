@@ -1,19 +1,18 @@
 package xzynine.WebDAVPass.Android.ui.ViewModel
 
 import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import xzylib.base.util.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.documentfile.provider.DocumentFile
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
-import xzynine.WebDAVPass.webdav.WebDav
-import xzynine.WebDAVPass.webdav.Authorization
+import github.xzynine.webdav.FileAbsenceSource
+import github.xzynine.webdav.SyncFailureKind
+import github.xzynine.webdav.SyncMergeCallback
+import github.xzynine.webdav.SyncOutcome
+import github.xzynine.webdav.SyncResult
+import github.xzynine.webdav.WebDavSyncEngine
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,17 +20,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import java.io.File
-import java.io.FileNotFoundException
-import java.net.ConnectException
-import java.net.SocketException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
 
 /**
  * 云端同步视图模型
  *
- * 负责管理云端库的上传、下载、合并和同步状态。
+ * 负责编排云端库的自动/手动恢复与备份流程，
+ * 上传下载等传输能力由子模块 [WebDavSyncEngine] 提供，本类仅负责调用与状态持久化。
  */
 class CloudSyncViewModel(private val context: Context) : ViewModel() {
 
@@ -46,6 +40,8 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
     }
 
     private val cloudSyncMutex = Mutex()
+
+    private val syncEngine = WebDavSyncEngine(context.applicationContext)
 
     private val _isBackupInProgress = MutableStateFlow(false)
     val isBackupInProgress: StateFlow<Boolean> = _isBackupInProgress.asStateFlow()
@@ -107,7 +103,7 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
                     _backupStatus.value = "未绑定云端 .kdbx，已跳过自动恢复"
                 } catch (ex: Exception) {
                     Logger.e(SYNC_LOG_TAG, "自动恢复失败: ${ex.message}", ex)
-                    val message = resolveSyncFailureMessage("自动恢复", null, ex)
+                    val message = resolveSyncFailureMessage("自动恢复", null, syncEngine.buildFailureOutcome(SyncFailureKind.of(ex), ex.message))
                     _backupStatus.value = "自动恢复失败：$message"
                     libraryViewModel.updateCloudSyncState(
                         status = SYNC_STATUS_FAILED,
@@ -160,7 +156,7 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
                     _backupStatus.value = "未绑定云端 .kdbx，无法手动恢复"
                 } catch (ex: Exception) {
                     Logger.e(SYNC_LOG_TAG, "手动恢复失败: ${ex.message}", ex)
-                    val message = resolveSyncFailureMessage("手动恢复", null, ex)
+                    val message = resolveSyncFailureMessage("手动恢复", null, syncEngine.buildFailureOutcome(SyncFailureKind.of(ex), ex.message))
                     _backupStatus.value = "手动恢复失败：$message"
                     libraryViewModel.updateCloudSyncState(
                         status = SYNC_STATUS_FAILED,
@@ -220,7 +216,7 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
                     _backupStatus.value = "未绑定云端 .kdbx，无法同步备份"
                 } catch (ex: Exception) {
                     Logger.e(SYNC_LOG_TAG, "备份同步失败: ${ex.message}", ex)
-                    val message = resolveSyncFailureMessage("备份", null, ex)
+                    val message = resolveSyncFailureMessage("备份", null, syncEngine.buildFailureOutcome(SyncFailureKind.of(ex), ex.message))
                     _backupStatus.value = "备份失败：$message"
                     libraryViewModel.updateCloudSyncState(
                         status = SYNC_STATUS_FAILED,
@@ -235,7 +231,7 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 从当前云端库下载到本地
+     * 从当前云端库下载到本地（调用子模块同步引擎）
      */
     private suspend fun downloadCurrentCloudLibrary(
         cloudLibrary: LibraryContext,
@@ -246,47 +242,50 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
             SYNC_LOG_TAG,
             "开始下载云端库: 本地路径=${cloudLibrary.localPath}, 远端路径=${cloudLibrary.remoteFilePath.orEmpty()}"
         )
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                val remote = WebDav(cloudLibrary.remoteFilePath!!, Authorization(cloudLibrary.username!!, cloudLibrary.password!!))
-                if (!remote.exists()) {
-                    Logger.d(SYNC_LOG_TAG, "跳过下载，远端文件不存在")
-                    libraryViewModel.updateCloudSyncState(
-                        status = SYNC_STATUS_FAILED,
-                        errorMessage = "远端文件不存在，无法下载"
-                    )
-                    return@runCatching false
-                }
-
-                val remoteInfo = remote.getWebDavFile()
-                val remoteModified = remoteInfo?.lastModify?.takeIf { it > 0 }
-                val bytes = remote.download()
-                writeBytesToLocalPath(cloudLibrary.localPath, bytes)
-
+        val remoteFilePath = cloudLibrary.remoteFilePath
+        val username = cloudLibrary.username
+        val password = cloudLibrary.password
+        if (remoteFilePath.isNullOrBlank() || username.isNullOrBlank() || password.isNullOrBlank()) {
+            Logger.e(SYNC_LOG_TAG, "下载云端库失败：凭据不完整（远端路径/账号/密码缺失）")
+            libraryViewModel.updateCloudSyncState(
+                status = SYNC_STATUS_FAILED,
+                errorMessage = "云端库凭据不完整，请重新绑定或检查账号信息",
+                remoteModifiedAt = null,
+                syncAt = System.currentTimeMillis()
+            )
+            return false
+        }
+        val outcome = syncEngine.download(
+            remotePath = remoteFilePath,
+            username = username,
+            password = password,
+            localPath = cloudLibrary.localPath
+        )
+        return when {
+            outcome.isSuccess -> {
                 libraryViewModel.updateCloudSyncState(
                     status = SYNC_STATUS_SUCCESS,
                     errorMessage = null,
-                    remoteModifiedAt = remoteModified,
+                    remoteModifiedAt = outcome.remoteModifiedAt,
                     syncAt = System.currentTimeMillis()
                 )
-                Logger.d(
-                    SYNC_LOG_TAG,
-                    "下载云端库成功: 远端修改时间=$remoteModified"
-                )
+                Logger.d(SYNC_LOG_TAG, "下载云端库成功: 远端修改时间=${outcome.remoteModifiedAt}")
                 true
-            }.onFailure {
-                Logger.e(SYNC_LOG_TAG, "下载云端库失败: ${it.message}", it)
-                val message = resolveSyncFailureMessage("下载", cloudLibrary.localPath, it)
+            }
+            else -> {
+                Logger.e(SYNC_LOG_TAG, "下载云端库失败: ${outcome.errorMessage}")
+                val message = resolveSyncFailureMessage("下载", cloudLibrary.localPath, outcome)
                 libraryViewModel.updateCloudSyncState(
                     status = SYNC_STATUS_FAILED,
                     errorMessage = message
                 )
-            }.getOrDefault(false)
+                false
+            }
         }
     }
 
     /**
-     * 将当前本地库上传到云端
+     * 将当前本地库上传到云端（调用子模块同步引擎）
      */
     private suspend fun uploadCurrentCloudLibrary(
         cloudLibrary: LibraryContext,
@@ -307,252 +306,82 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
             return false
         }
 
-        return withContext(Dispatchers.IO) {
-            runCatching {
-                if (!localPathExists(cloudLibrary.localPath)) {
-                    libraryViewModel.updateCloudSyncState(
-                        status = SYNC_STATUS_FAILED,
-                        errorMessage = "本地数据库文件不存在或不可访问"
-                    )
-                    return@runCatching false
-                }
-
-                val localPathIsUri = asContentUri(cloudLibrary.localPath) != null
-
-                val remote = WebDav(cloudLibrary.remoteFilePath!!, Authorization(cloudLibrary.username!!, cloudLibrary.password!!))
-                val remoteInfo = remote.getWebDavFile()
-                val remoteModified = remoteInfo?.lastModify?.takeIf { it > 0 }
-                val remoteChangedAfterSync = remoteModified != null &&
-                    (cloudLibrary.lastRemoteModifiedAt == null || remoteModified > cloudLibrary.lastRemoteModifiedAt)
-                val localChangedAfterSync = if (localPathIsUri) {
-                    true
-                } else {
-                    val localModifiedAt = getLocalPathLastModified(cloudLibrary.localPath)
-                    cloudLibrary.lastSyncAt?.let { syncAt ->
-                        (localModifiedAt ?: Long.MAX_VALUE) > syncAt
-                    } ?: true
-                }
-                Logger.d(
-                    SYNC_LOG_TAG,
-                    "上传前比较: 远端已变更=$remoteChangedAfterSync, 本地已变更=$localChangedAfterSync"
-                )
-
-                if (remoteChangedAfterSync) {
-                    Logger.d(SYNC_LOG_TAG, "检测到远端变更，进入下载/合并流程")
-                    val remoteBytes = remote.download()
-                    val merged = if (localChangedAfterSync) {
-                        Logger.d(SYNC_LOG_TAG, "检测到本地也有变更，尝试自动合并")
-                        repository.mergeRemoteDatabaseBytes(
-                            localPath = cloudLibrary.localPath,
-                            masterPassword = masterPassword,
-                            remoteBytes = remoteBytes
-                        )
-                    } else {
-                        Logger.d(SYNC_LOG_TAG, "本地无变更，使用远端内容覆盖本地")
-                        writeBytesToLocalPath(cloudLibrary.localPath, remoteBytes)
-                        true
-                    }
-
-                    if (!merged) {
-                        Logger.e(SYNC_LOG_TAG, "自动合并失败，标记为冲突")
-                        libraryViewModel.updateCloudSyncState(
-                            status = SYNC_STATUS_CONFLICT,
-                            errorMessage = "自动合并失败，请先手动恢复后再同步",
-                            remoteModifiedAt = remoteModified
-                        )
-                        return@runCatching false
-                    }
-                    Logger.d(SYNC_LOG_TAG, "自动合并成功")
-                }
-
-                if (localPathIsUri) {
-                    remote.upload(readBytesFromLocalPath(cloudLibrary.localPath), "application/octet-stream")
-                } else {
-                    remote.upload(File(cloudLibrary.localPath), "application/octet-stream")
-                }
-                val refreshedRemoteModified = runCatching {
-                    remote.getWebDavFile()?.lastModify
-                }.getOrNull()?.takeIf { it > 0 } ?: remoteModified
-
-                val finalStatus = if (remoteChangedAfterSync && localChangedAfterSync) {
-                    SYNC_STATUS_MERGED
-                } else {
-                    SYNC_STATUS_SUCCESS
-                }
+        val remoteFilePath = cloudLibrary.remoteFilePath
+        val username = cloudLibrary.username
+        val password = cloudLibrary.password
+        if (remoteFilePath.isNullOrBlank() || username.isNullOrBlank() || password.isNullOrBlank()) {
+            Logger.e(SYNC_LOG_TAG, "上传云端库失败：凭据不完整（远端路径/账号/密码缺失）")
+            libraryViewModel.updateCloudSyncState(
+                status = SYNC_STATUS_FAILED,
+                errorMessage = "云端库凭据不完整，请重新绑定或检查账号信息"
+            )
+            return false
+        }
+        val outcome = syncEngine.upload(
+            remotePath = remoteFilePath,
+            username = username,
+            password = password,
+            localPath = cloudLibrary.localPath,
+            masterPassword = masterPassword,
+            merge = SyncMergeCallback { localPath, masterPassword, remoteBytes ->
+                repository.mergeRemoteDatabaseBytes(localPath, masterPassword, remoteBytes)
+            },
+            lastRemoteModifiedAt = cloudLibrary.lastRemoteModifiedAt,
+            lastSyncAt = cloudLibrary.lastSyncAt
+        )
+        return when (outcome.result) {
+            SyncResult.SUCCESS, SyncResult.MERGED -> {
                 libraryViewModel.updateCloudSyncState(
-                    status = finalStatus,
+                    status = if (outcome.result == SyncResult.MERGED) {
+                        SYNC_STATUS_MERGED
+                    } else {
+                        SYNC_STATUS_SUCCESS
+                    },
                     errorMessage = null,
-                    remoteModifiedAt = refreshedRemoteModified,
+                    remoteModifiedAt = outcome.remoteModifiedAt,
                     syncAt = System.currentTimeMillis()
                 )
-                Logger.d(
-                    SYNC_LOG_TAG,
-                    "上传云端库成功: 最终状态=$finalStatus"
-                )
+                Logger.d(SYNC_LOG_TAG, "上传云端库成功: 最终状态=${outcome.result}")
                 true
-            }.onFailure {
-                Logger.e(SYNC_LOG_TAG, "上传云端库失败: ${it.message}", it)
-                val message = resolveSyncFailureMessage("上传", cloudLibrary.localPath, it)
+            }
+            SyncResult.CONFLICT -> {
+                Logger.e(SYNC_LOG_TAG, "自动合并失败，标记为冲突")
+                libraryViewModel.updateCloudSyncState(
+                    status = SYNC_STATUS_CONFLICT,
+                    errorMessage = "自动合并失败，请先手动恢复后再同步",
+                    remoteModifiedAt = outcome.remoteModifiedAt
+                )
+                false
+            }
+            SyncResult.FAILED -> {
+                Logger.e(SYNC_LOG_TAG, "上传云端库失败: ${outcome.errorMessage}")
+                val message = resolveSyncFailureMessage("上传", cloudLibrary.localPath, outcome)
                 libraryViewModel.updateCloudSyncState(
                     status = SYNC_STATUS_FAILED,
                     errorMessage = message
                 )
-            }.getOrDefault(false)
-        }
-    }
-
-    /**
-     * 判断路径是否为 Content Uri。
-     */
-    private fun asContentUri(path: String): Uri? {
-        val parsed = runCatching { Uri.parse(path) }.getOrNull() ?: return null
-        return if (parsed.scheme.equals("content", ignoreCase = true)) parsed else null
-    }
-
-    /**
-     * 申请并持久化 Uri 读写权限。
-     */
-    private fun takePersistableUriPermission(uri: Uri) {
-        if (!uri.scheme.equals("content", ignoreCase = true)) {
-            return
-        }
-
-        val resolver = context.contentResolver
-        runCatching {
-            resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        runCatching {
-            resolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
-        }
-    }
-
-    /**
-     * 写入本地定位（文件路径或 Uri）。
-     */
-    private fun writeBytesToLocalPath(localPath: String, bytes: ByteArray) {
-        val uri = asContentUri(localPath)
-        if (uri != null) {
-            takePersistableUriPermission(uri)
-            val output = context.contentResolver.openOutputStream(uri, "wt")
-                ?: throw IllegalStateException("无法写入本地数据库")
-            output.use { stream ->
-                stream.write(bytes)
-            }
-            return
-        }
-
-        val localFile = File(localPath)
-        localFile.parentFile?.let {
-            if (!it.exists()) {
-                it.mkdirs()
+                false
             }
         }
-        localFile.writeBytes(bytes)
     }
 
     /**
-     * 读取本地定位（文件路径或 Uri）。
+     * 将引擎的结构化失败类型映射为云端同步失败文案
      */
-    private fun readBytesFromLocalPath(localPath: String): ByteArray {
-        val uri = asContentUri(localPath)
-        if (uri != null) {
-            takePersistableUriPermission(uri)
-            val input = context.contentResolver.openInputStream(uri)
-                ?: throw IllegalStateException("无法读取本地数据库")
-            return input.use { stream ->
-                stream.readBytes()
+    private fun resolveSyncFailureMessage(action: String, localPath: String?, outcome: SyncOutcome): String {
+        val isUriPath = !localPath.isNullOrBlank() && localPath.startsWith("content://")
+        return when (outcome.errorKind) {
+            SyncFailureKind.PERMISSION -> "本地数据库访问权限已失效，请重新选择数据库文件"
+            SyncFailureKind.NETWORK -> "网络异常，请检查网络连接后重试"
+            SyncFailureKind.FILE_NOT_FOUND -> when (outcome.absenceSource) {
+                FileAbsenceSource.REMOTE -> "远端文件不存在，无法下载"
+                FileAbsenceSource.LOCAL, FileAbsenceSource.NONE -> if (isUriPath) {
+                    "本地数据库文件不存在或已失效，请重新选择数据库文件"
+                } else {
+                    "本地数据库文件不存在，请检查路径"
+                }
             }
+            SyncFailureKind.UNKNOWN -> outcome.errorMessage?.takeIf { it.isNotBlank() } ?: "${action}失败"
         }
-        return File(localPath).readBytes()
-    }
-
-    /**
-     * 判断本地定位是否可访问。
-     */
-    private fun localPathExists(localPath: String): Boolean {
-        val uri = asContentUri(localPath)
-        if (uri != null) {
-            return runCatching {
-                takePersistableUriPermission(uri)
-                context.contentResolver.openInputStream(uri)?.use { true } ?: false
-            }.getOrDefault(false)
-        }
-        return File(localPath).exists()
-    }
-
-    /**
-     * 获取本地文件最近修改时间。
-     */
-    private fun getLocalPathLastModified(localPath: String): Long? {
-        val uri = asContentUri(localPath)
-        if (uri != null) {
-            val modified = runCatching {
-                DocumentFile.fromSingleUri(context, uri)?.lastModified()
-            }.getOrNull() ?: 0L
-            return modified.takeIf { it > 0L }
-        }
-
-        val localFile = File(localPath)
-        if (!localFile.exists()) {
-            return null
-        }
-        return localFile.lastModified().takeIf { it > 0L }
-    }
-
-    /**
-     * 拼接异常链文本，便于关键字匹配。
-     */
-    private fun flattenThrowableMessage(throwable: Throwable): String {
-        return generateSequence(throwable) { current ->
-            current.cause
-        }.joinToString(separator = " | ") { current ->
-            "${current.javaClass.simpleName}:${current.message.orEmpty()}"
-        }
-    }
-
-    /**
-     * 判断是否为权限相关异常。
-     */
-    private fun isPermissionIssue(throwable: Throwable): Boolean {
-        if (throwable is SecurityException) {
-            return true
-        }
-        val text = flattenThrowableMessage(throwable)
-        return text.contains("permission", ignoreCase = true) ||
-            text.contains("denied", ignoreCase = true) ||
-            text.contains("ACTION_OPEN_DOCUMENT", ignoreCase = true) ||
-            text.contains("persistable", ignoreCase = true) ||
-            text.contains("EACCES", ignoreCase = true)
-    }
-
-    /**
-     * 判断是否为网络异常。
-     */
-    private fun isNetworkIssue(throwable: Throwable): Boolean {
-        return throwable is UnknownHostException ||
-            throwable is SocketTimeoutException ||
-            throwable is ConnectException ||
-            throwable is SocketException
-    }
-
-    /**
-     * 归一化云端同步失败文案。
-     */
-    private fun resolveSyncFailureMessage(action: String, localPath: String?, throwable: Throwable): String {
-        val isUriPath = !localPath.isNullOrBlank() && asContentUri(localPath) != null
-        if (isUriPath && isPermissionIssue(throwable)) {
-            return "本地数据库访问权限已失效，请重新选择数据库文件"
-        }
-        if (throwable is FileNotFoundException) {
-            return if (isUriPath) {
-                "本地数据库文件不存在或已失效，请重新选择数据库文件"
-            } else {
-                "本地数据库文件不存在，请检查路径"
-            }
-        }
-        if (isNetworkIssue(throwable)) {
-            return "网络异常，请检查网络连接后重试"
-        }
-        return throwable.message?.takeIf { it.isNotBlank() } ?: "${action}失败"
     }
 }

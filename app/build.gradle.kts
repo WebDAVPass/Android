@@ -30,7 +30,7 @@ val computedVersionCode = versionInfo.versionCode
 android {
     namespace = "xzynine.WebDAVPass.Android"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     // 从 local.properties 读取签名信息
@@ -108,9 +108,6 @@ android {
         compose = true
         buildConfig = true
     }
-    composeOptions {
-        kotlinCompilerExtensionVersion = libs.versions.composeCompiler.get()
-    }
     
     // 配置 16KB 页面大小 LOAD 段对齐
     packaging {
@@ -126,6 +123,7 @@ dependencies {
         implementation(libs.material) // Material 组件库
     implementation(libs.miuix.android) // Miuix UI 库
     implementation(libs.miuix.icons)
+    implementation(libs.miuix.preference)
     implementation(libs.okhttp) // OkHttp3 网络库
     implementation(libs.jsoup) // Jsoup XML解析库
     implementation(libs.hutool.core) // Hutool工具库

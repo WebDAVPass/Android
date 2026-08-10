@@ -28,7 +28,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.extra.SuperBottomSheet
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.Settings
@@ -340,8 +340,8 @@ fun MainScreen() {
     }
 
     if (!showWelcome) {
-        SuperBottomSheet(
-            show = showScanBottomSheet,
+        WindowBottomSheet(
+            show = showScanBottomSheet.value,
             title = "扫描二维码",
             onDismissRequest = {
                 showScanBottomSheet.value = false

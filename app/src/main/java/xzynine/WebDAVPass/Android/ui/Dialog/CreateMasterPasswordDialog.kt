@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.extra.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * 创建模式
@@ -53,7 +53,7 @@ fun CreateMasterPasswordDialog(
     WindowDialog(
         title = if (mode == CreateMode.LOCAL) "本地新建：设置主密码" else "云端新建：设置主密码",
         summary = "主密码用于解锁 .kdbx 数据库",
-        show = show,
+        show = show.value,
         onDismissRequest = onDismiss,
         defaultWindowInsetsPadding = true
     ) {

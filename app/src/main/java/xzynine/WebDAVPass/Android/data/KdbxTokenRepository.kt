@@ -5,8 +5,11 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import xzylib.base.util.Logger
 import com.kunzisoft.keepass.database.element.Database
+import com.kunzisoft.keepass.database.element.DateInstant
 import com.kunzisoft.keepass.database.element.Entry
+import com.kunzisoft.keepass.database.element.Attachment
 import com.kunzisoft.keepass.database.element.Field
+import com.kunzisoft.keepass.database.element.icon.IconImage
 import com.kunzisoft.keepass.database.element.Group
 import com.kunzisoft.keepass.database.element.MasterCredential
 import com.kunzisoft.keepass.database.element.database.DatabaseVersioned
@@ -42,6 +45,13 @@ class KdbxTokenRepository(context: Context) {
         private const val DATABASE_NAME = "WebDavPass"
         private const val ROOT_GROUP_NAME = "WebDavPass"
         private const val RECYCLE_BIN_FALLBACK_TITLE = "回收站"
+        private const val SMALL_BINARY_SIZE = 1024 * 1024
+
+        /** 附件查看/读取上限：1 MiB，超过则拒绝返回以避免 OOM */
+        const val MAX_ATTACHMENT_BYTES = 1024 * 1024
+
+        /** 附件导入（写库）上限：10 MiB */
+        const val MAX_ATTACHMENT_IMPORT_BYTES = 10 * 1024 * 1024
     }
 
     private val emptyChallengeResponseRetriever: (HardwareKey, ByteArray?) -> ByteArray = { _, _ ->
@@ -252,6 +262,13 @@ class KdbxTokenRepository(context: Context) {
             val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
                 ?: return@withDatabase null
             val entryInfo = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+            val attachmentPool = db.attachmentPool
+            val attachments = entry.getAttachments(attachmentPool).mapNotNull { attachment ->
+                val name = attachment.name
+                if (name.isBlank()) null else EditableAttachmentDraft(name = name)
+            }
+            val iconUuid = entry.icon.custom.uuid
+            val customIconUuid = if (iconUuid == DatabaseVersioned.UUID_ZERO) null else iconUuid.toString()
             PasswordEntryEditDraft(
                 entryId = toStableId(entry),
                 parentGroupId = toStableParentGroupId(entry.parent),
@@ -266,7 +283,11 @@ class KdbxTokenRepository(context: Context) {
                         value = field.protectedValue.stringValue,
                         isProtected = field.protectedValue.isProtected
                     )
-                }
+                },
+                attachments = attachments,
+                expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
+                customIconUuid = customIconUuid,
+                iconStandardId = entry.icon.standard.id
             )
         }
     }
@@ -308,15 +329,9 @@ class KdbxTokenRepository(context: Context) {
                 password = draft.password
                 url = draft.url
                 notes = draft.notes
-                customFields = draft.customFields
-                    .filter { field -> field.name.isNotBlank() }
-                    .map { field ->
-                        Field(
-                            field.name,
-                            ProtectedString(field.isProtected, field.value)
-                        )
-                    }
-                    .toMutableList()
+                customFields = mergeCustomFields(db, entry, draft.customFields)
+                attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
+                applyExpiryAndIcon(this, db, draft)
             }
             entry.setEntryInfo(db, entryInfo)
             db.addEntryTo(entry, parent)
@@ -339,17 +354,13 @@ class KdbxTokenRepository(context: Context) {
                 password = draft.password
                 url = draft.url
                 notes = draft.notes
-                customFields = draft.customFields
-                    .filter { field -> field.name.isNotBlank() }
-                    .map { field ->
-                        Field(
-                            field.name,
-                            ProtectedString(field.isProtected, field.value)
-                        )
-                    }
-                    .toMutableList()
+                customFields = mergeCustomFields(db, entry, draft.customFields)
+                attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
+                applyExpiryAndIcon(this, db, draft)
             }
             entry.setEntryInfo(db, entryInfo)
+            // 清理被删除附件后遗留的孤儿二进制，避免 KDBX 体积膨胀
+            db.removeUnlinkedAttachments()
 
             val targetParent = resolveParentGroup(db, draft.parentGroupId) ?: return@withDatabase false
             if (db.groupIsInRecycleBin(targetParent)) {
@@ -767,7 +778,8 @@ class KdbxTokenRepository(context: Context) {
         target: MutableList<RemainingKeyValue>,
         fieldName: String,
         rawValue: String,
-        fixedType: RemainingValueType? = null
+        fixedType: RemainingValueType? = null,
+        isProtected: Boolean = false
     ) {
         if (rawValue.isBlank()) {
             return
@@ -776,7 +788,9 @@ class KdbxTokenRepository(context: Context) {
             RemainingKeyValue(
                 fieldName = fieldName,
                 rawValue = rawValue,
-                valueType = fixedType ?: detectValueType(null, rawValue)
+                valueType = fixedType ?: detectValueType(null, rawValue),
+                isProtected = isProtected,
+                isStandard = true
             )
         )
     }
@@ -868,6 +882,18 @@ class KdbxTokenRepository(context: Context) {
                 emptyList()
             }
 
+            val attachmentPool = database.attachmentPool
+            val attachments = entry.getAttachments(attachmentPool).mapNotNull { attachment ->
+                val name = attachment.name
+                if (name.isBlank()) {
+                    null
+                } else {
+                    EntryAttachmentInfo(name = name, size = attachment.binaryData.getSize())
+                }
+            }
+            val iconUuid = entry.icon.custom.uuid
+            val customIconUuid = if (iconUuid == DatabaseVersioned.UUID_ZERO) null else iconUuid.toString()
+
             result.add(
                 PasswordEntry(
                     entryId = toStableId(entry),
@@ -876,6 +902,10 @@ class KdbxTokenRepository(context: Context) {
                     standardIconId = entry.icon.standard.id,
                     customIconBytes = readCustomIconBytes(database, entry),
                     keyValues = values,
+                    attachments = attachments,
+                    expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
+                    isExpired = entry.expires && entry.isCurrentlyExpires,
+                    customIconUuid = customIconUuid,
                     isFolderGroup = false,
                     isFolderPlaceholder = false
                 )
@@ -896,7 +926,7 @@ class KdbxTokenRepository(context: Context) {
         val values = mutableListOf<RemainingKeyValue>()
 
         appendStandardField(values, "UserName", entry.username)
-        appendStandardField(values, "Password", entry.password, RemainingValueType.PASSWORD)
+        appendStandardField(values, "Password", entry.password, RemainingValueType.PASSWORD, isProtected = true)
         appendStandardField(values, "URL", entry.url)
         appendStandardField(values, "Notes", entry.notes)
 
@@ -907,7 +937,8 @@ class KdbxTokenRepository(context: Context) {
                     RemainingKeyValue(
                         fieldName = field.name,
                         rawValue = value,
-                        valueType = detectValueType(field, value)
+                        valueType = detectValueType(field, value),
+                        isProtected = field.protectedValue.isProtected
                     )
                 )
             }
@@ -1282,4 +1313,189 @@ class KdbxTokenRepository(context: Context) {
         }.getOrNull()
     }
 
+    /**
+     * 合并自定义字段（额外字段，不含标准字段）。
+     *
+     * 以 [EditableFieldDraft.originalName] 与数据库原始额外字段稳定匹配，正确处理：
+     * - 删除：UI 标记 [EditableFieldDraft.removed] 的字段不写回；
+     * - 重命名：原名字段按 [EditableFieldDraft.originalName] 匹配，使用新名字写回，不会残留旧名；
+     * - 新增：originalName 为空且名字非空的字段作为新字段追加；
+     * - 保留：数据库中与任何草稿都不匹配的原始额外字段（例如从其他工具迁移来的、命名为
+     *   "Password"/"UserName" 的标准名字段）一律原样保留，避免在保存编辑时被静默删除；
+     * - 去重：新建字段名（不区分大小写）若与已有字段（含被保留的原始字段）冲突，则跳过后续重复项。
+     *
+     * 同时透传 [EditableFieldDraft.isProtected]，避免受保护字段（如 OTP 种子）保存后丢失保护标志。
+     */
+    private fun mergeCustomFields(
+        database: Database,
+        entry: Entry,
+        uiFields: List<EditableFieldDraft>
+    ): MutableList<Field> {
+        val originalExtras = entry.getExtraFields()
+        val result = mutableListOf<Field>()
+        val usedLowerNames = mutableSetOf<String>()
+
+        // 1. 先保留所有原始额外字段，但对有草稿匹配的项按草稿更新
+        for (orig in originalExtras) {
+            val draft = uiFields.firstOrNull { it.originalName == orig.name }
+            if (draft != null && !draft.removed) {
+                val name = draft.name.ifBlank { orig.name }
+                if (usedLowerNames.add(name.lowercase())) {
+                    result.add(Field(name, ProtectedString(draft.isProtected, draft.value)))
+                }
+            } else if (draft == null) {
+                // 没有草稿对应的原始额外字段（如从其他工具迁移来的标准名字段），原样保留
+                if (usedLowerNames.add(orig.name.lowercase())) {
+                    result.add(Field(orig.name, orig.protectedValue))
+                }
+            }
+            // draft != null 且 removed -> 用户显式删除，不加入 result
+        }
+
+        // 2. 新增字段（originalName 为空、名字非空、未删除），不与已有字段重名
+        uiFields
+            .filter { it.originalName == null && it.name.isNotBlank() && !it.removed }
+            .forEach { draft ->
+                if (usedLowerNames.add(draft.name.lowercase())) {
+                    result.add(Field(draft.name, ProtectedString(draft.isProtected, draft.value)))
+                }
+            }
+
+        return result
+    }
+
+    /**
+     * 构建最终的附件列表，直接交给 [Entry.setEntryInfo] 全量替换：
+     * - 原附件中未标记删除的保留；
+     * - 草稿中新建且带有字节的作为新附件写入。
+     */
+    private fun buildEntryInfoAttachments(
+        database: Database,
+        entry: Entry,
+        draft: PasswordEntryEditDraft
+    ): List<Attachment> {
+        val removedNames = draft.attachments
+            .filter { it.removed }
+            .map { it.name }
+            .toSet()
+
+        val kept = entry.getAttachments(database.attachmentPool)
+            .filter { it.name !in removedNames }
+            .toMutableList()
+
+        draft.attachments.forEach { att ->
+            if (att.isNew && att.data != null && !att.removed) {
+                // 避免与已保留的附件重名产生两个同名二进制
+                var finalName = att.name
+                var suffix = 1
+                while (kept.any { it.name.equals(finalName, ignoreCase = true) }) {
+                    finalName = "${att.name} ($suffix)"
+                    suffix++
+                }
+                val binary = database.buildNewBinaryAttachment() ?: return@forEach
+                binary.getOutputDataStream(database.binaryCache).use { output ->
+                    output.write(att.data)
+                }
+                kept.add(Attachment(finalName, binary))
+            }
+        }
+        return kept
+    }
+
+    /**
+     * 应用过期时间与图标到 [EntryInfo]。
+     */
+    private fun applyExpiryAndIcon(entryInfo: EntryInfo, database: Database, draft: PasswordEntryEditDraft) {
+        if (draft.expiryTime != null) {
+            entryInfo.expires = true
+            entryInfo.expiryTime = DateInstant.fromMilliseconds(draft.expiryTime)
+        } else {
+            entryInfo.expires = false
+        }
+        if (draft.customIconUuid == null) {
+            entryInfo.icon = IconImage(database.getStandardIcon(draft.iconStandardId))
+        }
+    }
+
+    /**
+     * 读取条目附件的字节内容（供 UI 查看/保存）。
+     */
+    /**
+     * 读取条目附件的字节内容（供 UI 查看/保存）。
+     *
+     * 采用增量读取并施加 [MAX_ATTACHMENT_BYTES] 硬性上限：超过上限的附件直接拒绝返回，
+     * 避免在内存中全量展开导致 OOM。
+     */
+    fun getEntryAttachmentBytes(localPath: String, masterPassword: String, entryId: Long, name: String): ByteArray? {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@withDatabase null
+            val pool = db.attachmentPool
+            val attachment = entry.getAttachments(pool).firstOrNull { it.name == name } ?: return@withDatabase null
+            runCatching {
+                attachment.binaryData.getInputDataStream(db.binaryCache).use { input ->
+                    readBoundedBytes(input, MAX_ATTACHMENT_BYTES)
+                }
+            }.getOrNull()
+        }
+    }
+
+    /**
+     * 将条目附件以增量方式拷贝到指定输出流（供 UI 保存到本地文件）。
+     *
+     * 同样施加 [MAX_ATTACHMENT_BYTES] 上限，避免读取端无限缓冲。输出流由调用方负责关闭。
+     */
+    fun copyEntryAttachmentTo(
+        localPath: String,
+        masterPassword: String,
+        entryId: Long,
+        name: String,
+        output: OutputStream
+    ): Boolean {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@withDatabase false
+            val pool = db.attachmentPool
+            val attachment = entry.getAttachments(pool).firstOrNull { it.name == name } ?: return@withDatabase false
+            runCatching {
+                attachment.binaryData.getInputDataStream(db.binaryCache).use { input ->
+                    copyBounded(input, output, MAX_ATTACHMENT_BYTES)
+                }
+            }.isSuccess
+        }
+    }
+
+    /**
+     * 增量读取输入流，超过 [limit] 字节则抛出 [IllegalStateException] 以拒绝超大附件。
+     */
+    private fun readBoundedBytes(input: InputStream, limit: Int): ByteArray {
+        val buffer = ByteArrayOutputStream(8 * 1024)
+        val chunk = ByteArray(8 * 1024)
+        var total = 0
+        while (true) {
+            val read = input.read(chunk)
+            if (read < 0) break
+            total += read
+            if (total > limit) {
+                throw IllegalStateException("附件过大（超过 ${limit / 1024} KiB），已拒绝读取")
+            }
+            buffer.write(chunk, 0, read)
+        }
+        return buffer.toByteArray()
+    }
+
+    /**
+     * 增量拷贝输入流到输出流，超过 [limit] 字节则抛出 [IllegalStateException] 以拒绝超大附件。
+     */
+    private fun copyBounded(input: InputStream, output: OutputStream, limit: Int) {
+        val chunk = ByteArray(8 * 1024)
+        var total = 0
+        while (true) {
+            val read = input.read(chunk)
+            if (read < 0) break
+            total += read
+            if (total > limit) {
+                throw IllegalStateException("附件过大（超过 ${limit / 1024} KiB），已拒绝读取")
+            }
+            output.write(chunk, 0, read)
+        }
+    }
 }

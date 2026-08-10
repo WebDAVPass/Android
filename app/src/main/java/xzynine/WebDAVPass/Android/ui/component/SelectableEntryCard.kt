@@ -19,9 +19,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.withTimeoutOrNull
-import top.yukonga.miuix.kmp.extra.CheckboxLocation
-import top.yukonga.miuix.kmp.extra.SuperArrow
-import top.yukonga.miuix.kmp.extra.SuperCheckbox
+import top.yukonga.miuix.kmp.preference.ArrowPreference
+import top.yukonga.miuix.kmp.preference.CheckboxLocation
+import top.yukonga.miuix.kmp.preference.CheckboxPreference
 
 /**
  * 通用可选条目卡片组件。
@@ -67,13 +67,13 @@ fun SelectableEntryCard(
             verticalAlignment = Alignment.CenterVertically
         ) {
             startIconAction()
-            SuperCheckbox(
+            CheckboxPreference(
                 title = title,
-                summary = summary,
                 checked = isSelected,
                 onCheckedChange = { checked ->
                     onCheckedChange(checked)
                 },
+                summary = summary,
                 checkboxLocation = CheckboxLocation.End,
                 modifier = Modifier
                     .weight(1f)
@@ -117,7 +117,7 @@ fun SelectableEntryCard(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(modifier = Modifier.weight(1f)) {
-            SuperArrow(
+            ArrowPreference(
                 title = title,
                 summary = summary,
                 startAction = {
@@ -130,7 +130,7 @@ fun SelectableEntryCard(
                 onClick = {
                     if (skipNextClick) {
                         skipNextClick = false
-                        return@SuperArrow
+                        return@ArrowPreference
                     }
                     onClick()
                 }

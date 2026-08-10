@@ -53,18 +53,46 @@ interface WebDavConfigDao {
     @Update
     suspend fun update(config: WebDavConfig)
 
-    /**
-     * 删除WebDAV配置
-     * @param config WebDAV配置对象
-     */
-    @Query("DELETE FROM webdav_configs WHERE id = :id")
-    suspend fun deleteById(id: Long)
+/**
+ * 删除WebDAV配置
+ * @param config WebDAV配置对象
+ */
+@Query("DELETE FROM webdav_configs WHERE id = :id")
+suspend fun deleteById(id: Long)
+
+/**
+ * 删除WebDAV配置
+ * @param config WebDAV配置对象
+ */
+suspend fun delete(config: WebDavConfig) {
+    deleteById(config.id)
+}
+}
+
+/**
+ * 应用设置数据访问对象（key-value）
+ */
+@Dao
+interface AppSettingsDao {
 
     /**
-     * 删除WebDAV配置
-     * @param config WebDAV配置对象
+     * 根据 key 获取设置
+     * @param key 设置键
      */
-    suspend fun delete(config: WebDavConfig) {
-        deleteById(config.id)
-    }
+    @Query("SELECT * FROM app_settings WHERE `key` = :key")
+    suspend fun getValue(key: String): AppSetting?
+
+    /**
+     * 写入设置（存在则替换）
+     * @param setting 设置项
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(setting: AppSetting)
+
+    /**
+     * 按 key 删除设置
+     * @param key 设置键
+     */
+    @Query("DELETE FROM app_settings WHERE `key` = :key")
+    suspend fun delete(key: String)
 }

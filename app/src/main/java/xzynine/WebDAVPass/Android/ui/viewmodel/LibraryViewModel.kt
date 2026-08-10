@@ -14,6 +14,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -52,7 +53,11 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     private var lastUnlockErrorMessage: String? = null
 
     init {
-        refreshLibraryHistory()
+        // 预热库缓存：迁移与数据库加载移到 IO 协程，避免首次访问在 UI 线程同步阻塞
+        libraryContextStore.warmUp()
+        viewModelScope.launch(Dispatchers.IO) {
+            refreshLibraryHistory()
+        }
     }
 
     /**

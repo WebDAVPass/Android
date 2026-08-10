@@ -291,6 +291,14 @@ class DateInstant : Parcelable {
             return ISO8601Format.print(this.instant)
         }
 
+        /**
+         * Build a [DateInstant] from an epoch millisecond value without requiring the
+         * caller to depend on the joda-time types directly.
+         */
+        fun fromMilliseconds(millis: Long): DateInstant {
+            return DateInstant(Instant(millis))
+        }
+
         @JvmField
         val CREATOR: Parcelable.Creator<DateInstant> = object : Parcelable.Creator<DateInstant> {
             override fun createFromParcel(parcel: Parcel): DateInstant {
