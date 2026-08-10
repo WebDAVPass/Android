@@ -266,34 +266,15 @@ fun PasswordListScreen(
         }
     }
 
-    // 搜索是否曾被激活；仅用于区分「初次进入空查询」与「用户清空搜索」两种场景
-    val isSearchEverEnabled = remember { mutableStateOf(false) }
-    LaunchedEffect(searchQuery) {
-        if (searchQuery.isNotBlank()) {
-            // 搜索词非空：激活标志并触发搜索
-            isSearchEverEnabled.value = true
-            tokenViewModel.passwordViewModel.refreshPasswordEntries(
-                searchQuery = searchQuery,
-                caseSensitive = searchCaseSensitive,
-                sortMode = sortMode,
-                ascending = sortAscending,
-                hideExpired = hideExpired
-            )
-        } else if (isSearchEverEnabled.value) {
-            // 搜索词被清空：恢复全量列表
-            tokenViewModel.passwordViewModel.refreshPasswordEntries(
-                searchQuery = "",
-                caseSensitive = searchCaseSensitive,
-                sortMode = sortMode,
-                ascending = sortAscending,
-                hideExpired = hideExpired
-            )
+    // 首次进入且搜索为空时跳过刷新（reloadInitialPasswordData 已完成加载）；
+    // 后续任何搜索/排序/过滤变化均统一在此触发刷新
+    val isFirstComposition = remember { mutableStateOf(true) }
+    LaunchedEffect(searchQuery, searchCaseSensitive, sortModeOrdinal, sortAscending, hideExpired) {
+        if (isFirstComposition.value && searchQuery.isBlank()) {
+            isFirstComposition.value = false
+            return@LaunchedEffect
         }
-        // 初次进入（searchQuery="" 且搜索未激活）：跳过，reloadInitialPasswordData 已完成加载
-    }
-
-    // 切换区分大小写/排序/过滤时按当前关键词重新搜索
-    LaunchedEffect(searchCaseSensitive, sortModeOrdinal, sortAscending, hideExpired) {
+        isFirstComposition.value = false
         tokenViewModel.passwordViewModel.refreshPasswordEntries(
             searchQuery = searchQuery,
             caseSensitive = searchCaseSensitive,
