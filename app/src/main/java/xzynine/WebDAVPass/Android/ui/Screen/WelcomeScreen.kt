@@ -70,7 +70,7 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
-import xzynine.WebDAVPass.Android.util.DateTimeFormatter
+import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 
 
 
@@ -870,7 +870,7 @@ fun WelcomeScreen(
                             else -> "未同步"
                         }
                         // 毫秒级时间戳按设备时区格式化为本地时间，避免直接显示原始数字
-                        val syncAtText = DateTimeFormatter.formatLocalDateTime(item.lastSyncAt)
+                        val syncAtText = LocalTimeFormatter.formatLocalDateTime(item.lastSyncAt)
                             .takeIf { it.isNotEmpty() }
                             ?.let { "，上次: $it" }
                             .orEmpty()

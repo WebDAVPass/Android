@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
+import github.xzynine.webdav.FileAbsenceSource
 import github.xzynine.webdav.SyncFailureKind
 import github.xzynine.webdav.SyncMergeCallback
 import github.xzynine.webdav.SyncOutcome
@@ -102,7 +103,7 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
                     _backupStatus.value = "未绑定云端 .kdbx，已跳过自动恢复"
                 } catch (ex: Exception) {
                     Logger.e(SYNC_LOG_TAG, "自动恢复失败: ${ex.message}", ex)
-                    val message = resolveSyncFailureMessage("自动恢复", null, syncEngine.classifyFailure(ex))
+                    val message = resolveSyncFailureMessage("自动恢复", null, syncEngine.buildFailureOutcome(SyncFailureKind.of(ex), ex.message))
                     _backupStatus.value = "自动恢复失败：$message"
                     libraryViewModel.updateCloudSyncState(
                         status = SYNC_STATUS_FAILED,
@@ -155,7 +156,7 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
                     _backupStatus.value = "未绑定云端 .kdbx，无法手动恢复"
                 } catch (ex: Exception) {
                     Logger.e(SYNC_LOG_TAG, "手动恢复失败: ${ex.message}", ex)
-                    val message = resolveSyncFailureMessage("手动恢复", null, syncEngine.classifyFailure(ex))
+                    val message = resolveSyncFailureMessage("手动恢复", null, syncEngine.buildFailureOutcome(SyncFailureKind.of(ex), ex.message))
                     _backupStatus.value = "手动恢复失败：$message"
                     libraryViewModel.updateCloudSyncState(
                         status = SYNC_STATUS_FAILED,
@@ -215,7 +216,7 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
                     _backupStatus.value = "未绑定云端 .kdbx，无法同步备份"
                 } catch (ex: Exception) {
                     Logger.e(SYNC_LOG_TAG, "备份同步失败: ${ex.message}", ex)
-                    val message = resolveSyncFailureMessage("备份", null, syncEngine.classifyFailure(ex))
+                    val message = resolveSyncFailureMessage("备份", null, syncEngine.buildFailureOutcome(SyncFailureKind.of(ex), ex.message))
                     _backupStatus.value = "备份失败：$message"
                     libraryViewModel.updateCloudSyncState(
                         status = SYNC_STATUS_FAILED,
@@ -372,11 +373,9 @@ class CloudSyncViewModel(private val context: Context) : ViewModel() {
         return when (outcome.errorKind) {
             SyncFailureKind.PERMISSION -> "本地数据库访问权限已失效，请重新选择数据库文件"
             SyncFailureKind.NETWORK -> "网络异常，请检查网络连接后重试"
-            SyncFailureKind.FILE_NOT_FOUND -> {
-                val specific = outcome.errorMessage
-                if (specific == "远端文件不存在，无法下载" || specific == "本地数据库文件不存在或不可访问") {
-                    specific
-                } else if (isUriPath) {
+            SyncFailureKind.FILE_NOT_FOUND -> when (outcome.absenceSource) {
+                FileAbsenceSource.REMOTE -> "远端文件不存在，无法下载"
+                FileAbsenceSource.LOCAL, FileAbsenceSource.NONE -> if (isUriPath) {
                     "本地数据库文件不存在或已失效，请重新选择数据库文件"
                 } else {
                     "本地数据库文件不存在，请检查路径"
