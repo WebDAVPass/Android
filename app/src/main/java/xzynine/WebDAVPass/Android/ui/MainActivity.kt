@@ -99,11 +99,14 @@ fun MainScreen() {
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             when (event) {
-                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                // 使用 ON_STOP/ON_START 而非 ON_PAUSE/ON_RESUME 判断后台：
+                // ON_PAUSE 在半透明 Activity、系统权限对话框和生物识别提示覆盖时也会触发，
+                // 此时应用并未真正退到后台，会误触发锁定。
+                androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
                     lastBackgroundAt = System.currentTimeMillis()
                 }
 
-                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
                     // 后台自动锁定：退后台 ≥30 秒则锁定
                     val backgroundAt = lastBackgroundAt
                     lastBackgroundAt = 0L
