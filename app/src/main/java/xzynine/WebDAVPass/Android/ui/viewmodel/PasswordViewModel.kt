@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
+import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
@@ -491,6 +492,84 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         val path = access.localPath ?: return 0
         return withContext(Dispatchers.IO) {
             kdbxTokenRepository.permanentlyDeleteRecentDeletedPasswordEntries(path, access.masterPassword, entryIds)
+        }
+    }
+
+    /**
+     * 加载全部分组树（不含回收站）。
+     */
+    suspend fun loadAllPasswordGroups(
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): List<GroupNodeInfo> {
+        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
+        if (!access.isReady()) {
+            return emptyList()
+        }
+        val path = access.localPath ?: return emptyList()
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.loadAllPasswordGroups(path, access.masterPassword)
+        }
+    }
+
+    /**
+     * 批量移动条目/分组到目标分组。
+     */
+    suspend fun movePasswordTargets(
+        entryIds: List<Long>,
+        groupIds: List<Long>,
+        targetGroupId: Long?,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): Int {
+        if (entryIds.isEmpty() && groupIds.isEmpty()) {
+            return 0
+        }
+        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
+        if (!access.isReady()) {
+            return 0
+        }
+        val path = access.localPath ?: return 0
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.movePasswordTargets(
+                path,
+                access.masterPassword,
+                entryIds,
+                groupIds,
+                targetGroupId
+            )
+        }
+    }
+
+    /**
+     * 批量复制条目/分组到目标分组。
+     */
+    suspend fun copyPasswordTargets(
+        entryIds: List<Long>,
+        groupIds: List<Long>,
+        targetGroupId: Long?,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): Int {
+        if (entryIds.isEmpty() && groupIds.isEmpty()) {
+            return 0
+        }
+        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
+        if (!access.isReady()) {
+            return 0
+        }
+        val path = access.localPath ?: return 0
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.copyPasswordTargets(
+                path,
+                access.masterPassword,
+                entryIds,
+                groupIds,
+                targetGroupId
+            )
         }
     }
 }

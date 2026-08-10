@@ -82,3 +82,12 @@ data class PasswordGroupEditDraft(
     val title: String,
     val notes: String = ""
 )
+
+/**
+ * 分组选择树节点（用于移动/复制的目标分组选择）。
+ */
+data class GroupNodeInfo(
+    val groupId: Long,
+    val title: String,
+    val depth: Int
+)

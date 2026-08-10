@@ -62,8 +62,10 @@ import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.AddFolder
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.MoveFile
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.icon.extended.Sort
 import top.yukonga.miuix.kmp.icon.extended.Undo
@@ -76,8 +78,10 @@ import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
+import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
@@ -134,6 +138,9 @@ fun PasswordListScreen(
     val showCreateGroupDialog = remember { mutableStateOf(false) }
     val showDeleteDialog = remember { mutableStateOf(false) }
     val showPermanentDeleteDialog = remember { mutableStateOf(false) }
+    val showGroupPicker = remember { mutableStateOf(false) }
+    var groupPickerIsMove by remember { mutableStateOf(false) }
+    var pickerGroups by remember { mutableStateOf<List<GroupNodeInfo>>(emptyList()) }
 
     var createEntryTitle by remember { mutableStateOf("") }
     var createEntryUsername by remember { mutableStateOf("") }
@@ -162,6 +169,36 @@ fun PasswordListScreen(
                 ToastUtils.showShortToast(context, "已恢复 $restored 项")
             } else {
                 ToastUtils.showShortToast(context, "恢复失败")
+            }
+            clearSelectionMode()
+        }
+    }
+
+    fun openGroupPicker(isMove: Boolean) {
+        groupPickerIsMove = isMove
+        coroutineScope.launch {
+            pickerGroups = tokenViewModel.loadAllPasswordGroups()
+            showGroupPicker.value = true
+        }
+    }
+
+    fun moveOrCopySelectedEntries(targetGroupId: Long?) {
+        showGroupPicker.value = false
+        coroutineScope.launch {
+            val entryIds = selectedTargets.keys.filter { selectedTargets[it] == false }
+            val groupIds = selectedTargets.keys.filter { selectedTargets[it] == true }
+            val count = if (groupPickerIsMove) {
+                tokenViewModel.movePasswordTargets(entryIds, groupIds, targetGroupId)
+            } else {
+                tokenViewModel.copyPasswordTargets(entryIds, groupIds, targetGroupId)
+            }
+            if (count > 0) {
+                ToastUtils.showShortToast(
+                    context,
+                    if (groupPickerIsMove) "已移动 $count 项" else "已复制 $count 项"
+                )
+            } else {
+                ToastUtils.showShortToast(context, if (groupPickerIsMove) "移动失败" else "复制失败")
             }
             clearSelectionMode()
         }
@@ -380,6 +417,30 @@ fun PasswordListScreen(
                                 )
                             }
                         } else if (allowWriteActions) {
+                            IconButton(
+                                onClick = {
+                                    if (selectedTargets.isNotEmpty()) {
+                                        openGroupPicker(isMove = true)
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.MoveFile,
+                                    contentDescription = "移动"
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (selectedTargets.isNotEmpty()) {
+                                        openGroupPicker(isMove = false)
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Copy,
+                                    contentDescription = "复制"
+                                )
+                            }
                             IconButton(
                                 onClick = {
                                     if (selectedTargets.isNotEmpty()) {
@@ -783,6 +844,14 @@ fun PasswordListScreen(
             }
         )
     }
+
+    GroupPickerDialog(
+        title = if (groupPickerIsMove) "移动到分组" else "复制到分组",
+        show = showGroupPicker.value,
+        groups = pickerGroups,
+        onDismiss = { showGroupPicker.value = false },
+        onPick = { targetGroupId -> moveOrCopySelectedEntries(targetGroupId) }
+    )
 }
 
 /**

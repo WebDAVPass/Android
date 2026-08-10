@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import xzynine.WebDAVPass.Android.data.DatabaseManager
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
+import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.OtpToken
@@ -500,6 +501,53 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             onPasswordWriteSuccess()
         }
         return deleted
+    }
+
+    /**
+     * 加载全部分组树（不含回收站），用于移动/复制的目标分组选择。
+     */
+    suspend fun loadAllPasswordGroups(): List<GroupNodeInfo> {
+        return passwordViewModel.loadAllPasswordGroups(
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+    }
+
+    /**
+     * 批量移动条目/分组到目标分组。
+     */
+    suspend fun movePasswordTargets(entryIds: List<Long>, groupIds: List<Long>, targetGroupId: Long?): Int {
+        val moved = passwordViewModel.movePasswordTargets(
+            entryIds,
+            groupIds,
+            targetGroupId,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+        if (moved > 0) {
+            onPasswordWriteSuccess()
+        }
+        return moved
+    }
+
+    /**
+     * 批量复制条目/分组到目标分组。
+     */
+    suspend fun copyPasswordTargets(entryIds: List<Long>, groupIds: List<Long>, targetGroupId: Long?): Int {
+        val copied = passwordViewModel.copyPasswordTargets(
+            entryIds,
+            groupIds,
+            targetGroupId,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+        if (copied > 0) {
+            onPasswordWriteSuccess()
+        }
+        return copied
     }
 
     /**

@@ -584,6 +584,133 @@ class KdbxTokenRepository(context: Context) {
     }
 
     /**
+     * 加载全部分组树（不含回收站），用于移动/复制的目标分组选择。
+     */
+    fun loadAllPasswordGroups(localPath: String, masterPassword: String): List<GroupNodeInfo> {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val rootGroup = db.rootGroup ?: return@withDatabase emptyList()
+            val result = mutableListOf<GroupNodeInfo>()
+            fun walk(group: Group, depth: Int) {
+                group.getChildGroups().forEach { child ->
+                    if (!db.groupIsInRecycleBin(child)) {
+                        result.add(GroupNodeInfo(groupId = toStableGroupId(child), title = child.title, depth = depth))
+                        walk(child, depth + 1)
+                    }
+                }
+            }
+            walk(rootGroup, 0)
+            result
+        }
+    }
+
+    /**
+     * 批量移动条目/分组到目标分组。
+     *
+     * @return 成功移动的数量（分组按 1 计）
+     */
+    fun movePasswordTargets(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+        groupIds: List<Long>,
+        targetGroupId: Long?
+    ): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val target = resolveParentGroup(db, targetGroupId) ?: return@withDatabase 0
+            if (db.groupIsInRecycleBin(target)) {
+                return@withDatabase 0
+            }
+            var moved = 0
+            entryIds.forEach { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
+                    ?: return@forEach
+                if (entry.parent != target) {
+                    db.moveEntryTo(entry, target)
+                    moved++
+                }
+            }
+            groupIds.forEach { groupId ->
+                val group = findGroupByStableId(db.rootGroup, groupId) ?: return@forEach
+                if (group.parent != target && !isGroupInSubtree(group, target)) {
+                    db.moveGroupTo(group, target)
+                    moved++
+                }
+            }
+            moved
+        }
+    }
+
+    /**
+     * 批量复制条目/分组到目标分组。
+     *
+     * 复制分组时整棵子树一并复制（标题加 " (~)" 由 [Database.copyEntryTo] 处理）。
+     *
+     * @return 成功复制的数量（分组按 1 计）
+     */
+    fun copyPasswordTargets(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+        groupIds: List<Long>,
+        targetGroupId: Long?
+    ): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val target = resolveParentGroup(db, targetGroupId) ?: return@withDatabase 0
+            if (db.groupIsInRecycleBin(target)) {
+                return@withDatabase 0
+            }
+            var copied = 0
+            entryIds.forEach { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
+                    ?: return@forEach
+                if (entry.parent != target) {
+                    db.copyEntryTo(entry, target)
+                    copied++
+                }
+            }
+            groupIds.forEach { groupId ->
+                val group = findGroupByStableId(db.rootGroup, groupId) ?: return@forEach
+                if (!isGroupInSubtree(group, target)) {
+                    copyGroupRecursive(db, group, target)
+                    copied++
+                }
+            }
+            copied
+        }
+    }
+
+    /**
+     * 递归复制分组（含其下所有条目与子分组）。
+     */
+    private fun copyGroupRecursive(database: Database, group: Group, newParent: Group) {
+        val copiedGroup = database.createGroup() ?: return
+        copiedGroup.title = group.title
+        copiedGroup.notes = group.notes
+        copiedGroup.icon = group.icon
+        database.addGroupTo(copiedGroup, newParent)
+        group.getChildEntries().forEach { entry ->
+            database.copyEntryTo(entry, copiedGroup)
+        }
+        group.getChildGroups().forEach { child ->
+            copyGroupRecursive(database, child, copiedGroup)
+        }
+    }
+
+    /**
+     * 判断 [candidate] 是否位于 [group] 的子树内（含自身），用于防止移动到自身/子孙。
+     */
+    private fun isGroupInSubtree(group: Group, candidate: Group): Boolean {
+        var current: Group? = candidate
+        while (current != null) {
+            if (current === group) {
+                return true
+            }
+            current = current.parent
+        }
+        return false
+    }
+
+    /**
      * 一次性加载一级密码条目及全局总计数。
      *
      * 对比分别调用 [loadPasswordEntriesByTopLevel] 和 [countPasswordEntries]，
