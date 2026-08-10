@@ -239,14 +239,18 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 读取回收站中所有条目摘要（仅条目，不包含文件夹占位）。
      */
-    fun loadRecentDeletedPasswordEntries(localPath: String, masterPassword: String): List<PasswordEntry> {
+    fun loadRecentDeletedPasswordEntries(
+        localPath: String,
+        masterPassword: String,
+        includeFieldDetails: Boolean = false
+    ): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val recycleBin = db.recycleBin ?: return@withDatabase emptyList()
             buildPasswordEntries(
                 database = db,
                 entries = collectEntries(recycleBin),
                 groups = emptyList(),
-                includeFieldDetails = false
+                includeFieldDetails = includeFieldDetails
             )
         }
     }

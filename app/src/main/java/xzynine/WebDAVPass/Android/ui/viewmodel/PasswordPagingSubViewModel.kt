@@ -195,7 +195,12 @@ internal class PasswordPagingSubViewModel(
                         }
                     }
                     PasswordListMode.RECENT_DELETED -> {
-                        repository.loadRecentDeletedPasswordEntries(localPath, masterPassword)
+                        // 搜索时加载字段详情，以便匹配备注/URL/自定义字段等（与正常列表模式一致）
+                        repository.loadRecentDeletedPasswordEntries(
+                            localPath,
+                            masterPassword,
+                            includeFieldDetails = keyword.isNotBlank()
+                        )
                     }
                 }
             }
