@@ -243,6 +243,8 @@ private fun RegistrationContent(
     var showPassword by remember { mutableStateOf(false) }
     var unlockLoading by remember { mutableStateOf(false) }
     var saving by remember { mutableStateOf(false) }
+    // 待保存的表单密码默认遮蔽，防止旁观者读取（FLAG_SECURE 只能阻止截屏/录屏）
+    var showFormPassword by remember { mutableStateOf(false) }
 
     var showGroupPicker by remember { mutableStateOf(false) }
     var pickerGroups by remember { mutableStateOf<List<GroupNodeInfo>>(emptyList()) }
@@ -280,11 +282,25 @@ private fun RegistrationContent(
             fontSize = 14.sp,
             color = MiuixTheme.colorScheme.onSurface
         )
-        Text(
-            text = "密码：${registerInfo.password.orEmpty()}",
-            fontSize = 14.sp,
-            color = MiuixTheme.colorScheme.onSurface
-        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = "密码：" + if (showFormPassword) {
+                    registerInfo.password.orEmpty()
+                } else {
+                    "•".repeat(registerInfo.password?.length ?: 0)
+                },
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.onSurface
+            )
+            TextButton(
+                text = if (showFormPassword) "隐藏密码" else "显示密码",
+                onClick = { showFormPassword = !showFormPassword }
+            )
+        }
 
         when {
             hasLibrary == null -> {
