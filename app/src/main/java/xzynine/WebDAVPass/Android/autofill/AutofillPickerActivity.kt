@@ -441,7 +441,8 @@ private fun RegistrationContent(
             onPick = { targetGroupId ->
                 selectedGroupId = targetGroupId
                 showGroupPicker = false
-            }
+            },
+            initialSelectedGroupId = selectedGroupId
         )
     }
 }

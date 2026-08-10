@@ -37,6 +37,9 @@ import xzynine.WebDAVPass.Android.data.GroupNodeInfo
  *
  * 以树状缩进展示全部分组（不含回收站），可选择「根目录」或任一分组。
  * [onPick] 回调参数为目标分组稳定 ID，null 表示根目录。
+ *
+ * @param initialSelectedGroupId 打开时回显的选中分组 ID，null 表示根目录。
+ *  调用方可传入上一次的选择，使重新打开时保持状态一致。
  */
 @Composable
 fun GroupPickerDialog(
@@ -44,13 +47,14 @@ fun GroupPickerDialog(
     show: Boolean,
     groups: List<GroupNodeInfo>,
     onDismiss: () -> Unit,
-    onPick: (targetGroupId: Long?) -> Unit
+    onPick: (targetGroupId: Long?) -> Unit,
+    initialSelectedGroupId: Long? = null
 ) {
     var selectedGroupId by remember { mutableStateOf<Long?>(null) }
 
     LaunchedEffect(show) {
         if (show) {
-            selectedGroupId = null
+            selectedGroupId = initialSelectedGroupId
         }
     }
 
