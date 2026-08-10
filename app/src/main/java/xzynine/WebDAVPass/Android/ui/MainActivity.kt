@@ -200,6 +200,16 @@ fun MainScreen() {
                     )
                 }
                 entry<Route.Home> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    }
+
                     Box(modifier = Modifier.fillMaxSize()) {
                         Scaffold(
                             popupHost = {},
@@ -281,6 +291,16 @@ fun MainScreen() {
                     }
                 }
                 entry<Route.Settings> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    }
+
                     Box(modifier = Modifier.fillMaxSize()) {
                         SettingsScreen(
                             viewModel = tokenViewModel,
@@ -307,6 +327,16 @@ fun MainScreen() {
                     }
                 }
                 entry<Route.DatabaseSettings> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    }
+
                     Box(modifier = Modifier.fillMaxSize()) {
                         DatabaseSettingsScreen(
                             viewModel = tokenViewModel,
