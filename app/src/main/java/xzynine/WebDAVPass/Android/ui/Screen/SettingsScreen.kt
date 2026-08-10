@@ -59,6 +59,7 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.GridView
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
@@ -649,6 +650,29 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                         viewModel.autoUnlockViewModel.updateManualUnlockWindowEnabled(currentLib, checked) {
                             viewModel.libraryViewModel.persistLibraryMetadata(it)
                         }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                val lockTimeoutItems = remember { listOf("不锁定", "1 分钟", "5 分钟", "15 分钟", "30 分钟", "60 分钟") }
+                val lockTimeoutValues = listOf(0, 1, 5, 15, 30, 60)
+                val lockTimeoutMinutes by viewModel.lockTimeoutMinutes.collectAsState()
+                val lockTimeoutIndex = lockTimeoutValues.indexOf(lockTimeoutMinutes).coerceAtLeast(0)
+                WindowSpinnerPreference(
+                    title = "应用超时锁定",
+                    summary = "退到后台超过该时长后自动锁定，需重新输入主密码",
+                    items = lockTimeoutItems.map { DropdownItem(text = it) },
+                    selectedIndex = lockTimeoutIndex,
+                    showValue = lockTimeoutMinutes > 0,
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Lock,
+                            contentDescription = "应用超时锁定"
+                        )
+                    },
+                    onSelectedIndexChange = { index ->
+                        viewModel.setLockTimeoutMinutes(lockTimeoutValues[index])
                     },
                     modifier = Modifier.fillMaxWidth()
                 )

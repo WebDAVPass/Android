@@ -59,6 +59,11 @@ import androidx.navigation3.ui.NavDisplay
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 截图防泄密：全局禁止截屏/录屏（涉及密码与令牌内容）
+        window.setFlags(
+            android.view.WindowManager.LayoutParams.FLAG_SECURE,
+            android.view.WindowManager.LayoutParams.FLAG_SECURE
+        )
         this.setContent {
             AppTheme {
                 SetupSystemBars()
@@ -73,6 +78,37 @@ fun MainScreen() {
     val context = LocalContext.current
     val tokenViewModel: TokenViewModel = remember(context.applicationContext) {
         TokenViewModel.getSharedInstance(context.applicationContext)
+    }
+
+    // 超时锁定：应用退到后台后计时，回到前台超过阈值则锁定
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var lastBackgroundAt by remember { mutableStateOf(0L) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    lastBackgroundAt = System.currentTimeMillis()
+                }
+
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> {
+                    val backgroundAt = lastBackgroundAt
+                    lastBackgroundAt = 0L
+                    val timeoutMinutes = tokenViewModel.lockTimeoutMinutes.value
+                    val timeoutMs = timeoutMinutes * 60_000L
+                    if (backgroundAt > 0L && timeoutMs > 0L &&
+                        System.currentTimeMillis() - backgroundAt >= timeoutMs
+                    ) {
+                        tokenViewModel.libraryViewModel.lockCurrentLibrary()
+                    }
+                }
+
+                else -> {}
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     val showCloudBindingDialog = remember { mutableStateOf(false) }

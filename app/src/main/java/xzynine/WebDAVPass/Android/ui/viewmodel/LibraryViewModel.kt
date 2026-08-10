@@ -112,6 +112,14 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 超时锁定：仅重置解锁状态（清空内存密码与数据库缓存），保留当前库选择。
+     * 回到前台超时后调用，解锁页仍显示当前库。
+     */
+    fun lockCurrentLibrary() {
+        resetUnlockState()
+    }
+
+    /**
      * 打开并选中库上下文
      */
     fun openLibraryContext(libraryContext: LibraryContext) {

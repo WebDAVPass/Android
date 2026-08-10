@@ -6,6 +6,7 @@ import android.net.Uri
 import xzylib.base.util.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import xzynine.WebDAVPass.Android.data.AppDatabaseHolder
 import xzynine.WebDAVPass.Android.data.DatabaseManager
 import xzynine.WebDAVPass.Android.data.DatabaseSettingsInfo
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
@@ -39,6 +40,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         private const val UNLOCK_LOAD_RETRY_COUNT = 3
         private const val UNLOCK_LOAD_RETRY_DELAY_MS = 250L
         private const val SYNC_LOG_TAG = "同步"
+        private const val SETTING_KEY_LOCK_TIMEOUT_MINUTES = "lock_timeout_minutes"
 
         @Volatile
         private var SHARED_VIEW_MODEL: TokenViewModel? = null
@@ -81,8 +83,41 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val _currentTimeMillis = MutableStateFlow(System.currentTimeMillis())
     val currentTimeMillis: StateFlow<Long> = _currentTimeMillis.asStateFlow()
 
+    /** 应用超时锁定分钟数（0 表示不锁定），持久化于 app_settings。 */
+    private val _lockTimeoutMinutes = MutableStateFlow(0)
+    val lockTimeoutMinutes: StateFlow<Int> = _lockTimeoutMinutes.asStateFlow()
+
     init {
         startTokenRefreshTimer()
+        viewModelScope.launch {
+            runCatching {
+                AppDatabaseHolder.getInstance(context)
+                    .appSettingsDao()
+                    .getValue(SETTING_KEY_LOCK_TIMEOUT_MINUTES)
+                    ?.value
+                    ?.toIntOrNull()
+            }.getOrNull()?.takeIf { it >= 0 }?.let { _lockTimeoutMinutes.value = it }
+        }
+    }
+
+    /**
+     * 设置应用超时锁定分钟数（0 表示不锁定）。
+     */
+    fun setLockTimeoutMinutes(minutes: Int) {
+        val safe = minutes.coerceAtLeast(0)
+        _lockTimeoutMinutes.value = safe
+        viewModelScope.launch {
+            runCatching {
+                AppDatabaseHolder.getInstance(context)
+                    .appSettingsDao()
+                    .put(
+                        xzynine.WebDAVPass.Android.data.AppSetting(
+                            SETTING_KEY_LOCK_TIMEOUT_MINUTES,
+                            safe.toString()
+                        )
+                    )
+            }
+        }
     }
 
     /**
