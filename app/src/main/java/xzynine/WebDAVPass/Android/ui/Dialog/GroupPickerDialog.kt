@@ -93,7 +93,8 @@ fun GroupPickerDialog(
                             .fillMaxWidth()
                             .clickable { selectedGroupId = group.groupId }
                             .padding(
-                                start = 14.dp + (group.depth * 20).dp,
+                                // 深层分组缩进设上限（coerceAtMost(6)），避免极深嵌套时文本被挤出屏幕
+                                start = 14.dp + (group.depth.coerceAtMost(6) * 20).dp,
                                 end = 14.dp,
                                 top = 12.dp,
                                 bottom = 12.dp
