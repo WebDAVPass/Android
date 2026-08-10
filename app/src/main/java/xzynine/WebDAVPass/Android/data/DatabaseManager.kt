@@ -99,9 +99,9 @@ object DatabaseManager {
     }
 
     /**
-     * 关闭并清除当前缓存的数据库实例。
+     * 关闭并清除当前缓存的数据库实例，同时清除密钥文件凭据。
      *
-     * 切换库或退出时调用，释放内存中的解密数据。
+     * 切换库、退出应用或真正"锁定"状态转移时调用，释放内存中的解密数据与凭据。
      */
     @Synchronized
     fun close() {
@@ -112,6 +112,21 @@ object DatabaseManager {
         keyFileData = null
         runCatching { c.database.clearAndClose(c.cacheDirectory) }
         Logger.d(LOG_TAG, "已关闭并清除数据库缓存: ${c.localPath}")
+    }
+
+    /**
+     * 只丢弃当前缓存的数据库实例（保留密钥文件凭据）。
+     *
+     * 用于"合并/保存过程中内存实例可能已部分变异"的失败路径：
+     * 需要关闭缓存避免污染后续写回，但不能清除 [keyFileData]，否则
+     * 密钥文件保护的库后续静默重开会因缺失密钥文件凭据而失败。
+     */
+    @Synchronized
+    fun invalidateCacheKeepKeyFile() {
+        val c = cached ?: return
+        cached = null
+        runCatching { c.database.clearAndClose(c.cacheDirectory) }
+        Logger.d(LOG_TAG, "已失效数据库缓存（保留密钥文件凭据）: ${c.localPath}")
     }
 
     /**

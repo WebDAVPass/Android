@@ -288,9 +288,53 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
 
     /**
      * 获取主密码（内部使用）
+     *
+     * 防御性检查：若 UI 仍显示"已解锁"但数据库缓存已失效（如合并/保存失败路径调用了
+     * [DatabaseManager.invalidateCacheKeepKeyFile]），在调用方真正需要凭据前，
+     * 用已有的内存密码 + 已保留的密钥文件静默重建缓存；若重建失败则回落锁定态。
      */
     internal fun getMasterPasswordInternal(): String {
+        if (_isLibraryUnlocked.value && !DatabaseManager.isOpen()) {
+            val localPath = _currentLibrary.value?.localPath
+            if (!localPath.isNullOrBlank() && currentLibraryMasterPassword.isNotBlank()) {
+                // 缓存失效但凭据仍在：尝试静默重建缓存，不强制用户重新解锁。
+                // 重建失败不抛异常——后续 withDatabase 仍可自行打开/关闭，
+                // 只是无法享受缓存加速；极端情况下再回落锁定态。
+                val rebuilt = runCatching {
+                    // 借用 validatePassword 的标准打开+缓存路径
+                    KdbxTokenRepository(context).validatePassword(
+                        localPath = localPath,
+                        masterPassword = currentLibraryMasterPassword,
+                        keyFileData = null  // DatabaseManager 已保留 keyFileData，validatePassword 会读取
+                    )
+                }.getOrDefault(false)
+                if (!rebuilt) {
+                    // 静默重建失败：回落至锁定态，避免 UI 显示"已解锁"但所有操作都失败
+                    Logger.w(
+                        "解锁状态",
+                        "数据库缓存丢失且静默重建失败，回落至锁定态: path=$localPath"
+                    )
+                    resetUnlockStateKeepKeyFile()
+                } else {
+                    Logger.d("解锁状态", "数据库缓存已静默重建: path=$localPath")
+                }
+            }
+        }
         return currentLibraryMasterPassword
+    }
+
+    /**
+     * 重置解锁状态，但保留 [DatabaseManager] 的密钥文件凭据。
+     *
+     * 用于"缓存已丢失且静默重开失败"的回落路径：需要锁定 UI，但密钥文件凭据
+     * 仍然有效（下次手动解锁时不要求用户重新选密钥文件），避免问题 #1 叠加。
+     */
+    private fun resetUnlockStateKeepKeyFile() {
+        currentLibraryMasterPassword = ""
+        isCurrentLibraryMasterPasswordManualVerified = false
+        _isLibraryUnlocked.value = false
+        // 不调用 DatabaseManager.close()，保留 keyFileData，
+        // 下次用户手动输入密码解锁时仍可复用已登记的密钥文件。
     }
 
     /**

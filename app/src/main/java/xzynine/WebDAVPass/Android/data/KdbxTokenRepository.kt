@@ -837,9 +837,10 @@ class KdbxTokenRepository(context: Context) {
                 DatabaseManager.setKeyFileData(effectiveKeyFile)
                 true
             } catch (e: Exception) {
-                // 保存失败：关闭缓存实例，防止内存中已变异的 KDF 设置污染后续保存，
-                // 下次操作将从磁盘重新打开（磁盘文件未被改写，旧凭据仍然有效）
-                DatabaseManager.close()
+                // 保存失败：失效缓存实例，防止内存中已变异的 KDF 设置污染后续保存，
+                // 下次操作将从磁盘重新打开（磁盘文件未被改写，旧凭据仍然有效）。
+                // 保留 keyFileData，避免密钥文件保护的库后续静默重开缺失凭据。
+                DatabaseManager.invalidateCacheKeepKeyFile()
                 throw e
             } finally {
                 if (cachedPair == null) {
@@ -953,8 +954,10 @@ class KdbxTokenRepository(context: Context) {
                 true
             }
         }.onFailure {
-            // 合并可能已部分改动内存实例，丢弃缓存以免污染状态被写回磁盘
-            DatabaseManager.close()
+            // 合并可能已部分改动内存实例，丢弃缓存以免污染状态被写回磁盘。
+            // 使用 invalidateCacheKeepKeyFile 而非 close：保留 keyFileData，
+            // 否则密钥文件保护的库后续静默重开会因缺失凭据失败（关联问题 #1/#9）。
+            DatabaseManager.invalidateCacheKeepKeyFile()
             Logger.e(LOG_TAG, "mergeLocalDatabaseFile failed, path=$localPath, message=${it.message}", it)
         }.getOrDefault(false)
     }
@@ -1130,8 +1133,10 @@ class KdbxTokenRepository(context: Context) {
         }.onSuccess {
             Logger.d(SYNC_LOG_TAG, "远端数据库合并成功：本地路径=$localPath")
         }.onFailure {
-            // 合并可能已部分改动内存实例，丢弃缓存以免污染状态被写回磁盘
-            DatabaseManager.close()
+            // 合并可能已部分改动内存实例，丢弃缓存以免污染状态被写回磁盘。
+            // 使用 invalidateCacheKeepKeyFile 而非 close：保留 keyFileData，
+            // 否则密钥文件保护的库后续静默重开会因缺失凭据失败（关联问题 #1/#9）。
+            DatabaseManager.invalidateCacheKeepKeyFile()
             Logger.e(SYNC_LOG_TAG, "远端数据库合并失败：${it.message}", it)
         }.getOrDefault(false)
     }
