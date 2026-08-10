@@ -1160,23 +1160,46 @@ private fun PasswordEntryEditorDialog(
  *
  * 字段名使用 [TemplateEngine.addTemplateDecorator] 装饰（如 [SSID]），
  * 保证其他支持模板的应用（如 KeePassDX）可识别；已存在的同名字段跳过。
+ *
+ * 字段类型按模板属性保留（如 DATETIME → DATE_TIME），受保护的 TEXT 映射为 PASSWORD；
+ * 逐字段去重，避免同一模板内重复标签进入列表。
  */
 private fun MutableList<EditableFieldDraft>.applyTemplateFields(template: Template) {
-    val existingNames = this.map { it.name }.toSet()
+    val existingNames = this.map { it.name }.toMutableSet()
     template.sections.forEach { section ->
         section.attributes.forEach { attribute ->
             val decoratedName = TemplateEngine.addTemplateDecorator(attribute.label)
             if (decoratedName !in existingNames) {
+                existingNames.add(decoratedName)
                 add(
                     EditableFieldDraft(
                         name = decoratedName,
                         value = attribute.options.default ?: "",
                         isProtected = attribute.protected,
-                        valueType = RemainingValueType.TEXT
+                        valueType = mapTemplateAttributeType(attribute.type, attribute.protected)
                     )
                 )
             }
         }
+    }
+}
+
+/**
+ * 将模板属性类型映射为列表展示用的 [RemainingValueType]。
+ */
+private fun mapTemplateAttributeType(
+    type: com.kunzisoft.keepass.database.element.template.TemplateAttributeType,
+    protected: Boolean
+): RemainingValueType {
+    return when (type) {
+        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.DATETIME ->
+            RemainingValueType.DATE_TIME
+        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.TEXT ->
+            if (protected) RemainingValueType.PASSWORD else RemainingValueType.TEXT
+        // LIST 与 DIVIDER 暂无对应的展示类型，回退为 TEXT
+        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.LIST,
+        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.DIVIDER ->
+            RemainingValueType.TEXT
     }
 }
 
