@@ -42,7 +42,8 @@ fun Uri.toRequestBody(contentType: MediaType? = null): RequestBody {
 
 /**
  * 通过 ContentResolver 查询 [OpenableColumns.DISPLAY_NAME] 获取 URI 展示名称；
- * 查询失败或名称为空时回退到 `uri.lastPathSegment`，最后回退到 [fallbackIfEmpty]。
+ * 查询失败或名称为空时回退到 `uri.lastPathSegment`（去掉 docid 前缀，如
+ * `primary:Documents/key.key` → `key.key`），最后回退到 [fallbackIfEmpty]。
  *
  * 原来在 WelcomeScreen / CreateMasterPasswordDialog 中内联了三份相同逻辑，统一到此扩展函数。
  */
@@ -62,6 +63,10 @@ fun Uri.resolveDisplayName(
             }
     }.getOrNull()
     return queried
-        ?: this.lastPathSegment?.takeIf { it.isNotBlank() }
+        // 部分 SAF provider 的 lastPathSegment 是 docid 内嵌路径 (primary:Documents/foo.key)，
+        // 取最后一段斜杠后的文件名，避免把完整 docid 当显示名。
+        ?: this.lastPathSegment
+            ?.substringAfterLast('/')
+            ?.takeIf { it.isNotBlank() }
         ?: fallbackIfEmpty
 }
