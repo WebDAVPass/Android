@@ -203,6 +203,22 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 单条读写与批量操作共享的前置检查：构造 [PasswordDataAccess] 校验就绪状态，
+     * 解出 localPath，并在 IO 调度器上执行 [block]。未就绪或路径为空时返回 [fallback]。
+     */
+    private suspend inline fun <T> withAccess(
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String,
+        fallback: T,
+        crossinline block: (String, String) -> T
+    ): T {
+        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
+        val path = access.localPath?.takeIf { access.isReady() } ?: return fallback
+        return withContext(Dispatchers.IO) { block(path, access.masterPassword) }
+    }
+
+    /**
      * 按稳定 ID 读取单条密码详情。
      */
     suspend fun loadPasswordEntryDetail(
@@ -214,15 +230,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (entryId < 0) {
             return null
         }
-
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return null
-        }
-
-        val path = access.localPath ?: return null
-        return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.loadPasswordEntryById(path, access.masterPassword, entryId)
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
+            kdbxTokenRepository.loadPasswordEntryById(path, pwd, entryId)
         }
     }
 
@@ -238,14 +247,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (entryId < 0) {
             return null
         }
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return null
-        }
-
-        val path = access.localPath ?: return null
-        return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.loadPasswordEntryDraft(path, access.masterPassword, entryId)
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
+            kdbxTokenRepository.loadPasswordEntryDraft(path, pwd, entryId)
         }
     }
 
@@ -261,14 +264,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (entryId < 0) {
             return emptyList()
         }
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return emptyList()
-        }
-
-        val path = access.localPath ?: return emptyList()
-        return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.loadEntryHistory(path, access.masterPassword, entryId)
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = emptyList()) { path, pwd ->
+            kdbxTokenRepository.loadEntryHistory(path, pwd, entryId)
         }
     }
 
@@ -285,14 +282,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (entryId < 0) {
             return false
         }
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return false
-        }
-
-        val path = access.localPath ?: return false
-        return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.restoreEntryFromHistory(path, access.masterPassword, entryId, historyIndex)
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
+            kdbxTokenRepository.restoreEntryFromHistory(path, pwd, entryId, historyIndex)
         }
     }
 
@@ -308,14 +299,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (groupId >= 0) {
             return null
         }
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return null
-        }
-
-        val path = access.localPath ?: return null
-        return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.loadPasswordGroupDraft(path, access.masterPassword, groupId)
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
+            kdbxTokenRepository.loadPasswordGroupDraft(path, pwd, groupId)
         }
     }
 
@@ -328,16 +313,9 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         localPath: String?,
         masterPassword: String
     ): Long? {
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return null
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
+            kdbxTokenRepository.createPasswordEntry(path, pwd, draft)
         }
-
-        val path = access.localPath ?: return null
-        val createdId = withContext(Dispatchers.IO) {
-            kdbxTokenRepository.createPasswordEntry(path, access.masterPassword, draft)
-        }
-        return createdId
     }
 
     /**
@@ -349,16 +327,9 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         localPath: String?,
         masterPassword: String
     ): Boolean {
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return false
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
+            kdbxTokenRepository.updatePasswordEntry(path, pwd, draft)
         }
-
-        val path = access.localPath ?: return false
-        val updated = withContext(Dispatchers.IO) {
-            kdbxTokenRepository.updatePasswordEntry(path, access.masterPassword, draft)
-        }
-        return updated
     }
 
     /**
@@ -373,16 +344,9 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (entryId < 0) {
             return false
         }
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return false
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
+            kdbxTokenRepository.deletePasswordEntry(path, pwd, entryId)
         }
-
-        val path = access.localPath ?: return false
-        val deleted = withContext(Dispatchers.IO) {
-            kdbxTokenRepository.deletePasswordEntry(path, access.masterPassword, entryId)
-        }
-        return deleted
     }
 
     /**
@@ -394,16 +358,9 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         localPath: String?,
         masterPassword: String
     ): Long? {
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return null
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
+            kdbxTokenRepository.createPasswordGroup(path, pwd, draft)
         }
-
-        val path = access.localPath ?: return null
-        val createdId = withContext(Dispatchers.IO) {
-            kdbxTokenRepository.createPasswordGroup(path, access.masterPassword, draft)
-        }
-        return createdId
     }
 
     /**
@@ -415,16 +372,9 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         localPath: String?,
         masterPassword: String
     ): Boolean {
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return false
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
+            kdbxTokenRepository.updatePasswordGroup(path, pwd, draft)
         }
-
-        val path = access.localPath ?: return false
-        val updated = withContext(Dispatchers.IO) {
-            kdbxTokenRepository.updatePasswordGroup(path, access.masterPassword, draft)
-        }
-        return updated
     }
 
     /**
@@ -439,16 +389,9 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (groupId >= 0) {
             return false
         }
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return false
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
+            kdbxTokenRepository.deletePasswordGroup(path, pwd, groupId)
         }
-
-        val path = access.localPath ?: return false
-        val deleted = withContext(Dispatchers.IO) {
-            kdbxTokenRepository.deletePasswordGroup(path, access.masterPassword, groupId)
-        }
-        return deleted
     }
 
     /**
@@ -463,14 +406,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (entryIds.isEmpty()) {
             return 0
         }
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return 0
-        }
-
-        val path = access.localPath ?: return 0
-        return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.restoreRecentDeletedPasswordEntries(path, access.masterPassword, entryIds)
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = 0) { path, pwd ->
+            kdbxTokenRepository.restoreRecentDeletedPasswordEntries(path, pwd, entryIds)
         }
     }
 
@@ -486,14 +423,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (entryIds.isEmpty()) {
             return 0
         }
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return 0
-        }
-
-        val path = access.localPath ?: return 0
-        return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.permanentlyDeleteRecentDeletedPasswordEntries(path, access.masterPassword, entryIds)
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = 0) { path, pwd ->
+            kdbxTokenRepository.permanentlyDeleteRecentDeletedPasswordEntries(path, pwd, entryIds)
         }
     }
 
@@ -505,13 +436,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         localPath: String?,
         masterPassword: String
     ): List<GroupNodeInfo> {
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return emptyList()
-        }
-        val path = access.localPath ?: return emptyList()
-        return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.loadAllPasswordGroups(path, access.masterPassword)
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = emptyList()) { path, pwd ->
+            kdbxTokenRepository.loadAllPasswordGroups(path, pwd)
         }
     }
 
@@ -529,19 +455,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (entryIds.isEmpty() && groupIds.isEmpty()) {
             return 0
         }
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return 0
-        }
-        val path = access.localPath ?: return 0
-        return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.movePasswordTargets(
-                path,
-                access.masterPassword,
-                entryIds,
-                groupIds,
-                targetGroupId
-            )
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = 0) { path, pwd ->
+            kdbxTokenRepository.movePasswordTargets(path, pwd, entryIds, groupIds, targetGroupId)
         }
     }
 
@@ -559,19 +474,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         if (entryIds.isEmpty() && groupIds.isEmpty()) {
             return 0
         }
-        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
-        if (!access.isReady()) {
-            return 0
-        }
-        val path = access.localPath ?: return 0
-        return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.copyPasswordTargets(
-                path,
-                access.masterPassword,
-                entryIds,
-                groupIds,
-                targetGroupId
-            )
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = 0) { path, pwd ->
+            kdbxTokenRepository.copyPasswordTargets(path, pwd, entryIds, groupIds, targetGroupId)
         }
     }
 }
