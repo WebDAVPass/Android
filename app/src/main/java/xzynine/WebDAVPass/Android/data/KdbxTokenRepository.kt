@@ -293,6 +293,59 @@ class KdbxTokenRepository(context: Context) {
     }
 
     /**
+     * 读取条目的历史版本摘要列表（按 KDBX 存储顺序返回）。
+     */
+    fun loadEntryHistory(localPath: String, masterPassword: String, entryId: Long): List<EntryHistoryInfo> {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
+                ?: return@withDatabase emptyList()
+            entry.getHistory().mapIndexed { index, historyEntry ->
+                val info = historyEntry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+                EntryHistoryInfo(
+                    index = index,
+                    lastModificationTime = historyEntry.lastModificationTime.toMilliseconds(),
+                    title = info.title,
+                    username = info.username,
+                    passwordSet = info.password.isNotBlank(),
+                    url = info.url,
+                    notes = info.notes,
+                    customFieldCount = info.customFields.size,
+                    attachmentCount = info.attachments.size
+                )
+            }
+        }
+    }
+
+    /**
+     * 将指定历史版本恢复为条目的当前内容。
+     *
+     * 恢复后当前条目内容与历史版本一致，且原有历史记录全部保留（新版本会追加进历史）。
+     * 逻辑参照 KeePassDX RestoreEntryHistoryDatabaseRunnable。
+     */
+    fun restoreEntryFromHistory(
+        localPath: String,
+        masterPassword: String,
+        entryId: Long,
+        historyIndex: Int
+    ): Boolean {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
+                ?: return@withDatabase false
+            val history = entry.getHistory()
+            if (historyIndex !in history.indices) {
+                return@withDatabase false
+            }
+            val historyToRestore = history[historyIndex]
+            // 将主条目现有历史复制进待恢复版本，避免恢复操作丢失历史记录
+            entry.getHistory().forEach { historyToRestore.addEntryToHistory(it) }
+            val entryInfo = historyToRestore.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+            entry.setEntryInfo(db, entryInfo)
+            db.updateEntry(entry)
+            true
+        }
+    }
+
+    /**
      * 按稳定 ID 读取分组编辑草稿。
      */
     fun loadPasswordGroupDraft(localPath: String, masterPassword: String, groupId: Long): PasswordGroupEditDraft? {

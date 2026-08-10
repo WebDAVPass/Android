@@ -68,6 +68,24 @@ data class PasswordEntry(
 )
 
 /**
+ * 条目历史版本摘要（用于历史列表展示）。
+ *
+ * @property index 历史索引（在 KDBX History 列表中的位置，恢复时使用）
+ * @property lastModificationTime 该版本的最后修改时间（毫秒）
+ */
+data class EntryHistoryInfo(
+    val index: Int,
+    val lastModificationTime: Long,
+    val title: String,
+    val username: String,
+    val passwordSet: Boolean,
+    val url: String,
+    val notes: String,
+    val customFieldCount: Int,
+    val attachmentCount: Int
+)
+
+/**
  * 值类型中文标签
  */
 fun RemainingValueType.toDisplayName(): String {

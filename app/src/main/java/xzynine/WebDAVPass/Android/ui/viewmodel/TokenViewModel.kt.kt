@@ -7,6 +7,7 @@ import xzylib.base.util.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import xzynine.WebDAVPass.Android.data.DatabaseManager
+import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.OtpToken
@@ -308,6 +309,35 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()
         )
+    }
+
+    /**
+     * 读取条目的历史版本摘要列表。
+     */
+    suspend fun loadEntryHistory(entryId: Long): List<EntryHistoryInfo> {
+        return passwordViewModel.loadEntryHistory(
+            entryId,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+    }
+
+    /**
+     * 将指定历史版本恢复为条目当前内容。
+     */
+    suspend fun restoreEntryFromHistory(entryId: Long, historyIndex: Int): Boolean {
+        val restored = passwordViewModel.restoreEntryFromHistory(
+            entryId,
+            historyIndex,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+        if (restored) {
+            onPasswordWriteSuccess()
+        }
+        return restored
     }
 
     /**

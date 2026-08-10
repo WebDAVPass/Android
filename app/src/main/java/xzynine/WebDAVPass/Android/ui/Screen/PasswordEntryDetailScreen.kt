@@ -72,14 +72,17 @@ import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.EntryAttachmentInfo
+import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.EntryHistoryDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
+import xzynine.WebDAVPass.Android.util.DateTimeFormatter
 import xzynine.WebDAVPass.Android.util.QrCodeUtil
 
 @Composable
@@ -98,6 +101,10 @@ fun PasswordEntryDetailScreen(
     var detailLoaded by rememberSaveable(entryId) { mutableStateOf(false) }
     val showDeleteDialog = remember { mutableStateOf(false) }
     var isEditing by rememberSaveable(entryId) { mutableStateOf(false) }
+
+    // 历史记录（非编辑态展示）
+    var historyItems by remember(entryId) { mutableStateOf<List<EntryHistoryInfo>>(emptyList()) }
+    val showHistoryDialog = remember { mutableStateOf(false) }
 
     var editTitle by rememberSaveable(entryId) { mutableStateOf("") }
     var editUsername by rememberSaveable(entryId) { mutableStateOf("") }
@@ -152,6 +159,7 @@ fun PasswordEntryDetailScreen(
         detailLoaded = false
         selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
         selectedEntry?.let { entry -> syncEditFields(entry) }
+        historyItems = tokenViewModel.loadEntryHistory(entryId)
         detailLoaded = true
     }
 
@@ -791,6 +799,64 @@ fun PasswordEntryDetailScreen(
                     }
                 }
             }
+
+            // 历史记录（非编辑态展示，编辑中不显示以免与保存中的内容混淆）
+            if (!isEditing && historyItems.isNotEmpty()) {
+                item {
+                    SmallTitle(
+                        text = "历史记录 (${historyItems.size})"
+                    )
+                }
+                item {
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .border(
+                                width = 0.5.dp,
+                                color = cardBorderColor,
+                                shape = RoundedCornerShape(cornerRadius)
+                            ),
+                        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
+                        cornerRadius = cornerRadius,
+                        pressFeedbackType = PressFeedbackType.None,
+                        showIndication = false,
+                        onClick = {}
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // 列表按时间倒序（最新在前）展示
+                            historyItems.asReversed().forEachIndexed { index, history ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable { showHistoryDialog.value = true }
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = DateTimeFormatter.formatLocalDateTime(history.lastModificationTime),
+                                            fontSize = 14.sp,
+                                            color = MiuixTheme.colorScheme.onSurface
+                                        )
+                                        Text(
+                                            text = history.title.ifBlank { "（无标题）" },
+                                            fontSize = 12.sp,
+                                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                            modifier = Modifier.padding(top = 2.dp)
+                                        )
+                                    }
+                                }
+                                if (index < historyItems.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 14.dp),
+                                        thickness = 0.5.dp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -815,6 +881,28 @@ fun PasswordEntryDetailScreen(
             }
         )
     }
+
+    EntryHistoryDialog(
+        show = showHistoryDialog,
+        histories = historyItems,
+        onDismiss = {
+            showHistoryDialog.value = false
+        },
+        onRestore = { history ->
+            coroutineScope.launch {
+                val restored = tokenViewModel.restoreEntryFromHistory(entryId, history.index)
+                if (restored) {
+                    ToastUtils.showShortToast(context, "已恢复该历史版本")
+                    // 刷新详情与历史列表（当前版本已进历史，原历史保留）
+                    selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
+                    selectedEntry?.let { syncEditFields(it) }
+                    historyItems = tokenViewModel.loadEntryHistory(entryId)
+                } else {
+                    ToastUtils.showShortToast(context, "恢复失败")
+                }
+            }
+        }
+    )
 }
 
 @Composable

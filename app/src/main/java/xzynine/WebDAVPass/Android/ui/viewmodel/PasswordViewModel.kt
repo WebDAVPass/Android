@@ -3,6 +3,7 @@ package xzynine.WebDAVPass.Android.ui.ViewModel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
@@ -236,6 +237,53 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         val path = access.localPath ?: return null
         return withContext(Dispatchers.IO) {
             kdbxTokenRepository.loadPasswordEntryDraft(path, access.masterPassword, entryId)
+        }
+    }
+
+    /**
+     * 按稳定 ID 读取条目历史版本摘要列表。
+     */
+    suspend fun loadEntryHistory(
+        entryId: Long,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): List<EntryHistoryInfo> {
+        if (entryId < 0) {
+            return emptyList()
+        }
+        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
+        if (!access.isReady()) {
+            return emptyList()
+        }
+
+        val path = access.localPath ?: return emptyList()
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.loadEntryHistory(path, access.masterPassword, entryId)
+        }
+    }
+
+    /**
+     * 将指定历史版本恢复为条目当前内容。
+     */
+    suspend fun restoreEntryFromHistory(
+        entryId: Long,
+        historyIndex: Int,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): Boolean {
+        if (entryId < 0) {
+            return false
+        }
+        val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
+        if (!access.isReady()) {
+            return false
+        }
+
+        val path = access.localPath ?: return false
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.restoreEntryFromHistory(path, access.masterPassword, entryId, historyIndex)
         }
     }
 
