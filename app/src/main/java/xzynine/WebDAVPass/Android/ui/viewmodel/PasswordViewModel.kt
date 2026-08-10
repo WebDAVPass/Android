@@ -85,8 +85,8 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
     /**
      * 刷新密码条目与键值列表。
      */
-    fun refreshPasswordEntries(searchQuery: String = "") {
-        passwordSubViewModel.refreshPasswordEntries(searchQuery)
+    fun refreshPasswordEntries(searchQuery: String = "", caseSensitive: Boolean = false) {
+        passwordSubViewModel.refreshPasswordEntries(searchQuery, caseSensitive)
     }
 
     /**

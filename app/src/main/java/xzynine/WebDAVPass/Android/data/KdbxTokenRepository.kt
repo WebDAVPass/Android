@@ -174,15 +174,15 @@ class KdbxTokenRepository(context: Context) {
     }
 
     /**
-     * 读取数据库中全部条目摘要（不包含键值详情）。
+     * 读取数据库中全部条目摘要（默认不包含键值详情，搜索时需要字段详情）。
      */
-    fun loadPasswordEntries(localPath: String, masterPassword: String): List<PasswordEntry> {
+    fun loadPasswordEntries(localPath: String, masterPassword: String, includeFieldDetails: Boolean = false): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             buildPasswordEntries(
                 database = db,
                 entries = collectEntriesOutsideRecycleBin(db, db.rootGroup),
                 groups = emptyList(),
-                includeFieldDetails = false
+                includeFieldDetails = includeFieldDetails
             )
         }
     }
@@ -1015,6 +1015,7 @@ class KdbxTokenRepository(context: Context) {
                     expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
                     isExpired = entry.expires && entry.isCurrentlyExpires,
                     customIconUuid = customIconUuid,
+                    tags = entry.tags.toList(),
                     isFolderGroup = false,
                     isFolderPlaceholder = false
                 )

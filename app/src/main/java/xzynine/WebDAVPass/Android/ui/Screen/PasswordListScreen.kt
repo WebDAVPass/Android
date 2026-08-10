@@ -112,6 +112,7 @@ fun PasswordListScreen(
     val passwordHasMore by tokenViewModel.passwordViewModel.passwordHasMore.collectAsState(false)
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var searchExpanded by rememberSaveable { mutableStateOf(false) }
+    var searchCaseSensitive by rememberSaveable { mutableStateOf(false) }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
     val allowWriteActions = enableGroupNavigation || enableRecycleBinActions
@@ -219,12 +220,19 @@ fun PasswordListScreen(
         if (searchQuery.isNotBlank()) {
             // 搜索词非空：激活标志并触发搜索
             isSearchEverEnabled.value = true
-            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = searchQuery)
+            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = searchQuery, caseSensitive = searchCaseSensitive)
         } else if (isSearchEverEnabled.value) {
             // 搜索词被清空：恢复全量列表
-            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = "")
+            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = "", caseSensitive = searchCaseSensitive)
         }
         // 初次进入（searchQuery="" 且搜索未激活）：跳过，reloadInitialPasswordData 已完成加载
+    }
+
+    // 切换区分大小写时按当前关键词重新搜索
+    LaunchedEffect(searchCaseSensitive) {
+        if (searchQuery.isNotBlank()) {
+            tokenViewModel.passwordViewModel.refreshPasswordEntries(searchQuery = searchQuery, caseSensitive = searchCaseSensitive)
+        }
     }
 
     LaunchedEffect(passwordGroupStack, searchQuery) {
@@ -426,6 +434,22 @@ fun PasswordListScreen(
                     }
                 },
                 outsideEndAction = {
+                    IconButton(
+                        onClick = {
+                            searchCaseSensitive = !searchCaseSensitive
+                        },
+                        modifier = Modifier.padding(start = 8.dp)
+                    ) {
+                        Text(
+                            text = "Aa",
+                            fontWeight = FontWeight.Bold,
+                            color = if (searchCaseSensitive) {
+                                MiuixTheme.colorScheme.primary
+                            } else {
+                                MiuixTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
                     IconButton(
                         onClick = {
                             searchQuery = ""

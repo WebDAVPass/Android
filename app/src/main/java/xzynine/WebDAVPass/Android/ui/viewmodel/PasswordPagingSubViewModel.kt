@@ -105,7 +105,7 @@ internal class PasswordPagingSubViewModel(
         }
     }
 
-    fun refreshPasswordEntries(searchQuery: String = "") {
+    fun refreshPasswordEntries(searchQuery: String = "", caseSensitive: Boolean = false) {
         refreshJob?.cancel()
         refreshJob = scope.launch {
             val access = accessProvider()
@@ -145,7 +145,8 @@ internal class PasswordPagingSubViewModel(
                                 repository.loadPasswordEntriesByGroup(localPath, masterPassword, currentGroupId)
                             }
                         } else {
-                            repository.loadPasswordEntries(localPath, masterPassword)
+                            // 搜索时加载字段详情，以便匹配备注/URL/自定义字段等
+                            repository.loadPasswordEntries(localPath, masterPassword, includeFieldDetails = true)
                         }
                     }
                     PasswordListMode.RECENT_DELETED -> {
@@ -156,7 +157,7 @@ internal class PasswordPagingSubViewModel(
 
             // 在 IO 线程完成排序/分组，避免主线程阻塞
             val sections = withContext(ioDispatcher) {
-                computeSections(source, keyword)
+                computeSections(source, keyword, caseSensitive)
             }
 
             pagingMutex.withLock {
@@ -308,13 +309,11 @@ internal class PasswordPagingSubViewModel(
      * 纯计算：对数据源进行过滤、排序、分组，返回有序分组列表。
      * 可在任意线程安全调用（无副作用）。
      */
-    private fun computeSections(source: List<PasswordEntry>, keyword: String): List<IndexedSection> {
+    private fun computeSections(source: List<PasswordEntry>, keyword: String, caseSensitive: Boolean = false): List<IndexedSection> {
         val values = source
             .asSequence()
             .filter { item ->
-                keyword.isBlank() ||
-                    item.title.contains(keyword, ignoreCase = true) ||
-                    item.account.contains(keyword, ignoreCase = true)
+                keyword.isBlank() || matchesKeyword(item, keyword, caseSensitive)
             }
             .sortedBy { item ->
                 item.title.ifBlank { item.account }.lowercase()
@@ -336,6 +335,25 @@ internal class PasswordPagingSubViewModel(
                 }
             )
             .map { (key, items) -> IndexedSection(key = key, items = items) }
+    }
+
+    /**
+     * 判断条目是否命中搜索关键词：匹配标题/账号/URL/备注/自定义字段键与值/标签。
+     */
+    private fun matchesKeyword(item: PasswordEntry, keyword: String, caseSensitive: Boolean): Boolean {
+        val contains: (String) -> Boolean = { field ->
+            if (caseSensitive) field.contains(keyword) else field.contains(keyword, ignoreCase = true)
+        }
+        if (contains(item.title) || contains(item.account)) {
+            return true
+        }
+        if (item.keyValues.any { kv -> contains(kv.fieldName) || contains(kv.rawValue) }) {
+            return true
+        }
+        if (item.tags.any { contains(it) }) {
+            return true
+        }
+        return false
     }
 
     /**
