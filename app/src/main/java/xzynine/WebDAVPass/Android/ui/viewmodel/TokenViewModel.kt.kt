@@ -138,9 +138,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun unlockCurrentLibrary(
         masterPassword: String,
-        isManualUnlock: Boolean = true
+        isManualUnlock: Boolean = true,
+        keyFileData: ByteArray? = null
     ): Boolean {
-        val ok = libraryViewModel.unlockCurrentLibrary(kdbxTokenRepository, masterPassword, isManualUnlock)
+        val ok = libraryViewModel.unlockCurrentLibrary(kdbxTokenRepository, masterPassword, isManualUnlock, keyFileData)
         if (!ok) {
             return false
         }
@@ -170,9 +171,15 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun verifyCurrentLibraryPassword(
         masterPassword: String,
-        updateManualTimestamp: Boolean = false
+        updateManualTimestamp: Boolean = false,
+        keyFileData: ByteArray? = null
     ): Boolean {
-        return libraryViewModel.verifyCurrentLibraryPassword(kdbxTokenRepository, masterPassword, updateManualTimestamp)
+        return libraryViewModel.verifyCurrentLibraryPassword(
+            kdbxTokenRepository,
+            masterPassword,
+            updateManualTimestamp,
+            keyFileData
+        )
     }
 
     /**
@@ -211,9 +218,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     /**
      * 通过系统 CreateDocument 创建本地 kdbx 文件并就地使用。
      */
-    suspend fun createLocalKdbx(uri: Uri, masterPassword: String): String? {
+    suspend fun createLocalKdbx(uri: Uri, masterPassword: String, keyFileData: ByteArray? = null): String? {
         return runCatching {
-            val kdbxBytes = kdbxTokenRepository.createDatabaseBytes(masterPassword)
+            val kdbxBytes = kdbxTokenRepository.createDatabaseBytes(masterPassword, keyFileData)
             context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
                 out.write(kdbxBytes)
             } ?: return null
@@ -223,8 +230,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         }.getOrNull()
     }
 
-    fun createEmptyKdbxBytes(masterPassword: String): ByteArray {
-        return kdbxTokenRepository.createDatabaseBytes(masterPassword)
+    fun createEmptyKdbxBytes(masterPassword: String, keyFileData: ByteArray? = null): ByteArray {
+        return kdbxTokenRepository.createDatabaseBytes(masterPassword, keyFileData)
     }
 
     /**

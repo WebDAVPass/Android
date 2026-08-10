@@ -8,6 +8,7 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -54,8 +56,10 @@ import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.Hide
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import androidx.fragment.app.FragmentActivity
 import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
@@ -94,11 +98,14 @@ fun WelcomeScreen(
     var showCreateMasterPasswordDialog by remember { mutableStateOf(false) }
     var createMode by remember { mutableStateOf(CreateMode.LOCAL) }
     var pendingCreateMasterPassword by remember { mutableStateOf("") }
+    var pendingCreateKeyFileData by remember { mutableStateOf<ByteArray?>(null) }
     var pendingUnlockLibrary by remember { mutableStateOf<LibraryContext?>(null) }
     var inlineUnlockPassword by remember { mutableStateOf("") }
     var showInlinePassword by remember { mutableStateOf(false) }
     var inlineUnlockLoading by remember { mutableStateOf(false) }
     var inlineUnlockFocusNonce by remember { mutableStateOf(0) }
+    var inlineKeyFileName by remember { mutableStateOf("") }
+    var inlineKeyFileData by remember { mutableStateOf<ByteArray?>(null) }
     var manualUnlockClockMillis by remember { mutableStateOf(System.currentTimeMillis()) }
     val isSelectionMode = remember { mutableStateOf(false) }
     val selectedHistoryIds = remember { mutableStateMapOf<String, Boolean>() }
@@ -254,6 +261,8 @@ fun WelcomeScreen(
         inlineUnlockPassword = ""
         showInlinePassword = false
         inlineUnlockLoading = false
+        inlineKeyFileName = ""
+        inlineKeyFileData = null
         keyboardController?.hide()
     }
 
@@ -654,7 +663,7 @@ fun WelcomeScreen(
                 return@rememberLauncherForActivityResult
             }
             coroutineScope.launch {
-                val path = tokenViewModel.createLocalKdbx(uri, pendingCreateMasterPassword)
+                val path = tokenViewModel.createLocalKdbx(uri, pendingCreateMasterPassword, pendingCreateKeyFileData)
                 if (path == null) {
                     ToastUtils.showShortToast(context, "新建失败：无法创建文件")
                     return@launch
@@ -669,14 +678,49 @@ fun WelcomeScreen(
                 )
                 tokenViewModel.libraryViewModel.upsertAndSelectLibrary(item)
                 val plainPassword = pendingCreateMasterPassword
-                val unlockOk = tokenViewModel.unlockCurrentLibrary(plainPassword)
+                val plainKeyFileData = pendingCreateKeyFileData
+                val unlockOk = tokenViewModel.unlockCurrentLibrary(plainPassword, keyFileData = plainKeyFileData)
                 pendingCreateMasterPassword = ""
+                pendingCreateKeyFileData = null
                 if (unlockOk) {
                     tryEnrollAutoUnlockAfterManualUnlock(item, plainPassword)
                     onEnterLibrary()
                 } else {
                     showInlineUnlock(item)
                 }
+            }
+        }
+    )
+
+    val inlineKeyFilePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri: Uri? ->
+            if (uri == null) {
+                return@rememberLauncherForActivityResult
+            }
+            runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    val buffer = java.io.ByteArrayOutputStream(8 * 1024)
+                    val chunk = ByteArray(8 * 1024)
+                    var total = 0
+                    while (true) {
+                        val read = input.read(chunk)
+                        if (read < 0) break
+                        total += read
+                        if (total > 1024 * 1024) {
+                            throw IllegalStateException("密钥文件过大")
+                        }
+                        buffer.write(chunk, 0, read)
+                    }
+                    val bytes = buffer.toByteArray()
+                    if (bytes.isNotEmpty()) {
+                        inlineKeyFileName = uri.lastPathSegment?.substringAfterLast('/')
+                            ?.takeIf { it.isNotBlank() } ?: "keyfile"
+                        inlineKeyFileData = bytes
+                    }
+                }
+            }.onFailure {
+                ToastUtils.showShortToast(context, "密钥文件读取失败：${it.message ?: "未知错误"}")
             }
         }
     )
@@ -773,6 +817,44 @@ fun WelcomeScreen(
                         singleLine = true
                     )
 
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { inlineKeyFilePicker.launch(arrayOf("application/octet-stream", "*/*")) },
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Lock,
+                            contentDescription = "密钥文件",
+                            tint = MiuixTheme.colorScheme.primary
+                        )
+                        Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                            Text(
+                                text = "密钥文件（可选）",
+                                fontSize = 12.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            )
+                            Text(
+                                text = if (inlineKeyFileName.isBlank()) "点击选择密钥文件" else inlineKeyFileName,
+                                fontSize = 13.sp,
+                                color = if (inlineKeyFileName.isBlank()) MiuixTheme.colorScheme.primary
+                                else MiuixTheme.colorScheme.onSurface
+                            )
+                        }
+                        if (inlineKeyFileName.isNotBlank()) {
+                            IconButton(onClick = {
+                                inlineKeyFileName = ""
+                                inlineKeyFileData = null
+                            }) {
+                                Icon(
+                                    imageVector = MiuixIcons.Delete,
+                                    contentDescription = "清除密钥文件",
+                                    tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                                )
+                            }
+                        }
+                    }
+
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(
                             text = "取消",
@@ -790,7 +872,10 @@ fun WelcomeScreen(
                                 }
                                 coroutineScope.launch {
                                     inlineUnlockLoading = true
-                                    val ok = tokenViewModel.unlockCurrentLibrary(inlineUnlockPassword)
+                                    val ok = tokenViewModel.unlockCurrentLibrary(
+                                        inlineUnlockPassword,
+                                        keyFileData = inlineKeyFileData
+                                    )
                                     inlineUnlockLoading = false
                                     if (ok) {
                                         val unlockedLibrary = resolveLatestLibrary(unlockLibrary)
@@ -994,14 +1079,17 @@ fun WelcomeScreen(
             tokenViewModel = tokenViewModel,
             mode = CloudMode.CREATE,
             createMasterPassword = pendingCreateMasterPassword,
+            createKeyFileData = pendingCreateKeyFileData,
             onDismiss = { showCloudCreateDialog = false },
             onSelected = { library, createdMasterPassword ->
                 coroutineScope.launch {
                     tokenViewModel.libraryViewModel.upsertAndSelectLibrary(library)
                     showCloudCreateDialog = false
                     val password = createdMasterPassword.orEmpty()
-                    val unlockOk = tokenViewModel.unlockCurrentLibrary(password)
+                    val keyFileData = pendingCreateKeyFileData
+                    val unlockOk = tokenViewModel.unlockCurrentLibrary(password, keyFileData = keyFileData)
                     pendingCreateMasterPassword = ""
+                    pendingCreateKeyFileData = null
                     if (unlockOk) {
                         tryEnrollAutoUnlockAfterManualUnlock(library, password)
                         onEnterLibrary()
@@ -1020,8 +1108,9 @@ fun WelcomeScreen(
                 showCreateMasterPasswordDialog = false
                 pendingCreateMasterPassword = ""
             },
-            onConfirm = { password ->
+            onConfirm = { password, keyFileData ->
                 pendingCreateMasterPassword = password
+                pendingCreateKeyFileData = keyFileData
                 showCreateMasterPasswordDialog = false
                 if (createMode == CreateMode.LOCAL) {
                     localCreateLauncher.launch("WebDavPass.kdbx")

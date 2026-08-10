@@ -189,17 +189,21 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     suspend fun unlockCurrentLibrary(
         repository: KdbxTokenRepository,
         masterPassword: String,
-        isManualUnlock: Boolean = true
+        isManualUnlock: Boolean = true,
+        keyFileData: ByteArray? = null
     ): Boolean {
         val localPath = _currentLibrary.value?.localPath ?: return false
         val ok = withContext(Dispatchers.IO) {
-            repository.validatePassword(localPath, masterPassword)
+            repository.validatePassword(localPath, masterPassword, keyFileData)
         }
         if (!ok) {
             lastUnlockErrorMessage = resolveUnlockFailureMessage(localPath, repository)
             _isLibraryUnlocked.value = false
             return false
         }
+
+        // 解锁成功后登记密钥文件，供后续重新加密保存时复用
+        DatabaseManager.setKeyFileData(keyFileData)
 
         lastUnlockErrorMessage = null
         currentLibraryMasterPassword = masterPassword
@@ -224,11 +228,12 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     suspend fun verifyCurrentLibraryPassword(
         repository: KdbxTokenRepository,
         masterPassword: String,
-        updateManualTimestamp: Boolean = false
+        updateManualTimestamp: Boolean = false,
+        keyFileData: ByteArray? = null
     ): Boolean {
         val localPath = _currentLibrary.value?.localPath ?: return false
         val ok = withContext(Dispatchers.IO) {
-            repository.validatePassword(localPath, masterPassword)
+            repository.validatePassword(localPath, masterPassword, keyFileData)
         }
         if (!ok) {
             lastUnlockErrorMessage = resolveUnlockFailureMessage(localPath, repository)

@@ -34,6 +34,26 @@ object DatabaseManager {
     @Volatile
     private var cached: CachedDatabase? = null
 
+    /** 当前库的密钥文件字节（与主密码共同构成解锁凭据），随缓存一起生命周期管理。 */
+    @Volatile
+    private var keyFileData: ByteArray? = null
+
+    /**
+     * 设置当前库的密钥文件字节。
+     * 解锁成功后调用；[close] 时自动清除。
+     */
+    @Synchronized
+    fun setKeyFileData(bytes: ByteArray?) {
+        keyFileData = bytes
+    }
+
+    /**
+     * 获取当前库的密钥文件字节。
+     */
+    fun getKeyFileData(): ByteArray? {
+        return keyFileData
+    }
+
     /**
      * 存储已打开的数据库实例。
      *
@@ -83,6 +103,7 @@ object DatabaseManager {
     fun close() {
         val c = cached ?: return
         cached = null
+        keyFileData = null
         runCatching { c.database.clearAndClose(c.cacheDirectory) }
         Logger.d(LOG_TAG, "已关闭并清除数据库缓存: ${c.localPath}")
     }

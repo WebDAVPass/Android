@@ -77,6 +77,7 @@ fun CloudLibraryDialog(
     mode: CloudMode,
     initialLibraryContext: LibraryContext? = null,
     createMasterPassword: String = "",
+    createKeyFileData: ByteArray? = null,
     onDismiss: () -> Unit,
     onSelected: (LibraryContext, String?) -> Unit
 ) {
@@ -230,7 +231,14 @@ fun CloudLibraryDialog(
         }
     }
 
-    suspend fun createRemote(baseUrl: String, path: String, user: String, pass: String, masterPassword: String): LibraryContext? {
+    suspend fun createRemote(
+        baseUrl: String,
+        path: String,
+        user: String,
+        pass: String,
+        masterPassword: String,
+        keyFileData: ByteArray? = null
+    ): LibraryContext? {
         return withContext(Dispatchers.IO) {
             val normalized = if (path.startsWith("http://") || path.startsWith("https://")) {
                 path
@@ -240,7 +248,7 @@ fun CloudLibraryDialog(
             }
 
             val remote = WebDav(normalized, Authorization(user, pass))
-            val kdbxBytes = tokenViewModel.createEmptyKdbxBytes(masterPassword)
+            val kdbxBytes = tokenViewModel.createEmptyKdbxBytes(masterPassword, keyFileData)
             remote.upload(kdbxBytes, "application/octet-stream")
             val remoteModifiedAt = remote.getWebDavFile()?.lastModify?.takeIf { it > 0 }
 
@@ -490,7 +498,7 @@ fun CloudLibraryDialog(
                             if (isImportMode) {
                                 importRemote(baseUrl, path, username, password)
                             } else {
-                                createRemote(baseUrl, path, username, password, createPassword)
+                                createRemote(baseUrl, path, username, password, createPassword, createKeyFileData)
                             }
                         } catch (e: Exception) {
                             null

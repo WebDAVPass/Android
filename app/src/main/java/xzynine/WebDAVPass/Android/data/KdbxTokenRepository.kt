@@ -67,7 +67,7 @@ class KdbxTokenRepository(context: Context) {
         data class UriLocation(val uri: Uri) : DatabaseLocation
     }
 
-    fun initializeDatabase(localPath: String, masterPassword: String) {
+    fun initializeDatabase(localPath: String, masterPassword: String, keyFileData: ByteArray? = null) {
         val location = resolveLocation(localPath)
         when (location) {
             is DatabaseLocation.FileLocation -> {
@@ -76,7 +76,7 @@ class KdbxTokenRepository(context: Context) {
                 if (file.exists() && file.length() > 0) {
                     return
                 }
-                file.writeBytes(createDatabaseBytes(masterPassword))
+                file.writeBytes(createDatabaseBytes(masterPassword, keyFileData))
             }
 
             is DatabaseLocation.UriLocation -> {
@@ -84,13 +84,13 @@ class KdbxTokenRepository(context: Context) {
                     return
                 }
                 openOutputStream(location).use { output ->
-                    output.write(createDatabaseBytes(masterPassword))
+                    output.write(createDatabaseBytes(masterPassword, keyFileData))
                 }
             }
         }
     }
 
-    fun createDatabaseBytes(masterPassword: String): ByteArray {
+    fun createDatabaseBytes(masterPassword: String, keyFileData: ByteArray? = null): ByteArray {
         val database = Database().apply {
             createData(DATABASE_NAME, ROOT_GROUP_NAME, null)
         }
@@ -102,7 +102,10 @@ class KdbxTokenRepository(context: Context) {
                     cacheFile = cacheFile,
                     databaseOutputStream = { outputStream },
                     isNewLocation = true,
-                    masterCredential = MasterCredential(password = masterPassword),
+                    masterCredential = MasterCredential(
+                        password = masterPassword,
+                        keyFileData = keyFileData ?: DatabaseManager.getKeyFileData()
+                    ),
                     challengeResponseRetriever = emptyChallengeResponseRetriever
                 )
                 outputStream.toByteArray()
@@ -113,11 +116,12 @@ class KdbxTokenRepository(context: Context) {
         }
     }
 
-    fun validatePassword(localPath: String, masterPassword: String): Boolean {
+    fun validatePassword(localPath: String, masterPassword: String, keyFileData: ByteArray? = null): Boolean {
+        val effectiveKeyFileData = keyFileData ?: DatabaseManager.getKeyFileData()
         lastUnlockErrorMessage = null
         return runCatching {
             val location = resolveLocation(localPath)
-            ensureLocationInitialized(location, masterPassword)
+            ensureLocationInitialized(location, masterPassword, effectiveKeyFileData)
 
             // 此路径已有缓存实例，直接验证可访问性，无需重新解密
             val existing = DatabaseManager.tryGet(localPath)
@@ -130,7 +134,7 @@ class KdbxTokenRepository(context: Context) {
             DatabaseManager.close()
 
             // 打开数据库后缓存，不立即关闭，供后续操作复用
-            val (database, cacheDirectory) = openDatabase(location, masterPassword)
+            val (database, cacheDirectory) = openDatabase(location, masterPassword, effectiveKeyFileData)
             try {
                 database.rootGroup // 验证根组可访问
             } catch (e: Exception) {
@@ -809,7 +813,10 @@ class KdbxTokenRepository(context: Context) {
                 ByteArrayInputStream(remoteBytes).use { input ->
                     db.mergeData(
                         databaseToMergeStream = input,
-                        databaseToMergeMasterCredential = MasterCredential(password = masterPassword),
+                        databaseToMergeMasterCredential = MasterCredential(
+                            password = masterPassword,
+                            keyFileData = DatabaseManager.getKeyFileData()
+                        ),
                         databaseToMergeChallengeResponseRetriever = emptyChallengeResponseRetriever,
                         isRAMSufficient = { true },
                         progressTaskUpdater = null
@@ -1350,13 +1357,20 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 根据定位打开数据库。
      */
-    private fun openDatabase(location: DatabaseLocation, masterPassword: String): Pair<Database, File> {
+    private fun openDatabase(
+        location: DatabaseLocation,
+        masterPassword: String,
+        keyFileData: ByteArray? = DatabaseManager.getKeyFileData()
+    ): Pair<Database, File> {
         val cacheDirectory = buildCacheDirectory(location)
         val database = Database()
         openInputStream(location).use { input ->
             database.loadData(
                 databaseStream = input,
-                masterCredential = MasterCredential(password = masterPassword),
+                masterCredential = MasterCredential(
+                    password = masterPassword,
+                    keyFileData = keyFileData
+                ),
                 challengeResponseRetriever = emptyChallengeResponseRetriever,
                 readOnly = false,
                 allowUserVerification = false,
@@ -1372,13 +1386,22 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 将数据库保存回定位目标。
      */
-    private fun saveDatabase(database: Database, location: DatabaseLocation, masterPassword: String, cacheDirectory: File) {
+    private fun saveDatabase(
+        database: Database,
+        location: DatabaseLocation,
+        masterPassword: String,
+        cacheDirectory: File,
+        keyFileData: ByteArray? = DatabaseManager.getKeyFileData()
+    ) {
         val cacheFile = File.createTempFile("kdbx-save-", ".tmp", cacheDirectory)
         database.saveData(
             cacheFile = cacheFile,
             databaseOutputStream = { openOutputStream(location) },
             isNewLocation = true,
-            masterCredential = MasterCredential(password = masterPassword),
+            masterCredential = MasterCredential(
+                password = masterPassword,
+                keyFileData = keyFileData
+            ),
             challengeResponseRetriever = emptyChallengeResponseRetriever
         )
     }
@@ -1456,18 +1479,18 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 确保定位目标可初始化。
      */
-    private fun ensureLocationInitialized(location: DatabaseLocation, masterPassword: String) {
+    private fun ensureLocationInitialized(location: DatabaseLocation, masterPassword: String, keyFileData: ByteArray? = null) {
         when (location) {
             is DatabaseLocation.FileLocation -> {
                 val file = location.file
                 if (!file.exists() || file.length() == 0L) {
-                    initializeDatabase(file.absolutePath, masterPassword)
+                    initializeDatabase(file.absolutePath, masterPassword, keyFileData)
                 }
             }
 
             is DatabaseLocation.UriLocation -> {
                 if (!hasUriData(location.uri)) {
-                    initializeDatabase(location.uri.toString(), masterPassword)
+                    initializeDatabase(location.uri.toString(), masterPassword, keyFileData)
                 }
             }
         }
