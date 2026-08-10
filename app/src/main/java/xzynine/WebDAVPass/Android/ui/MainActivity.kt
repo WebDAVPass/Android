@@ -3,6 +3,9 @@ package xzynine.WebDAVPass.Android.ui
 import android.os.Bundle
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -87,10 +90,11 @@ fun MainScreen() {
 
     // 超时锁定：
     // 1) 后台自动锁定：退到后台超过 30 秒（开关开启时）回到前台即锁定；
-    // 2) 单纯超时：前台连续停留超过设定分钟数（默认 5 分钟）即锁定，与是否后台无关。
+    // 2) 无操作超时：前台无任何操作超过设定分钟数（默认 5 分钟）即锁定。
+    //    用 AtomicLong 保存时间戳，触摸事件高频写入时不触发重组。
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     var lastBackgroundAt by remember { mutableStateOf(0L) }
-    var foregroundSince by remember { mutableStateOf(System.currentTimeMillis()) }
+    val lastActivityAt = remember { java.util.concurrent.atomic.AtomicLong(System.currentTimeMillis()) }
 
     DisposableEffect(lifecycleOwner) {
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
@@ -108,8 +112,8 @@ fun MainScreen() {
                     ) {
                         tokenViewModel.libraryViewModel.lockCurrentLibrary()
                     }
-                    // 重置单纯超时的前台计时起点
-                    foregroundSince = System.currentTimeMillis()
+                    // 回到前台重新开始无操作计时
+                    lastActivityAt.set(System.currentTimeMillis())
                 }
 
                 else -> {}
@@ -121,18 +125,18 @@ fun MainScreen() {
         }
     }
 
-    // 单纯超时：前台停留超过设定分钟数即锁定（每 30 秒检查一次）
+    // 无操作超时：任何触摸操作重置计时，无操作超过设定分钟数即锁定（每 30 秒检查一次）
     LaunchedEffect(Unit) {
         while (true) {
             delay(30_000L)
             val timeoutMinutes = tokenViewModel.lockTimeoutMinutes.value
             val timeoutMs = timeoutMinutes * 60_000L
-            if (timeoutMs > 0L && foregroundSince > 0L &&
-                System.currentTimeMillis() - foregroundSince >= timeoutMs
+            if (timeoutMs > 0L &&
+                System.currentTimeMillis() - lastActivityAt.get() >= timeoutMs
             ) {
                 tokenViewModel.libraryViewModel.lockCurrentLibrary()
                 // 锁定后重新计时，避免解锁页停留期间反复触发
-                foregroundSince = System.currentTimeMillis()
+                lastActivityAt.set(System.currentTimeMillis())
             }
         }
     }
@@ -148,24 +152,35 @@ fun MainScreen() {
     val navigator = rememberNavigator(startRoute)
 
     CompositionLocalProvider(LocalNavigator provides navigator) {
-        NavDisplay(
-            backStack = navigator.backStack,
-            entryDecorators = listOf(
-                rememberSaveableStateHolderNavEntryDecorator()
-            ),
-            onBack = {
-                if (showCloudBindingDialog.value) {
-                    showCloudBindingDialog.value = false
-                    return@NavDisplay
+        // 全局触摸监听：任何触摸操作都重置无操作超时计时
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        awaitFirstDown()
+                        lastActivityAt.set(System.currentTimeMillis())
+                    }
                 }
-                if (showScanBottomSheet.value) {
-                    showScanBottomSheet.value = false
-                    return@NavDisplay
-                }
-                if (navigator.backStackSize() > 1) {
-                    navigator.pop()
-                }
-            },
+        ) {
+            NavDisplay(
+                backStack = navigator.backStack,
+                entryDecorators = listOf(
+                    rememberSaveableStateHolderNavEntryDecorator()
+                ),
+                onBack = {
+                    if (showCloudBindingDialog.value) {
+                        showCloudBindingDialog.value = false
+                        return@NavDisplay
+                    }
+                    if (showScanBottomSheet.value) {
+                        showScanBottomSheet.value = false
+                        return@NavDisplay
+                    }
+                    if (navigator.backStackSize() > 1) {
+                        navigator.pop()
+                    }
+                },
             entryProvider = entryProvider {
                 entry<Route.Welcome> {
                     WelcomeScreen(
@@ -422,6 +437,7 @@ fun MainScreen() {
                 }
             }
         )
+        }
     }
 
     if (showCloudBindingDialog.value) {

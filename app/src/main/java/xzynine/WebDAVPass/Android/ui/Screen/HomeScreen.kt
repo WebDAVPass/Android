@@ -85,7 +85,9 @@ fun HomeScreen(
     LaunchedEffect(passwordTotalCount, recentDeletedCount) {
         coroutineScope.launch {
             val issues = tokenViewModel.loadSecurityIssues()
-            securityIssueCount.intValue = issues.expiredCount + issues.weakCount
+            // 以不重复的问题条目计数（同一条目同时过期且弱密码只计一次）
+            securityIssueCount.intValue = (issues.expiredEntries.map { it.entryId } +
+                issues.weakPasswordEntries.map { it.entryId }).distinct().size
         }
     }
 
