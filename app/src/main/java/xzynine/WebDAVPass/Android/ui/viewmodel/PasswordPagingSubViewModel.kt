@@ -5,6 +5,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -50,6 +51,10 @@ internal class PasswordPagingSubViewModel(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val pageSectionSize: Int = 4
 ) {
+    private companion object {
+        /** 搜索输入防抖时长（ms）：用户快速输入时只保留最后一次刷新，避免全库字段详情重复加载。 */
+        const val SEARCH_DEBOUNCE_MS = 250L
+    }
     private data class IndexedSection(
         val key: String,
         val items: List<PasswordEntry>
@@ -153,6 +158,11 @@ internal class PasswordPagingSubViewModel(
         val effHideExpired = currentHideExpired
         refreshJob?.cancel()
         refreshJob = scope.launch {
+            // 搜索输入防抖：快速连续输入时只保留最后一次刷新。
+            // delay 是可取消的挂起点，refreshJob?.cancel() 会在新一轮输入时中断未完成的等待。
+            if (searchQuery.isNotBlank()) {
+                delay(SEARCH_DEBOUNCE_MS)
+            }
             val access = accessProvider()
             if (!access.isReady()) {
                 pagingMutex.withLock {
