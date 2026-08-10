@@ -40,18 +40,22 @@ object DatabaseManager {
 
     /**
      * 设置当前库的密钥文件字节。
-     * 解锁成功后调用；[close] 时自动清除。
+     * 解锁成功后调用；[close] 时自动清除。替换前显式置零旧字节，避免解密凭据残留于堆中直至 GC。
      */
     @Synchronized
     fun setKeyFileData(bytes: ByteArray?) {
+        keyFileData?.fill(0)
         keyFileData = bytes
     }
 
     /**
      * 获取当前库的密钥文件字节。
+     *
+     * 返回副本，避免调用方就地修改内部数组影响后续保存使用的凭据。
      */
+    @Synchronized
     fun getKeyFileData(): ByteArray? {
-        return keyFileData
+        return keyFileData?.copyOf()
     }
 
     /**
@@ -103,6 +107,8 @@ object DatabaseManager {
     fun close() {
         val c = cached ?: return
         cached = null
+        // 关闭前显式置零密钥文件字节，避免解密凭据残留于堆中直至 GC
+        keyFileData?.fill(0)
         keyFileData = null
         runCatching { c.database.clearAndClose(c.cacheDirectory) }
         Logger.d(LOG_TAG, "已关闭并清除数据库缓存: ${c.localPath}")
