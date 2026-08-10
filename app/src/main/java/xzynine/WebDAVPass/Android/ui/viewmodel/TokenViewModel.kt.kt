@@ -355,6 +355,28 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 读取条目附件的字节内容。
+     */
+    suspend fun getEntryAttachmentBytes(entryId: Long, name: String): ByteArray? {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return null
+        val masterPassword = libraryViewModel.getMasterPasswordInternal() ?: return null
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.getEntryAttachmentBytes(localPath, masterPassword, entryId, name)
+        }
+    }
+
+    /**
+     * 将条目附件以增量方式拷贝到指定输出流（供保存到本地文件，避免第二份全量内存拷贝）。
+     */
+    suspend fun copyEntryAttachmentTo(entryId: Long, name: String, output: java.io.OutputStream): Boolean {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
+        val masterPassword = libraryViewModel.getMasterPasswordInternal() ?: return false
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.copyEntryAttachmentTo(localPath, masterPassword, entryId, name, output)
+        }
+    }
+
+    /**
      * 删除密码条目（进入回收站）。
      */
     suspend fun deletePasswordEntry(entryId: Long): Boolean {

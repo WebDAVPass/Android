@@ -24,7 +24,25 @@ enum class RemainingValueType {
 data class RemainingKeyValue(
     val fieldName: String,
     val rawValue: String,
-    val valueType: RemainingValueType
+    val valueType: RemainingValueType,
+    val isProtected: Boolean = false,
+    /**
+     * 是否为条目内建标准字段（UserName/Password/URL/Notes）。
+     * 标准字段由独立编辑器管理，加载为自定义字段草稿时应排除；
+     * 而同名但属于额外字段（extra）的项此值为 false，应被保留，避免在保存时被静默删除。
+     */
+    val isStandard: Boolean = false
+)
+
+/**
+ * 条目中的附件摘要（用于展示与查看）。
+ *
+ * @property name 附件文件名
+ * @property size 附件字节大小
+ */
+data class EntryAttachmentInfo(
+    val name: String,
+    val size: Long
 )
 
 /**
@@ -41,6 +59,10 @@ data class PasswordEntry(
     val standardIconId: Int,
     val customIconBytes: ByteArray?,
     val keyValues: List<RemainingKeyValue>,
+    val attachments: List<EntryAttachmentInfo> = emptyList(),
+    val expiryTime: Long? = null,
+    val isExpired: Boolean = false,
+    val customIconUuid: String? = null,
     val isFolderGroup: Boolean = false,
     val isFolderPlaceholder: Boolean = false
 )

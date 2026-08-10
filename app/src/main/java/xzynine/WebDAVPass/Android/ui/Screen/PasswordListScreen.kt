@@ -1,12 +1,16 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.documentfile.provider.DocumentFile
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -44,6 +48,11 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.CardDefaults
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
@@ -51,11 +60,17 @@ import top.yukonga.miuix.kmp.icon.extended.AddFolder
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
+import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
+import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
@@ -64,6 +79,10 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.toPasswordIndexKey
 import androidx.compose.ui.platform.LocalContext
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
+import xzylib.base.util.ToastUtils
+
+/** 附件导入大小上限（与仓库 SMALL_BINARY_SIZE 一致），防止无界读入内存导致 OOM。 */
+private const val MAX_ATTACHMENT_BYTES = 1024 * 1024
 
 /**
  * 全部密码列表页面。
@@ -485,31 +504,22 @@ fun PasswordListScreen(
     PasswordEntryEditorDialog(
         title = "新建条目",
         show = showCreateEntryDialog,
-        entryTitle = createEntryTitle,
-        entryUsername = createEntryUsername,
-        entryPassword = createEntryPassword,
-        entryUrl = createEntryUrl,
-        entryNotes = createEntryNotes,
-        onEntryTitleChange = { createEntryTitle = it },
-        onEntryUsernameChange = { createEntryUsername = it },
-        onEntryPasswordChange = { createEntryPassword = it },
-        onEntryUrlChange = { createEntryUrl = it },
-        onEntryNotesChange = { createEntryNotes = it },
+        initialDraft = PasswordEntryEditDraft(
+            title = createEntryTitle,
+            username = createEntryUsername,
+            password = createEntryPassword,
+            url = createEntryUrl,
+            notes = createEntryNotes
+        ),
         onDismiss = {
             showCreateEntryDialog.value = false
         },
-        onConfirm = {
+        onConfirm = { draft ->
             coroutineScope.launch {
                 val createdId = tokenViewModel.createPasswordEntry(
-                    PasswordEntryEditDraft(
+                    draft.copy(
                         entryId = null,
-                        parentGroupId = passwordGroupStack.lastOrNull(),
-                        title = createEntryTitle.trim(),
-                        username = createEntryUsername.trim(),
-                        password = createEntryPassword,
-                        url = createEntryUrl.trim(),
-                        notes = createEntryNotes,
-                        customFields = emptyList()
+                        parentGroupId = passwordGroupStack.lastOrNull()
                     )
                 )
                 if (createdId != null) {
@@ -582,24 +592,79 @@ fun PasswordListScreen(
 
 /**
  * 条目编辑对话框（用于新增）。
+ *
+ * 支持标题/账号/密码/网站/备注、自定义字段、附件、过期时间与图标。
  */
 @Composable
 private fun PasswordEntryEditorDialog(
     title: String,
     show: androidx.compose.runtime.MutableState<Boolean>,
-    entryTitle: String,
-    entryUsername: String,
-    entryPassword: String,
-    entryUrl: String,
-    entryNotes: String,
-    onEntryTitleChange: (String) -> Unit,
-    onEntryUsernameChange: (String) -> Unit,
-    onEntryPasswordChange: (String) -> Unit,
-    onEntryUrlChange: (String) -> Unit,
-    onEntryNotesChange: (String) -> Unit,
+    initialDraft: PasswordEntryEditDraft = PasswordEntryEditDraft(title = "", username = "", password = "", url = "", notes = ""),
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: (PasswordEntryEditDraft) -> Unit
 ) {
+    val context = LocalContext.current
+
+    var entryTitle by remember { mutableStateOf(initialDraft.title) }
+    var entryUsername by remember { mutableStateOf(initialDraft.username) }
+    var entryPassword by remember { mutableStateOf(initialDraft.password) }
+    var entryUrl by remember { mutableStateOf(initialDraft.url) }
+    var entryNotes by remember { mutableStateOf(initialDraft.notes) }
+    var customFields by remember { mutableStateOf(initialDraft.customFields) }
+    var attachments by remember { mutableStateOf(initialDraft.attachments.map { it.copy() }) }
+    var expiryTime by remember { mutableStateOf(initialDraft.expiryTime) }
+    var iconStandardId by remember { mutableStateOf(initialDraft.iconStandardId) }
+    var customIconUuid by remember { mutableStateOf(initialDraft.customIconUuid) }
+
+    LaunchedEffect(show.value) {
+        if (show.value) {
+            entryTitle = initialDraft.title
+            entryUsername = initialDraft.username
+            entryPassword = initialDraft.password
+            entryUrl = initialDraft.url
+            entryNotes = initialDraft.notes
+            customFields = initialDraft.customFields
+            attachments = initialDraft.attachments.map { it.copy() }
+            expiryTime = initialDraft.expiryTime
+            iconStandardId = initialDraft.iconStandardId
+            customIconUuid = initialDraft.customIconUuid
+        }
+    }
+
+    val attachmentPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        val declaredSize = DocumentFile.fromSingleUri(context, uri)?.length() ?: -1L
+        if (declaredSize > MAX_ATTACHMENT_BYTES) {
+            ToastUtils.showShortToast(context, "附件过大（上限 ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MiB），已取消")
+            return@rememberLauncherForActivityResult
+        }
+        runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                // 增量读取并强制上限：content provider 可能返回 -1 的声明大小，故真正限制在这里施加
+                val buffer = java.io.ByteArrayOutputStream(8 * 1024)
+                val chunk = ByteArray(8 * 1024)
+                var total = 0
+                while (true) {
+                    val read = input.read(chunk)
+                    if (read < 0) break
+                    total += read
+                    if (total > MAX_ATTACHMENT_BYTES) {
+                        throw IllegalStateException("附件过大")
+                    }
+                    buffer.write(chunk, 0, read)
+                }
+                val bytes = buffer.toByteArray()
+                val name = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+                    ?: "attachment_${System.currentTimeMillis()}"
+                attachments = attachments + EditableAttachmentDraft(name = name, data = bytes, isNew = true)
+            }
+        }.onFailure {
+            ToastUtils.showShortToast(context, "附件过大或读取失败，已取消")
+        }
+    }
+
     WindowDialog(
         title = title,
         show = show.value,
@@ -608,38 +673,100 @@ private fun PasswordEntryEditorDialog(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             TextField(
                 value = entryTitle,
-                onValueChange = onEntryTitleChange,
+                onValueChange = { entryTitle = it },
                 label = "标题",
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             TextField(
                 value = entryUsername,
-                onValueChange = onEntryUsernameChange,
+                onValueChange = { entryUsername = it },
                 label = "账号",
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             TextField(
                 value = entryPassword,
-                onValueChange = onEntryPasswordChange,
+                onValueChange = { entryPassword = it },
                 label = "密码",
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             TextField(
                 value = entryUrl,
-                onValueChange = onEntryUrlChange,
+                onValueChange = { entryUrl = it },
                 label = "网站",
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth()
             )
             TextField(
                 value = entryNotes,
-                onValueChange = onEntryNotesChange,
+                onValueChange = { entryNotes = it },
                 label = "备注",
                 modifier = Modifier.fillMaxWidth()
             )
+
+            SmallTitle(text = "自定义字段")
+            CustomFieldsEditor(fields = customFields) { customFields = it }
+
+            ExpiryTimeEditor(value = expiryTime) { expiryTime = it }
+
+            SmallTitle(text = "附件 (${attachments.count { !it.removed }})")
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
+                cornerRadius = 12.dp,
+                pressFeedbackType = PressFeedbackType.None,
+                showIndication = false,
+                onClick = {}
+            ) {
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    attachments.filter { !it.removed }.forEachIndexed { index, att ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(text = att.name, fontSize = 14.sp, color = MiuixTheme.colorScheme.onSurface)
+                                if (att.isNew) {
+                                    Text(
+                                        text = formatFileSize((att.data?.size ?: 0).toLong()) + " · 新增",
+                                        fontSize = 12.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                    )
+                                }
+                            }
+                            IconButton(onClick = {
+                                attachments = attachments.map {
+                                    if (it === att) it.copy(removed = true) else it
+                                }
+                            }) {
+                                Icon(imageVector = MiuixIcons.Delete, contentDescription = "删除附件")
+                            }
+                        }
+                        if (index < attachments.filter { !it.removed }.lastIndex) {
+                            HorizontalDivider(modifier = Modifier.padding(horizontal = 14.dp), thickness = 0.5.dp)
+                        }
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { attachmentPicker.launch("*/*") }
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(imageVector = MiuixIcons.Edit, contentDescription = "添加附件", tint = MiuixTheme.colorScheme.primary)
+                        Text(
+                            text = " 添加附件",
+                            fontSize = 14.sp,
+                            color = MiuixTheme.colorScheme.primary,
+                            modifier = Modifier.padding(start = 8.dp)
+                        )
+                    }
+                }
+            }
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -655,7 +782,22 @@ private fun PasswordEntryEditorDialog(
                     )
                 }
                 Button(
-                    onClick = onConfirm,
+                    onClick = {
+                        onConfirm(
+                            initialDraft.copy(
+                                title = entryTitle.trim(),
+                                username = entryUsername.trim(),
+                                password = entryPassword,
+                                url = entryUrl.trim(),
+                                notes = entryNotes,
+                                customFields = customFields,
+                                attachments = attachments,
+                                expiryTime = expiryTime,
+                                customIconUuid = customIconUuid,
+                                iconStandardId = iconStandardId
+                            )
+                        )
+                    },
                     enabled = entryTitle.isNotBlank(),
                     modifier = Modifier.weight(1f)
                 ) {
@@ -668,6 +810,8 @@ private fun PasswordEntryEditorDialog(
         }
     }
 }
+
+
 
 /**
  * 分组编辑对话框（用于新增与编辑）。

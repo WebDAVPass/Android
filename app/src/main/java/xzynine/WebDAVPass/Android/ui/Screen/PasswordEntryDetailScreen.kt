@@ -4,21 +4,31 @@ import android.content.ClipData
 import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.PersistableBundle
+import android.webkit.MimeTypeMap
 import android.widget.ImageView
-import xzylib.base.util.ToastUtils
+import androidx.documentfile.provider.DocumentFile
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -41,6 +51,7 @@ import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
+import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
@@ -57,6 +68,11 @@ import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlinx.coroutines.launch
+import xzylib.base.util.ToastUtils
+import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
+import xzynine.WebDAVPass.Android.data.EditableFieldDraft
+import xzynine.WebDAVPass.Android.data.EntryAttachmentInfo
+import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
@@ -89,6 +105,14 @@ fun PasswordEntryDetailScreen(
     var editUrl by rememberSaveable(entryId) { mutableStateOf("") }
     var editNotes by rememberSaveable(entryId) { mutableStateOf("") }
 
+    // 附件 / 自定义字段 / 过期时间 / 图标（编辑态）
+    // 注意：附件含 ByteArray，不能用 rememberSaveable（无法序列化）
+    var editAttachments by remember(entryId) { mutableStateOf<List<EditableAttachmentDraft>>(emptyList()) }
+    var editCustomFields by remember(entryId) { mutableStateOf<List<EditableFieldDraft>>(emptyList()) }
+    var editExpiryTime by remember(entryId) { mutableStateOf<Long?>(null) }
+    var editIconStandardId by remember(entryId) { mutableStateOf(0) }
+    var editCustomIconUuid by remember(entryId) { mutableStateOf<String?>(null) }
+
     fun syncEditFields(entry: PasswordEntry) {
         val usernameField = entry.keyValues.firstOrNull { it.fieldName.equals("UserName", ignoreCase = true) }
         val passwordField = entry.keyValues.firstOrNull {
@@ -104,6 +128,24 @@ fun PasswordEntryDetailScreen(
         editPassword = passwordField?.rawValue ?: ""
         editUrl = urlField?.rawValue ?: ""
         editNotes = notesField?.rawValue ?: ""
+        editAttachments = entry.attachments.map { EditableAttachmentDraft(name = it.name) }
+        // 仅排除真正的标准字段（isStandard），保留同名但属于额外字段（extra）的合法字段，
+        // 避免从其他工具迁移来的、命名为 Password 等的 extra 在保存时被静默删除。
+        editCustomFields = entry.keyValues
+            .filter { !it.isStandard }
+            .map {
+                EditableFieldDraft(
+                    name = it.fieldName,
+                    originalName = it.fieldName,
+                    value = it.rawValue,
+                    isProtected = it.isProtected,
+                    valueType = it.valueType,
+                    isStandard = it.isStandard
+                )
+            }
+        editExpiryTime = entry.expiryTime
+        editIconStandardId = entry.standardIconId
+        editCustomIconUuid = entry.customIconUuid
     }
 
     LaunchedEffect(entryId) {
@@ -121,6 +163,46 @@ fun PasswordEntryDetailScreen(
 
     val cornerRadius = 12.dp
     val cardBorderColor = MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.18f)
+
+    // 附件导入：选择文件后增量读取字节加入编辑态附件列表（带硬性大小上限，避免 OOM）
+    val attachmentPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri ->
+        uri ?: return@rememberLauncherForActivityResult
+        // 先用声明大小预检（content provider 可能返回 -1，故仅作软提示，真正上限在增量读取处强制）
+        val declaredSize = DocumentFile.fromSingleUri(context, uri)?.length() ?: -1L
+        if (declaredSize > KdbxTokenRepository.MAX_ATTACHMENT_BYTES) {
+            ToastUtils.showShortToast(context, "附件过大（上限 ${KdbxTokenRepository.MAX_ATTACHMENT_BYTES / 1024 / 1024} MiB），已取消")
+            return@rememberLauncherForActivityResult
+        }
+        runCatching {
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                // 增量读取并强制上限：超过则抛异常，拒绝进入内存
+                val buffer = java.io.ByteArrayOutputStream(8 * 1024)
+                val chunk = ByteArray(8 * 1024)
+                var total = 0
+                while (true) {
+                    val read = input.read(chunk)
+                    if (read < 0) break
+                    total += read
+                    if (total > KdbxTokenRepository.MAX_ATTACHMENT_BYTES) {
+                        throw IllegalStateException("附件过大")
+                    }
+                    buffer.write(chunk, 0, read)
+                }
+                val bytes = buffer.toByteArray()
+                val name = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+                    ?: "attachment_${System.currentTimeMillis()}"
+                editAttachments = editAttachments + EditableAttachmentDraft(
+                    name = name,
+                    data = bytes,
+                    isNew = true
+                )
+            }
+        }.onFailure {
+            ToastUtils.showShortToast(context, "附件过大或读取失败，已取消")
+        }
+    }
 
     Scaffold(
         popupHost = {},
@@ -161,11 +243,17 @@ fun PasswordEntryDetailScreen(
                                                 username = editUsername.trim(),
                                                 password = editPassword,
                                                 url = editUrl.trim(),
-                                                notes = editNotes
+                                                notes = editNotes,
+                                                customFields = editCustomFields,
+                                                attachments = editAttachments,
+                                                expiryTime = editExpiryTime,
+                                                customIconUuid = editCustomIconUuid,
+                                                iconStandardId = editIconStandardId
                                             )
                                         )
                                         if (updated) {
                                             selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
+                                            selectedEntry?.let { syncEditFields(it) }
                                             isEditing = false
                                         }
                                     }
@@ -504,6 +592,169 @@ fun PasswordEntryDetailScreen(
                 }
             }
 
+            // 过期时间（编辑态可设置，非编辑态展示）
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(
+                            width = 0.5.dp,
+                            color = cardBorderColor,
+                            shape = RoundedCornerShape(cornerRadius)
+                        ),
+                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
+                    cornerRadius = cornerRadius,
+                    pressFeedbackType = PressFeedbackType.None,
+                    showIndication = false,
+                    onClick = {}
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (isEditing) {
+                            ExpiryTimeEditor(
+                                value = editExpiryTime,
+                                onValueChange = { editExpiryTime = it }
+                            )
+                        } else if (entry.expiryTime != null) {
+                            val expired = entry.isExpired
+                            ArrowPreference(
+                                title = "过期时间",
+                                summary = formatExpiry(entry.expiryTime, expired),
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {}
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 自定义字段（编辑态可增删改，非编辑态在附加信息中已展示，这里提供编辑入口）
+            if (isEditing) {
+                item {
+                    SmallTitle(text = "自定义字段")
+                }
+                item {
+                    CustomFieldsEditor(
+                        fields = editCustomFields,
+                        onFieldsChange = { editCustomFields = it }
+                    )
+                }
+            }
+
+            // 附件
+            item {
+                val attachmentCount = if (isEditing) {
+                    editAttachments.count { !it.removed }
+                } else {
+                    entry.attachments.size
+                }
+                SmallTitle(text = "附件 ($attachmentCount)")
+            }
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .border(
+                            width = 0.5.dp,
+                            color = cardBorderColor,
+                            shape = RoundedCornerShape(cornerRadius)
+                        ),
+                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
+                    cornerRadius = cornerRadius,
+                    pressFeedbackType = PressFeedbackType.None,
+                    showIndication = false,
+                    onClick = {}
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        if (entry.attachments.isEmpty() && !isEditing) {
+                            Text(
+                                text = "无附件",
+                                fontSize = 13.sp,
+                                color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp)
+                            )
+                        }
+                        if (isEditing) {
+                            editAttachments.filter { !it.removed }.forEachIndexed { index, att ->
+                                AttachmentEditRow(
+                                    name = att.name,
+                                    sizeText = if (att.isNew) {
+                                        "${formatFileSize((att.data?.size ?: 0).toLong())} · 新增"
+                                    } else null,
+                                    canDelete = true,
+                                    onDelete = {
+                                        editAttachments = editAttachments.map {
+                                            if (it === att) it.copy(removed = true) else it
+                                        }
+                                    }
+                                )
+                                if (index < editAttachments.filter { !it.removed }.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 14.dp),
+                                        thickness = 0.5.dp
+                                    )
+                                }
+                            }
+                        } else {
+                            entry.attachments.forEachIndexed { index, att ->
+                                AttachmentViewRow(
+                                    name = att.name,
+                                    sizeText = formatFileSize(att.size),
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            val file = java.io.File(context.cacheDir, "attachments").apply { mkdirs() }
+                                                .resolve(att.name.replace("/", "_"))
+                                            val ok = runCatching {
+                                                file.outputStream().use { out ->
+                                                    tokenViewModel.copyEntryAttachmentTo(entryId, att.name, out)
+                                                }
+                                            }.getOrElse { false }
+                                            if (ok) {
+                                                openAttachment(context, att.name, file)
+                                            } else {
+                                                ToastUtils.showShortToast(context, "读取附件失败或附件过大")
+                                            }
+                                        }
+                                    }
+                                )
+                                if (index < entry.attachments.lastIndex) {
+                                    HorizontalDivider(
+                                        modifier = Modifier.padding(horizontal = 14.dp),
+                                        thickness = 0.5.dp
+                                    )
+                                }
+                            }
+                        }
+                        if (isEditing) {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(horizontal = 14.dp),
+                                thickness = 0.5.dp
+                            )
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { attachmentPicker.launch("*/*") }
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Edit,
+                                    contentDescription = "添加附件",
+                                    tint = MiuixTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = " 添加附件",
+                                    fontSize = 14.sp,
+                                    color = MiuixTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(start = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             if (additionalFields.isNotEmpty()) {
                 item {
                     SmallTitle(
@@ -611,4 +862,104 @@ private fun copySensitiveToClipboard(
     }
     clipData.description.extras = sensitiveExtras
     clipboardManager.setPrimaryClip(clipData)
+}
+
+@Composable
+private fun AttachmentViewRow(
+    name: String,
+    sizeText: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = name,
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.onSurface
+            )
+            Text(
+                text = sizeText,
+                fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurfaceSecondary
+            )
+        }
+    }
+}
+
+@Composable
+private fun AttachmentEditRow(
+    name: String,
+    sizeText: String?,
+    canDelete: Boolean,
+    onDelete: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = name,
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.onSurface
+            )
+            if (sizeText != null) {
+                Text(
+                    text = sizeText,
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                )
+            }
+        }
+        if (canDelete) {
+            IconButton(onClick = onDelete) {
+                Icon(
+                    imageVector = MiuixIcons.Delete,
+                    contentDescription = "删除附件"
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 将已写入缓存目录的附件通过系统查看器打开，便于用户查看。
+ *
+ * MIME 通过文件扩展名推断（[MimeTypeMap]）而非依赖 FileProvider 的 getType（其常返回 null），
+ * 避免兜底为 application/octet-stream 导致选择器无可用处理器而抛出 ActivityNotFoundException。
+ */
+private fun openAttachment(context: Context, name: String, file: java.io.File) {
+    runCatching {
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context,
+            context.packageName + ".fileprovider",
+            file
+        )
+        val ext = name.substringAfterLast('.', "").lowercase()
+        val mime = if (ext.isNotEmpty()) {
+            MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+                ?: "application/octet-stream"
+        } else {
+            "application/octet-stream"
+        }
+        val intent = Intent(Intent.ACTION_VIEW).apply {
+            setDataAndType(uri, mime)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        if (intent.resolveActivity(context.packageManager) != null) {
+            context.startActivity(Intent.createChooser(intent, "打开附件"))
+        } else {
+            ToastUtils.showShortToast(context, "没有可打开该类型附件的应用")
+        }
+    }.onFailure {
+        ToastUtils.showShortToast(context, "打开附件失败")
+    }
 }
