@@ -209,9 +209,9 @@ private fun SecurityIssueRow(
                 text = buildString {
                     if (item.account.isNotBlank()) {
                         append(item.account)
-                        append(" · ")
                     }
                     if (item.expiryTime != null && item.expiryTime!! > 0L) {
+                        if (isNotEmpty()) append(" · ")
                         append("过期时间 ${DateTimeFormatter.formatLocalDateTime(item.expiryTime)}")
                     }
                     if (item.passwordStrengthBits > 0.0) {
