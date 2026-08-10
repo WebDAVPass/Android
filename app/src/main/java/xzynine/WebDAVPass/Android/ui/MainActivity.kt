@@ -50,6 +50,7 @@ import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
 import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
+import xzynine.WebDAVPass.Android.ui.Screen.SecurityCheckScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import androidx.navigation3.runtime.entryProvider
@@ -204,9 +205,36 @@ fun MainScreen() {
                                         },
                                         onNavigateToTokenList = {
                                             navigator.push(Route.TokenList)
+                                        },
+                                        onNavigateToSecurityCheck = {
+                                            navigator.push(Route.SecurityCheck)
                                         }
                                     )
                                 }
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.SecurityCheck> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        SecurityCheckScreen(
+                            tokenViewModel = tokenViewModel,
+                            onNavigateBack = {
+                                navigator.pop()
+                            },
+                            onEntryClick = { entryId ->
+                                navigator.push(Route.PasswordEntryDetail(entryId))
                             }
                         )
                         MiuixPopupHost()

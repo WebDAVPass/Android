@@ -34,4 +34,8 @@ sealed interface Route : NavKey, Parcelable {
     @Parcelize
     @Serializable
     data class PasswordEntryDetail(val entryId: Long) : Route
+
+    @Parcelize
+    @Serializable
+    data object SecurityCheck : Route
 }

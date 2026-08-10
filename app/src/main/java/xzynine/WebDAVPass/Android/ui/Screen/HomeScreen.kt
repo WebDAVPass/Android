@@ -3,15 +3,19 @@ package xzynine.WebDAVPass.Android.ui.Screen
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Search
@@ -68,11 +72,22 @@ fun FeatureCard(
 fun HomeScreen(
     tokenViewModel: TokenViewModel,
     onNavigateToPasswordList: (PasswordListMode) -> Unit,
-    onNavigateToTokenList: () -> Unit
+    onNavigateToTokenList: () -> Unit,
+    onNavigateToSecurityCheck: () -> Unit
 ) {
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val passwordTotalCount by tokenViewModel.passwordViewModel.passwordTotalCount.collectAsState(0)
     val recentDeletedCount by tokenViewModel.passwordViewModel.recentDeletedCount.collectAsState(0)
+    val securityIssueCount = remember { mutableIntStateOf(0) }
+    val coroutineScope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        coroutineScope.launch {
+            val issues = tokenViewModel.loadSecurityIssues()
+            securityIssueCount.intValue = issues.expiredCount + issues.weakCount
+        }
+    }
+
     val tokenCount by remember {
         derivedStateOf {
             tokens.size
@@ -125,9 +140,9 @@ fun HomeScreen(
                     // 安全性
                     FeatureCard(
                         title = "安全性",
-                        value = "0",
+                        value = "${securityIssueCount.intValue}",
                         onClick = {
-                            // TODO: tos提示待开发
+                            onNavigateToSecurityCheck()
                         },
                         modifier = Modifier.weight(1f)
                     )

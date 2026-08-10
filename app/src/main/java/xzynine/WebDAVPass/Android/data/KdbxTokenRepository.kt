@@ -25,6 +25,7 @@ import com.kunzisoft.keepass.otp.OtpEntryFields
 import com.kunzisoft.keepass.otp.OtpEntryFields.isOTP
 import com.kunzisoft.keepass.otp.OtpType
 import com.kunzisoft.keepass.otp.TokenCalculator
+import xzynine.WebDAVPass.Android.util.PasswordStrength
 import java.io.ByteArrayOutputStream
 import java.io.ByteArrayInputStream
 import java.io.File
@@ -889,6 +890,57 @@ class KdbxTokenRepository(context: Context) {
         }.onFailure {
             Logger.e(LOG_TAG, "mergeLocalDatabaseFile failed, path=$localPath, message=${it.message}", it)
         }.getOrDefault(false)
+    }
+
+    /**
+     * 安全性检查：返回已过期条目与弱密码条目（不含回收站）。
+     *
+     * 弱密码判定使用 [PasswordStrength.isWeak]（熵低于 60 bits）。
+     */
+    fun loadSecurityIssues(localPath: String, masterPassword: String): SecurityIssuesInfo {
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val nowMillis = System.currentTimeMillis()
+            val expired = mutableListOf<SecurityIssueEntry>()
+            val weak = mutableListOf<SecurityIssueEntry>()
+
+            collectEntriesOutsideRecycleBin(db, db.rootGroup).forEach { entry ->
+                val entryId = toStableId(entry)
+                val title = entry.title
+                    .takeIf { it.isNotBlank() }
+                    ?: entry.url.takeIf { it.isNotBlank() }
+                    ?: entry.username.takeIf { it.isNotBlank() }
+                    ?: entryId.toString()
+                val account = entry.username.takeIf { it.isNotBlank() } ?: ""
+                val expiryMillis = entry.expiryTime.toMilliseconds()
+                val password = entry.password
+                val strengthBits = PasswordStrength.estimateBits(password)
+
+                if (expiryMillis > 0L && expiryMillis < nowMillis) {
+                    expired.add(
+                        SecurityIssueEntry(
+                            entryId = entryId,
+                            title = title,
+                            account = account,
+                            passwordStrengthBits = strengthBits,
+                            expiryTime = expiryMillis
+                        )
+                    )
+                }
+                if (PasswordStrength.isWeak(password)) {
+                    weak.add(
+                        SecurityIssueEntry(
+                            entryId = entryId,
+                            title = title,
+                            account = account,
+                            passwordStrengthBits = strengthBits,
+                            expiryTime = expiryMillis.takeIf { it > 0L }
+                        )
+                    )
+                }
+            }
+
+            SecurityIssuesInfo(expiredEntries = expired, weakPasswordEntries = weak)
+        }
     }
 
     /**

@@ -102,3 +102,25 @@ data class DatabaseSettingsInfo(
     val parallelism: Long,
     val isCompressionEnabled: Boolean
 )
+
+/**
+ * 安全性检查条目（过期或弱密码）。
+ */
+data class SecurityIssueEntry(
+    val entryId: Long,
+    val title: String,
+    val account: String,
+    val passwordStrengthBits: Double,
+    val expiryTime: Long?
+)
+
+/**
+ * 安全性检查结果。
+ */
+data class SecurityIssuesInfo(
+    val expiredEntries: List<SecurityIssueEntry>,
+    val weakPasswordEntries: List<SecurityIssueEntry>
+) {
+    val expiredCount: Int get() = expiredEntries.size
+    val weakCount: Int get() = weakPasswordEntries.size
+}

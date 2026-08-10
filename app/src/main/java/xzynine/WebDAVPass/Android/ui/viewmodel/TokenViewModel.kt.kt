@@ -16,6 +16,7 @@ import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
+import xzynine.WebDAVPass.Android.data.SecurityIssuesInfo
 import xzynine.WebDAVPass.Android.data.TokenCode
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
@@ -668,6 +669,14 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             onPasswordWriteSuccess()
         }
         return ok
+    }
+
+    /**
+     * 安全性检查：已过期条目与弱密码条目。
+     */
+    suspend fun loadSecurityIssues(): SecurityIssuesInfo {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return SecurityIssuesInfo(emptyList(), emptyList())
+        return kdbxTokenRepository.loadSecurityIssues(localPath, libraryViewModel.getMasterPasswordInternal())
     }
 
     /**
