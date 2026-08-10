@@ -146,7 +146,25 @@
 1. ~~**#5 Room 破坏性迁移**（数据丢失风险，高）→ ✅ 已修复。~~
 2. ~~**#4 `commit()`→`apply()`**（UI 卡顿，中）→ ❌ 不属实，代码已重构为数据库实现，无需修改。~~
 3. ~~**#6 空路径拼出 `.kdbx`**（功能缺陷，中）→ ✅ 已修复。~~
-4. **N8 / N6** 字符串资源化、补充同步单元测试（质量，中，待处理）。
+4. **N8 / N6** 字符串资源化、补充同步单元测试（质量，中，待处理，见下方可选意见核查）。
+
+### 可选/建议意见核查结论（本轮一并处理）
+下列意见原为「可选/建议」，经核查多数在当前代码状态下已不适用或已满足；少数属较大范围增强，超出本次最小化修复范围，留待后续单独处理。
+
+- **#2 `AppDatabaseHolder` 的 `@Volatile`**：保留即安全（双重检查锁单例推荐写法），评审仅为「需注意」，不改动。
+- **#8 数据库版本号常量**：`AppDatabase.kt` 的 `@Database(version = 7)` 注解已是集中常量管理，版本号未散落硬编码，**已满足**，无需在 Holder 重复抽取。
+- **#11 `LibraryContextStore` 并发保护**：该文件已重构为 Room DAO 读写，Room 自身提供线程安全与事务，原 `SharedPreferences` 并发担忧已不适用。
+- **N1 `composeOptions` 版本配置**：`app/build.gradle.kts` 的 `kotlinCompilerExtensionVersion` 与 AGP/Kotlin 版本匹配正常，无需修改。
+- **N3 Dao 索引/唯一约束**：`LibraryContextEntity.id` 为主键即唯一约束，符合基本需求，暂不额外加索引。
+- **N4 命名/注释风格**：代码注释风格一致，无需强制统一。
+- **N6 同步单元测试**：属质量增强项，工作量较大，留待后续独立任务补充。
+- **N7 未使用 import**：经 lint 与逐引用核查，`CloudLibraryDialog.kt` 顶部所有 import（`URLEncoder`、`Dispatchers`、`KeyboardType`、`KeyboardOptions` 等）均被实际使用，**不成立**，无需清理。
+- **N8 字符串硬编码资源化**：属质量增强项，涉及多处 Toast/状态文案，工作量较大，留待后续独立任务处理。
+
+### base 模块构建修复（外部提交拉取）
+- 仓库原存在 `base/consumer-rules.pro` 缺失导致 `assembleDebug` 失败（`base/build.gradle.kts:15` 引用了未提交的 proguard 文件）。该问题已在提交 `fdab590d012286a896d9bdd178a17f91b6a74308` 修复。
+- 已通过 `git cherry-pick fdab590d...` 将该修复并入本分支（commit `2cd5f06`）。
+- 拉取后整体 `./gradlew assembleDebug` 验证为 **BUILD SUCCESSFUL**。
 
 ### 已排除项
 - **#1 / N2** `.gitmodules` 评审意见不成立（评审者描述的子模块路径/URL 与实际文件不符），**无需修改**。
