@@ -66,6 +66,14 @@ class LibraryContextStore(private val context: Context) {
     }
 
     /**
+     * 应用启动预热：在 IO 协程中提前完成迁移与数据库加载，
+     * 使首次用户操作前的缓存已就绪，避免 UI 线程触发 [ensureLoaded] 的同步阻塞。
+     */
+    fun warmUp() {
+        ioScope.launch { ensureLoaded() }
+    }
+
+    /**
      * 一次性迁移：旧 SharedPreferences 数据导入数据库，并加密存量明文密码。
      *
      * 说明：
@@ -404,14 +412,11 @@ class LibraryContextStore(private val context: Context) {
         // 兼容旧版本：缺省视为启用48小时手动主密码策略。
         val normalizedForceManualUnlock = item.forceManualUnlockEvery48Hours ?: true
 
-        // 兼容旧版本：缺省视为未失效。
-        val normalizedAutoUnlockInvalidated = item.autoUnlockInvalidated
-
         return item.copy(
             autoSyncEnabled = normalizedAutoSync,
             autoUnlockAuthMode = normalizedAuthMode,
             forceManualUnlockEvery48Hours = normalizedForceManualUnlock,
-            autoUnlockInvalidated = normalizedAutoUnlockInvalidated
+            autoUnlockInvalidated = item.autoUnlockInvalidated
         )
     }
 

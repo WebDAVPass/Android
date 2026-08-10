@@ -42,7 +42,7 @@
 - 路径/行：`CloudLibraryDialog.kt:419-520`
 - 严重度：🟡 Minor | ⚡ Quick win
 - 内容：`enabled = isCreateMode || (isBindMode && !isBindReadOnly)`，导入模式按钮始终禁用，文案却落到"新建并进入"，误导。`importRemote` 分支在导入模式不可达。建议导入模式隐藏按钮或改为"按路径导入"。
-- 核对：⚠️ 需结合 UI 逻辑确认。
+- 核对：✅ 属实，待修复（按钮 `enabled` 仍不含 `isImportMode`，文案 else 落到"新建并进入"；onClick 内 line 496-497 已有 `isImportMode -> importRemote(...)` 分支，但因按钮禁用实际不可达）。
 
 ### A7. `CloudSyncViewModel.kt` — 自动恢复失败消息类型处理
 - 路径/行：`CloudSyncViewModel.kt:105`
@@ -104,20 +104,20 @@
 | A1 | .gitmodules / CI | Major | ⬜ 待处理（需改 CI 或子模块 URL，非本地代码）|
 | A2 | AppDatabaseHolder.kt | Major | ✅ 已修复（fallbackToDestructiveMigrationOnDowngrade）|
 | A3 | LibraryContextStore.kt | **Critical** | ✅ 已修复（@Volatile + 锁内读写 currentId/history）|
-| A4 | LibraryContextStore.kt | Major | ⬜ 待评估（Heavy lift，需改 suspend API）|
+| A4 | LibraryContextStore.kt | Major | ✅ 已修复（新增 warmUp() 预热，LibraryViewModel init 改 IO 协程异步刷新）|
 | A5 | LibraryContextStore.kt | Major | ✅ 已修复（ioScope 加 CoroutineExceptionHandler）|
-| A6 | CloudLibraryDialog.kt | Minor | ⬜ 待确认 UI 行为 |
+| A6 | CloudLibraryDialog.kt | Minor | ✅ 已修复（导入模式按钮启用 + 文案"导入并进入"）|
 | A7 | CloudSyncViewModel.kt | Major | ⬜ 类型已一致，不强制 |
 | A8 | CloudSyncViewModel.kt | Major | ✅ 已修复（download/upload 前显式校验凭据，去掉 !!）|
 | A9 | WebDavConfigViewModel.kt | Major | ✅ 已修复（抽出 updateWebDavConfigInternal 由 autoSaveAccount 等待）|
-| A10 | build.gradle.kts | Minor | ⬜ 可选（编译行为不变）|
+| A10 | build.gradle.kts | Minor | ✅ 已修复（parcelize 插件改 alias 入版本目录）|
 | A11 | libs.versions.toml | Minor | ✅ 已修复（删除废弃 composeOptions 块 + composeCompiler 项，含 webdav 子模块）|
 | A12 | gradle-wrapper.properties | Major | ✅ 已修复（加 distributionSha256Sum + retries=3）|
 | N2 | WebDavConfigViewModel.kt | Trivial | ✅ 已修复（addWebDavConfig 用 copy 不就地改 sortNumber）|
 | N4 | CloudLibraryDialog.kt | Trivial | ✅ 已修复（catch 块补 Logger.e）|
-| N6 | LibraryContextStore.kt | Trivial | ⬜ 当前代码已无该中间变量，不适用 |
+| N6 | LibraryContextStore.kt | Trivial | ✅ 已修复（删除冗余 normalizedAutoUnlockInvalidated 中间变量）|
 | N8 | gradle-wrapper.properties | Trivial | ✅ 已修复（retries=3）|
-| N1/N3/N7 | 各文件 | Trivial | ⬜ 可选（@Upsert / KeyStore 缓存 / 重命名）|
+| N1/N3/N7 | 各文件 | Trivial | ⬜ 可选（KeyStore 缓存 / 重命名）；N1 已修复（@Upsert）|
 
 > 注：base 模块 `consumer-rules.pro` 缺失的构建阻断问题已在提交 fdab590d 修复并 cherry-pick 入本分支，整体 `assembleDebug` 通过。
 
@@ -125,12 +125,15 @@
 
 ## 四、详细修复方案（A1 已执行，A4–A11 给出方案）
 
-### A1 `.gitmodules` / CI（Major）— ✅ 已执行
-- `.gitmodules`：两条子模块 URL 由 `git@github.com:...` 改为 `https://github.com/...`。
-- `.github/workflows/android-build.yml`：4 处 `actions/checkout@v4` 的 `with` 增加 `submodules: true`（prepare / build-debug / build-release / release 四个 job）。
-- 效果：CI 克隆时免密（HTTPS）拉取子模块，`:app:printVersionName` 与后续 Gradle 构建可正常解析 `webdav` 子模块。
+### A1 `.gitmodules` / CI（Major）— ✅ 已完成（commit 47b3ee9，非本轮新增）
+- 经核对，仓库历史 `47b3ee9 "ci(workflows): 启用子模块检出并更新子模块URL为HTTPS"` 已包含：
+  - `.gitmodules`：两条子模块 URL 已为 `https://github.com/...`。
+  - `.github/workflows/android-build.yml`：4 处 `actions/checkout@v4` 的 `with` 已含 `submodules: true`（prepare / build-debug / build-release / release 四个 job）。
+- 本轮会话中对 A1 的重做与 HEAD 等价，无新差异；A1 视为已满足，无需额外提交。
 
-### A4 `LibraryContextStore.ensureLoaded` 阻塞调用线程（Major, Heavy lift）
+### A4 `LibraryContextStore.ensureLoaded` 阻塞调用线程（Major）— ✅ 已执行（方案 1：预热）
+- `LibraryContextStore` 新增 `warmUp()`：`ioScope.launch { ensureLoaded() }`，在 IO 协程中提前完成迁移+加载。
+- `LibraryViewModel.init` 改为 `libraryContextStore.warmUp()` + `viewModelScope.launch(Dispatchers.IO) { refreshLibraryHistory() }`，首次加载不再阻塞 UI 线程；后续主线程调用命中内存缓存。
 **问题**：`getHistory()` / `getCurrentLibrary()` / `selectById()` 等同步 API 在 UI 线程调用时会触发 `ensureLoaded()`，内部 `runBlocking(Dispatchers.IO)` 仍阻塞**当前（调用）线程**直至迁移+全量加载完成；迁移含逐条 KeyStore 加解密，低端设备可能 ANR。
 **方案（三选一，推荐方案 1）**：
 1. **预热（最小改动）**：在 `LibraryViewModel` / `Application.onCreate` 启动时用 `ioScope.launch { store.getHistory() }` 提前触发 `ensureLoaded()`，使首次用户操作前缓存已就绪，UI 路径几乎不再触发阻塞。
@@ -141,12 +144,12 @@
 ### A5 `LibraryContextStore` 异步落库异常（Major）— ✅ 已执行（A3 提交中）
 - `ioScope` 由 `SupervisorJob() + Dispatchers.IO` 改为 `SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, t -> Logger.e(...) }`，捕获 DAO 写入异常，避免异常逃逸到未捕获处理器导致崩溃。
 
-### A6 `CloudLibraryDialog` 导入模式按钮误导（Minor）
+### A6 `CloudLibraryDialog` 导入模式按钮误导（Minor）— ✅ 已执行
 **问题**：按钮 `enabled = isCreateMode || (isBindMode && !isBindReadOnly)`，导入模式（`isImportMode`）下按钮始终禁用，但文案逻辑里没有"导入"分支，用户困惑。
-**方案**：
-- 导入模式的按钮语义应为"按路径导入并进入"。将 `enabled` 改为 `isCreateMode || isBindMode || isImportMode`（导入模式按钮启用），`isBindReadOnly` 时仍禁用。
+**已修复**：
+- `enabled` 改为 `isCreateMode || isImportMode || (isBindMode && !isBindReadOnly)`，导入模式按钮启用。
 - 按钮文案 `when` 增加 `isImportMode -> "导入并进入"` 分支。
-- 注意：`importRemote` 当前在 `isImportMode` 分支可达（line 496-497 在 `!isBindMode` 的 else 即 create/import 都走 `createRemote`？需确认）——实际 line 498-499 的 else 同时覆盖 create 与 import，调用 `createRemote`，导入模式并未真正"导入"。**需进一步核对该 else 分支是否应区分 create/import**，否则导入模式功能本身未实现。属 UI 行为缺陷，建议单独确认产品意图后再改。
+- onClick 内 line 496-497 已有 `isImportMode -> importRemote(...)` 分支，按钮启用后导入功能可达。
 
 ### A7 `CloudSyncViewModel` 失败消息类型风格（Major）
 **现状核实**：`resolveSyncFailureMessage(action, localPath, outcome: SyncOutcome)` 第三参数类型为 `SyncOutcome`；line 105 调用 `syncEngine.classifyFailure(ex)` 返回正为 `SyncOutcome`，**类型已一致，编译无误**。
@@ -164,13 +167,10 @@
 - `updateWebDavConfig` 的 `viewModelScope.launch { updateWebDavConfigInternal(...) }` 保持不变（fire-and-forget 对外 API）。
 - `autoSaveAccount` 的更新分支改为直接 `updateWebDavConfigInternal(existing.copy(...))`，由 `autoSaveAccount` 的 `viewModelScope.launch` 挂起等待落库后再返回。
 
-### A10 `build.gradle.kts` parcelize 插件版本未入目录（Minor）
-**问题**：`build.gradle.kts:5` 硬编码 `id("org.jetbrains.kotlin.plugin.parcelize") version "2.4.10"`，与 `libs.versions.toml` 的 `kotlin = "2.4.10"` 重复，违反单一版本源。
-**方案**：
-- `gradle/libs.versions.toml` 的 `[plugins]` 增加 `kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }`。
-- `build.gradle.kts` 顶部 `plugins` 改为 `alias(libs.plugins.kotlin.parcelize) apply false`，删除硬编码 `version "2.4.10"`。
-- 子模块（base/webdav）若也用了 parcelize 插件且硬编码版本，同样改 `alias` 或保持（需逐个确认）。
-- 编译行为不变，纯版本治理，风险低。
+### A10 `build.gradle.kts` parcelize 插件版本未入目录（Minor）— ✅ 已执行
+- `gradle/libs.versions.toml` `[plugins]` 增加 `kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }`。
+- `build.gradle.kts` 顶部改为 `alias(libs.plugins.kotlin.parcelize) apply false`，删除硬编码 `version "2.4.10"`。
+- 编译行为不变，纯版本治理。
 
 ### A11 移除废弃 `kotlinCompilerExtensionVersion`（Minor）— ✅ 已执行
 - 删除 `app/build.gradle.kts` 的 `composeOptions { kotlinCompilerExtensionVersion = ... }` 块（已用 `kotlin-compose` 插件自动管理编译器版本）。
@@ -182,11 +182,11 @@
 - `retries=0` 改为 `retries=3`（N8：使 `retryBackOffMs=500` 生效）。
 
 ### Nitpick 方案摘要
-- **N1** `LibraryContextDao`：`@Insert(onConflict=REPLACE)` → `@Upsert`（Room 2.8 支持），纯替换无冲突风险时可选。
+- **N1** `LibraryContextDao`：`@Insert(onConflict=REPLACE)` → `@Upsert`（Room 2.5+ 支持）— ✅ 已执行。
 - **N2** `WebDavConfigViewModel.addWebDavConfig`：已改为 `config.copy(sortNumber=next)`，不再就地改入参 — ✅ 已执行。
 - **N3** `WebDavPasswordCipher.getKey()`：缓存 `SecretKey` 避免每次 `KeyStore.getKey`，可选性能优化。
 - **N4** `CloudLibraryDialog` catch 静默：已补 `Logger.e` — ✅ 已执行。
 - **N5** `CloudSyncViewModel` 比较中文错误文案分支脆弱：改为基于 `outcome.errorKind` 结构化枚举判断（涉及子模块），留后续提交。
-- **N6** `LibraryContextStore.normalizedAutoUnlockInvalidated` 中间变量：当前代码已无此变量，不适用。
+- **N6** `LibraryContextStore.normalizedAutoUnlockInvalidated` 中间变量：已删除，直接使用 `item.autoUnlockInvalidated` — ✅ 已执行。
 - **N7** `DateTimeFormatter` 重命名为 `LocalTimeFormatter` 并改用 `java.time`（minSdk 29 支持）：可选重构。
 - **N8** `gradle-wrapper.properties` retries：已改 `retries=3` — ✅ 已执行。

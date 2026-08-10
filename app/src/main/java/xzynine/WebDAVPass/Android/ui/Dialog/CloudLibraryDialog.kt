@@ -510,11 +510,12 @@ fun CloudLibraryDialog(
 
                         onSelected(selected, if (isCreateMode) createPassword else null)
                     }
-                }, enabled = isCreateMode || (isBindMode && !isBindReadOnly)) {
+                }, enabled = isCreateMode || isImportMode || (isBindMode && !isBindReadOnly)) {
                     Text(
                         when {
                             isBindMode && isBindReadOnly -> "配置已锁定"
                             isBindMode -> "保存云端绑定"
+                            isImportMode -> "导入并进入"
                             else -> "新建并进入"
                         }
                     )
