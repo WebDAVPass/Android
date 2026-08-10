@@ -9,13 +9,11 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.basic.Search
@@ -79,16 +77,15 @@ fun HomeScreen(
     val passwordTotalCount by tokenViewModel.passwordViewModel.passwordTotalCount.collectAsState(0)
     val recentDeletedCount by tokenViewModel.passwordViewModel.recentDeletedCount.collectAsState(0)
     val securityIssueCount = remember { mutableIntStateOf(0) }
-    val coroutineScope = rememberCoroutineScope()
 
-    // 密码/回收站计数变化（写入成功后刷新）时重新扫描安全性问题，保证数字不过期
+    // 密码/回收站计数变化（写入成功后刷新）时重新扫描安全性问题，保证数字不过期。
+    // 直接在 LaunchedEffect 体内调用挂起函数，key 变化时自动取消上一次扫描，
+    // 避免先启动的扫描后完成覆盖较新结果。
     LaunchedEffect(passwordTotalCount, recentDeletedCount) {
-        coroutineScope.launch {
-            val issues = tokenViewModel.loadSecurityIssues()
-            // 以不重复的问题条目计数（同一条目同时过期且弱密码只计一次）
-            securityIssueCount.intValue = (issues.expiredEntries.map { it.entryId } +
-                issues.weakPasswordEntries.map { it.entryId }).distinct().size
-        }
+        val issues = tokenViewModel.loadSecurityIssues()
+        // 以不重复的问题条目计数（同一条目同时过期且弱密码只计一次）
+        securityIssueCount.intValue = (issues.expiredEntries.map { it.entryId } +
+            issues.weakPasswordEntries.map { it.entryId }).distinct().size
     }
 
     val tokenCount by remember {
