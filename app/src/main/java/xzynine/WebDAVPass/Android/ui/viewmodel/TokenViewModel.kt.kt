@@ -7,6 +7,7 @@ import xzylib.base.util.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import xzynine.WebDAVPass.Android.data.AppDatabaseHolder
+import xzynine.WebDAVPass.Android.data.AppSetting
 import xzynine.WebDAVPass.Android.data.DatabaseManager
 import xzynine.WebDAVPass.Android.data.DatabaseSettingsInfo
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
@@ -127,11 +128,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 AppDatabaseHolder.getInstance(context)
                     .appSettingsDao()
                     .put(
-                        xzynine.WebDAVPass.Android.data.AppSetting(
+                        AppSetting(
                             SETTING_KEY_LOCK_TIMEOUT_MINUTES,
                             safe.toString()
                         )
                     )
+            }.onFailure {
+                Logger.e(SYNC_LOG_TAG, "保存锁定超时设置失败: ${it.message}", it)
             }
         }
     }
@@ -146,11 +149,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                 AppDatabaseHolder.getInstance(context)
                     .appSettingsDao()
                     .put(
-                        xzynine.WebDAVPass.Android.data.AppSetting(
+                        AppSetting(
                             SETTING_KEY_LOCK_ON_BACKGROUND,
                             enabled.toString()
                         )
                     )
+            }.onFailure {
+                Logger.e(SYNC_LOG_TAG, "保存后台锁定设置失败: ${it.message}", it)
             }
         }
     }
