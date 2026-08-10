@@ -311,6 +311,7 @@ fun WelcomeScreen(
         if (showCreateMasterPasswordDialog) {
             showCreateMasterPasswordDialog = false
             pendingCreateMasterPassword = ""
+            pendingCreateKeyFileData = null
             return@BackHandler
         }
         if (showDeleteDialog.value) {
@@ -1107,6 +1108,7 @@ fun WelcomeScreen(
             onDismiss = {
                 showCreateMasterPasswordDialog = false
                 pendingCreateMasterPassword = ""
+                pendingCreateKeyFileData = null
             },
             onConfirm = { password, keyFileData ->
                 pendingCreateMasterPassword = password
