@@ -66,7 +66,9 @@ import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Lock
+import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -1084,6 +1086,8 @@ private fun AdditionalFieldRow(
     item: RemainingKeyValue,
     onCopy: () -> Unit
 ) {
+    // 受保护字段默认以掩码展示，仅在用户主动切换后显示原值
+    var showProtectedValue by remember { mutableStateOf(false) }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1102,18 +1106,19 @@ private fun AdditionalFieldRow(
                 color = MiuixTheme.colorScheme.onSurface
             )
             Text(
-                text = item.rawValue,
+                text = if (item.isProtected && !showProtectedValue) "••••••" else item.rawValue,
                 fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurfaceSecondary
             )
         }
         if (item.isProtected) {
-            Icon(
-                imageVector = MiuixIcons.Lock,
-                contentDescription = "受保护字段",
-                tint = MiuixTheme.colorScheme.onSurfaceSecondary,
-                modifier = Modifier.padding(end = 8.dp)
-            )
+            IconButton(onClick = { showProtectedValue = !showProtectedValue }) {
+                Icon(
+                    imageVector = if (showProtectedValue) MiuixIcons.Hide else MiuixIcons.Show,
+                    contentDescription = if (showProtectedValue) "隐藏受保护字段" else "显示受保护字段",
+                    tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                )
+            }
         }
         IconButton(onClick = onCopy) {
             Icon(
