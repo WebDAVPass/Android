@@ -49,6 +49,8 @@ import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.util.PasswordStrength
+import xzynine.WebDAVPass.Android.util.strengthLabel
 
 /**
  * 数据库设置页。
@@ -78,6 +80,11 @@ fun DatabaseSettingsScreen(
     var keyFileName by remember { mutableStateOf("") }
     var keyFileData by remember { mutableStateOf<ByteArray?>(null) }
     var status by remember { mutableStateOf("") }
+    // 弱密码二次确认：修改主密码时若新密码较弱且未更换密钥文件，需再次确认
+    var weakPasswordAcknowledged by remember { mutableStateOf(false) }
+
+    val newPasswordStrengthBits = remember(newPassword) { PasswordStrength.estimateBits(newPassword) }
+    val newPasswordIsWeak = newPassword.isNotEmpty() && PasswordStrength.isWeak(newPassword)
 
     val kdfOptions = listOf("AES", "Argon2d", "Argon2id")
     // -1 表示未知 KDF 或尚未加载：保存时 KDF 传 null（不修改），避免把未知 KDF 静默切到 AES
@@ -171,6 +178,12 @@ fun DatabaseSettingsScreen(
         if (error.isNotBlank()) {
             return
         }
+        // 未更换密钥文件时，弱密码需二次确认（首次点击仅提示）
+        if (keyFileData == null && newPasswordIsWeak && !weakPasswordAcknowledged) {
+            weakPasswordAcknowledged = true
+            status = "新主密码强度较低（${newPasswordStrengthBits.toInt()} bits），建议增加长度或组合大小写/数字/符号；再次点击「保存设置」可强制使用。"
+            return
+        }
             coroutineScope.launch {
                 saving = true
                 val ok = viewModel.changeDatabaseSettings(
@@ -235,13 +248,27 @@ fun DatabaseSettingsScreen(
                 )
                 TextField(
                     value = newPassword,
-                    onValueChange = { newPassword = it; status = "" },
+                    onValueChange = {
+                        newPassword = it
+                        status = ""
+                        weakPasswordAcknowledged = false
+                    },
                     label = "新主密码",
                     visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (newPassword.isNotEmpty()) {
+                    val bits = newPasswordStrengthBits
+                    Text(
+                        text = "强度：${strengthLabel(bits)}（${bits.toInt()} bits）",
+                        fontSize = 12.sp,
+                        color = if (bits < PasswordStrength.WEAK_PASSWORD_THRESHOLD_BITS)
+                            MiuixTheme.colorScheme.error
+                        else MiuixTheme.colorScheme.primary
+                    )
+                }
                 TextField(
                     value = confirmPassword,
                     onValueChange = { confirmPassword = it; status = "" },
