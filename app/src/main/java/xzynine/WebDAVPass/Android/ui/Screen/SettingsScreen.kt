@@ -44,6 +44,7 @@ import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
+import xzynine.WebDAVPass.Android.ui.Dialog.PasswordInputDialog
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -60,6 +61,7 @@ import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 import github.xzynine.webdav.ui.WebDavSyncStatusSection
 import github.xzynine.webdav.ui.WebDavSyncUiState
 
@@ -228,6 +230,19 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
         }
     )
 
+    var pendingMergeUri by remember { mutableStateOf<android.net.Uri?>(null) }
+    var mergeLoading by remember { mutableStateOf(false) }
+
+    val mergeLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            if (uri == null) {
+                return@rememberLauncherForActivityResult
+            }
+            pendingMergeUri = uri
+        }
+    )
+
     /**
      * 当前库是否已具备云端同步所需信息。
      */
@@ -387,6 +402,24 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                 },
                 onClick = {
                     exportLauncher.launch("WebDavPass-导出.kdbx")
+                },
+                modifier = Modifier.Companion
+                    .fillMaxWidth()
+            )
+
+            // 合并数据库
+            ArrowPreference(
+                title = "合并数据库",
+                summary = "将其他 .kdbx 文件的内容合并进当前库",
+                startAction = {
+                    Icon(
+                        modifier = Modifier.Companion.padding(end = 16.dp),
+                        imageVector = MiuixIcons.UploadCloud,
+                        contentDescription = "合并数据库",
+                    )
+                },
+                onClick = {
+                    mergeLauncher.launch(arrayOf("application/octet-stream", "*/*"))
                 },
                 modifier = Modifier.Companion
                     .fillMaxWidth()
@@ -671,5 +704,28 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
 
             Spacer(modifier = Modifier.height(8.dp))
         }
+    }
+
+    pendingMergeUri?.let { mergeUri ->
+        PasswordInputDialog(
+            show = true,
+            title = "合并数据库",
+            summary = "请输入待合并文件的主密码",
+            confirmButtonText = "合并",
+            onDismiss = { pendingMergeUri = null },
+            onConfirm = { mergePassword ->
+                pendingMergeUri = null
+                coroutineScope.launch {
+                    mergeLoading = true
+                    val ok = viewModel.mergeLocalDatabase(mergeUri, mergePassword)
+                    mergeLoading = false
+                    if (ok) {
+                        xzylib.base.util.ToastUtils.showShortToast(context, "合并完成")
+                    } else {
+                        xzylib.base.util.ToastUtils.showShortToast(context, "合并失败：密码错误或文件无效")
+                    }
+                }
+            }
+        )
     }
 }

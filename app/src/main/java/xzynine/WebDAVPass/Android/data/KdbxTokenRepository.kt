@@ -857,6 +857,41 @@ class KdbxTokenRepository(context: Context) {
     }
 
     /**
+     * 将本地 .kdbx 文件合并进当前数据库（与云端合并同一语义，KeePassDX mergeData）。
+     *
+     * @param mergeFileUri 待合并的本地 kdbx 文件 Uri（content:// 或文件路径）
+     * @param mergeMasterPassword 待合并文件的主密码（密钥文件与当前库一致）
+     * @return 是否成功
+     */
+    fun mergeLocalDatabaseFile(
+        localPath: String,
+        masterPassword: String,
+        mergeFileUri: String,
+        mergeMasterPassword: String
+    ): Boolean {
+        return runCatching {
+            withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+                val mergeLocation = resolveLocation(mergeFileUri)
+                openInputStream(mergeLocation).use { input ->
+                    db.mergeData(
+                        databaseToMergeStream = input,
+                        databaseToMergeMasterCredential = MasterCredential(
+                            password = mergeMasterPassword,
+                            keyFileData = DatabaseManager.getKeyFileData()
+                        ),
+                        databaseToMergeChallengeResponseRetriever = emptyChallengeResponseRetriever,
+                        isRAMSufficient = { true },
+                        progressTaskUpdater = null
+                    )
+                }
+                true
+            }
+        }.onFailure {
+            Logger.e(LOG_TAG, "mergeLocalDatabaseFile failed, path=$localPath, message=${it.message}", it)
+        }.getOrDefault(false)
+    }
+
+    /**
      * 一次性加载一级密码条目及全局总计数。
      *
      * 对比分别调用 [loadPasswordEntriesByTopLevel] 和 [countPasswordEntries]，

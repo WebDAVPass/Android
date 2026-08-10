@@ -619,6 +619,23 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 将本地 .kdbx 文件合并进当前数据库。
+     */
+    suspend fun mergeLocalDatabase(uri: Uri, mergeMasterPassword: String): Boolean {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
+        val ok = kdbxTokenRepository.mergeLocalDatabaseFile(
+            localPath,
+            libraryViewModel.getMasterPasswordInternal(),
+            uri.toString(),
+            mergeMasterPassword
+        )
+        if (ok) {
+            onPasswordWriteSuccess()
+        }
+        return ok
+    }
+
+    /**
      * 写入成功后的统一刷新链路。
      */
     private fun onPasswordWriteSuccess() {
