@@ -1022,8 +1022,9 @@ private fun AdditionalFieldRow(
             modifier = Modifier.weight(1f),
             verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
+            val displayName = displayFieldName(item.fieldName)
             Text(
-                text = if (item.isProtected) "${item.fieldName}（已保护）" else item.fieldName,
+                text = if (item.isProtected) "$displayName（已保护）" else displayName,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
                 color = MiuixTheme.colorScheme.onSurface
@@ -1048,6 +1049,17 @@ private fun AdditionalFieldRow(
                 contentDescription = "复制 ${item.fieldName}"
             )
         }
+    }
+}
+
+/**
+ * 模板装饰字段名（如 [SSID]）去除括号后展示，普通字段名原样返回。
+ */
+private fun displayFieldName(name: String): String {
+    return if (name.startsWith("[") && name.endsWith("]")) {
+        name.removePrefix("[").removeSuffix("]")
+    } else {
+        name
     }
 }
 

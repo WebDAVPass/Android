@@ -78,11 +78,15 @@ import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
+import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.TemplatePickerDialog
+import com.kunzisoft.keepass.database.element.template.Template
+import com.kunzisoft.keepass.database.element.template.TemplateEngine
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordSortMode
@@ -882,6 +886,7 @@ private fun PasswordEntryEditorDialog(
     var customIconUuid by remember { mutableStateOf(initialDraft.customIconUuid) }
     var newCustomIconBytes by remember { mutableStateOf<ByteArray?>(initialDraft.newCustomIconBytes) }
     var showIconPicker by remember { mutableStateOf(false) }
+    var showTemplatePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(show.value) {
         if (show.value) {
@@ -1011,6 +1016,24 @@ private fun PasswordEntryEditorDialog(
             }
 
             SmallTitle(text = "自定义字段")
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showTemplatePicker = true },
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Edit,
+                    contentDescription = "从模板添加",
+                    tint = MiuixTheme.colorScheme.primary
+                )
+                Text(
+                    text = "  从模板添加字段",
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.primary,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
             CustomFieldsEditor(fields = customFields) { customFields = it }
 
             ExpiryTimeEditor(value = expiryTime) { expiryTime = it }
@@ -1132,6 +1155,46 @@ private fun PasswordEntryEditorDialog(
                 showIconPicker = false
             }
         )
+    }
+
+    if (showTemplatePicker) {
+        TemplatePickerDialog(
+            show = showTemplatePicker,
+            onDismiss = { showTemplatePicker = false },
+            onPick = { template ->
+                showTemplatePicker = false
+                if (template != null) {
+                    customFields = customFields.toMutableList().apply {
+                        applyTemplateFields(template)
+                    }
+                }
+            }
+        )
+    }
+}
+
+/**
+ * 将模板字段集应用到当前自定义字段列表。
+ *
+ * 字段名使用 [TemplateEngine.addTemplateDecorator] 装饰（如 [SSID]），
+ * 保证其他支持模板的应用（如 KeePassDX）可识别；已存在的同名字段跳过。
+ */
+private fun MutableList<EditableFieldDraft>.applyTemplateFields(template: Template) {
+    val existingNames = this.map { it.name }.toSet()
+    template.sections.forEach { section ->
+        section.attributes.forEach { attribute ->
+            val decoratedName = TemplateEngine.addTemplateDecorator(attribute.label)
+            if (decoratedName !in existingNames) {
+                add(
+                    EditableFieldDraft(
+                        name = decoratedName,
+                        value = attribute.options.default ?: "",
+                        isProtected = attribute.protected,
+                        valueType = RemainingValueType.TEXT
+                    )
+                )
+            }
+        }
     }
 }
 
