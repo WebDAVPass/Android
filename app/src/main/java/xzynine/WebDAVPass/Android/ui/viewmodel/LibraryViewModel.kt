@@ -33,6 +33,7 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
         private const val SYNC_STATUS_CONFLICT = "conflict"
         private const val SYNC_STATUS_FAILED = "failed"
         private const val SYNC_LOG_TAG = "同步"
+        private const val UNLOCK_STATE_LOG_TAG = "解锁状态"
     }
 
     private val libraryContextStore: LibraryContextStore = LibraryContextStore(context)
@@ -55,13 +56,26 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
 
     /**
      * 正在进行的「缓存丢失后异步重建」任务（若有）。
-     * 原子引用保证多线程并发调用 getMasterPasswordInternal 时只启动一次 IO 协程，
-     * 避免重复跑 KDF（Argon2 64MB+ 代价高）。
+     * 原子引用保证并发场景只启动一次 IO 协程，避免重复跑 KDF（Argon2 64MB+ 代价高）。
      */
     private val cacheRebuildJobRef: AtomicReference<Job?> = AtomicReference(null)
 
     init {
         refreshLibraryHistory()
+        // 订阅 DatabaseManager 的缓存失效事件。
+        // 触发时机：invalidateCacheKeepKeyFile（合并/改密失败路径）或 close（切库/锁定）。
+        // 与"在 getMasterPasswordInternal 里与操作并发调度"不同，这里的调度发生在
+        // 失败路径 onFailure 回调返回之前——此时用户还没有发起下一次操作，
+        // 预重建与后续用户操作之间是「先重建、再使用」的串行关系，不会并发打开
+        // 两个实例导致缓存 S0/磁盘 S1 的代次竞争。
+        viewModelScope.launch {
+            // DatabaseManager.cacheInvalidatedEvents 是 SharedFlow<Unit>，按本条 collect：
+            // - 生命周期跟随 viewModelScope；
+            // - tryEmit + DROP_OLDEST 保证发射永不阻塞 onFailure 同步回调。
+            DatabaseManager.cacheInvalidatedEvents.collect {
+                scheduleCacheRebuildIfNeeded()
+            }
+        }
     }
 
     /**
@@ -300,29 +314,29 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     /**
      * 获取主密码（内部使用）
      *
-     * 若 UI 仍显示"已解锁"但数据库缓存已失效（合并/改密失败路径调用了
-     * [DatabaseManager.invalidateCacheKeepKeyFile]），会立刻在 **IO 后台协程**
-     * 调度一次缓存重建，避免在调用方线程（尤其 Main 线程）上同步执行
-     * Argon2/AES-KDF 造成数秒卡顿甚至 ANR。
+     * 不做缓存重建调度——调度由 [DatabaseManager.cacheInvalidatedEvents] 订阅触发：
+     * 失败路径 onFailure 回调返回前已同步 emit 事件，预重建在用户下一次操作之前启动，
+     * 避免与用户操作并发打开两个实例造成的缓存过期问题。
      *
-     * 本函数本身**不挂起、不阻塞**：立即返回内存中的主密码给调用方。
-     * 即使后台重建尚未完成，后续 `withDatabase` 在 IO 上下文内仍会自行
-     * 打开磁盘文件完成操作，只是暂时没有缓存命中。
+     * 即使后台重建尚未完成，调用方进入 `withDatabase` 未命中缓存也会自行
+     * 打开磁盘文件 → 操作 → 关闭，功能正确；若写入成功会自动推进写入代次，
+     * tryGet() 能识别尚未完成的「过期重建缓存」并丢弃。
      */
     internal fun getMasterPasswordInternal(): String {
-        scheduleCacheRebuildIfNeeded()
         return currentLibraryMasterPassword
     }
 
     /**
      * 当缓存已失效但凭据仍在时，在后台 IO 协程中重建缓存。
      *
+     * 触发来源：[DatabaseManager.cacheInvalidatedEvents] 的订阅方。
+     *
      * - 并发安全：[cacheRebuildJobRef] 原子引用保证只启动一个重建协程。
      * - 非阻塞：调用后立即返回，不会在调用方线程上跑 KDF。
      * - 失败回落：重建失败则把 UI 切回锁定态，但仍保留密钥文件凭据。
-     *
-     * 可在已知缓存即将失效的时机（如合并/改密失败后）主动调用，
-     * 作为「惰性异步预重建」——多数情况下用户下一次操作前缓存已就绪。
+     * - 写入代次校验：重建 KDF 阻塞期间若有写入（重试合并/用户手动编辑等），
+     *   完成后立即丢弃基于旧磁盘状态的缓存实例，由后续 withDatabase 自行
+     *   打开最新版本，杜绝「缓存 S0/磁盘 S1」造成写入静默回滚。
      */
     fun scheduleCacheRebuildIfNeeded() {
         if (!_isLibraryUnlocked.value || DatabaseManager.isOpen()) return
@@ -332,10 +346,16 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
         // 尝试原子地占用「重建槽位」：已有 Job 在跑就跳过，避免重复 KDF。
         val existing = cacheRebuildJobRef.get()
         if (existing != null && existing.isActive) return
+        // lateinit：launch 返回前赋值尚未完成，lambda 体调度执行时赋值早已结束，安全读取。
+        // 用 selfJob 而非 coroutineContext[Job] 规避 import/挂起上下文限制。
+        lateinit var selfJob: Job
         val newJob = viewModelScope.launch(Dispatchers.IO) {
+            // 快照重建开始时的写入代次：若代次不同说明 KDF 期间有并发写入。
+            val startGeneration = DatabaseManager.currentSaveGeneration()
             try {
                 val rebuilt = runCatching {
-                    // validatePassword 内部会打开数据库并存入 DatabaseManager 缓存
+                    // validatePassword 内部会打开数据库并存入 DatabaseManager 缓存，
+                    // store() 时会再快照一次 currentSaveGeneration 作为 storeGeneration。
                     KdbxTokenRepository(context).validatePassword(
                         localPath = localPath,
                         masterPassword = currentLibraryMasterPassword,
@@ -344,23 +364,46 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
                 }.getOrDefault(false)
                 if (!rebuilt) {
                     // 重建失败（凭据失配/文件损坏/权限失效等）：切回锁定态
-                    // 切 StateFlow 须在 Main 线程；此处无 UI 副作用也可直接赋值，
-                    // 但保持一致用 Main dispatcher 更安全。
                     withContext(Dispatchers.Main.immediate) {
                         Logger.w(
-                            "解锁状态",
+                            UNLOCK_STATE_LOG_TAG,
                             "数据库缓存丢失且后台重建失败，回落至锁定态: path=$localPath"
                         )
                         resetUnlockStateKeepKeyFile()
                     }
+                    return@launch
+                }
+
+                // 重建成功后的代次一致性校验：
+                // 阻塞型 KDF 期间（Argon2/AES 1-3s）若有另一个 withDatabase 非缓存路径
+                // 成功写入磁盘，saveDatabase 会把代次推进；当前缓存是基于 KDF 之前的
+                // 磁盘快照（S0），磁盘已是 S1 → 缓存已过期，必须丢弃避免后续 tryGet
+                // 读到 S0，写操作时静默回滚掉并发修改。
+                val currentAfterRebuild = DatabaseManager.currentSaveGeneration()
+                if (currentAfterRebuild != startGeneration) {
+                    Logger.w(
+                        UNLOCK_STATE_LOG_TAG,
+                        "重建期间检测到并发写入（start=$startGeneration, current=$currentAfterRebuild），" +
+                            "丢弃过期重建缓存: path=$localPath"
+                    )
+                    // 丢弃旧缓存但保留密钥文件凭据——代次推进意味着已有新数据落盘，
+                    // 不能让旧缓存污染后续读写。下次触发失效事件时会再次调度重建。
+                    DatabaseManager.invalidateCacheKeepKeyFile()
                 } else {
-                    Logger.d("解锁状态", "数据库缓存后台重建完成: path=$localPath")
+                    Logger.d(
+                        UNLOCK_STATE_LOG_TAG,
+                        "数据库缓存后台重建完成（代次一致 start=$startGeneration）: path=$localPath"
+                    )
                 }
             } finally {
-                // Job 结束（无论成功/失败/取消）后清空引用，下次缓存失效时可再次调度
-                cacheRebuildJobRef.compareAndSet(cacheRebuildJobRef.get(), null)
+                // 只在当前引用仍指向「本协程自己的 Job」时清空。
+                // 之前写法 compareAndSet(cacheRebuildJobRef.get(), null)：
+                // 本任务被切库 cancel、期间又调度了新任务时，会把新任务的引用误清空，
+                // 下一次触发调度时将并发启动第二个 KDF。修复为与自身 Job 比较。
+                cacheRebuildJobRef.compareAndSet(selfJob, null)
             }
         }
+        selfJob = newJob
         if (!cacheRebuildJobRef.compareAndSet(existing, newJob)) {
             // CAS 失败：另一线程刚完成 compareAndSet，取消我们刚创建的 Job
             newJob.cancel()
