@@ -72,6 +72,13 @@ internal class PasswordPagingSubViewModel(
     // 增量累积已加载条目，避免每次翻页都重建全量列表（O(n²) → O(n)）
     private var accumulatedEntries: List<PasswordEntry> = emptyList()
 
+    // 排序/过滤配置提升为持有状态，避免分组导航与写入刷新时回落到默认值。
+    // refreshPasswordEntries 的对应参数为 null 时沿用当前值。
+    private var currentCaseSensitive: Boolean = false
+    private var currentSortMode: PasswordSortMode = PasswordSortMode.DEFAULT
+    private var currentAscending: Boolean = true
+    private var currentHideExpired: Boolean = false
+
     /**
      * 更新数据访问提供者
      */
@@ -99,8 +106,16 @@ internal class PasswordPagingSubViewModel(
         }
 
         // 在 IO 线程完成排序/分组，避免首次进入时主线程阻塞导致动画卡顿
+        // 复用当前持有的排序/过滤配置，使重新加载（如解锁后）尊重用户已选设置
         val sections = withContext(ioDispatcher) {
-            computeSections(topLevelPasswordEntries, "")
+            computeSections(
+                topLevelPasswordEntries,
+                "",
+                currentCaseSensitive,
+                currentSortMode,
+                currentAscending,
+                currentHideExpired
+            )
         }
 
         pagingMutex.withLock {
@@ -114,11 +129,20 @@ internal class PasswordPagingSubViewModel(
 
     fun refreshPasswordEntries(
         searchQuery: String = "",
-        caseSensitive: Boolean = false,
-        sortMode: PasswordSortMode = PasswordSortMode.DEFAULT,
-        ascending: Boolean = true,
-        hideExpired: Boolean = false
+        caseSensitive: Boolean? = null,
+        sortMode: PasswordSortMode? = null,
+        ascending: Boolean? = null,
+        hideExpired: Boolean? = null
     ) {
+        // null 表示沿用当前持有状态，避免分组导航/写入刷新时重置用户的排序与过滤设置
+        if (caseSensitive != null) currentCaseSensitive = caseSensitive
+        if (sortMode != null) currentSortMode = sortMode
+        if (ascending != null) currentAscending = ascending
+        if (hideExpired != null) currentHideExpired = hideExpired
+        val effCaseSensitive = currentCaseSensitive
+        val effSortMode = currentSortMode
+        val effAscending = currentAscending
+        val effHideExpired = currentHideExpired
         refreshJob?.cancel()
         refreshJob = scope.launch {
             val access = accessProvider()
@@ -170,7 +194,7 @@ internal class PasswordPagingSubViewModel(
 
             // 在 IO 线程完成排序/分组，避免主线程阻塞
             val sections = withContext(ioDispatcher) {
-                computeSections(source, keyword, caseSensitive, sortMode, ascending, hideExpired)
+                computeSections(source, keyword, effCaseSensitive, effSortMode, effAscending, effHideExpired)
             }
 
             pagingMutex.withLock {

@@ -85,13 +85,15 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
 
     /**
      * 刷新密码条目与键值列表。
+     *
+     * 排序/过滤参数为 null 时沿用 ViewModel 当前持有值，避免分组导航与写入刷新时重置用户设置。
      */
     fun refreshPasswordEntries(
         searchQuery: String = "",
-        caseSensitive: Boolean = false,
-        sortMode: PasswordSortMode = PasswordSortMode.DEFAULT,
-        ascending: Boolean = true,
-        hideExpired: Boolean = false
+        caseSensitive: Boolean? = null,
+        sortMode: PasswordSortMode? = null,
+        ascending: Boolean? = null,
+        hideExpired: Boolean? = null
     ) {
         passwordSubViewModel.refreshPasswordEntries(searchQuery, caseSensitive, sortMode, ascending, hideExpired)
     }
