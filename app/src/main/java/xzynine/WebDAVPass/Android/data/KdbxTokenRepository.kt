@@ -354,10 +354,17 @@ class KdbxTokenRepository(context: Context) {
                 return@withDatabase false
             }
             val historyToRestore = history[historyIndex]
+            // 对齐 KeePass 语义：在覆盖前把当前状态作为快照追加进 history，
+            // 避免恢复操作不可逆（用户反悔时仍可回到恢复前的版本）。
+            // copyHistory=false：不要把当前 entry 自身的 history 列表再复制进快照，
+            // 否则会出现 history 嵌套 history 的冗余结构。
+            val snapshotBeforeRestore = Entry(entry, copyHistory = false)
             // 用历史版本的字段覆盖当前条目；history 列表由 setEntryInfo 保留不动，
             // 不要把 historyToRestore 再 addEntryToHistory（它已在 history 中，重复追加会自引用污染）。
             val entryInfo = historyToRestore.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
             entry.setEntryInfo(db, entryInfo)
+            // 追加"恢复前状态"快照到 history 末尾（本次覆盖会让 history 当前版本保持不变）
+            entry.addEntryToHistory(snapshotBeforeRestore)
             db.updateEntry(entry)
             true
         }
