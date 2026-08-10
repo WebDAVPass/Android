@@ -5,6 +5,7 @@ import android.content.ClipDescription
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.PersistableBundle
 import android.webkit.MimeTypeMap
@@ -61,8 +62,10 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.preference.ArrowPreference
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
+import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -570,7 +573,11 @@ fun PasswordEntryDetailScreen(
                                 title = "网站",
                                 summary = urlValue,
                                 modifier = Modifier.fillMaxWidth(),
-                                onClick = {}
+                                onClick = {
+                                    if (urlValue != "--") {
+                                        openUrl(context, urlValue)
+                                    }
+                                }
                             )
                         }
 
@@ -787,7 +794,13 @@ fun PasswordEntryDetailScreen(
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             additionalFields.forEachIndexed { index, item ->
-                                AdditionalFieldRow(item = item)
+                                AdditionalFieldRow(
+                                    item = item,
+                                    onCopy = {
+                                        copySensitiveToClipboard(context, item.fieldName, item.rawValue)
+                                        ToastUtils.showShortToast(context, "已复制到剪贴板")
+                                    }
+                                )
                                 if (index < additionalFields.lastIndex) {
                                     HorizontalDivider(
                                         modifier = Modifier.padding(horizontal = 14.dp),
@@ -906,24 +919,64 @@ fun PasswordEntryDetailScreen(
 }
 
 @Composable
-private fun AdditionalFieldRow(item: RemainingKeyValue) {
-    Column(
+private fun AdditionalFieldRow(
+    item: RemainingKeyValue,
+    onCopy: () -> Unit
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = item.fieldName,
-            fontSize = 14.sp,
-            fontWeight = FontWeight.Medium,
-            color = MiuixTheme.colorScheme.onSurface
-        )
-        Text(
-            text = item.rawValue,
-            fontSize = 13.sp,
-            color = MiuixTheme.colorScheme.onSurfaceSecondary
-        )
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = if (item.isProtected) "${item.fieldName}（已保护）" else item.fieldName,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = MiuixTheme.colorScheme.onSurface
+            )
+            Text(
+                text = item.rawValue,
+                fontSize = 13.sp,
+                color = MiuixTheme.colorScheme.onSurfaceSecondary
+            )
+        }
+        if (item.isProtected) {
+            Icon(
+                imageVector = MiuixIcons.Lock,
+                contentDescription = "受保护字段",
+                tint = MiuixTheme.colorScheme.onSurfaceSecondary,
+                modifier = Modifier.padding(end = 8.dp)
+            )
+        }
+        IconButton(onClick = onCopy) {
+            Icon(
+                imageVector = MiuixIcons.Copy,
+                contentDescription = "复制 ${item.fieldName}"
+            )
+        }
+    }
+}
+
+/**
+ * 通过系统浏览器打开网址，无 scheme 时自动补充 https://。
+ */
+private fun openUrl(context: Context, rawUrl: String) {
+    runCatching {
+        val schemePattern = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
+        val url = if (schemePattern.containsMatchIn(rawUrl)) rawUrl else "https://$rawUrl"
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+        if (intent.resolveActivity(context.packageManager) != null) {
+            context.startActivity(Intent.createChooser(intent, "打开网址"))
+        } else {
+            ToastUtils.showShortToast(context, "没有可打开该网址的应用")
+        }
+    }.onFailure {
+        ToastUtils.showShortToast(context, "网址无法打开")
     }
 }
 
