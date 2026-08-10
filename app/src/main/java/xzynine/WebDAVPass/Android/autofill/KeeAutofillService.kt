@@ -49,7 +49,6 @@ class KeeAutofillService : AutofillService() {
 
     private var applicationIdBlocklist: Set<String> = emptySet()
     private var webDomainBlocklist: Set<String> = emptySet()
-    private var askToSaveData: Boolean = false
 
     override fun onConnected() {
         Log.d(TAG, "onConnected")
@@ -61,8 +60,9 @@ class KeeAutofillService : AutofillService() {
     }
 
     private fun getPreferences() {
+        // 异步加载，Fill/Save 请求时直接读取 AutofillSavePreferences.askToSaveData，
+        // 不再复制到本地字段，避免读到未完成加载的默认值。
         AutofillSavePreferences.load(this)
-        askToSaveData = AutofillSavePreferences.askToSaveData
     }
 
     override fun onFillRequest(
@@ -151,7 +151,7 @@ class KeeAutofillService : AutofillService() {
                         RemoteViews(packageName, R.layout.item_autofill_unlock)
                     }
 
-                    if (askToSaveData) {
+                    if (AutofillSavePreferences.askToSaveData) {
                         var types: Int = SaveInfo.SAVE_DATA_TYPE_GENERIC
                         val requiredIds = ArrayList<AutofillId>()
 
@@ -187,7 +187,7 @@ class KeeAutofillService : AutofillService() {
 
     override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
         // 功能关闭或系统版本不支持时静默接受，避免每次表单提交都提示保存失败
-        if (!askToSaveData || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+        if (!AutofillSavePreferences.askToSaveData || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             callback.onSuccess()
             return
         }
