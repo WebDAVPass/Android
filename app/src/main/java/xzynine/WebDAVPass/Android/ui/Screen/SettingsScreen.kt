@@ -465,7 +465,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
             // 检查更新
             ArrowPreference(
                 title = "检查更新",
-                summary = "从 GitHub Releases 检查新版本",
+                summary = if (checkingUpdate) "正在检查..." else "从 GitHub Releases 检查新版本",
                 startAction = {
                     Icon(
                         modifier = Modifier.Companion.padding(end = 16.dp),
@@ -474,6 +474,7 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
                     )
                 },
                 onClick = {
+                    if (checkingUpdate) return@ArrowPreference
                     coroutineScope.launch {
                         checkingUpdate = true
                         val result = CheckUpdateManager(context).checkUpdate(
@@ -815,10 +816,11 @@ pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
         PasswordInputDialog(
             show = true,
             title = "合并数据库",
-            summary = "请输入待合并文件的主密码",
-            confirmButtonText = "合并",
-            onDismiss = { pendingMergeUri = null },
+            summary = if (mergeLoading) "正在合并..." else "请输入待合并文件的主密码",
+            confirmButtonText = if (mergeLoading) "合并中..." else "合并",
+            onDismiss = { if (!mergeLoading) pendingMergeUri = null },
             onConfirm = { mergePassword ->
+                if (mergeLoading) return@PasswordInputDialog
                 pendingMergeUri = null
                 coroutineScope.launch {
                     mergeLoading = true
