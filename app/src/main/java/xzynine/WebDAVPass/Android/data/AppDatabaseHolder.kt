@@ -25,7 +25,7 @@ object AppDatabaseHolder {
                 "webdav_config_database"
             )
                 .addMigrations(AppDatabase.MIGRATION_6_7)
-                .fallbackToDestructiveMigration(dropAllTables = true)
+                .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
                 .also { INSTANCE = it }
         }

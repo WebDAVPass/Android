@@ -431,8 +431,10 @@ fun CloudLibraryDialog(
                             val baseUrl = normalizeServerRootUrl(serverUrl)
                             val normalizedPath = if (manualPath.endsWith(".kdbx", ignoreCase = true)) {
                                 manualPath
-                            } else {
+                            } else if (manualPath.isNotBlank()) {
                                 "$manualPath.kdbx"
+                            } else {
+                                manualPath
                             }
                             val remoteFilePath = if (normalizedPath.startsWith("http://") || normalizedPath.startsWith("https://")) {
                                 normalizedPath
@@ -469,6 +471,10 @@ fun CloudLibraryDialog(
                         }
 
                         if (isCreateMode) {
+                            if (manualPath.isBlank()) {
+                                ToastUtils.showShortToast(context, "请输入远端文件路径")
+                                return@launch
+                            }
                             if (createPassword.isBlank()) {
                                 ToastUtils.showShortToast(context, "请输入主密码")
                                 return@launch
@@ -480,7 +486,7 @@ fun CloudLibraryDialog(
                         }
 
                         val baseUrl = normalizeServerRootUrl(serverUrl)
-                        val path = if (isCreateMode && !manualPath.endsWith(".kdbx", ignoreCase = true)) {
+                        val path = if (isCreateMode && manualPath.isNotBlank() && !manualPath.endsWith(".kdbx", ignoreCase = true)) {
                             "$manualPath.kdbx"
                         } else {
                             manualPath
