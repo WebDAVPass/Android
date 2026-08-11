@@ -789,10 +789,10 @@ fun WelcomeScreen(
                     Text(
                         text = when {
                             autoUnlockInvalidated -> "自动解锁状态：已失效（需主密码+认证恢复）"
-                            !isManualWindowEnabled -> "48小时主密码校验：已关闭"
-                            manualWindowRemaining == null -> "48小时主密码校验：不可用"
-                            manualWindowRemaining <= 0L -> "48小时主密码校验：已到期（本次凭据解锁后将标记失效）"
-                            else -> "48小时主密码校验剩余：${tokenViewModel.autoUnlockViewModel.formatRemainingHoursMinutes(manualWindowRemaining)}"
+                            !isManualWindowEnabled -> "强制主密码校验：已关闭"
+                            manualWindowRemaining == null -> "强制主密码校验：不可用"
+                            manualWindowRemaining <= 0L -> "强制主密码校验：已到期（本次凭据解锁后将标记失效）"
+                            else -> "强制主密码校验剩余：${tokenViewModel.autoUnlockViewModel.formatRemainingHoursMinutes(manualWindowRemaining)}"
                         },
                         fontSize = 12.sp
                     )

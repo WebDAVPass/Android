@@ -26,6 +26,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
@@ -42,6 +46,7 @@ import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Settings
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
@@ -402,11 +407,11 @@ fun SecuritySettingsContent(
                 ) {
                     Preference(
                         type = PreferenceType.Switch,
-                        title = "48小时需手动主密码一次",
+                        title = "强制超时主密码校验",
                         summary = when {
-                            !manualUnlockWindowSwitchChecked -> "已关闭48小时主密码校验"
+                            !manualUnlockWindowSwitchChecked -> "已关闭强制主密码校验"
                             !autoUnlockSwitchChecked && !currentLib.autoUnlockEnabled -> "启用自动解锁后生效"
-                            manualUnlockRemaining == null -> "48小时主密码校验不可用"
+                            manualUnlockRemaining == null -> "强制主密码校验不可用"
                             manualUnlockRemaining <= 0L -> "已到期：凭据解锁一次后将清理自动解锁"
                             else -> "剩余：${viewModel.autoUnlockViewModel.formatRemainingHoursMinutes(manualUnlockRemaining)}"
                         },
@@ -415,7 +420,7 @@ fun SecuritySettingsContent(
                             Icon(
                                 modifier = Modifier.padding(end = 16.dp),
                                 imageVector = MiuixIcons.Settings,
-                                contentDescription = "48小时主密码校验"
+                                contentDescription = "强制超时主密码校验"
                             )
                         },
                         onCheckedChange = { checked ->
@@ -439,10 +444,26 @@ fun SecuritySettingsContent(
                     Preference(
                         type = PreferenceType.Spinner,
                         title = "应用超时锁定",
-                        summary = "应用在前后台连续停留超过该时长后自动锁定，需重新输入主密码",
+                        summary = null,
                         items = lockTimeoutItems.map { DropdownItem(text = it) },
                         selectedIndex = lockTimeoutIndex,
                         showValue = lockTimeoutMinutes > 0,
+                        bottomAction = if (lockTimeoutMinutes > 0) {
+                            {
+                                val lockTimeoutText = buildAnnotatedString {
+                                    append("应用超过")
+                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                        append("${lockTimeoutMinutes} 分钟")
+                                    }
+                                    append("未操作后将自动锁定")
+                                }
+                                Text(
+                                    text = lockTimeoutText,
+                                    fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                )
+                            }
+                        } else null,
                         startAction = {
                             Icon(
                                 modifier = Modifier.padding(end = 16.dp),
@@ -465,7 +486,7 @@ fun SecuritySettingsContent(
                     Preference(
                         type = PreferenceType.Switch,
                         title = "后台自动锁定",
-                        summary = "退到后台 30 秒后回到应用时自动锁定",
+                        summary = "退出到后台将自动锁定应用",
                         checked = lockOnBackground,
                         startAction = {
                             Icon(
