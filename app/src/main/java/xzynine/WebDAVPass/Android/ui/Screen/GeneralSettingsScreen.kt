@@ -24,16 +24,14 @@ import xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences
 import xzynine.WebDAVPass.Android.autofill.KeeAutofillService
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
+import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 
 /**
  * 填充器设置子页面（自动填充相关）。
@@ -48,18 +46,9 @@ fun FillerSettingsContent(
     Scaffold(
         popupHost = { },
         topBar = {
-            TopAppBar(
+            SettingsTopAppBar(
                 title = "填充器设置",
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回"
-                        )
-                    }
-                },
-                actions = {},
-                defaultWindowInsetsPadding = true
+                onNavigateBack = onNavigateBack
             )
         }
     ) {

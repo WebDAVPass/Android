@@ -18,12 +18,9 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.icon.extended.Info
@@ -32,6 +29,7 @@ import top.yukonga.miuix.kmp.icon.extended.Months
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
+import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 
 /**
  * 设置界面主索引页。
@@ -76,7 +74,7 @@ fun SettingsScreen(
     }
 
     /**
-     * 当前库云端摘要，展示在"备份详情查看"入口。
+     * 当前库云端摘要。
      */
     val cloudBindingSummary = run {
         val current = currentLibraryState
@@ -104,20 +102,9 @@ fun SettingsScreen(
     Scaffold(
         popupHost = { },
         topBar = {
-            TopAppBar(
+            SettingsTopAppBar(
                 title = "设置",
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回"
-                        )
-                    }
-                },
-                actions = {},
-                defaultWindowInsetsPadding = true
+                onNavigateBack = onNavigateBack
             )
         }
     ) {
@@ -196,7 +183,7 @@ fun SettingsScreen(
             ) {
                 Preference(
                     type = PreferenceType.Arrow,
-                    title = "备份详情查看",
+                    title = "备份设置",
                     summary = backupEntrySummary,
                     startAction = {
                         Icon(

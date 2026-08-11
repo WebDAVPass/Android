@@ -15,17 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 import xzynine.WebDAVPass.Android.ui.component.WebDavSyncStatusSection
 import xzynine.WebDAVPass.Android.ui.component.WebDavSyncUiState
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 
 /**
- * 备份详情查看子页面
+ * 备份设置子页面
  */
 @Composable
 fun BackupSettingsContent(
@@ -54,18 +50,9 @@ fun BackupSettingsContent(
     Scaffold(
         popupHost = { },
         topBar = {
-            TopAppBar(
-                title = "备份详情查看",
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回"
-                        )
-                    }
-                },
-                actions = {},
-                defaultWindowInsetsPadding = true
+            SettingsTopAppBar(
+                title = "备份设置",
+                onNavigateBack = onNavigateBack
             )
         }
     ) {

@@ -36,17 +36,15 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
+import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 
 /**
  * 安全设置子页面（原「安全」分组）。
@@ -185,18 +183,9 @@ fun SecuritySettingsContent(
     Scaffold(
         popupHost = { },
         topBar = {
-            TopAppBar(
+            SettingsTopAppBar(
                 title = "安全",
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回"
-                        )
-                    }
-                },
-                actions = {},
-                defaultWindowInsetsPadding = true
+                onNavigateBack = onNavigateBack
             )
         }
     ) {

@@ -40,9 +40,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Lock
@@ -50,6 +48,7 @@ import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
+import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.ui.Dialog.PasswordInputDialog
@@ -246,18 +245,9 @@ fun DatabaseSettingsScreen(
     Scaffold(
         popupHost = {},
         topBar = {
-            TopAppBar(
+            SettingsTopAppBar(
                 title = "数据库设置",
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回"
-                        )
-                    }
-                },
-                actions = {},
-                defaultWindowInsetsPadding = true
+                onNavigateBack = onNavigateBack
             )
         }
     ) {
