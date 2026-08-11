@@ -3,6 +3,15 @@ name: 打包并预发布release
 
 on:
   workflow_dispatch:
+  # 允许其他工作流（如 PR 构建检查）复用本工作流；
+  # use-debug-signing=true 时使用随机生成的调试密钥库，不依赖 KEYSTORE_BASE64 secrets。
+  workflow_call:
+    inputs:
+      use-debug-signing:
+        description: 'PR 构建：使用随机生成的调试密钥库，跳过真实签名与发版'
+        type: boolean
+        required: false
+        default: false
 
 jobs:
   # 前置作业：准备环境和获取版本信息
@@ -29,9 +38,20 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Decode keystore into app module
+      - name: 准备签名（PR 构建生成随机调试密钥库，否则解码真实密钥库）
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > PublicHub
+          if [ "${{ inputs.use-debug-signing }}" == "true" ]; then
+            # PR 场景拿不到真实 secrets，用随机生成的临时密钥库完成签名
+            keytool -genkeypair -v \
+              -keystore PublicHub \
+              -alias debug \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass pr-debug-pass -keypass pr-debug-pass \
+              -dname "CN=PR-Build, OU=CI, O=WebDAVPass, C=CN"
+            echo "::notice::已生成随机调试密钥库（仅用于 PR 构建）"
+          else
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > PublicHub
+          fi
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
@@ -79,9 +99,20 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Decode keystore into app module
+      - name: 准备签名（PR 构建生成随机调试密钥库，否则解码真实密钥库）
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > PublicHub
+          if [ "${{ inputs.use-debug-signing }}" == "true" ]; then
+            # PR 场景拿不到真实 secrets，用随机生成的临时密钥库完成签名
+            keytool -genkeypair -v \
+              -keystore PublicHub \
+              -alias debug \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass pr-debug-pass -keypass pr-debug-pass \
+              -dname "CN=PR-Build, OU=CI, O=WebDAVPass, C=CN"
+            echo "::notice::已生成随机调试密钥库（仅用于 PR 构建）"
+          else
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > PublicHub
+          fi
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
@@ -91,9 +122,10 @@ jobs:
           ./gradlew assembleDebug
           echo "::notice::Debug APK 构建完成！"
         env:
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          # PR 构建（随机调试签名）时使用临时别名与口令，否则回退真实 secrets
+          KEY_ALIAS: ${{ inputs.use-debug-signing && 'debug' || secrets.KEY_ALIAS }}
+          STORE_PASSWORD: ${{ inputs.use-debug-signing && 'pr-debug-pass' || secrets.STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ inputs.use-debug-signing && 'pr-debug-pass' || secrets.KEY_PASSWORD }}
 
       - name: Upload signed universal debug APK
         uses: actions/upload-artifact@v4
@@ -104,8 +136,9 @@ jobs:
       - name: Debug APK 上传完成
         run: echo "::notice::Debug APK 已成功上传到 Artifacts！"
 
-  # 并行构建作业：构建 release APKs
+  # 并行构建作业：构建 release APKs（PR 随机签名模式跳过，仅构建 debug 验证）
   build-release:
+    if: ${{ !inputs.use-debug-signing }}
     needs: prepare
     runs-on: ubuntu-latest
     permissions:
@@ -127,9 +160,20 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
 
-      - name: Decode keystore into app module
+      - name: 准备签名（PR 构建生成随机调试密钥库，否则解码真实密钥库）
         run: |
-          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > PublicHub
+          if [ "${{ inputs.use-debug-signing }}" == "true" ]; then
+            # PR 场景拿不到真实 secrets，用随机生成的临时密钥库完成签名
+            keytool -genkeypair -v \
+              -keystore PublicHub \
+              -alias debug \
+              -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass pr-debug-pass -keypass pr-debug-pass \
+              -dname "CN=PR-Build, OU=CI, O=WebDAVPass, C=CN"
+            echo "::notice::已生成随机调试密钥库（仅用于 PR 构建）"
+          else
+            echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > PublicHub
+          fi
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
 
@@ -152,8 +196,9 @@ jobs:
       - name: Release APKs 上传完成
         run: echo "::notice::Release APKs 已成功上传到 Artifacts！"
 
-  # 最终作业：创建 GitHub Pre-release
+  # 最终作业：创建 GitHub Pre-release（PR 构建检查模式跳过，绝不发版）
   release:
+    if: ${{ !inputs.use-debug-signing }}
     needs: [prepare, build-debug, build-release]
     runs-on: ubuntu-latest
     permissions:
