@@ -9,8 +9,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
@@ -45,6 +48,58 @@ fun SettingsScreen(
     onNavigateBack: () -> Unit
 ) {
     val navigator = LocalNavigator.current
+    val currentLibraryState by viewModel.libraryViewModel.currentLibrary.collectAsState()
+    val backupStatus = viewModel.cloudSyncViewModel.backupStatus.collectAsState().value
+
+    /**
+     * 当前库是否已具备云端同步所需信息。
+     */
+    val isCurrentLibraryCloudBound = run {
+        val current = currentLibraryState
+        current != null
+                && current.sourceType == LibrarySourceType.CLOUD
+                && !current.remoteFilePath.isNullOrBlank()
+                && !current.username.isNullOrBlank()
+                && !current.password.isNullOrBlank()
+    }
+
+    /**
+     * 将同步状态编码映射为可读文案。
+     */
+    val cloudSyncStatusText = when (currentLibraryState?.lastSyncStatus) {
+        "syncing" -> "同步中"
+        "success" -> "同步成功"
+        "merged" -> "已自动合并"
+        "conflict" -> "同步冲突"
+        "failed" -> "同步失败"
+        else -> "未同步"
+    }
+
+    /**
+     * 当前库云端摘要，展示在"备份详情查看"入口。
+     */
+    val cloudBindingSummary = run {
+        val current = currentLibraryState
+        if (current == null) {
+            "当前未选择数据库文件"
+        } else if (isCurrentLibraryCloudBound) {
+            val remote = current.remoteFilePath ?: current.remoteBaseUrl.orEmpty()
+            "$remote | $cloudSyncStatusText"
+        } else {
+            "当前库未绑定云端 .kdbx，点击配置"
+        }
+    }
+
+    /**
+     * 入口摘要：备份状态文本优先，未发生时展示云端绑定摘要。
+     */
+    val backupEntrySummary = if (backupStatus.isBlank()) {
+        cloudBindingSummary
+    } else if (cloudBindingSummary.isBlank()) {
+        backupStatus
+    } else {
+        "$backupStatus | $cloudBindingSummary"
+    }
 
     Scaffold(
         popupHost = { },
@@ -141,13 +196,13 @@ fun SettingsScreen(
             ) {
                 Preference(
                     type = PreferenceType.Arrow,
-                    title = "备份与恢复",
-                    summary = "云端同步、备份与手动恢复",
+                    title = "备份详情查看",
+                    summary = backupEntrySummary,
                     startAction = {
                         Icon(
                             modifier = Modifier.padding(end = 16.dp),
                             imageVector = MiuixIcons.CloudFill,
-                            contentDescription = "备份与恢复",
+                            contentDescription = "备份详情查看",
                         )
                     },
                     onClick = { navigator.push(Route.BackupSettings) },

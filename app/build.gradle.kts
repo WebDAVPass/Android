@@ -131,6 +131,10 @@ dependencies {
     implementation(libs.hutool.core) // Hutool工具库
     // 复用 WebDAV 库
     implementation(project(":webdav"))
+    // content:// Uri 定位支持（WebDAV 文件浏览）
+    implementation("androidx.documentfile:documentfile:1.0.1")
+    // WebDAV 文件浏览图标支持
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation(project(":crypto"))
     implementation(project(":database"))
     implementation(project(":icon-pack"))

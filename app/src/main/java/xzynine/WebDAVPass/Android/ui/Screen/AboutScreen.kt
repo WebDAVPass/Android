@@ -53,8 +53,7 @@ import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * 关于页面。
- *
- * 顶部展示应用图标头图与版本号（非 Preference 类型，居中），
+ * 顶部展示应用图标头图与版本号
  * 下方为更新日志查看与检查更新。
  */
 @Composable

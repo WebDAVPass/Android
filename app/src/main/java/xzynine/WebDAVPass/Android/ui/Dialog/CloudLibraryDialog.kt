@@ -39,8 +39,8 @@ import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import github.xzynine.webdav.Authorization
 import github.xzynine.webdav.WebDav
-import github.xzynine.webdav.ui.WebDavBrowseMode
-import github.xzynine.webdav.ui.WebDavFileBrowserDialog
+import xzynine.WebDAVPass.Android.ui.component.WebDavBrowseMode
+import xzynine.WebDAVPass.Android.ui.component.WebDavFileBrowserDialog
 
 /**
  * 云端库操作模式
