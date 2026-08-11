@@ -40,7 +40,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.data.SecurityIssueEntry
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
-import xzynine.WebDAVPass.Android.util.DateTimeFormatter
+import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 import xzynine.WebDAVPass.Android.util.strengthLabel
 
 /**
@@ -212,7 +212,7 @@ private fun SecurityIssueRow(
                     }
                     if (item.expiryTime != null && item.expiryTime!! > 0L) {
                         if (isNotEmpty()) append(" · ")
-                        append("过期时间 ${DateTimeFormatter.formatLocalDateTime(item.expiryTime)}")
+                        append("过期时间 ${LocalTimeFormatter.formatLocalDateTime(item.expiryTime)}")
                     }
                     if (item.passwordStrengthBits > 0.0) {
                         if (isNotEmpty()) append(" · ")

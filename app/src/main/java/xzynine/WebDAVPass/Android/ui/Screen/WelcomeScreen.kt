@@ -76,6 +76,7 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
+import xzynine.WebDAVPass.Android.util.resolveDisplayName
 
 /** 密钥文件大小上限（1 MiB），与 CreateMasterPasswordDialog 保持一致。 */
 private const val MAX_KEY_FILE_BYTES = 1024 * 1024

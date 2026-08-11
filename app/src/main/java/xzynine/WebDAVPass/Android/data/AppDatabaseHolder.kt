@@ -24,7 +24,7 @@ object AppDatabaseHolder {
                 AppDatabase::class.java,
                 "webdav_config_database"
             )
-                .addMigrations(AppDatabase.MIGRATION_6_7)
+                .addMigrations(AppDatabase.MIGRATION_6_7, AppDatabase.MIGRATION_7_8)
                 .fallbackToDestructiveMigrationOnDowngrade(dropAllTables = true)
                 .build()
                 .also { INSTANCE = it }

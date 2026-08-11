@@ -90,7 +90,7 @@ import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
-import xzynine.WebDAVPass.Android.util.DateTimeFormatter
+import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 import xzynine.WebDAVPass.Android.util.QrCodeUtil
 
 @Composable
@@ -987,7 +987,7 @@ fun PasswordEntryDetailScreen(
                                 ) {
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text(
-                                            text = DateTimeFormatter.formatLocalDateTime(history.lastModificationTime),
+                                            text = LocalTimeFormatter.formatLocalDateTime(history.lastModificationTime),
                                             fontSize = 14.sp,
                                             color = MiuixTheme.colorScheme.onSurface
                                         )

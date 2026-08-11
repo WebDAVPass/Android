@@ -29,7 +29,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
-import xzynine.WebDAVPass.Android.util.DateTimeFormatter
+import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 
 /**
  * 条目历史版本对话框
@@ -69,7 +69,7 @@ fun EntryHistoryDialog(
                     modifier = Modifier.padding(bottom = 8.dp)
                 )
                 Text(
-                    text = "${DateTimeFormatter.formatLocalDateTime(restore.lastModificationTime)} · ${restore.title.ifBlank { "（无标题）" }}",
+                    text = "${LocalTimeFormatter.formatLocalDateTime(restore.lastModificationTime)} · ${restore.title.ifBlank { "（无标题）" }}",
                     fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     modifier = Modifier.padding(bottom = 16.dp)
@@ -132,7 +132,7 @@ private fun HistoryRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = DateTimeFormatter.formatLocalDateTime(history.lastModificationTime),
+                    text = LocalTimeFormatter.formatLocalDateTime(history.lastModificationTime),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
                     color = MiuixTheme.colorScheme.onSurface
