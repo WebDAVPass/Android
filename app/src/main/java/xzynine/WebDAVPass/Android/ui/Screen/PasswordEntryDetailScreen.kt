@@ -60,7 +60,8 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.preference.ArrowPreference
+import xzynine.WebDAVPass.Android.ui.component.Preference
+import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Copy
@@ -410,7 +411,8 @@ fun PasswordEntryDetailScreen(
 
                 if (showOtpSecret && otpSecretField != null) {
                     item {
-                        ArrowPreference(
+                        Preference(
+                            type = PreferenceType.Arrow,
                             title = "OTP 键值",
                             summary = otpSecretField.rawValue,
                             modifier = Modifier.fillMaxWidth(),
@@ -522,7 +524,8 @@ fun PasswordEntryDetailScreen(
                                         .padding(horizontal = 12.dp, vertical = 8.dp)
                                 )
                             } else {
-                                ArrowPreference(
+                                Preference(
+                            type = PreferenceType.Arrow,
                                     title = "账号",
                                     summary = usernameValue,
                                     modifier = Modifier.fillMaxWidth(),
@@ -556,7 +559,8 @@ fun PasswordEntryDetailScreen(
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         } else {
-                            ArrowPreference(
+                            Preference(
+                            type = PreferenceType.Arrow,
                                 title = "密码",
                                 summary = when {
                                     passwordValue == "--" -> "--"
@@ -565,7 +569,7 @@ fun PasswordEntryDetailScreen(
                                 },
                                 modifier = Modifier.fillMaxWidth(),
                                 onClick = {
-                                    if (passwordValue == "--") return@ArrowPreference
+                                    if (passwordValue == "--") return@Preference
                                     if (!isPasswordVisible) {
                                         copySensitiveToClipboard(
                                             context = context,
@@ -595,7 +599,8 @@ fun PasswordEntryDetailScreen(
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         } else {
-                            ArrowPreference(
+                            Preference(
+                            type = PreferenceType.Arrow,
                                 title = "网站",
                                 summary = urlValue,
                                 modifier = Modifier.fillMaxWidth(),
@@ -622,7 +627,8 @@ fun PasswordEntryDetailScreen(
                                     .padding(horizontal = 12.dp, vertical = 8.dp)
                             )
                         } else {
-                            ArrowPreference(
+                            Preference(
+                            type = PreferenceType.Arrow,
                                 title = "备注",
                                 summary = notesValue,
                                 modifier = Modifier.fillMaxWidth(),
@@ -723,7 +729,8 @@ fun PasswordEntryDetailScreen(
                             )
                         } else if (entry.expiryTime != null) {
                             val expired = entry.isExpired
-                            ArrowPreference(
+                            Preference(
+                            type = PreferenceType.Arrow,
                                 title = "过期时间",
                                 summary = formatExpiry(entry.expiryTime, expired),
                                 modifier = Modifier.fillMaxWidth(),

@@ -1,5 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -42,12 +44,15 @@ import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Delete
+import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Settings
-import top.yukonga.miuix.kmp.preference.SwitchPreference
-import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
+import top.yukonga.miuix.kmp.icon.extended.UploadCloud
+import xzynine.WebDAVPass.Android.ui.component.Preference
+import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzylib.base.util.ToastUtils
+import xzynine.WebDAVPass.Android.ui.Dialog.PasswordInputDialog
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.PasswordStrength
 import xzynine.WebDAVPass.Android.util.strengthLabel
@@ -82,6 +87,37 @@ fun DatabaseSettingsScreen(
     var status by remember { mutableStateOf("") }
     // 弱密码二次确认：修改主密码时若新密码较弱且未更换密钥文件，需再次确认
     var weakPasswordAcknowledged by remember { mutableStateOf(false) }
+
+    // 导出 / 合并数据库
+    var pendingMergeUri by remember { mutableStateOf<Uri?>(null) }
+    var mergeLoading by remember { mutableStateOf(false) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+        onResult = { uri ->
+            if (uri == null) {
+                return@rememberLauncherForActivityResult
+            }
+            coroutineScope.launch {
+                val ok = viewModel.exportCurrentDatabase(uri)
+                if (ok) {
+                    ToastUtils.showShortToast(context, "数据库已导出")
+                } else {
+                    ToastUtils.showShortToast(context, "导出失败")
+                }
+            }
+        }
+    )
+
+    val mergeLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument(),
+        onResult = { uri ->
+            if (uri == null) {
+                return@rememberLauncherForActivityResult
+            }
+            pendingMergeUri = uri
+        }
+    )
 
     val newPasswordStrengthBits = remember(newPassword) { PasswordStrength.estimateBits(newPassword) }
     val newPasswordIsWeak = newPassword.isNotEmpty() && PasswordStrength.isWeak(newPassword)
@@ -233,178 +269,271 @@ fun DatabaseSettingsScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (loading) {
-                Text(text = "加载中...", fontSize = 14.sp)
-            } else {
-                Text(text = "修改主密码", modifier = Modifier.padding(top = 4.dp))
-                TextField(
-                    value = oldPassword,
-                    onValueChange = { oldPassword = it; status = "" },
-                    label = "当前主密码",
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                TextField(
-                    value = newPassword,
-                    onValueChange = {
-                        newPassword = it
-                        status = ""
-                        weakPasswordAcknowledged = false
-                    },
-                    label = "新主密码",
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                if (newPassword.isNotEmpty()) {
-                    val bits = newPasswordStrengthBits
-                    Text(
-                        text = "强度：${strengthLabel(bits)}（${bits.toInt()} bits）",
-                        fontSize = 12.sp,
-                        color = if (bits < PasswordStrength.WEAK_PASSWORD_THRESHOLD_BITS)
-                            MiuixTheme.colorScheme.error
-                        else MiuixTheme.colorScheme.primary
-                    )
-                }
-                TextField(
-                    value = confirmPassword,
-                    onValueChange = { confirmPassword = it; status = "" },
-                    label = "确认新主密码",
-                    visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Button(onClick = { showPassword = !showPassword }) {
-                    Text(if (showPassword) "隐藏密码" else "显示密码")
-                }
-
-                Row(
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { keyFilePicker.launch(arrayOf("application/octet-stream", "*/*")) },
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    Icon(
-                        imageVector = MiuixIcons.Lock,
-                        contentDescription = "密钥文件",
-                        tint = MiuixTheme.colorScheme.primary
-                    )
-                    Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
-                        Text(
-                            text = "新密钥文件（可选）",
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
+                    if (loading) {
+                        Text(text = "加载中...", fontSize = 14.sp)
+                    } else {
+                        Text(text = "修改主密码", modifier = Modifier.padding(top = 4.dp))
+                        TextField(
+                            value = oldPassword,
+                            onValueChange = { oldPassword = it; status = "" },
+                            label = "当前主密码",
+                            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                        Text(
-                            text = if (keyFileName.isBlank()) "点击选择密钥文件，不选则沿用当前" else keyFileName,
-                            fontSize = 14.sp,
-                            color = if (keyFileName.isBlank()) MiuixTheme.colorScheme.primary
-                            else MiuixTheme.colorScheme.onSurface
+                        TextField(
+                            value = newPassword,
+                            onValueChange = {
+                                newPassword = it
+                                status = ""
+                                weakPasswordAcknowledged = false
+                            },
+                            label = "新主密码",
+                            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                    }
-                    if (keyFileName.isNotBlank()) {
-                        IconButton(onClick = {
-                            keyFileName = ""
-                            keyFileData = null
-                        }) {
-                            Icon(
-                                imageVector = MiuixIcons.Delete,
-                                contentDescription = "清除密钥文件",
-                                tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                        if (newPassword.isNotEmpty()) {
+                            val bits = newPasswordStrengthBits
+                            Text(
+                                text = "强度：${strengthLabel(bits)}（${bits.toInt()} bits）",
+                                fontSize = 12.sp,
+                                color = if (bits < PasswordStrength.WEAK_PASSWORD_THRESHOLD_BITS)
+                                    MiuixTheme.colorScheme.error
+                                else MiuixTheme.colorScheme.primary
                             )
+                        }
+                        TextField(
+                            value = confirmPassword,
+                            onValueChange = { confirmPassword = it; status = "" },
+                            label = "确认新主密码",
+                            visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(onClick = { showPassword = !showPassword }) {
+                            Text(if (showPassword) "隐藏密码" else "显示密码")
+                        }
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { keyFilePicker.launch(arrayOf("application/octet-stream", "*/*")) },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Lock,
+                                contentDescription = "密钥文件",
+                                tint = MiuixTheme.colorScheme.primary
+                            )
+                            Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
+                                Text(
+                                    text = "新密钥文件（可选）",
+                                    fontSize = 13.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                )
+                                Text(
+                                    text = if (keyFileName.isBlank()) "点击选择密钥文件，不选则沿用当前" else keyFileName,
+                                    fontSize = 14.sp,
+                                    color = if (keyFileName.isBlank()) MiuixTheme.colorScheme.primary
+                                    else MiuixTheme.colorScheme.onSurface
+                                )
+                            }
+                            if (keyFileName.isNotBlank()) {
+                                IconButton(onClick = {
+                                    keyFileName = ""
+                                    keyFileData = null
+                                }) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Delete,
+                                        contentDescription = "清除密钥文件",
+                                        tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                                    )
+                                }
+                            }
+                        }
+
+                        if (status.isNotBlank()) {
+                            Text(text = status, fontSize = 13.sp, color = MiuixTheme.colorScheme.error)
+                        }
+
+                        Button(
+                            onClick = { save() },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 8.dp),
+                            enabled = !saving
+                        ) {
+                            Text(if (saving) "保存中..." else "保存设置")
                         }
                     }
                 }
+            }
 
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(text = "加密与压缩")
-                WindowSpinnerPreference(
-                    title = "KDF 算法",
-                    summary = "当前：$kdfEngineName",
-                    items = kdfOptions.map { DropdownItem(text = it) },
-                    selectedIndex = kdfSelectedIndex.coerceAtLeast(0),
-                    showValue = true,
-                    startAction = {
-                        Icon(
-                            modifier = Modifier.padding(end = 16.dp),
-                            imageVector = MiuixIcons.Settings,
-                            contentDescription = "KDF 算法"
-                        )
-                    },
-                    onSelectedIndexChange = { index ->
-                        switchKdf(index)
-                    }
-                )
-                // 按选中索引决定参数输入框：未知 KDF 隐藏全部参数；AES 仅显示轮数；Argon2 显示全部参数
-                when {
-                    kdfSelectedIndex < 0 -> {
-                        // 未知 KDF：不展示参数输入框，保存时也不会修改 KDF
-                        Text(
-                            text = "当前 KDF 不在可选范围内，保存时将保留原算法与参数",
-                            fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
-                        )
-                    }
-                    kdfEngineName == "AES" -> {
-                        TextField(
-                            value = keyRounds,
-                            onValueChange = { keyRounds = it },
-                            label = "加密轮数（AES-KDF）",
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                    else -> {
-                        TextField(
-                            value = memoryUsageMb,
-                            onValueChange = { memoryUsageMb = it },
-                            label = "内存占用（MB，Argon2）",
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        TextField(
-                            value = parallelism,
-                            onValueChange = { parallelism = it },
-                            label = "并行度（Argon2）",
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        TextField(
-                            value = keyRounds,
-                            onValueChange = { keyRounds = it },
-                            label = "迭代次数（Argon2）",
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    }
-                }
-                SwitchPreference(
-                    title = "启用压缩",
-                    summary = "保存时使用 GZIP 压缩数据库内容",
-                    checked = isCompressionEnabled,
-                    onCheckedChange = { isCompressionEnabled = it }
-                )
-
-                if (status.isNotBlank()) {
-                    Text(text = status, fontSize = 13.sp, color = MiuixTheme.colorScheme.error)
-                }
-
-                Button(
-                    onClick = { save() },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp),
-                    enabled = !saving
+            if (!loading) {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (saving) "保存中..." else "保存设置")
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Text(text = "加密与压缩")
+                        Preference(
+                            type = PreferenceType.Spinner,
+                            title = "KDF 算法",
+                            summary = "当前：$kdfEngineName",
+                            items = kdfOptions.map { DropdownItem(text = it) },
+                            selectedIndex = kdfSelectedIndex.coerceAtLeast(0),
+                            showValue = true,
+                            startAction = {
+                                Icon(
+                                    modifier = Modifier.padding(end = 16.dp),
+                                    imageVector = MiuixIcons.Settings,
+                                    contentDescription = "KDF 算法"
+                                )
+                            },
+                            onSelectedIndexChange = { index ->
+                                switchKdf(index)
+                            }
+                        )
+                        // 按选中索引决定参数输入框：未知 KDF 隐藏全部参数；AES 仅显示轮数；Argon2 显示全部参数
+                        when {
+                            kdfSelectedIndex < 0 -> {
+                                // 未知 KDF：不展示参数输入框，保存时也不会修改 KDF
+                                Text(
+                                    text = "当前 KDF 不在可选范围内，保存时将保留原算法与参数",
+                                    fontSize = 13.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                )
+                            }
+                            kdfEngineName == "AES" -> {
+                                TextField(
+                                    value = keyRounds,
+                                    onValueChange = { keyRounds = it },
+                                    label = "加密轮数（AES-KDF）",
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            else -> {
+                                TextField(
+                                    value = memoryUsageMb,
+                                    onValueChange = { memoryUsageMb = it },
+                                    label = "内存占用（MB，Argon2）",
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                TextField(
+                                    value = parallelism,
+                                    onValueChange = { parallelism = it },
+                                    label = "并行度（Argon2）",
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                                TextField(
+                                    value = keyRounds,
+                                    onValueChange = { keyRounds = it },
+                                    label = "迭代次数（Argon2）",
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                        }
+                        Preference(
+                            type = PreferenceType.Switch,
+                            title = "启用压缩",
+                            summary = "保存时使用 GZIP 压缩数据库内容",
+                            checked = isCompressionEnabled,
+                            onCheckedChange = { isCompressionEnabled = it }
+                        )
+                    }
+                }
+            }
+
+            if (!loading) {
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Preference(
+                        type = PreferenceType.Arrow,
+                        title = "导出数据库",
+                        summary = "将当前库另存为 .kdbx 文件",
+                        startAction = {
+                            Icon(
+                                modifier = Modifier.padding(end = 16.dp),
+                                imageVector = MiuixIcons.Download,
+                                contentDescription = "导出数据库",
+                            )
+                        },
+                        onClick = {
+                            exportLauncher.launch("WebDavPass-导出.kdbx")
+                        },
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Preference(
+                        type = PreferenceType.Arrow,
+                        title = "合并数据库",
+                        summary = "将其他 .kdbx 文件的内容合并进当前库",
+                        startAction = {
+                            Icon(
+                                modifier = Modifier.padding(end = 16.dp),
+                                imageVector = MiuixIcons.UploadCloud,
+                                contentDescription = "合并数据库",
+                            )
+                        },
+                        onClick = {
+                            mergeLauncher.launch(arrayOf("application/octet-stream", "*/*"))
+                        },
+                    )
+                }
+
+                pendingMergeUri?.let { mergeUri ->
+                    PasswordInputDialog(
+                        show = true,
+                        title = "合并数据库",
+                        summary = if (mergeLoading) "正在合并..." else "请输入待合并文件的主密码",
+                        confirmButtonText = if (mergeLoading) "合并中..." else "合并",
+                        onDismiss = { if (!mergeLoading) pendingMergeUri = null },
+                        onConfirm = { mergePassword ->
+                            if (mergeLoading) return@PasswordInputDialog
+                            pendingMergeUri = null
+                            coroutineScope.launch {
+                                mergeLoading = true
+                                val ok = viewModel.mergeLocalDatabase(mergeUri, mergePassword)
+                                mergeLoading = false
+                                if (ok) {
+                                    ToastUtils.showShortToast(context, "合并完成")
+                                } else {
+                                    ToastUtils.showShortToast(context, "合并失败：密码错误或文件无效")
+                                }
+                            }
+                        }
+                    )
                 }
             }
         }

@@ -43,7 +43,11 @@ import xzynine.WebDAVPass.Android.ui.navigation.Navigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
 import xzynine.WebDAVPass.Android.ui.navigation.rememberNavigator
 import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
+import xzynine.WebDAVPass.Android.ui.Screen.FillerSettingsContent
+import xzynine.WebDAVPass.Android.ui.Screen.SecuritySettingsContent
+import xzynine.WebDAVPass.Android.ui.Screen.BackupSettingsContent
 import xzynine.WebDAVPass.Android.ui.Screen.DatabaseSettingsScreen
+import xzynine.WebDAVPass.Android.ui.Screen.AboutScreen
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
@@ -329,6 +333,76 @@ fun MainScreen() {
                         MiuixPopupHost()
                     }
                 }
+                entry<Route.GeneralSettings> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        FillerSettingsContent(
+                            viewModel = tokenViewModel,
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.SecuritySettings> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        SecuritySettingsContent(
+                            viewModel = tokenViewModel,
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.BackupSettings> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        BackupSettingsContent(
+                            viewModel = tokenViewModel,
+                            onCloudBindingClick = {
+                                if (currentLibrary == null) {
+                                    ToastUtils.showShortToast(context, "请先选择数据库文件")
+                                } else {
+                                    showCloudBindingDialog.value = true
+                                }
+                            },
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
                 entry<Route.DatabaseSettings> {
                     val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
                     val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
@@ -343,6 +417,16 @@ fun MainScreen() {
                     Box(modifier = Modifier.fillMaxSize()) {
                         DatabaseSettingsScreen(
                             viewModel = tokenViewModel,
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.About> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AboutScreen(
                             onNavigateBack = {
                                 navigator.pop()
                             }

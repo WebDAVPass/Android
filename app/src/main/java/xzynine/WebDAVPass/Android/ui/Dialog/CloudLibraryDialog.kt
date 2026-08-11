@@ -32,7 +32,8 @@ import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.preference.WindowSpinnerPreference
+import xzynine.WebDAVPass.Android.ui.component.Preference
+import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
@@ -309,7 +310,8 @@ fun CloudLibraryDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 if (savedAccounts.isNotEmpty()) {
-                    WindowSpinnerPreference(
+                    Preference(
+                        type = PreferenceType.Spinner,
                         title = "已保存的 WebDAV 账号",
                         summary = if (selectedAccountIndex >= 0) {
                             "当前：${savedAccounts[selectedAccountIndex].name}"
