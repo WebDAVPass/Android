@@ -23,15 +23,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.ArrowBack
-import androidx.compose.material.icons.automirrored.rounded.InsertDriveFile
 import androidx.compose.material.icons.rounded.Archive
-import androidx.compose.material.icons.rounded.AudioFile
-import androidx.compose.material.icons.rounded.Description
-import androidx.compose.material.icons.rounded.Folder
-import androidx.compose.material.icons.rounded.Image
-import androidx.compose.material.icons.rounded.MoreVert
-import androidx.compose.material.icons.rounded.Tune
 import androidx.compose.material.icons.rounded.VideoFile
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -68,6 +60,15 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Back
+import top.yukonga.miuix.kmp.icon.extended.File
+import top.yukonga.miuix.kmp.icon.extended.Folder
+import top.yukonga.miuix.kmp.icon.extended.Image
+import top.yukonga.miuix.kmp.icon.extended.More
+import top.yukonga.miuix.kmp.icon.extended.Music
+import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.icon.extended.Tune
 import java.net.URLEncoder
 import java.text.Collator
 
@@ -538,7 +539,7 @@ private fun DetailView(
         horizontalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         IconButton(onClick = onBack) {
-            Icon(imageVector = Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "返回")
+            Icon(imageVector = MiuixIcons.Back, contentDescription = "返回")
         }
         Text("文件详情")
     }
@@ -800,7 +801,7 @@ private fun BrowseView(
                 )
             )
         ) {
-            Icon(imageVector = Icons.Rounded.Tune, contentDescription = "排序")
+            Icon(imageVector = MiuixIcons.Tune, contentDescription = "排序")
         }
 
         WindowIconDropdownMenu(
@@ -821,7 +822,7 @@ private fun BrowseView(
                 )
             )
         ) {
-            Icon(imageVector = Icons.Rounded.MoreVert, contentDescription = "更多")
+            Icon(imageVector = MiuixIcons.More, contentDescription = "更多")
         }
     }
 
@@ -960,13 +961,13 @@ private fun FileEntryCard(
  * 根据文件类型选择图标
  */
 private fun iconForEntry(entry: WebDavFileEntry): ImageVector = when (entry.kind) {
-    WebDavFileKind.DIRECTORY -> Icons.Rounded.Folder
-    WebDavFileKind.IMAGE -> Icons.Rounded.Image
+    WebDavFileKind.DIRECTORY -> MiuixIcons.Folder
+    WebDavFileKind.IMAGE -> MiuixIcons.Image
     WebDavFileKind.VIDEO -> Icons.Rounded.VideoFile
-    WebDavFileKind.AUDIO -> Icons.Rounded.AudioFile
+    WebDavFileKind.AUDIO -> MiuixIcons.Music
     WebDavFileKind.ARCHIVE -> Icons.Rounded.Archive
-    WebDavFileKind.TEXT -> Icons.Rounded.Description
-    WebDavFileKind.OTHER -> Icons.AutoMirrored.Rounded.InsertDriveFile
+    WebDavFileKind.TEXT -> MiuixIcons.Notes
+    WebDavFileKind.OTHER -> MiuixIcons.File
 }
 
 /**
