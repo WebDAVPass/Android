@@ -47,6 +47,8 @@ class TokenViewModel(private val context: Context) : ViewModel() {
         private const val SETTING_KEY_LOCK_TIMEOUT_MINUTES = "lock_timeout_minutes"
         private const val SETTING_KEY_LOCK_ON_BACKGROUND = "lock_on_background"
         private const val DEFAULT_LOCK_TIMEOUT_MINUTES = 5
+        /** 截屏防护临时关闭后的自动恢复时长 */
+        private const val SECURE_RECOVERY_DELAY_MS = 5 * 60_000L
 
         @Volatile
         private var SHARED_VIEW_MODEL: TokenViewModel? = null
@@ -72,6 +74,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private val kdbxTokenRepository: KdbxTokenRepository = KdbxTokenRepository(context)
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
     private var tokenRefreshJob: Job? = null
+    private var secureRestoreJob: Job? = null
 
     val libraryViewModel: LibraryViewModel = LibraryViewModel(context)
     val autoUnlockViewModel: AutoUnlockViewModel = AutoUnlockViewModel(context)
@@ -96,6 +99,13 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     /** 后台自动锁定开关（退到后台 30 秒后锁定），默认开启。 */
     private val _lockOnBackground = MutableStateFlow(true)
     val lockOnBackground: StateFlow<Boolean> = _lockOnBackground.asStateFlow()
+
+    /**
+     * 截屏防护开关（仅内存状态，默认开启）。
+     * 关闭后 5 分钟自动恢复开启；进程被杀/清理后台后重建必然回到开启态，保证安全兜底。
+     */
+    private val _isSecureRecentsEnabled = MutableStateFlow(true)
+    val isSecureRecentsEnabled: StateFlow<Boolean> = _isSecureRecentsEnabled.asStateFlow()
 
     init {
         startTokenRefreshTimer()
@@ -149,6 +159,21 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                     )
             }.onFailure {
                 Logger.e(SYNC_LOG_TAG, "保存锁定超时设置失败: ${it.message}", it)
+            }
+        }
+    }
+
+    /**
+     * 设置截屏防护开关：关闭后 5 分钟自动恢复开启（期间可手动提前恢复）。
+     */
+    fun setSecureRecentsEnabled(enabled: Boolean) {
+        secureRestoreJob?.cancel()
+        secureRestoreJob = null
+        _isSecureRecentsEnabled.value = enabled
+        if (!enabled) {
+            secureRestoreJob = viewModelScope.launch {
+                delay(SECURE_RECOVERY_DELAY_MS)
+                _isSecureRecentsEnabled.value = true
             }
         }
     }

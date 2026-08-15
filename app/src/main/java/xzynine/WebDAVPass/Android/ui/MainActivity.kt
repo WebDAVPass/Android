@@ -1,6 +1,10 @@
 package xzynine.WebDAVPass.Android.ui
 
+import android.app.Activity
+import android.app.ActivityManager
+import android.os.Build
 import android.os.Bundle
+import android.view.WindowManager
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -22,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -38,6 +43,7 @@ import top.yukonga.miuix.kmp.icon.extended.Scan
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
 import xzynine.WebDAVPass.Android.ui.navigation.Navigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
@@ -54,7 +60,9 @@ import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
 import xzynine.WebDAVPass.Android.ui.Dialog.ScanTokenScreen
 import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
+import xzynine.WebDAVPass.Android.ui.Screen.OnboardingScreen
 import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
+import xzynine.WebDAVPass.Android.ui.Screen.isOnboardingCompleted
 import xzynine.WebDAVPass.Android.ui.Screen.LockedScreen
 import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
@@ -69,11 +77,6 @@ import androidx.navigation3.ui.NavDisplay
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 截图防泄密：全局禁止截屏/录屏（涉及密码与令牌内容）
-        window.setFlags(
-            android.view.WindowManager.LayoutParams.FLAG_SECURE,
-            android.view.WindowManager.LayoutParams.FLAG_SECURE
-        )
         this.setContent {
             AppTheme {
                 SetupSystemBars()
@@ -91,6 +94,33 @@ fun MainScreen() {
     val context = LocalContext.current
     val tokenViewModel: TokenViewModel = remember(context.applicationContext) {
         TokenViewModel.getSharedInstance(context.applicationContext)
+    }
+
+    // 截屏防护：按开关动态启停 FLAG_SECURE（临时关闭 5 分钟后自动恢复开启，进程重建默认恢复防护）
+    val isSecureRecentsEnabled by tokenViewModel.isSecureRecentsEnabled.collectAsState()
+    val activity = context as? Activity
+    LaunchedEffect(isSecureRecentsEnabled) {
+        val window = activity?.window ?: return@LaunchedEffect
+        if (isSecureRecentsEnabled) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
+    // 最近任务占位预览颜色：FLAG_SECURE 生效时系统按该颜色绘制占位块（API 33+，随主题色变化）
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val placeholderColor = MiuixTheme.colorScheme.surface.toArgb()
+        LaunchedEffect(placeholderColor) {
+            activity?.setTaskDescription(
+                ActivityManager.TaskDescription.Builder()
+                    .setBackgroundColor(placeholderColor)
+                    .build()
+            )
+        }
     }
 
     // 超时锁定：
@@ -151,6 +181,9 @@ fun MainScreen() {
 
     val showCloudBindingDialog = remember { mutableStateOf(false) }
     var showWelcome by rememberSaveable { mutableStateOf(true) }
+    // 首次启动引导：未完成时先展示引导页，完成后露出初始路由（欢迎页/锁定页）
+    val onboardingCompleted = remember { isOnboardingCompleted(context) }
+    var showOnboarding by remember { mutableStateOf(!onboardingCompleted) }
     val currentLibrary by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
     val showScanBottomSheet = remember { mutableStateOf(false) }
 
@@ -177,6 +210,13 @@ fun MainScreen() {
                     }
                 }
         ) {
+            if (showOnboarding) {
+                OnboardingScreen(
+                    onFinish = {
+                        showOnboarding = false
+                    }
+                )
+            } else {
             NavDisplay(
                 backStack = navigator.backStack,
                 entryDecorators = listOf(
@@ -654,6 +694,7 @@ fun MainScreen() {
                 }
             }
         )
+            }
         }
     }
 

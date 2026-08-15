@@ -8,11 +8,15 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -21,16 +25,22 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -40,6 +50,7 @@ import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
@@ -267,146 +278,199 @@ fun WelcomeScreen(
             )
         }
     ) {
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(it)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+                .padding(it),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(text = "请选择数据库来源", fontSize = 18.sp)
+            // 分组标题（MIUI 设置分组样式）
+            item {
+                SmallTitle(
+                    text = "数据库",
+                    insideMargin = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                )
+            }
 
-            Text(text = "历史库")
-
+            // 内联解锁面板（选中历史库后展示）
             if (!isSelectionMode.value) {
                 resolveLatestLibrary(pendingUnlockLibrary)?.let { unlockLibrary ->
-                    InlineUnlockPanel(
-                        tokenViewModel = tokenViewModel,
-                        library = unlockLibrary,
-                        onUnlockSuccess = {
-                            pendingUnlockLibrary = null
-                            onEnterLibrary()
-                        },
-                        onDismiss = {
-                            pendingUnlockLibrary = null
-                        }
-                    )
+                    item {
+                        InlineUnlockPanel(
+                            tokenViewModel = tokenViewModel,
+                            library = unlockLibrary,
+                            onUnlockSuccess = {
+                                pendingUnlockLibrary = null
+                                onEnterLibrary()
+                            },
+                            onDismiss = {
+                                pendingUnlockLibrary = null
+                            }
+                        )
+                    }
                 }
             }
 
             if (history.isEmpty()) {
-                Text(text = "暂无历史记录")
-            } else {
-                history.forEach { item ->
-                    val cloudSyncSummary = if (item.sourceType == LibrarySourceType.CLOUD) {
-                        val syncText = when (item.lastSyncStatus) {
-                            "syncing" -> "同步中"
-                            "success" -> "同步成功"
-                            "merged" -> "已自动合并"
-                            "conflict" -> "同步冲突"
-                            "failed" -> "同步失败"
-                            else -> "未同步"
-                        }
-                        // 毫秒级时间戳按设备时区格式化为本地时间，避免直接显示原始数字
-                        val syncAtText = LocalTimeFormatter.formatLocalDateTime(item.lastSyncAt)
-                            .takeIf { it.isNotEmpty() }
-                            ?.let { "，上次: $it" }
-                            .orEmpty()
-                        "$syncText$syncAtText"
-                    } else {
-                        ""
-                    }
-
-                    SelectableEntryCard(
-                        itemKey = item.id,
-                        title = item.displayName,
-                        summary = if (item.sourceType == LibrarySourceType.CLOUD) {
-                            val remote = item.remoteFilePath ?: item.remoteBaseUrl.orEmpty()
-                            "$remote | $cloudSyncSummary"
-                        } else {
-                            item.localPath
-                        },
-                        isSelectionMode = isSelectionMode.value,
-                        isSelected = selectedHistoryIds.containsKey(item.id),
-                        onLongClick = {
-                            if (!isSelectionMode.value) {
-                                setSelection(item, true)
-                            }
-                        },
-                        onCheckedChange = { checked ->
-                            setSelection(item, checked)
-                        },
-                        contentDescription = "历史库图标",
-                        startAction = {
-                            Icon(
-                                modifier = Modifier.padding(end = 16.dp),
-                                imageVector = if (item.sourceType == LibrarySourceType.CLOUD) MiuixIcons.CloudFill else MiuixIcons.Folder,
-                                contentDescription = "历史库"
-                            )
-                        },
-                        onClick = {
-                            if (isSelectionMode.value) {
-                                setSelection(item, !selectedHistoryIds.containsKey(item.id))
-                                return@SelectableEntryCard
-                            }
-                            coroutineScope.launch {
-                                tokenViewModel.libraryViewModel.selectLibraryById(item.id)
-                                val selectedLibrary = currentLibraryState?.takeIf { it.id == item.id } ?: item
-
-                                showInlineUnlock(selectedLibrary)
-                            }
-                        },
+                // 空状态
+                item {
+                    Column(
                         modifier = Modifier
                             .fillMaxWidth()
-                    )
+                            .padding(vertical = 48.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Folder,
+                            contentDescription = null,
+                            modifier = Modifier.size(56.dp),
+                            tint = MiuixTheme.colorScheme.onSurfaceContainerVariant
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(
+                            text = "暂无历史库",
+                            fontSize = 16.sp,
+                            color = MiuixTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = "点击下方按钮导入或新建数据库",
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            } else {
+                // 历史库分组卡片
+                item {
+                    Card {
+                        history.forEachIndexed { index, item ->
+                            if (index > 0) {
+                                HorizontalDivider()
+                            }
+                            val cloudSyncSummary = if (item.sourceType == LibrarySourceType.CLOUD) {
+                                val syncText = when (item.lastSyncStatus) {
+                                    "syncing" -> "同步中"
+                                    "success" -> "同步成功"
+                                    "merged" -> "已自动合并"
+                                    "conflict" -> "同步冲突"
+                                    "failed" -> "同步失败"
+                                    else -> "未同步"
+                                }
+                                // 毫秒级时间戳按设备时区格式化为本地时间，避免直接显示原始数字
+                                val syncAtText = LocalTimeFormatter.formatLocalDateTime(item.lastSyncAt)
+                                    .takeIf { it.isNotEmpty() }
+                                    ?.let { "，上次: $it" }
+                                    .orEmpty()
+                                "$syncText$syncAtText"
+                            } else {
+                                ""
+                            }
+
+                            SelectableEntryCard(
+                                itemKey = item.id,
+                                title = item.displayName,
+                                summary = if (item.sourceType == LibrarySourceType.CLOUD) {
+                                    val remote = item.remoteFilePath ?: item.remoteBaseUrl.orEmpty()
+                                    "$remote | $cloudSyncSummary"
+                                } else {
+                                    item.localPath
+                                },
+                                isSelectionMode = isSelectionMode.value,
+                                isSelected = selectedHistoryIds.containsKey(item.id),
+                                onLongClick = {
+                                    if (!isSelectionMode.value) {
+                                        setSelection(item, true)
+                                    }
+                                },
+                                onCheckedChange = { checked ->
+                                    setSelection(item, checked)
+                                },
+                                contentDescription = "历史库图标",
+                                startAction = {
+                                    Icon(
+                                        modifier = Modifier.padding(end = 16.dp),
+                                        imageVector = if (item.sourceType == LibrarySourceType.CLOUD) MiuixIcons.CloudFill else MiuixIcons.Folder,
+                                        contentDescription = "历史库"
+                                    )
+                                },
+                                onClick = {
+                                    if (isSelectionMode.value) {
+                                        setSelection(item, !selectedHistoryIds.containsKey(item.id))
+                                        return@SelectableEntryCard
+                                    }
+                                    coroutineScope.launch {
+                                        tokenViewModel.libraryViewModel.selectLibraryById(item.id)
+                                        val selectedLibrary = currentLibraryState?.takeIf { it.id == item.id } ?: item
+
+                                        showInlineUnlock(selectedLibrary)
+                                    }
+                                },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                            )
+                        }
+                    }
                 }
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+            }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        localImportLauncher.launch(arrayOf("*/*"))
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(imageVector = MiuixIcons.Folder, contentDescription = "本地导入")
-                    Text(text = "本地导入")
-                }
+            // 导入（主操作，主色按钮）
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            localImportLauncher.launch(arrayOf("*/*"))
+                        },
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = MiuixIcons.Folder, contentDescription = "本地导入")
+                        Text(text = "本地导入")
+                    }
 
-                Button(
-                    onClick = {
-                        showCloudImportDialog = true
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(imageVector = MiuixIcons.CloudFill, contentDescription = "云端导入")
-                    Text(text = "云端导入")
+                    Button(
+                        onClick = {
+                            showCloudImportDialog = true
+                        },
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = MiuixIcons.CloudFill, contentDescription = "云端导入")
+                        Text(text = "云端导入")
+                    }
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = {
-                        createMode = CreateMode.LOCAL
-                        showCreateMasterPasswordDialog = true
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(imageVector = MiuixIcons.AddFolder, contentDescription = "本地新建")
-                    Text(text = "本地新建")
-                }
+            // 新建（次级操作，次级色按钮弱化）
+            item {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(
+                        onClick = {
+                            createMode = CreateMode.LOCAL
+                            showCreateMasterPasswordDialog = true
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = MiuixIcons.AddFolder, contentDescription = "本地新建")
+                        Text(text = "本地新建")
+                    }
 
-                Button(
-                    onClick = {
-                        createMode = CreateMode.CLOUD
-                        showCreateMasterPasswordDialog = true
-                    },
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Icon(imageVector = MiuixIcons.UploadCloud, contentDescription = "云端新建")
-                    Text(text = "云端新建")
+                    Button(
+                        onClick = {
+                            createMode = CreateMode.CLOUD
+                            showCreateMasterPasswordDialog = true
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) {
+                        Icon(imageVector = MiuixIcons.UploadCloud, contentDescription = "云端新建")
+                        Text(text = "云端新建")
+                    }
                 }
             }
         }

@@ -45,6 +45,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Lock
+import top.yukonga.miuix.kmp.icon.extended.ScreenCapture
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.ui.component.Preference
@@ -497,6 +498,34 @@ fun SecuritySettingsContent(
                         },
                         onCheckedChange = { checked ->
                             viewModel.setLockOnBackground(checked)
+                        },
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                val isSecureRecentsEnabled by viewModel.isSecureRecentsEnabled.collectAsState()
+                Card(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Preference(
+                        type = PreferenceType.Switch,
+                        title = "截屏防护",
+                        summary = if (isSecureRecentsEnabled) {
+                            "禁止截屏、录屏与最近任务内容预览"
+                        } else {
+                            "临时关闭，5 分钟后自动恢复"
+                        },
+                        checked = isSecureRecentsEnabled,
+                        startAction = {
+                            Icon(
+                                modifier = Modifier.padding(end = 16.dp),
+                                imageVector = MiuixIcons.ScreenCapture,
+                                contentDescription = "截屏防护"
+                            )
+                        },
+                        onCheckedChange = { checked ->
+                            viewModel.setSecureRecentsEnabled(checked)
                         },
                     )
                 }
