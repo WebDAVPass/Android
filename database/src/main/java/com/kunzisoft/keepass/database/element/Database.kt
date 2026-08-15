@@ -135,8 +135,11 @@ open class Database {
         return iconsManager.getIcon(iconId)
     }
 
-    fun buildNewCustomIcon(result: (IconImageCustom?, BinaryData?) -> Unit) {
-        mDatabaseKDBX?.buildNewCustomIcon(null, result)
+    fun buildNewCustomIcon(
+        customIconId: UUID? = null,
+        result: (IconImageCustom?, BinaryData?) -> Unit,
+    ) {
+        mDatabaseKDBX?.buildNewCustomIcon(customIconId, result)
     }
 
     fun isCustomIconBinaryDuplicate(binaryData: BinaryData): Boolean {

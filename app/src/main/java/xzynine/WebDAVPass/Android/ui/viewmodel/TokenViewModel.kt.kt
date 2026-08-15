@@ -539,6 +539,22 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 批量将条目图标固化为自定义图标（品牌图标写入密码库）。
+     */
+    suspend fun solidifyEntryBrandIcons(iconUpdates: Map<Long, ByteArray>): Int {
+        val count = passwordViewModel.solidifyEntryBrandIcons(
+            iconUpdates,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+        if (count > 0) {
+            onPasswordWriteSuccess()
+        }
+        return count
+    }
+
+    /**
      * 读取条目附件的字节内容。
      */
     suspend fun getEntryAttachmentBytes(entryId: Long, name: String): ByteArray? {

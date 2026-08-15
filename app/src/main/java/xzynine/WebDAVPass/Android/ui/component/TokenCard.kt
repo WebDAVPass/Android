@@ -3,9 +3,11 @@ package xzynine.WebDAVPass.Android.ui.component
 import android.content.Context
 import android.graphics.BitmapFactory
 import android.widget.ImageView
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -14,21 +16,30 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -39,6 +50,7 @@ import org.liberty.android.freeotp.token_images.matchToken
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -119,7 +131,7 @@ fun EntryIcon(
     val context = LocalContext.current
 
     /**
-     * 1) 优先渲染 KeePass 自定义图标（二进制）。
+     * 1) 优先渲染自定义图标（二进制，含固化的品牌图标）。
      * 在后台线程解码，避免主线程阻塞导致滚动卡顿。
      */
     val customBitmap: Bitmap? by produceState<Bitmap?>(initialValue = null, key1 = customIconBytes) {
@@ -144,7 +156,44 @@ fun EntryIcon(
     }
 
     /**
-     * 2) 渲染 KeePass 标准图标（数据库标准图标ID）或 Token 品牌图标。
+     * 2) 渲染 Token 品牌图标（按 issuer/label 匹配）。
+     * 仅当数字标准图标未选择（默认 0 或空）时生效；
+     * 结果按主副文案记忆化，避免每行重复扫描 TokenImage 枚举。
+     */
+    val tokenImageRes: Int? = remember(primary, secondary) {
+        TokenImage.values().firstOrNull { it.matchToken(primary, secondary) }?.resource
+    }
+    if (standardIconId == null || standardIconId == 0) {
+        tokenImageRes?.let {
+            Image(
+                painter = painterResource(id = it),
+                contentDescription = contentDescription,
+                modifier = modifier
+            )
+            return
+        }
+    }
+
+    /**
+     * 3) 渲染 KeePass 标准图标的现代化版本（Miuix / Material 矢量图标）。
+     * 显式选择的数字标准图标（ID != 0）优先于令牌品牌图标，
+     * 使「有品牌图标的条目也能设置数字标准类型」。
+     * 语义映射见 StandardIconIcons.kt；使用 primary 主题色着色。
+     */
+    if (standardIconId != null) {
+        standardIconVectorMap[standardIconId]?.let { vector ->
+            Icon(
+                imageVector = vector,
+                contentDescription = contentDescription,
+                modifier = modifier,
+                tint = MiuixTheme.colorScheme.primary
+            )
+            return
+        }
+    }
+
+    /**
+     * 4) 渲染 KeePass 标准图标（数据库标准图标ID）或 Token 品牌图标兜底。
      * 结果按 (standardIconId, primary, secondary) 全局 LRU 缓存；
      * IconPack 为进程级单例，避免每行重复 71 次 getIdentifier。
      */
@@ -214,7 +263,11 @@ fun TokenCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                // 占据剩余宽度并约束文本列，防止账号过长把右侧倒计时挤出/顶歪
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 12.dp)
             ) {
                 EntryIcon(
                     customIconBytes = customIconBytes,
@@ -229,14 +282,14 @@ fun TokenCard(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (token.issuer != null) {
-                        Text(
+                        ScrollableSingleLineText(
                             text = token.issuer,
                             fontSize = 14.sp,
                             color = MiuixTheme.colorScheme.onSurface
                         )
                     }
 
-                    Text(
+                    ScrollableSingleLineText(
                         text = token.label,
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onSurfaceSecondary
@@ -252,6 +305,55 @@ fun TokenCard(
                 CountdownDisplay(code = code, currentTimeMillis = currentTimeMillis)
             }
         }
+    }
+}
+
+/**
+ * 单行文本：超长时自动横向滚动（跑马灯）循环显示完整内容，不做省略号截断；
+ * 长度未超限时静态显示。禁用手动拖动，仅程序化滚动。
+ */
+private const val MARQUEE_SPEED_PX_PER_MS = 0.1f
+private const val MARQUEE_PAUSE_MS = 1200L
+
+@Composable
+private fun ScrollableSingleLineText(
+    text: String,
+    fontSize: TextUnit,
+    color: Color
+) {
+    val scrollState = rememberScrollState()
+    var textWidth by remember { mutableIntStateOf(0) }
+    var viewportWidth by remember { mutableIntStateOf(0) }
+    val overflow = viewportWidth > 0 && textWidth > viewportWidth
+
+    // 超长时循环滚动：滚到末尾 → 停顿 → 滚回开头 → 停顿
+    LaunchedEffect(overflow, textWidth, viewportWidth) {
+        if (!overflow) return@LaunchedEffect
+        val range = (textWidth - viewportWidth).coerceAtLeast(0)
+        val durationMs = (range / MARQUEE_SPEED_PX_PER_MS).toInt().coerceAtLeast(1500)
+        while (true) {
+            scrollState.animateScrollTo(range, tween(durationMs, easing = LinearEasing))
+            delay(MARQUEE_PAUSE_MS)
+            scrollState.animateScrollTo(0, tween(durationMs, easing = LinearEasing))
+            delay(MARQUEE_PAUSE_MS)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clipToBounds()
+            // enabled=false：禁用触摸拖动，仅用于无约束测量文本宽度与程序化滚动
+            .horizontalScroll(scrollState, enabled = false)
+            .onSizeChanged { viewportWidth = it.width }
+    ) {
+        Text(
+            text = text,
+            fontSize = fontSize,
+            color = color,
+            maxLines = 1,
+            onTextLayout = { textWidth = it.size.width }
+        )
     }
 }
 

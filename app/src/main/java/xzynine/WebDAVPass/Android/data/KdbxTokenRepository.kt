@@ -463,6 +463,42 @@ class KdbxTokenRepository(context: Context) {
     }
 
     /**
+     * 批量将条目图标固化为自定义图标（品牌图标写入密码库图标池）。
+     *
+     * 相同图片字节使用确定性 UUID（[UUID.nameUUIDFromBytes]），
+     * 同一品牌的所有条目共享同一个图标池条目，避免重复膨胀。
+     *
+     * @return 成功写入的条目数
+     */
+    fun solidifyEntryBrandIcons(
+        localPath: String,
+        masterPassword: String,
+        iconUpdates: Map<Long, ByteArray>,
+    ): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            var count = 0
+            iconUpdates.forEach { (entryId, bytes) ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
+                    ?: return@forEach
+                val customIconId = UUID.nameUUIDFromBytes(bytes)
+                db.buildNewCustomIcon(customIconId) { customIcon, binary ->
+                    if (customIcon != null && binary != null) {
+                        binary.getOutputDataStream(db.binaryCache).use { output ->
+                            output.write(bytes)
+                        }
+                        val entryInfo = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+                        entryInfo.icon = IconImage(customIcon)
+                        entry.setEntryInfo(db, entryInfo)
+                        db.updateEntry(entry)
+                        count++
+                    }
+                }
+            }
+            count
+        }
+    }
+
+    /**
      * 删除条目（仅回收站删除）。
      */
     fun deletePasswordEntry(localPath: String, masterPassword: String, entryId: Long): Boolean {

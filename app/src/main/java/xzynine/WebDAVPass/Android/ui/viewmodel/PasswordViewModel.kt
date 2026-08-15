@@ -350,6 +350,23 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 批量将条目图标固化为自定义图标（品牌图标写入密码库）。
+     */
+    suspend fun solidifyEntryBrandIcons(
+        iconUpdates: Map<Long, ByteArray>,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): Int {
+        if (iconUpdates.isEmpty()) {
+            return 0
+        }
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = 0) { path, pwd ->
+            kdbxTokenRepository.solidifyEntryBrandIcons(path, pwd, iconUpdates)
+        }
+    }
+
+    /**
      * 新建密码分组并返回稳定 ID。
      */
     suspend fun createPasswordGroup(

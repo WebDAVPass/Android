@@ -535,7 +535,7 @@ fun PasswordEntryDetailScreen(
                                             standardIconId = entry.standardIconId,
                                             primary = entry.title,
                                             secondary = entry.account,
-                                            modifier = Modifier.padding(end = 16.dp),
+                                            modifier = Modifier.padding(end = 16.dp).size(32.dp),
                                             contentDescription = "条目图标"
                                         )
                                     },
@@ -657,8 +657,8 @@ fun PasswordEntryDetailScreen(
                                     EntryIcon(
                                         customIconBytes = editNewCustomIconBytes ?: entry.customIconBytes,
                                         standardIconId = editIconStandardId,
-                                        primary = entry.account,
-                                        secondary = entry.title,
+                                        primary = entry.title,
+                                        secondary = entry.account,
                                         modifier = Modifier.size(36.dp)
                                     )
                                     Text(
@@ -1069,6 +1069,8 @@ fun PasswordEntryDetailScreen(
             show = showIconPicker,
             currentStandardIconId = editIconStandardId,
             currentCustomIconBytes = editNewCustomIconBytes ?: selectedEntry?.customIconBytes,
+            iconPrimary = selectedEntry?.title,
+            iconSecondary = selectedEntry?.account,
             onDismiss = { showIconPicker = false },
             onPick = { standardId, bytes ->
                 showIconPicker = false

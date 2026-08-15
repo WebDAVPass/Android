@@ -62,11 +62,11 @@ import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.AddFolder
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
-import top.yukonga.miuix.kmp.icon.extended.Copy
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
-import top.yukonga.miuix.kmp.icon.extended.MoveFile
+import top.yukonga.miuix.kmp.icon.extended.MoreCircle
 import top.yukonga.miuix.kmp.icon.extended.Ok
+import top.yukonga.miuix.kmp.icon.extended.SelectAll
 import top.yukonga.miuix.kmp.icon.extended.Sort
 import top.yukonga.miuix.kmp.icon.extended.Undo
 import top.yukonga.miuix.kmp.theme.MiuixTheme
@@ -74,6 +74,8 @@ import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.Flip
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
@@ -95,6 +97,7 @@ import androidx.compose.ui.platform.LocalContext
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
+import xzynine.WebDAVPass.Android.ui.component.buildBrandIconBytes
 import xzylib.base.util.ToastUtils
 
 /** 附件导入大小上限（与仓库 SMALL_BINARY_SIZE 一致），防止无界读入内存导致 OOM。 */
@@ -145,6 +148,8 @@ fun PasswordListScreen(
     val showGroupPicker = remember { mutableStateOf(false) }
     var groupPickerIsMove by remember { mutableStateOf(false) }
     var pickerGroups by remember { mutableStateOf<List<GroupNodeInfo>>(emptyList()) }
+    val showSolidifyDialog = remember { mutableStateOf(false) }
+    var solidifyUpdates by remember { mutableStateOf<Map<Long, ByteArray>>(emptyMap()) }
 
     var createEntryTitle by remember { mutableStateOf("") }
     var createEntryUsername by remember { mutableStateOf("") }
@@ -160,6 +165,8 @@ fun PasswordListScreen(
         isSelectionMode.value = false
         showDeleteDialog.value = false
         showPermanentDeleteDialog.value = false
+        showSolidifyDialog.value = false
+        solidifyUpdates = emptyMap()
     }
 
     fun restoreSelectedEntries() {
@@ -236,6 +243,50 @@ fun PasswordListScreen(
                 isSelectionMode.value = false
             }
         }
+    }
+
+    fun selectAllVisible() {
+        if (!allowWriteActions) {
+            return
+        }
+        entries.forEach { entry ->
+            selectedTargets[entry.entryId] = entry.isFolderPlaceholder
+        }
+        isSelectionMode.value = true
+    }
+
+    fun invertSelection() {
+        if (!allowWriteActions) {
+            return
+        }
+        val currentlySelected = selectedTargets.keys.toSet()
+        entries.forEach { entry ->
+            if (entry.entryId in currentlySelected) {
+                selectedTargets.remove(entry.entryId)
+            } else {
+                selectedTargets[entry.entryId] = entry.isFolderPlaceholder
+            }
+        }
+        if (selectedTargets.isEmpty()) {
+            isSelectionMode.value = false
+        }
+    }
+
+    fun solidifySelectedBrandIcons() {
+        val entryIds = selectedTargets.keys.filter { selectedTargets[it] == false }.toSet()
+        val matched = entries
+            .filter { it.entryId in entryIds && !it.isFolderPlaceholder }
+            .mapNotNull { entry ->
+                buildBrandIconBytes(context, entry.title, entry.account)
+                    ?.let { entry.entryId to it }
+            }
+            .toMap()
+        if (matched.isEmpty()) {
+            ToastUtils.showShortToast(context, "选中的条目无匹配的品牌图标")
+            return
+        }
+        solidifyUpdates = matched
+        showSolidifyDialog.value = true
     }
 
     BackHandler(enabled = isSelectionMode.value) {
@@ -340,9 +391,20 @@ fun PasswordListScreen(
         popupHost = {},
         topBar = {
             TopAppBar(
-                title = title,
+                title = if (isSelectionMode.value) "已选 ${selectedTargets.size} 项" else title,
                 navigationIcon = {
-                    if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
+                    if (isSelectionMode.value) {
+                        IconButton(
+                            onClick = {
+                                clearSelectionMode()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Close,
+                                contentDescription = "取消选择"
+                            )
+                        }
+                    } else if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
                         IconButton(
                             onClick = {
                                 tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
@@ -366,6 +428,26 @@ fun PasswordListScreen(
                 },
                 actions = {
                     if (isSelectionMode.value) {
+                        IconButton(
+                            onClick = {
+                                selectAllVisible()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.SelectAll,
+                                contentDescription = "全选"
+                            )
+                        }
+                        IconButton(
+                            onClick = {
+                                invertSelection()
+                            }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Flip,
+                                contentDescription = "反选"
+                            )
+                        }
                         if (enableRecycleBinActions) {
                             IconButton(
                                 onClick = {
@@ -391,41 +473,7 @@ fun PasswordListScreen(
                                     contentDescription = "永久删除"
                                 )
                             }
-                            IconButton(
-                                onClick = {
-                                    clearSelectionMode()
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Close,
-                                    contentDescription = "取消选择"
-                                )
-                            }
                         } else if (allowWriteActions) {
-                            IconButton(
-                                onClick = {
-                                    if (selectedTargets.isNotEmpty()) {
-                                        openGroupPicker(isMove = true)
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.MoveFile,
-                                    contentDescription = "移动"
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (selectedTargets.isNotEmpty()) {
-                                        openGroupPicker(isMove = false)
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Copy,
-                                    contentDescription = "复制"
-                                )
-                            }
                             IconButton(
                                 onClick = {
                                     if (selectedTargets.isNotEmpty()) {
@@ -438,14 +486,42 @@ fun PasswordListScreen(
                                     contentDescription = "删除"
                                 )
                             }
-                            IconButton(
-                                onClick = {
-                                    clearSelectionMode()
-                                }
+                            WindowIconDropdownMenu(
+                                entries = listOf(
+                                    DropdownEntry(
+                                        items = listOf(
+                                            DropdownItem(
+                                                text = "固化为品牌图标",
+                                                onClick = { solidifySelectedBrandIcons() }
+                                            )
+                                        )
+                                    ),
+                                    DropdownEntry(
+                                        items = listOf(
+                                            DropdownItem(
+                                                text = "移动",
+                                                onClick = {
+                                                    if (selectedTargets.isNotEmpty()) {
+                                                        openGroupPicker(isMove = true)
+                                                    }
+                                                }
+                                            ),
+                                            DropdownItem(
+                                                text = "复制",
+                                                onClick = {
+                                                    if (selectedTargets.isNotEmpty()) {
+                                                        openGroupPicker(isMove = false)
+                                                    }
+                                                }
+                                            )
+                                        )
+                                    )
+                                ),
+                                collapseOnSelection = true
                             ) {
                                 Icon(
-                                    imageVector = MiuixIcons.Close,
-                                    contentDescription = "取消选择"
+                                    imageVector = MiuixIcons.MoreCircle,
+                                    contentDescription = "更多操作"
                                 )
                             }
                         }
@@ -805,6 +881,30 @@ fun PasswordListScreen(
         )
     }
 
+    if (allowWriteActions && !enableRecycleBinActions && isSelectionMode.value && solidifyUpdates.isNotEmpty()) {
+        ConfirmationDialog(
+            title = "固化为品牌图标",
+            summary = "将为 ${solidifyUpdates.size} 个匹配条目写入品牌图标并保存到密码库。",
+            show = showSolidifyDialog,
+            onDismiss = {
+                showSolidifyDialog.value = false
+            },
+            confirmButtonText = "固化",
+            onConfirm = {
+                coroutineScope.launch {
+                    val count = tokenViewModel.solidifyEntryBrandIcons(solidifyUpdates)
+                    if (count > 0) {
+                        ToastUtils.showShortToast(context, "已固化 $count 个条目")
+                    } else {
+                        ToastUtils.showShortToast(context, "固化失败")
+                    }
+                    solidifyUpdates = emptyMap()
+                    clearSelectionMode()
+                }
+            }
+        )
+    }
+
     if (enableRecycleBinActions && isSelectionMode.value && selectedTargets.isNotEmpty()) {
         ConfirmationDialog(
             title = "确认永久删除",
@@ -1129,6 +1229,8 @@ private fun PasswordEntryEditorDialog(
             show = showIconPicker,
             currentStandardIconId = iconStandardId,
             currentCustomIconBytes = newCustomIconBytes,
+            iconPrimary = entryTitle,
+            iconSecondary = entryUsername,
             onDismiss = { showIconPicker = false },
             onPick = { standardId, bytes ->
                 iconStandardId = standardId ?: 0
