@@ -6,8 +6,9 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-import java.io.File
-import java.util.Properties
+        import java.io.File
+        import java.util.Properties
+
 
 // 使用 buildSrc 的 JGit 实现计算版本信息
 
@@ -142,7 +143,6 @@ dependencies {
     implementation(project(":base"))
     implementation("com.google.code.gson:gson:2.10.1") // Gson JSON解析库
     // 接入令牌图标系统模块
-    implementation(project(":text-drawable"))
     implementation(project(":token-images"))
     // 检查更新模块
     implementation(project(":checkupdates"))
