@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import xzylib.base.util.Logger
+import xzylib.base.util.ToastUtils
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import xzynine.WebDAVPass.Android.data.AppDatabaseHolder
@@ -21,6 +22,7 @@ import xzynine.WebDAVPass.Android.data.SecurityIssuesInfo
 import xzynine.WebDAVPass.Android.data.TokenCode
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -97,6 +99,18 @@ class TokenViewModel(private val context: Context) : ViewModel() {
 
     init {
         startTokenRefreshTimer()
+        // 监听锁定状态：库一旦锁定，立即清空内存中的令牌与密码条目数据，
+        // 确保任何页面在未解锁状态下都无法读到已解密内容（如安全性检查页防泄漏）。
+        viewModelScope.launch {
+            libraryViewModel.isLibraryUnlocked.collect { unlocked ->
+                if (!unlocked) {
+                    _tokens.value = emptyList()
+                    _tokenCodes.clear()
+                    publishTokenCodeSnapshot()
+                    passwordViewModel.clearAll(resetTotalCount = false)
+                }
+            }
+        }
         viewModelScope.launch {
             runCatching {
                 AppDatabaseHolder.getInstance(context)
@@ -210,7 +224,12 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 解锁当前库
+     * 解锁当前库。
+     *
+     * 仅校验主密码并进入解锁态，数据加载在 [viewModelScope] 中后台执行，
+     * 不受调用方协程（如锁定页组合作用域）销毁的影响——冷启动锁定页解锁时
+     * 解锁态变化会立即触发导航离开锁定页，若数据加载仍挂在调用方协程上，
+     * 会被取消并误报"解锁失败"，同时留下密码/令牌列表为空的半解锁态。
      */
     suspend fun unlockCurrentLibrary(
         masterPassword: String,
@@ -222,8 +241,29 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             return false
         }
 
-        repeat(UNLOCK_LOAD_RETRY_COUNT) { attemptIndex ->
-            val loaded = loadTokensInternal()
+        startUnlockDataLoading()
+        return true
+    }
+
+    /**
+     * 解锁成功后后台加载当前库数据（令牌与密码条目），并执行失败回落。
+     *
+     * 加载成功时按需触发云端自动恢复；重试耗尽仍失败且库仍处于解锁态时，
+     * 回落至锁定态并提示，避免停留在数据为空的半解锁主界面。
+     */
+    private fun startUnlockDataLoading() {
+        viewModelScope.launch {
+            var loaded = false
+            repeat(UNLOCK_LOAD_RETRY_COUNT) { attemptIndex ->
+                loaded = loadTokensInternal()
+                if (loaded) {
+                    return@repeat
+                }
+                if (attemptIndex < UNLOCK_LOAD_RETRY_COUNT - 1) {
+                    delay(UNLOCK_LOAD_RETRY_DELAY_MS)
+                }
+            }
+
             if (loaded) {
                 if (libraryViewModel.shouldAutoSyncCurrentLibrary()) {
                     Logger.d(SYNC_LOG_TAG, "解锁成功，触发自动恢复")
@@ -231,15 +271,17 @@ class TokenViewModel(private val context: Context) : ViewModel() {
                         loadTokensInternal()
                     }
                 }
-                return true
+                return@launch
             }
 
-            if (attemptIndex < UNLOCK_LOAD_RETRY_COUNT - 1) {
-                delay(UNLOCK_LOAD_RETRY_DELAY_MS)
+            // 数据加载失败：若期间未被用户/超时重新锁定，则回落锁定并提示，
+            // 主界面守卫会自动导航回锁定页，避免半解锁态。
+            if (libraryViewModel.isLibraryUnlocked.value) {
+                Logger.e(SYNC_LOG_TAG, "解锁后数据加载失败，回落至锁定态")
+                libraryViewModel.lockCurrentLibrary()
+                ToastUtils.showShortToast(context, "解锁后数据加载失败，已重新锁定，请重试")
             }
         }
-
-        return false
     }
 
     /**
@@ -348,6 +390,9 @@ class TokenViewModel(private val context: Context) : ViewModel() {
             )
             passwordViewModel.reloadInitialPasswordData()
             true
+        } catch (e: CancellationException) {
+            // 协程取消（如调用方组合销毁）不应误报为数据加载失败，原样抛出
+            throw e
         } catch (ex: Exception) {
             _tokens.value = emptyList()
             passwordViewModel.clearAll(resetTotalCount = true)

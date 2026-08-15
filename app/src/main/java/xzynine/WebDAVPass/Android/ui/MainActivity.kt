@@ -55,6 +55,7 @@ import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
 import xzynine.WebDAVPass.Android.ui.Dialog.ScanTokenScreen
 import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
 import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
+import xzynine.WebDAVPass.Android.ui.Screen.LockedScreen
 import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
@@ -153,8 +154,14 @@ fun MainScreen() {
     val currentLibrary by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
     val showScanBottomSheet = remember { mutableStateOf(false) }
 
-    val startRoute = remember(showWelcome) {
-        if (showWelcome) Route.Welcome else Route.Home
+    // 初始路由：存在已记录的库文件 → 锁定页（解锁目标为上次库）；否则欢迎页。
+    // 用同步快照一次性决定，避免首帧 currentLibrary 流尚未预热导致初始路由闪烁或旋转后丢失导航栈。
+    val startRoute = remember {
+        if (tokenViewModel.libraryViewModel.getCurrentLibrarySync() != null) {
+            Route.Locked
+        } else {
+            Route.Welcome
+        }
     }
     val navigator = rememberNavigator(startRoute)
 
@@ -206,13 +213,52 @@ fun MainScreen() {
                         }
                     )
                 }
+                entry<Route.Locked> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        when {
+                            // 已解锁：进入主界面
+                            isLibraryUnlocked && lib != null -> {
+                                navigator.replaceAll(listOf(Route.Home))
+                                showWelcome = false
+                            }
+                            // 当前库被清除：回欢迎页选择/新建库。
+                            // 用同步快照兜底：currentLibrary 流在冷启动首帧可能尚未预热，
+                            // 此时 lib 为 null 但历史库实际存在，不应误弹回欢迎页。
+                            lib == null && tokenViewModel.libraryViewModel.getCurrentLibrarySync() == null -> {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                                showWelcome = true
+                            }
+                        }
+                    }
+
+                    LockedScreen(
+                        tokenViewModel = tokenViewModel,
+                        onUnlocked = {
+                            navigator.replaceAll(listOf(Route.Home))
+                            showWelcome = false
+                        },
+                        onSwitchLibrary = {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    )
+                }
                 entry<Route.Home> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(isLibraryUnlocked, lib) {
                         if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
+                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
                             showWelcome = true
                         }
                     }
@@ -274,12 +320,18 @@ fun MainScreen() {
                     }
                 }
                 entry<Route.SecurityCheck> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(isLibraryUnlocked, lib) {
                         if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
+                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
                             showWelcome = true
                         }
                     }
@@ -298,12 +350,18 @@ fun MainScreen() {
                     }
                 }
                 entry<Route.Settings> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(isLibraryUnlocked, lib) {
                         if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
+                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
                             showWelcome = true
                         }
                     }
@@ -334,12 +392,18 @@ fun MainScreen() {
                     }
                 }
                 entry<Route.GeneralSettings> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(isLibraryUnlocked, lib) {
                         if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
+                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
                             showWelcome = true
                         }
                     }
@@ -355,12 +419,18 @@ fun MainScreen() {
                     }
                 }
                 entry<Route.SecuritySettings> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(isLibraryUnlocked, lib) {
                         if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
+                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
                             showWelcome = true
                         }
                     }
@@ -376,12 +446,18 @@ fun MainScreen() {
                     }
                 }
                 entry<Route.BackupSettings> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(isLibraryUnlocked, lib) {
                         if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
+                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
                             showWelcome = true
                         }
                     }
@@ -404,12 +480,18 @@ fun MainScreen() {
                     }
                 }
                 entry<Route.DatabaseSettings> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(isLibraryUnlocked, lib) {
                         if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
+                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
                             showWelcome = true
                         }
                     }
@@ -435,12 +517,18 @@ fun MainScreen() {
                     }
                 }
                 entry<Route.TokenList> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(isLibraryUnlocked, lib) {
                         if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
+                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
                             showWelcome = true
                         }
                     }
@@ -484,8 +572,8 @@ fun MainScreen() {
                 }
                 entry<Route.PasswordList> { key ->
                     val listMode = key.listMode
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(listMode) {
                         tokenViewModel.passwordViewModel.setPasswordListMode(listMode, refreshNow = true)
@@ -494,7 +582,13 @@ fun MainScreen() {
 
                     LaunchedEffect(isLibraryUnlocked, lib) {
                         if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
+                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
                             showWelcome = true
                         }
                     }
@@ -528,12 +622,18 @@ fun MainScreen() {
                 }
                 entry<Route.PasswordEntryDetail> { key ->
                     val entryId = key.entryId
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(isLibraryUnlocked, lib) {
                         if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
+                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
                             showWelcome = true
                         }
                     }
