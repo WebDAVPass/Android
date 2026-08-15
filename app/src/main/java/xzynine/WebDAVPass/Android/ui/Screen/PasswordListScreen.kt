@@ -810,19 +810,6 @@ fun PasswordListScreen(
                             }
                         )
                     }
-                    IconButton(
-                        onClick = {
-                            searchQuery = ""
-                            searchExpanded = false
-                            focusManager.clearFocus()
-                        },
-                        modifier = Modifier.padding(start = 8.dp)
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Close,
-                            contentDescription = "清空搜索"
-                        )
-                    }
                 }
             ) {
             }
