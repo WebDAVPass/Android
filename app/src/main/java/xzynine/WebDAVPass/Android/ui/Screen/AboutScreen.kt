@@ -50,6 +50,7 @@ import top.yukonga.miuix.kmp.icon.extended.Download
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import top.yukonga.miuix.kmp.window.WindowDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.OpenSourceDrawer
 
 /**
  * 关于页面。
@@ -68,6 +69,7 @@ fun AboutScreen(
     var loadingChangelog by remember { mutableStateOf(false) }
     var showChangelog by remember { mutableStateOf(false) }
     var changelogReleases by remember { mutableStateOf<List<ReleaseInfo>?>(null) }
+    var showOpenSource by remember { mutableStateOf(false) }
 
     Scaffold(
         popupHost = { },
@@ -200,6 +202,27 @@ fun AboutScreen(
                     modifier = Modifier.fillMaxWidth()
                 )
             }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Preference(
+                    type = PreferenceType.Arrow,
+                    title = "开源代码",
+                    summary = "本项目使用的外部开源库",
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Download,
+                            contentDescription = "开源代码",
+                        )
+                    },
+                    onClick = { showOpenSource = true },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
         }
     }
 
@@ -214,6 +237,12 @@ fun AboutScreen(
         show = showChangelog,
         releases = changelogReleases,
         onDismiss = { showChangelog = false }
+    )
+
+    OpenSourceDrawer(
+        show = showOpenSource,
+        onDismiss = { showOpenSource = false },
+        context = context
     )
 }
 
