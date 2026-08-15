@@ -99,7 +99,8 @@ fun PasswordEntryDetailScreen(
     tokenViewModel: TokenViewModel,
     entryId: Long,
     onNavigateBack: () -> Unit,
-    onDeleted: () -> Unit = {}
+    onDeleted: () -> Unit = {},
+    isEmbedded: Boolean = false
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -226,115 +227,27 @@ fun PasswordEntryDetailScreen(
         }
     }
 
-    Scaffold(
-        popupHost = {},
-        topBar = {
-            TopAppBar(
-                title = selectedEntry?.title ?: "密码详情",
-                navigationIcon = {
-                    IconButton(
-                        onClick = onNavigateBack
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回"
-                        )
-                    }
-                },
-                actions = {
-                    if (selectedEntry != null) {
-                        if (isEditing) {
-                            IconButton(
-                                onClick = {
-                                    selectedEntry?.let { syncEditFields(it) }
-                                    isEditing = false
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Close,
-                                    contentDescription = "取消编辑"
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        val existingDraft = tokenViewModel.loadPasswordEntryDraft(entryId) ?: return@launch
-                                        val updated = tokenViewModel.updatePasswordEntry(
-                                            existingDraft.copy(
-                                                title = editTitle.trim(),
-                                                username = editUsername.trim(),
-                                                password = editPassword,
-                                                url = editUrl.trim(),
-                                                notes = editNotes,
-                                                tags = parseTagsText(editTagsText),
-                                                customFields = editCustomFields,
-                                                attachments = editAttachments,
-                                                expiryTime = editExpiryTime,
-                                                customIconUuid = editCustomIconUuid,
-                                                iconStandardId = editIconStandardId,
-                                                newCustomIconBytes = editNewCustomIconBytes
-                                            )
-                                        )
-                                        if (updated) {
-                                            selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
-                                            selectedEntry?.let { syncEditFields(it) }
-                                            isEditing = false
-                                        }
-                                    }
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Ok,
-                                    contentDescription = "保存"
-                                )
-                            }
-                        } else {
-                            IconButton(
-                                onClick = {
-                                    showDeleteDialog.value = true
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Delete,
-                                    contentDescription = "删除"
-                                )
-                            }
-                            IconButton(onClick = { isEditing = true }) {
-                                Icon(
-                                    imageVector = MiuixIcons.Edit,
-                                    contentDescription = "编辑"
-                                )
-                            }
-                        }
-                    }
-                },
-                defaultWindowInsetsPadding = true
-            )
-        }
-    ) { paddingValues ->
+    @Composable
+    fun PasswordDetailContent(modifier: Modifier = Modifier) {
         if (!detailLoaded) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                modifier = modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Text(text = "加载中...")
             }
-            return@Scaffold
+            return
         }
 
         val entry = selectedEntry
         if (entry == null) {
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues),
+                modifier = modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
             ) {
                 Text(text = "条目不存在")
             }
-            return@Scaffold
+            return
         }
 
         val usernameField = entry.keyValues.firstOrNull { it.fieldName.equals("UserName", ignoreCase = true) }
@@ -378,9 +291,7 @@ fun PasswordEntryDetailScreen(
         val notesValue = notesField?.rawValue?.ifBlank { "--" } ?: "--"
 
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues),
+            modifier = modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
@@ -1017,6 +928,103 @@ fun PasswordEntryDetailScreen(
                     }
                 }
             }
+        }
+    }
+
+    if (isEmbedded) {
+        // 嵌入模式：不显示 Scaffold，直接显示内容
+        PasswordDetailContent()
+    } else {
+        // 独立模式：显示完整 Scaffold
+        Scaffold(
+            popupHost = {},
+            topBar = {
+                TopAppBar(
+                    title = selectedEntry?.title ?: "密码详情",
+                    navigationIcon = {
+                        IconButton(
+                            onClick = onNavigateBack
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Back,
+                                contentDescription = "返回"
+                            )
+                        }
+                    },
+                    actions = {
+                        if (selectedEntry != null) {
+                            if (isEditing) {
+                                IconButton(
+                                    onClick = {
+                                        selectedEntry?.let { syncEditFields(it) }
+                                        isEditing = false
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Close,
+                                        contentDescription = "取消编辑"
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        coroutineScope.launch {
+                                            val existingDraft = tokenViewModel.loadPasswordEntryDraft(entryId) ?: return@launch
+                                            val updated = tokenViewModel.updatePasswordEntry(
+                                                existingDraft.copy(
+                                                    title = editTitle.trim(),
+                                                    username = editUsername.trim(),
+                                                    password = editPassword,
+                                                    url = editUrl.trim(),
+                                                    notes = editNotes,
+                                                    tags = parseTagsText(editTagsText),
+                                                    customFields = editCustomFields,
+                                                    attachments = editAttachments,
+                                                    expiryTime = editExpiryTime,
+                                                    customIconUuid = editCustomIconUuid,
+                                                    iconStandardId = editIconStandardId,
+                                                    newCustomIconBytes = editNewCustomIconBytes
+                                                )
+                                            )
+                                            if (updated) {
+                                                selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
+                                                selectedEntry?.let { syncEditFields(it) }
+                                                isEditing = false
+                                            }
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Ok,
+                                        contentDescription = "保存"
+                                    )
+                                }
+                            } else {
+                                IconButton(
+                                    onClick = {
+                                        showDeleteDialog.value = true
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Delete,
+                                        contentDescription = "删除"
+                                    )
+                                }
+                                IconButton(onClick = { isEditing = true }) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Edit,
+                                        contentDescription = "编辑"
+                                    )
+                                }
+                            }
+                        }
+                    },
+                    defaultWindowInsetsPadding = true
+                )
+            }
+        ) { paddingValues ->
+            PasswordDetailContent(
+                modifier = Modifier.padding(paddingValues)
+            )
         }
     }
 

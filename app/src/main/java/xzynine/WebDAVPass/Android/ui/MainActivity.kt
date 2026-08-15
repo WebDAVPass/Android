@@ -2,6 +2,7 @@ package xzynine.WebDAVPass.Android.ui
 
 import android.app.Activity
 import android.app.ActivityManager
+import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
@@ -11,22 +12,28 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
@@ -70,6 +77,8 @@ import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.Screen.SecurityCheckScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
+import xzynine.WebDAVPass.Android.ui.component.AppNavigationRail
+import xzynine.WebDAVPass.Android.ui.component.CategoryNavigationItem
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
@@ -187,6 +196,16 @@ fun MainScreen() {
     val currentLibrary by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
     val showScanBottomSheet = remember { mutableStateOf(false) }
 
+    // 横屏模式检测
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isWideScreen = configuration.screenWidthDp >= 600
+    val isLandscapeWideScreen = isLandscape && isWideScreen
+
+    // 横屏模式下的导航状态
+    var selectedNavIndex by remember { mutableIntStateOf(0) }
+    var selectedEntryId by remember { mutableStateOf<Long?>(null) }
+
     // 初始路由：存在已记录的库文件 → 锁定页（解锁目标为上次库）；否则欢迎页。
     // 用同步快照一次性决定，避免首帧 currentLibrary 流尚未预热导致初始路由闪烁或旋转后丢失导航栈。
     val startRoute = remember {
@@ -197,6 +216,30 @@ fun MainScreen() {
         }
     }
     val navigator = rememberNavigator(startRoute)
+
+    // 横屏模式下导航项选择处理
+    val handleNavigationItemSelected = remember(tokenViewModel, navigator) {
+        { item: CategoryNavigationItem ->
+            when (item) {
+                CategoryNavigationItem.ALL_PASSWORDS -> {
+                    selectedNavIndex = 0
+                    navigator.replaceAll(listOf(Route.PasswordList(PasswordListMode.ALL_PASSWORDS)))
+                }
+                CategoryNavigationItem.TOKENS -> {
+                    selectedNavIndex = 1
+                    navigator.replaceAll(listOf(Route.TokenList))
+                }
+                CategoryNavigationItem.SECURITY -> {
+                    selectedNavIndex = 2
+                    navigator.replaceAll(listOf(Route.SecurityCheck))
+                }
+                CategoryNavigationItem.RECENT_DELETED -> {
+                    selectedNavIndex = 3
+                    navigator.replaceAll(listOf(Route.PasswordList(PasswordListMode.RECENT_DELETED)))
+                }
+            }
+        }
+    }
 
     CompositionLocalProvider(LocalNavigator provides navigator) {
         // 全局触摸监听：任何触摸操作都重置无操作超时计时
@@ -216,26 +259,41 @@ fun MainScreen() {
                         showOnboarding = false
                     }
                 )
-            } else {
-            NavDisplay(
-                backStack = navigator.backStack,
-                entryDecorators = listOf(
-                    rememberSaveableStateHolderNavEntryDecorator()
-                ),
-                onBack = {
-                    if (showCloudBindingDialog.value) {
-                        showCloudBindingDialog.value = false
-                        return@NavDisplay
-                    }
-                    if (showScanBottomSheet.value) {
-                        showScanBottomSheet.value = false
-                        return@NavDisplay
-                    }
-                    if (navigator.backStackSize() > 1) {
-                        navigator.pop()
-                    }
-                },
-            entryProvider = entryProvider {
+            } else if (isLandscapeWideScreen && navigator.current() !is Route.Welcome && navigator.current() !is Route.Locked) {
+                // 横屏三栏布局（欢迎页/锁定页不使用三栏）
+                Row(modifier = Modifier.fillMaxSize()) {
+                    // 左侧导航栏
+                    AppNavigationRail(
+                        selectedIndex = selectedNavIndex,
+                        onItemSelected = handleNavigationItemSelected,
+                        expanded = configuration.screenWidthDp >= 1200
+                    )
+
+                    // 内容区域
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                    ) {
+                        NavDisplay(
+                            backStack = navigator.backStack,
+                            entryDecorators = listOf(
+                                rememberSaveableStateHolderNavEntryDecorator()
+                            ),
+                            onBack = {
+                                if (showCloudBindingDialog.value) {
+                                    showCloudBindingDialog.value = false
+                                    return@NavDisplay
+                                }
+                                if (showScanBottomSheet.value) {
+                                    showScanBottomSheet.value = false
+                                    return@NavDisplay
+                                }
+                                if (navigator.backStackSize() > 1) {
+                                    navigator.pop()
+                                }
+                            },
+                            entryProvider = entryProvider {
                 entry<Route.Welcome> {
                     WelcomeScreen(
                         tokenViewModel = tokenViewModel,
@@ -694,6 +752,463 @@ fun MainScreen() {
                 }
             }
         )
+                }
+            }
+            } else {
+                // 竖屏单栏布局
+                NavDisplay(
+                    backStack = navigator.backStack,
+                    entryDecorators = listOf(
+                        rememberSaveableStateHolderNavEntryDecorator()
+                    ),
+                    onBack = {
+                        if (showCloudBindingDialog.value) {
+                            showCloudBindingDialog.value = false
+                            return@NavDisplay
+                        }
+                        if (showScanBottomSheet.value) {
+                            showScanBottomSheet.value = false
+                            return@NavDisplay
+                        }
+                        if (navigator.backStackSize() > 1) {
+                            navigator.pop()
+                        }
+                    },
+                    entryProvider = entryProvider {
+                entry<Route.Welcome> {
+                    WelcomeScreen(
+                        tokenViewModel = tokenViewModel,
+                        onEnterLibrary = {
+                            navigator.replaceAll(listOf(Route.Home))
+                            showWelcome = false
+                        },
+                        onBackPressed = {
+                            if (navigator.backStackSize() > 1) {
+                                navigator.pop()
+                                true
+                            } else {
+                                false
+                            }
+                        }
+                    )
+                }
+                entry<Route.Locked> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        when {
+                            isLibraryUnlocked && lib != null -> {
+                                navigator.replaceAll(listOf(Route.Home))
+                                showWelcome = false
+                            }
+                            lib == null && tokenViewModel.libraryViewModel.getCurrentLibrarySync() == null -> {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                                showWelcome = true
+                            }
+                        }
+                    }
+
+                    LockedScreen(
+                        tokenViewModel = tokenViewModel,
+                        onUnlocked = {
+                            navigator.replaceAll(listOf(Route.Home))
+                            showWelcome = false
+                        },
+                        onSwitchLibrary = {
+                            navigator.replaceAll(listOf(Route.Welcome))
+                            showWelcome = true
+                        }
+                    )
+                }
+                entry<Route.Home> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Scaffold(
+                            popupHost = {},
+                            topBar = {
+                                TopAppBar(
+                                    title = currentLibrary?.displayName ?: "WebDAVPass",
+                                    navigationIcon = {},
+                                    actions = {
+                                        IconButton(onClick = {
+                                            navigator.push(Route.Settings)
+                                        }) {
+                                            Icon(
+                                                imageVector = MiuixIcons.Settings,
+                                                contentDescription = "设置"
+                                            )
+                                        }
+                                    }
+                                )
+                            },
+                            floatingActionButton = {
+                                FloatingActionButton(
+                                    onClick = {
+                                        showScanBottomSheet.value = true
+                                    }
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Scan,
+                                        contentDescription = "扫描二维码"
+                                    )
+                                }
+                            },
+                            floatingActionButtonPosition = FabPosition.Companion.End,
+                            content = { paddingValues ->
+                                Box(
+                                    modifier = Modifier.Companion
+                                        .fillMaxSize()
+                                        .padding(paddingValues)
+                                ) {
+                                    HomeScreen(
+                                        tokenViewModel = tokenViewModel,
+                                        onNavigateToPasswordList = { listMode ->
+                                            navigator.push(Route.PasswordList(listMode))
+                                        },
+                                        onNavigateToTokenList = {
+                                            navigator.push(Route.TokenList)
+                                        },
+                                        onNavigateToSecurityCheck = {
+                                            navigator.push(Route.SecurityCheck)
+                                        }
+                                    )
+                                }
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.SecurityCheck> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        SecurityCheckScreen(
+                            tokenViewModel = tokenViewModel,
+                            onNavigateBack = {
+                                navigator.pop()
+                            },
+                            onEntryClick = { entryId ->
+                                navigator.push(Route.PasswordEntryDetail(entryId))
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.Settings> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        SettingsScreen(
+                            viewModel = tokenViewModel,
+                            onCloudBindingClick = {
+                                if (currentLibrary == null) {
+                                    ToastUtils.showShortToast(context, "请先选择数据库文件")
+                                } else {
+                                    showCloudBindingDialog.value = true
+                                }
+                            },
+                            onSwitchLibraryClick = {
+                                tokenViewModel.libraryViewModel.clearCurrentLibrarySelection()
+                                navigator.replaceAll(listOf(Route.Welcome))
+                                showWelcome = true
+                            },
+                            onDatabaseSettingsClick = {
+                                navigator.push(Route.DatabaseSettings)
+                            },
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.GeneralSettings> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        FillerSettingsContent(
+                            viewModel = tokenViewModel,
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.SecuritySettings> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        SecuritySettingsContent(
+                            viewModel = tokenViewModel,
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.BackupSettings> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        BackupSettingsContent(
+                            viewModel = tokenViewModel,
+                            onCloudBindingClick = {
+                                if (currentLibrary == null) {
+                                    ToastUtils.showShortToast(context, "请先选择数据库文件")
+                                } else {
+                                    showCloudBindingDialog.value = true
+                                }
+                            },
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.DatabaseSettings> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        DatabaseSettingsScreen(
+                            viewModel = tokenViewModel,
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.About> {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AboutScreen(
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.TokenList> {
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        Scaffold(
+                            popupHost = {},
+                            topBar = {
+                                TopAppBar(
+                                    title = "令牌列表",
+                                    navigationIcon = {
+                                        IconButton(onClick = {
+                                            navigator.pop()
+                                        }) {
+                                            Icon(
+                                                imageVector = MiuixIcons.Back,
+                                                contentDescription = "返回"
+                                            )
+                                        }
+                                    },
+                                    actions = {}
+                                )
+                            },
+                            content = { paddingValues ->
+                                Box(
+                                    modifier = Modifier.Companion
+                                        .fillMaxSize()
+                                        .padding(paddingValues)
+                                ) {
+                                    TokenListScreen(
+                                        tokenViewModel = tokenViewModel,
+                                        onEntryClick = { entryId ->
+                                            navigator.push(Route.PasswordEntryDetail(entryId))
+                                        }
+                                    )
+                                }
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.PasswordList> { key ->
+                    val listMode = key.listMode
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(listMode) {
+                        tokenViewModel.passwordViewModel.setPasswordListMode(listMode, refreshNow = true)
+                        tokenViewModel.passwordViewModel.refreshRecentDeletedCount()
+                    }
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
+                            showWelcome = true
+                        }
+                    }
+
+                    DisposableEffect(listMode) {
+                        onDispose {
+                            tokenViewModel.passwordViewModel.resetPasswordGroupStackOnly()
+                            if (listMode == PasswordListMode.RECENT_DELETED) {
+                                tokenViewModel.passwordViewModel.setPasswordListMode(PasswordListMode.ALL_PASSWORDS, refreshNow = true)
+                            }
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        PasswordListScreen(
+                            tokenViewModel = tokenViewModel,
+                            title = if (listMode == PasswordListMode.RECENT_DELETED) "最近删除" else "全部密码",
+                            emptyStateText = if (listMode == PasswordListMode.RECENT_DELETED) "暂无最近删除条目" else "暂无条目",
+                            emptySearchStateText = "无匹配条目",
+                            enableGroupNavigation = listMode == PasswordListMode.ALL_PASSWORDS,
+                            enableRecycleBinActions = listMode == PasswordListMode.RECENT_DELETED,
+                            onEntryClick = { entryId ->
+                                navigator.push(Route.PasswordEntryDetail(entryId))
+                            },
+                            onNavigateBack = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+                entry<Route.PasswordEntryDetail> { key ->
+                    val entryId = key.entryId
+                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+                    LaunchedEffect(isLibraryUnlocked, lib) {
+                        if (!isLibraryUnlocked || lib == null) {
+                            if (lib != null) {
+                                navigator.replaceAll(listOf(Route.Locked))
+                            } else {
+                                navigator.replaceAll(listOf(Route.Welcome))
+                            }
+                            showWelcome = true
+                        }
+                    }
+
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        PasswordEntryDetailScreen(
+                            tokenViewModel = tokenViewModel,
+                            entryId = entryId,
+                            onNavigateBack = {
+                                navigator.pop()
+                            },
+                            onDeleted = {
+                                navigator.pop()
+                            }
+                        )
+                        MiuixPopupHost()
+                    }
+                }
+            }
+        )
             }
         }
     }
@@ -727,7 +1242,7 @@ fun MainScreen() {
             },
             content = {
                 Box(
-                    modifier = Modifier.Companion
+                    modifier = Modifier
                         .fillMaxWidth()
                         .height(500.dp)
                 ) {
