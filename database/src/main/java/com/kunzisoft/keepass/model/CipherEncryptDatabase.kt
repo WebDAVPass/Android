@@ -71,9 +71,7 @@ class CipherEncryptDatabase(): Parcelable {
 
         other as CipherEncryptDatabase
 
-        if (databaseUri != other.databaseUri) return false
-
-        return true
+        return databaseUri == other.databaseUri
     }
 
     override fun hashCode(): Int {

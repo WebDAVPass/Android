@@ -291,7 +291,7 @@ object PermissionHelper {
      * @return 详细的 OS 版本字符串，例如 "OS3.0.300.4.WNACNXM"。
      */
     fun getDetailedOsVersion(): String? {
-        val fingerprint = android.os.Build.FINGERPRINT
+        val fingerprint = Build.FINGERPRINT
         return try {
             // 直接搜索包含 "OS" 开头的版本部分
             // 例如：OS3.0.300.4.WNACNXM
@@ -377,8 +377,8 @@ object PermissionHelper {
             try {
                 val application = context.applicationContext as? android.app.Application
                 application?.registerActivityLifecycleCallbacks(object : android.app.Application.ActivityLifecycleCallbacks {
-                    override fun onActivityCreated(activity: android.app.Activity, savedInstanceState: android.os.Bundle?) {}
-                    override fun onActivityStarted(activity: android.app.Activity) {
+                    override fun onActivityCreated(activity: Activity, savedInstanceState: android.os.Bundle?) {}
+                    override fun onActivityStarted(activity: Activity) {
                         if (activityStartCount == 0) {
                             // 从后台进入前台
                             isForeground = true
@@ -387,9 +387,9 @@ object PermissionHelper {
                         activityStartCount++
                     }
                     
-                    override fun onActivityResumed(activity: android.app.Activity) {}
-                    override fun onActivityPaused(activity: android.app.Activity) {}
-                    override fun onActivityStopped(activity: android.app.Activity) {
+                    override fun onActivityResumed(activity: Activity) {}
+                    override fun onActivityPaused(activity: Activity) {}
+                    override fun onActivityStopped(activity: Activity) {
                         activityStartCount--
                         if (activityStartCount == 0) {
                             // 进入后台
@@ -398,8 +398,8 @@ object PermissionHelper {
                         }
                     }
                     
-                    override fun onActivitySaveInstanceState(activity: android.app.Activity, outState: android.os.Bundle) {}
-                    override fun onActivityDestroyed(activity: android.app.Activity) {}
+                    override fun onActivitySaveInstanceState(activity: Activity, outState: android.os.Bundle) {}
+                    override fun onActivityDestroyed(activity: Activity) {}
                 })
             } catch (e: Exception) {
                 Logger.e("AppForegroundDetector", "初始化失败", e)

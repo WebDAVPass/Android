@@ -325,7 +325,7 @@ private fun ChangelogDialog(
                     }
                 }
                 if (index != list.lastIndex) {
-                    androidx.compose.material3.HorizontalDivider()
+                    HorizontalDivider()
                 }
             }
         }

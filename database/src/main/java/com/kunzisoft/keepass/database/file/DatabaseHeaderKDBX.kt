@@ -80,7 +80,7 @@ class DatabaseHeaderKDBX(private val databaseV4: DatabaseKDBX) : DatabaseHeader(
         const val Protected: Byte = 1
     }
 
-    inner class HeaderAndHash(var header: ByteArray, var hash: ByteArray)
+    class HeaderAndHash(var header: ByteArray, var hash: ByteArray)
 
     init {
         this.version = databaseV4.getMinKdbxVersion()

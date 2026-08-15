@@ -147,14 +147,14 @@ class AutofillPickerActivity : AppCompatActivity() {
                         AutofillManager.EXTRA_AUTHENTICATION_RESULT,
                         response
                     )
-                    setResult(Activity.RESULT_OK, replyIntent)
+                    setResult(RESULT_OK, replyIntent)
                 } else {
                     Log.w(TAG, "Failed to build fill response")
-                    setResult(Activity.RESULT_CANCELED)
+                    setResult(RESULT_CANCELED)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading entries", e)
-                setResult(Activity.RESULT_CANCELED)
+                setResult(RESULT_CANCELED)
             }
             finish()
         }
@@ -218,7 +218,7 @@ class AutofillPickerActivity : AppCompatActivity() {
     }
 
     private fun cancelAndFinish() {
-        setResult(Activity.RESULT_CANCELED)
+        setResult(RESULT_CANCELED)
         finish()
     }
 }

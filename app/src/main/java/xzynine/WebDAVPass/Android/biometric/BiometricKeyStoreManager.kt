@@ -172,11 +172,6 @@ class BiometricKeyStoreManager(private val context: Context) {
                 onFailure(errorCode, errString)
             }
 
-            override fun onAuthenticationFailed() {
-                super.onAuthenticationFailed()
-                // Biometric recognized but rejected (e.g. wrong fingerprint)
-                // Do not call onFailure here, let user retry (BiometricPrompt handles retries)
-            }
         }
 
         val biometricPrompt = BiometricPrompt(activity, executor, callback)

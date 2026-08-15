@@ -214,7 +214,7 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         }
     }
 
-    private inner class EntryOperationHandler : NodeOperationHandler<EntryKDBX>() {
+    private class EntryOperationHandler : NodeOperationHandler<EntryKDBX>() {
         var passwordQualityEstimationDisabled = false
         override fun operate(node: EntryKDBX): Boolean {
             if (!node.qualityCheck) {
@@ -224,7 +224,7 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         }
     }
 
-    private inner class GroupOperationHandler : NodeOperationHandler<GroupKDBX>() {
+    private class GroupOperationHandler : NodeOperationHandler<GroupKDBX>() {
         var containsTags = false
         override fun operate(node: GroupKDBX): Boolean {
             if (node.tags.isNotEmpty())

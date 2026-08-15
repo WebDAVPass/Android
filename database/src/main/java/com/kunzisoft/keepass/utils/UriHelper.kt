@@ -128,18 +128,12 @@ fun ContentResolver.getUriOutputStream(fileUri: Uri?): OutputStream? {
 
 fun Uri.withFileScheme(): Boolean {
     val scheme = this.scheme
-    if (scheme.isNullOrEmpty() || scheme.lowercase(Locale.ENGLISH) == "file") {
-        return true
-    }
-    return false
+    return scheme.isNullOrEmpty() || scheme.lowercase(Locale.ENGLISH) == "file"
 }
 
 fun Uri.withContentScheme(): Boolean {
     val scheme = this.scheme
-    if (scheme != null && scheme.lowercase(Locale.ENGLISH) == "content") {
-        return true
-    }
-    return false
+    return scheme != null && scheme.lowercase(Locale.ENGLISH) == "content"
 }
 fun PackageManager.getPackageInfoCompat(packageName: String, flags: Int = 0): PackageInfo =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

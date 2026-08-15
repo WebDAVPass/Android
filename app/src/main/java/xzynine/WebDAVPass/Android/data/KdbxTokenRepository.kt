@@ -71,8 +71,7 @@ class KdbxTokenRepository(context: Context) {
     }
 
     fun initializeDatabase(localPath: String, masterPassword: String, keyFileData: ByteArray? = null) {
-        val location = resolveLocation(localPath)
-        when (location) {
+        when (val location = resolveLocation(localPath)) {
             is DatabaseLocation.FileLocation -> {
                 val file = location.file
                 file.parentFile?.mkdirs()
@@ -1936,7 +1935,7 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 按节点 UUID 查找分组（含自身），用于恢复条目到原分组。
      */
-    private fun findGroupByUuid(group: Group?, uuid: java.util.UUID): Group? {
+    private fun findGroupByUuid(group: Group?, uuid: UUID): Group? {
         if (group == null) {
             return null
         }
@@ -2018,8 +2017,7 @@ class KdbxTokenRepository(context: Context) {
     private fun toStableGroupId(group: Group): Long {
         val uuid = (group.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
             ?: UUID(0L, 0L)
-        val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits
-        val absolute = when (mixed) {
+        val absolute = when (val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits) {
             Long.MIN_VALUE -> 0L
             else -> abs(mixed)
         }
@@ -2314,8 +2312,7 @@ class KdbxTokenRepository(context: Context) {
     private fun toStableId(entry: Entry): Long {
         val uuid = (entry.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
             ?: UUID(0L, 0L)
-        val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits
-        return when (mixed) {
+        return when (val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits) {
             Long.MIN_VALUE -> 0L
             else -> abs(mixed)
         }

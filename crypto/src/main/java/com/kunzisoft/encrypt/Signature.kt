@@ -70,8 +70,7 @@ object Signature {
 
     fun sign(privateKeyPem: String, message: ByteArray): ByteArray {
         val privateKey = createPrivateKey(privateKeyPem)
-        val algorithmKey = privateKey.algorithm
-        val algorithmSignature = when (algorithmKey) {
+        val algorithmSignature = when (val algorithmKey = privateKey.algorithm) {
             "EC" -> "SHA256withECDSA"
             "ECDSA" -> "SHA256withECDSA"
             "RSA" -> "SHA256withRSA"
@@ -350,7 +349,7 @@ object Signature {
     /**
      * Combines a set of signatures into a single string for database storage.
      */
-    fun Set<String>.singleLineFingerprints(): String? {
+    fun Set<String>.singleLineFingerprints(): String {
         return this.joinToString(SIGNATURE_DELIMITER)
     }
 

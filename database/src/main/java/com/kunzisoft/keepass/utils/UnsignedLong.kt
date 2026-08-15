@@ -36,9 +36,7 @@ class UnsignedLong(value: Long) {
 
         other as UnsignedLong
 
-        if (unsignedValue != other.unsignedValue) return false
-
-        return true
+        return unsignedValue == other.unsignedValue
     }
 
     override fun hashCode(): Int {

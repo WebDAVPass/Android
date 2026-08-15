@@ -47,7 +47,7 @@ fun buildBrandIconBytes(
     }
     val bitmap = Bitmap.createBitmap(BRAND_ICON_SIZE_PX, BRAND_ICON_SIZE_PX, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
-    drawable.setBounds(bounds)
+    drawable.bounds = bounds
     drawable.draw(canvas)
     return ByteArrayOutputStream().use { out ->
         bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
