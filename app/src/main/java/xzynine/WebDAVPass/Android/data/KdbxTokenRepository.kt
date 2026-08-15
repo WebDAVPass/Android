@@ -163,7 +163,8 @@ class KdbxTokenRepository(context: Context) {
     }
 
     fun loadTokens(localPath: String, masterPassword: String): List<OtpToken> {
-        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            migrateLegacyTokenConvention(db)
             val entries = collectEntriesOutsideRecycleBin(db, db.rootGroup)
             entries.mapNotNull { entry -> toToken(entry) }
                 .sortedBy { it.ordinal }
@@ -177,7 +178,8 @@ class KdbxTokenRepository(context: Context) {
      * 若 [DatabaseManager] 已有缓存实例，则跳过解密直接读取，性能更优。
      */
     fun loadTokensFlow(localPath: String, masterPassword: String): Flow<OtpToken> = channelFlow {
-        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+        withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            migrateLegacyTokenConvention(db)
             collectEntriesOutsideRecycleBin(db, db.rootGroup)
                 .mapNotNull { entry -> toToken(entry) }
                 .sortedBy { it.ordinal }
@@ -1191,10 +1193,12 @@ class KdbxTokenRepository(context: Context) {
             }
 
             otpElement.counter = otpElement.counter + 1L
+            // 按当前条目约定的字段顺序组装 OTP URI：title=issuer、username=label（旧版反存数据按反向传入）
+            val oldConvention = isOldTokenConvention(entry, otpElement)
             val otpField = OtpEntryFields.buildOtpField(
                 otpElement,
-                entry.username,
-                entry.title
+                if (oldConvention) entry.username else entry.title,
+                if (oldConvention) entry.title else entry.username
             )
 
             val entryInfo = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false).apply {
@@ -1242,6 +1246,42 @@ class KdbxTokenRepository(context: Context) {
         return source.firstOrNull { toStableId(it) == entryId }
     }
 
+    /**
+     * 判断令牌条目是否为旧版反存约定（title=label、username=issuer）。
+     *
+     * 新约定为 title=issuer、username=label，与 OTP 字段内的 issuer/name 对照：
+     * 若标题与 OTP name 相同、账号与 OTP issuer 相同，即判定为旧版反存。
+     * 两字段均非空时才认定，避免 label 恰与 issuer 相同导致误判。
+     */
+    private fun isOldTokenConvention(entry: Entry, otpElement: OtpElement): Boolean {
+        return entry.title == otpElement.name &&
+            entry.username == otpElement.issuer &&
+            entry.title.isNotBlank() &&
+            entry.username.isNotBlank()
+    }
+
+    /**
+     * 迁移旧版反存约定的令牌条目（title=label、username=issuer → 互相对换）。
+     *
+     * 仅处理含 OTP 字段且符合旧约定的条目：直接交换标准字段 title/username，
+     * 不触碰 OTP 自定义字段与其余字段。返回迁移条目数，供调用方决定是否落盘
+     * （withDatabase 的 saveAfter 会在 [Database.dataModifiedSinceLastLoading] 为真时保存）。
+     */
+    private fun migrateLegacyTokenConvention(db: Database): Int {
+        var migrated = 0
+        collectEntriesOutsideRecycleBin(db, db.rootGroup).forEach { entry ->
+            val otpElement = entry.getOtpElement() ?: return@forEach
+            if (isOldTokenConvention(entry, otpElement)) {
+                val oldTitle = entry.title
+                entry.title = entry.username
+                entry.username = oldTitle
+                db.updateEntry(entry)
+                migrated++
+            }
+        }
+        return migrated
+    }
+
     private fun toToken(entry: Entry): OtpToken? {
         val otpElement = entry.getOtpElement() ?: return null
         val secret = otpElement.getBase32Secret().takeIf { it.isNotBlank() } ?: return null
@@ -1262,10 +1302,15 @@ class KdbxTokenRepository(context: Context) {
             period
         )
 
-        val label = entry.title.takeIf { it.isNotBlank() }
+        // 约定：title = 服务商（issuer），username = 账号（label），与 EntryInfo.setOtp 一致。
+        // 旧版本曾把两者反存（title=label、username=issuer），按 OTP 字段中的 issuer/name 判定迁移。
+        val oldConvention = isOldTokenConvention(entry, otpElement)
+        val label = if (oldConvention) entry.title else entry.username.takeIf { it.isNotBlank() }
+        val issuer = if (oldConvention) entry.username else entry.title.takeIf { it.isNotBlank() }
+        val finalLabel = label
             ?: otpElement.name.takeIf { it.isNotBlank() }
             ?: "Token"
-        val issuer = entry.username.takeIf { it.isNotBlank() }
+        val finalIssuer = issuer
             ?: otpElement.issuer.takeIf { it.isNotBlank() }
         val description = entry.notes.takeIf { it.isNotBlank() }
 
@@ -1274,8 +1319,8 @@ class KdbxTokenRepository(context: Context) {
         return OtpToken(
             id = toStableId(entry),
             ordinal = ordinal,
-            issuer = issuer,
-            label = label,
+            issuer = finalIssuer,
+            label = finalLabel,
             description = description,
             imagePath = null,
             tokenType = tokenType,
@@ -1319,8 +1364,8 @@ class KdbxTokenRepository(context: Context) {
             }
 
         val entryInfo = EntryInfo().apply {
-            title = token.label
-            username = token.issuer ?: ""
+            title = token.issuer?.takeIf { it.isNotBlank() } ?: token.label
+            username = token.label
             password = ""
             notes = token.description ?: ""
             customFields = filteredFields
@@ -1409,6 +1454,8 @@ class KdbxTokenRepository(context: Context) {
         includeFieldDetails: Boolean
     ): List<PasswordEntry> {
         val result = mutableListOf<PasswordEntry>()
+        // 自定义图标按 UUID 记忆化：共享同一图标的条目只解压复制一次
+        val customIconBytesCache = HashMap<String, ByteArray?>()
 
         groups.forEach { group ->
             val groupTitle = group.title.takeIf { it.isNotBlank() } ?: "未命名文件夹"
@@ -1457,7 +1504,7 @@ class KdbxTokenRepository(context: Context) {
                     title = title,
                     account = account,
                     standardIconId = entry.icon.standard.id,
-                    customIconBytes = readCustomIconBytes(database, entry),
+                    customIconBytes = readCustomIconBytes(database, entry, customIconBytesCache),
                     keyValues = values,
                     attachments = attachments,
                     expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
@@ -1472,10 +1519,16 @@ class KdbxTokenRepository(context: Context) {
             )
         }
 
+        // 排序键缓存：避免比较器内每次比较都重复 lowercase()，O(n log n) → 每项仅计算一次
+        val sortKeyCache = HashMap<PasswordEntry, Pair<String, String>>()
+        val keysOf: (PasswordEntry) -> Pair<String, String> = { entry ->
+            sortKeyCache.getOrPut(entry) { entry.title.lowercase() to entry.account.lowercase() }
+        }
+
         return result.sortedWith(
             compareBy<PasswordEntry> { if (it.isFolderGroup) 0 else 1 }
-                .thenBy { it.title.lowercase() }
-                .thenBy { it.account.lowercase() }
+                .thenBy { keysOf(it).first }
+                .thenBy { keysOf(it).second }
         )
     }
 
@@ -1958,19 +2011,29 @@ class KdbxTokenRepository(context: Context) {
      * 读取条目自定义图标二进制数据。
      *
      * 优先从条目的 custom icon UUID 读取数据库中的二进制，读取失败时返回 null。
+     * 按图标 UUID 记忆化：同一图标被多条目共享时只解压复制一次。
      */
-    private fun readCustomIconBytes(database: Database, entry: Entry): ByteArray? {
+    private fun readCustomIconBytes(
+        database: Database,
+        entry: Entry,
+        cache: MutableMap<String, ByteArray?>
+    ): ByteArray? {
         val iconUuid = entry.icon.custom.uuid
         if (iconUuid == DatabaseVersioned.UUID_ZERO) {
             return null
         }
+        val uuidKey = iconUuid.toString()
+        if (cache.containsKey(uuidKey)) {
+            return cache[uuidKey]
+        }
 
-        return runCatching {
-            val binary = database.getBinaryForCustomIcon(iconUuid) ?: return null
-            binary.getUnGzipInputDataStream(database.binaryCache).use { input ->
-                input.readBytes()
-            }
+        val bytes = runCatching {
+            database.getBinaryForCustomIcon(iconUuid)
+                ?.getUnGzipInputDataStream(database.binaryCache)
+                ?.use { input -> input.readBytes() }
         }.getOrNull()
+        cache[uuidKey] = bytes
+        return bytes
     }
 
     /**

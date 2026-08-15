@@ -1,5 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.component
 
+import android.content.Context
 import android.graphics.BitmapFactory
 import android.widget.ImageView
 import androidx.compose.animation.core.animateFloatAsState
@@ -45,6 +46,67 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.TokenCode
 
+/**
+ * 进程级 IconPack 单例。
+ *
+ * IconPack 构造会循环调用 69+2 次 resources.getIdentifier()，代价高昂；
+ * 原实现每行 remember 新建一次，全平铺大库时主线程开销显著。
+ */
+private object IconPackHolder {
+    @Volatile
+    private var instance: IconPack? = null
+
+    fun get(context: Context): IconPack {
+        instance?.let { return it }
+        return synchronized(this) {
+            instance ?: IconPack(
+                context.applicationContext.packageName,
+                context.applicationContext.resources,
+                com.kunzisoft.keepass.icon.material.R.string.resource_id
+            ).also { instance = it }
+        }
+    }
+}
+
+/**
+ * 图标资源 ID 的全局 LRU 缓存（容量 256，访问序淘汰）。
+ *
+ * 键为 (标准图标ID, 主文案, 副文案)，覆盖 KeePass 标准图标与 Token 品牌图标两条路径，
+ * 避免滚动回看时每行重复构建 IconPack 与线性扫描 ~270 个 TokenImage 枚举。
+ */
+private const val ICON_RES_CACHE_MAX_SIZE = 256
+
+private data class IconResCacheKey(
+    val standardIconId: Int?,
+    val primary: String?,
+    val secondary: String?
+)
+
+private val iconResCache = object : LinkedHashMap<IconResCacheKey, Int?>(16, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<IconResCacheKey, Int?>) =
+        size > ICON_RES_CACHE_MAX_SIZE
+}
+
+/**
+ * 解析条目图标资源 ID：优先 KeePass 标准图标，其次 Token 品牌图标。
+ */
+private fun computeEntryIconRes(
+    context: Context,
+    standardIconId: Int?,
+    primary: String?,
+    secondary: String?
+): Int? {
+    if (standardIconId != null) {
+        val keepassRes = runCatching {
+            IconPackHolder.get(context).iconToResId(standardIconId)
+        }.getOrNull()?.takeIf { it != com.kunzisoft.keepass.icon.R.drawable.ic_blank_32dp }
+        if (keepassRes != null) {
+            return keepassRes
+        }
+    }
+    return TokenImage.values().firstOrNull { it.matchToken(primary, secondary) }?.resource
+}
+
 @Composable
 fun EntryIcon(
     customIconBytes: ByteArray? = null,
@@ -82,38 +144,19 @@ fun EntryIcon(
     }
 
     /**
-     * 2) 渲染 KeePass 标准图标（数据库标准图标ID）。
+     * 2) 渲染 KeePass 标准图标（数据库标准图标ID）或 Token 品牌图标。
+     * 结果按 (standardIconId, primary, secondary) 全局 LRU 缓存；
+     * IconPack 为进程级单例，避免每行重复 71 次 getIdentifier。
      */
-    val keepassIconRes: Int? = remember(standardIconId) {
-        val iconId = standardIconId ?: return@remember null
-        runCatching {
-            val iconPack = IconPack(
-                context.packageName,
-                context.resources,
-                com.kunzisoft.keepass.icon.material.R.string.resource_id
-            )
-            iconPack.iconToResId(iconId)
-        }.getOrNull()?.takeIf { it != com.kunzisoft.keepass.icon.R.drawable.ic_blank_32dp }
+    val iconRes: Int? = remember(standardIconId, primary, secondary) {
+        iconResCache.getOrPut(IconResCacheKey(standardIconId, primary, secondary)) {
+            computeEntryIconRes(context, standardIconId, primary, secondary)
+        }
     }
 
-    if (keepassIconRes != null) {
+    if (iconRes != null) {
         Image(
-            painter = painterResource(id = keepassIconRes),
-            contentDescription = contentDescription,
-            modifier = modifier
-        )
-        return
-    }
-
-    val matchedRes: Int? = remember(primary, secondary) {
-        TokenImage.values().firstOrNull {
-            it.matchToken(primary, secondary)
-        }?.resource
-    }
-
-    if (matchedRes != null) {
-        Image(
-            painter = painterResource(id = matchedRes),
+            painter = painterResource(id = iconRes),
             contentDescription = contentDescription,
             modifier = modifier
         )

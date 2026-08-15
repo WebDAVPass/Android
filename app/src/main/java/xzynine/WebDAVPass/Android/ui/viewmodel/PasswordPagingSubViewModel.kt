@@ -377,6 +377,8 @@ internal class PasswordPagingSubViewModel(
         ascending: Boolean = true,
         hideExpired: Boolean = false
     ): List<IndexedSection> {
+        // 预计算排序键缓存：lowercase() 若在比较器内每次比较都重算，全量排序退化为 O(n log n) 字符串小写
+        val sortKeyCache = HashMap<PasswordEntry, String>()
         val values = source
             .asSequence()
             .filter { item ->
@@ -385,7 +387,7 @@ internal class PasswordPagingSubViewModel(
                 }
                 keyword.isBlank() || matchesKeyword(item, keyword, caseSensitive)
             }
-            .sortedWith(passwordEntryComparator(sortMode, ascending))
+            .sortedWith(passwordEntryComparator(sortMode, ascending, sortKeyCache))
             .toList()
 
         // 时间排序时跳过字母分组：所有非文件夹条目归入单一分组，保持全局时间序。
@@ -425,12 +427,18 @@ internal class PasswordPagingSubViewModel(
 
     /**
      * 构造排序比较器：文件夹始终置前，再按选定键排序。
+     *
+     * @param sortKeyCache 排序键缓存，避免每次比较都重复 lowercase()
      */
-    private fun passwordEntryComparator(sortMode: PasswordSortMode, ascending: Boolean): Comparator<PasswordEntry> {
+    private fun passwordEntryComparator(
+        sortMode: PasswordSortMode,
+        ascending: Boolean,
+        sortKeyCache: HashMap<PasswordEntry, String>
+    ): Comparator<PasswordEntry> {
         val byKey: Comparator<PasswordEntry> = when (sortMode) {
-            PasswordSortMode.DEFAULT -> compareBy { it.title.ifBlank { it.account }.lowercase() }
-            PasswordSortMode.TITLE -> compareBy { it.title.lowercase() }
-            PasswordSortMode.ACCOUNT -> compareBy { it.account.lowercase() }
+            PasswordSortMode.DEFAULT -> compareBy { sortKeyCache.getOrPut(it) { it.title.ifBlank { it.account }.lowercase() } }
+            PasswordSortMode.TITLE -> compareBy { sortKeyCache.getOrPut(it) { it.title.lowercase() } }
+            PasswordSortMode.ACCOUNT -> compareBy { sortKeyCache.getOrPut(it) { it.account.lowercase() } }
             PasswordSortMode.MODIFIED_TIME -> compareBy { it.modifiedTime }
             PasswordSortMode.CREATED_TIME -> compareBy { it.creationTime }
         }
@@ -500,6 +508,13 @@ internal class PasswordPagingSubViewModel(
 }
 
 internal fun PasswordEntry.toPasswordIndexKey(): String {
+    cachedIndexKey?.let { return it }
+    val key = computePasswordIndexKey()
+    cachedIndexKey = key
+    return key
+}
+
+private fun PasswordEntry.computePasswordIndexKey(): String {
     if (isFolderGroup) {
         return PasswordFolderIndexLabel
     }
