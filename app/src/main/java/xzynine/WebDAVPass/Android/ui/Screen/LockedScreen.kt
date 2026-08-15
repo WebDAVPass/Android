@@ -36,7 +36,7 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.R
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import java.io.File
 
 /**

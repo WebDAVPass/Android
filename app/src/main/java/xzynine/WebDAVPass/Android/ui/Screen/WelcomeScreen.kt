@@ -58,7 +58,7 @@ import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
 import xzynine.WebDAVPass.Android.ui.Dialog.CreateMasterPasswordDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CreateMode
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 import xzynine.WebDAVPass.Android.util.resolveDisplayName

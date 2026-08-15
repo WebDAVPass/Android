@@ -24,7 +24,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InputField
@@ -46,7 +45,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Flip
 import xzynine.WebDAVPass.Android.data.PasswordEntry
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordSortMode
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar

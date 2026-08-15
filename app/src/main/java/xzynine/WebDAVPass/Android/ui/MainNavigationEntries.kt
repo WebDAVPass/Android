@@ -28,7 +28,7 @@ import xzynine.WebDAVPass.Android.ui.Screen.SecurityCheckScreen
 import xzynine.WebDAVPass.Android.ui.Screen.SecuritySettingsContent
 import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
 import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.navigation.Navigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
 

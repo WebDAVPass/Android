@@ -33,11 +33,10 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold

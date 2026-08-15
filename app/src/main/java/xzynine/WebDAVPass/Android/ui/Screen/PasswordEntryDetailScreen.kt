@@ -37,7 +37,7 @@ import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryHistoryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 @Composable
 fun PasswordEntryDetailScreen(

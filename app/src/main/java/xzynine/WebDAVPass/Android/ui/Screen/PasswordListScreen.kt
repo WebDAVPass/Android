@@ -17,10 +17,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.flow.first
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.Icon
@@ -44,7 +42,7 @@ import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.DuplicateScanDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryMergeDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordSortMode
 import xzynine.WebDAVPass.Android.ui.ViewModel.toPasswordIndexKey

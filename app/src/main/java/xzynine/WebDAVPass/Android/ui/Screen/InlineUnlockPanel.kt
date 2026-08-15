@@ -57,7 +57,7 @@ import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.resolveDisplayName
 import java.io.File
 

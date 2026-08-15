@@ -44,10 +44,9 @@ import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.PasswordEntry
-import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import com.kunzisoft.keepass.model.PasskeyEntryFields
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
 import xzynine.WebDAVPass.Android.util.LocalTimeFormatter

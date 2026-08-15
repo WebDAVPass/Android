@@ -14,7 +14,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
 import top.yukonga.miuix.kmp.basic.Icon

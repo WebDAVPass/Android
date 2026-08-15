@@ -18,7 +18,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 /**
  * 横屏三栏布局的中间（密码列表）与右侧（密码详情）两栏。

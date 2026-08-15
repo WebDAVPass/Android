@@ -36,7 +36,7 @@ import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.LibraryContext
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import github.xzynine.webdav.Authorization
 import github.xzynine.webdav.WebDav
 import xzynine.WebDAVPass.Android.ui.component.WebDavBrowseMode

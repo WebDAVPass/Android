@@ -30,7 +30,7 @@ import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
 import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.navigation.Navigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
 
