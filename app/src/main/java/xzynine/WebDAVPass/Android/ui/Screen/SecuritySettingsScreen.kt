@@ -413,7 +413,7 @@ fun SecuritySettingsContent(
                             !manualUnlockWindowSwitchChecked -> "已关闭强制主密码校验"
                             !autoUnlockSwitchChecked && !currentLib.autoUnlockEnabled -> "启用自动解锁后生效"
                             manualUnlockRemaining == null -> "强制主密码校验不可用"
-                            manualUnlockRemaining <= 0L -> "已到期：凭据解锁一次后将清理自动解锁"
+                            manualUnlockRemaining <= 0L -> "已超过48小时：64小时内仍可凭据解锁一次，之后需手动输入主密码"
                             else -> "剩余：${viewModel.autoUnlockViewModel.formatRemainingHoursMinutes(manualUnlockRemaining)}"
                         },
                         checked = manualUnlockWindowSwitchChecked,

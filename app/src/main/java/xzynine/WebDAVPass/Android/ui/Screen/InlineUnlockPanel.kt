@@ -59,6 +59,7 @@ import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.resolveDisplayName
+import java.io.File
 
 /** 密钥文件大小上限（1 MiB），与 CreateMasterPasswordDialog 保持一致。 */
 private const val MAX_KEY_FILE_BYTES = 1024 * 1024
@@ -430,6 +431,11 @@ private fun InlineUnlockPanelContent(
         }
 
         // 分支2：输入框无内容 -> 原始凭据/生物解锁，不重置48小时计时。
+        // 超过 64 小时硬性截止：凭据解锁直接拒绝，只能手动输入主密码。
+        if (tokenViewModel.autoUnlockViewModel.isCredentialUnlockExpired(targetLibrary)) {
+            ToastUtils.showShortToast(context, "已超过64小时，自动解锁不可用，请手动输入主密码")
+            return
+        }
         if (!tokenViewModel.autoUnlockViewModel.isAutoUnlockAvailable(targetLibrary)) {
             ToastUtils.showShortToast(context, "自动解锁不可用，请先输入主密码")
             return
@@ -454,6 +460,8 @@ private fun InlineUnlockPanelContent(
             activity = context,
             cipher = cipher,
             authMode = authMode,
+            libraryFileName = targetLibrary.localPath
+                ?.let { path -> runCatching { File(path).name }.getOrNull() },
             onSuccess = { authCipher ->
                 if (authCipher != null) {
                     coroutineScope.launch {
@@ -477,8 +485,11 @@ private fun InlineUnlockPanelContent(
             onFailure = { errorCode, _ ->
                 var fallbackLaunched = false
                 if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
+                    val fileName = targetLibrary.localPath
+                        ?.let { path -> runCatching { File(path).name }.getOrNull() }
+                        .orEmpty()
                     val intent = tokenViewModel.autoUnlockViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
-                        title = "验证身份",
+                        title = if (fileName.isBlank()) "验证身份" else "验证身份并自动解锁$fileName",
                         subtitle = "请使用 PIN/图案/密码解锁"
                     )
                     if (intent != null) {
@@ -516,10 +527,26 @@ private fun InlineUnlockPanelContent(
         }
     }
 
-    // 面板出现时聚焦主密码输入框
+    // 面板出现时聚焦主密码输入框。
+    // 自动解锁可用且 48 小时窗口未过期时改为主动唤起识别接口（见下方自动唤起 Effect），不弹键盘；
+    // 其余情况（未开启/已失效/窗口已过期）保持现状聚焦键盘。
     LaunchedEffect(inlineUnlockFocusNonce) {
-        inlineUnlockFocusRequester.requestFocus()
-        keyboardController?.show()
+        val shouldAutoPrompt = tokenViewModel.autoUnlockViewModel.isAutoUnlockAvailable(library) &&
+            !tokenViewModel.autoUnlockViewModel.isManualUnlockWindowExpired(library)
+        if (!shouldAutoPrompt) {
+            inlineUnlockFocusRequester.requestFocus()
+            keyboardController?.show()
+        }
+    }
+
+    // 自动解锁可用且 48 小时窗口未过期时，进入面板主动唤起识别接口（PIN/生物识别）而非键盘。
+    // 48 小时过期后（含 64 小时硬性截止）不再自动唤起，回到键盘输入。
+    LaunchedEffect(library.id) {
+        if (tokenViewModel.autoUnlockViewModel.isAutoUnlockAvailable(library) &&
+            !tokenViewModel.autoUnlockViewModel.isManualUnlockWindowExpired(library)
+        ) {
+            launchCredentialUnlockFromInline(library)
+        }
     }
 
     // 强制主密码校验剩余时间的定时刷新（每分钟）
@@ -539,6 +566,10 @@ private fun InlineUnlockPanelContent(
         library = unlockLibrary,
         nowMillis = manualUnlockClockMillis
     )
+    val credentialUnlockRemaining = tokenViewModel.autoUnlockViewModel.getCredentialUnlockRemainingMillis(
+        library = unlockLibrary,
+        nowMillis = manualUnlockClockMillis
+    )
 
     Column(
         modifier = modifier,
@@ -550,7 +581,14 @@ private fun InlineUnlockPanelContent(
                 autoUnlockInvalidated -> "自动解锁状态：已失效（需主密码+认证恢复）"
                 !isManualWindowEnabled -> "强制主密码校验：已关闭"
                 manualWindowRemaining == null -> "强制主密码校验：不可用"
-                manualWindowRemaining <= 0L -> "强制主密码校验：已到期（本次凭据解锁后将标记失效）"
+                manualWindowRemaining <= 0L -> {
+                    val deadlineRemaining = credentialUnlockRemaining
+                    if (deadlineRemaining != null && deadlineRemaining > 0L) {
+                        "已超过48小时，最后一次凭据解锁机会（剩余${tokenViewModel.autoUnlockViewModel.formatRemainingHoursMinutes(deadlineRemaining)}）"
+                    } else {
+                        "已超过64小时，仅支持手动输入主密码"
+                    }
+                }
                 else -> "强制主密码校验剩余：${tokenViewModel.autoUnlockViewModel.formatRemainingHoursMinutes(manualWindowRemaining)}"
             },
             fontSize = 12.sp
@@ -689,38 +727,33 @@ private fun InlineUnlockPanelContent(
             }
         }
 
-        Button(
-            onClick = {
-                launchCredentialUnlockFromInline(unlockLibrary)
-            },
-            modifier = Modifier.fillMaxWidth(),
-            enabled = !inlineUnlockLoading
-        ) {
-            Text(text = "使用")
-            Spacer(modifier = Modifier.size(6.dp))
-            Image(
-                painter = painterResource(id = R.drawable.key_vertical_24),
-                contentDescription = "凭据解锁",
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.size(4.dp))
-            Text(text = "/")
-            Spacer(modifier = Modifier.size(4.dp))
-            Image(
-                painter = painterResource(id = R.drawable.fingerprint_24),
-                contentDescription = "生物识别解锁",
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.size(6.dp))
-            Text(
-                text = if (autoUnlockAvailable) {
-                    "解锁"
-                } else if (autoUnlockInvalidated) {
-                    "解锁（已失效，输入主密码后恢复）"
-                } else {
-                    "解锁（输入主密码后可启用）"
-                }
-            )
+        // 凭据/生物识别解锁按钮：仅自动解锁开启且可用时显示（未开启/失效状态不显示）。
+        if (autoUnlockAvailable) {
+            Button(
+                onClick = {
+                    launchCredentialUnlockFromInline(unlockLibrary)
+                },
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !inlineUnlockLoading
+            ) {
+                Text(text = "使用")
+                Spacer(modifier = Modifier.size(6.dp))
+                Image(
+                    painter = painterResource(id = R.drawable.key_vertical_24),
+                    contentDescription = "凭据解锁",
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.size(4.dp))
+                Text(text = "/")
+                Spacer(modifier = Modifier.size(4.dp))
+                Image(
+                    painter = painterResource(id = R.drawable.fingerprint_24),
+                    contentDescription = "生物识别解锁",
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.size(6.dp))
+                Text(text = "解锁")
+            }
         }
     }
 }
