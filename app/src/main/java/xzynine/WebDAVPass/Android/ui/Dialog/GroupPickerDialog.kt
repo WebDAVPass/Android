@@ -27,7 +27,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.AddFolder
+import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
@@ -72,7 +72,7 @@ fun GroupPickerDialog(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Icon(
-                    imageVector = MiuixIcons.AddFolder,
+                    imageVector = MiuixIcons.Folder,
                     contentDescription = null,
                     tint = if (selectedGroupId == null) MiuixTheme.colorScheme.primary
                     else MiuixTheme.colorScheme.onSurfaceSecondary
@@ -106,7 +106,7 @@ fun GroupPickerDialog(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
-                            imageVector = MiuixIcons.AddFolder,
+                            imageVector = MiuixIcons.Folder,
                             contentDescription = null,
                             tint = if (selectedGroupId == group.groupId) MiuixTheme.colorScheme.primary
                             else MiuixTheme.colorScheme.onSurfaceSecondary
