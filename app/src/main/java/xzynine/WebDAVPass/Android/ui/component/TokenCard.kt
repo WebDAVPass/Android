@@ -2,21 +2,23 @@ package xzynine.WebDAVPass.Android.ui.component
 
 import android.content.Context
 import android.graphics.BitmapFactory
-import android.widget.ImageView
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import android.graphics.Bitmap
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -31,10 +33,13 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -42,8 +47,6 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import com.amulyakhare.textdrawable.TextDrawable
 import com.kunzisoft.keepass.icon.IconPack
 import org.liberty.android.freeotp.token_images.TokenImage
 import org.liberty.android.freeotp.token_images.matchToken
@@ -53,6 +56,8 @@ import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.Text
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.VpnKey
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.data.OtpToken
@@ -147,11 +152,13 @@ fun EntryIcon(
     }
 
     if (customBitmap != null) {
-        Image(
-            bitmap = customBitmap!!.asImageBitmap(),
-            contentDescription = contentDescription,
-            modifier = modifier
-        )
+        BrandIconFrame(modifier = modifier) {
+            Image(
+                bitmap = customBitmap!!.asImageBitmap(),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
         return
     }
 
@@ -165,11 +172,13 @@ fun EntryIcon(
     }
     if (standardIconId == null || standardIconId == 0) {
         tokenImageRes?.let {
-            Image(
-                painter = painterResource(id = it),
-                contentDescription = contentDescription,
-                modifier = modifier
-            )
+            BrandIconFrame(modifier = modifier) {
+                Image(
+                    painter = painterResource(id = it),
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
             return
         }
     }
@@ -182,12 +191,14 @@ fun EntryIcon(
      */
     if (standardIconId != null) {
         standardIconVectorMap[standardIconId]?.let { vector ->
-            Icon(
-                imageVector = vector,
-                contentDescription = contentDescription,
-                modifier = modifier,
-                tint = MiuixTheme.colorScheme.primary
-            )
+            BrandIconFrame(modifier = modifier) {
+                Icon(
+                    imageVector = vector,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    tint = MiuixTheme.colorScheme.primary
+                )
+            }
             return
         }
     }
@@ -204,28 +215,48 @@ fun EntryIcon(
     }
 
     if (iconRes != null) {
-        Image(
-            painter = painterResource(id = iconRes),
-            contentDescription = contentDescription,
-            modifier = modifier
-        )
+        BrandIconFrame(modifier = modifier) {
+            Image(
+                painter = painterResource(id = iconRes),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
         return
     }
 
-    val letter = remember(primary, secondary) {
-        (primary ?: secondary).orEmpty().firstOrNull()?.uppercase() ?: "?"
+    /**
+     * 5) 无任何图标时的统一兜底：按 0 号标准图标（钥匙）渲染，
+     * 与密码条目列表（standardIconId=0）的显示一致；原首字母圆形已废弃。
+     */
+    BrandIconFrame(modifier = modifier) {
+        Icon(
+            imageVector = standardIconVectorMap[0] ?: Icons.Rounded.VpnKey,
+            contentDescription = contentDescription,
+            modifier = Modifier.fillMaxSize(),
+            tint = MiuixTheme.colorScheme.primary
+        )
     }
-    val colorInt = MiuixTheme.colorScheme.primary.toArgb()
+}
 
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            ImageView(context).apply {
-                val drawable = TextDrawable.builder().buildRound(letter, colorInt)
-                setImageDrawable(drawable)
-            }
-        }
-    )
+/**
+ * 品牌图标背景容器：纯白圆角底板，
+ * 深色主题下衬托苹果等深色系品牌图标；不存在纯白 logo，白色底板足够。
+ * 图标内容填满容器不缩放。
+ */
+@Composable
+private fun BrandIconFrame(
+    modifier: Modifier,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color.White),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
+    }
 }
 
 @Composable

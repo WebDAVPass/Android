@@ -499,6 +499,292 @@ class KdbxTokenRepository(context: Context) {
     }
 
     /**
+     * 加载指定条目的合并摘要（标准字段 + 自定义字段 + 附件名），不进行重复分组判断。
+     */
+    fun loadEntryMergeInfos(localPath: String, masterPassword: String, entryIds: List<Long>): List<DuplicateEntryInfo> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            entryIds.mapNotNull { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@mapNotNull null
+                buildDuplicateEntryInfo(db, entry)
+            }
+        }
+    }
+
+    /**
+     * 检测重复候选组。
+     *
+     * 候选规则：两个条目的「账号完全相等 / 标题互含 / URL 互含」三个维度中命中 ≥2 个
+     * 即视为重复候选（均不区分大小写、去除首尾空白）；密码不参与候选判定。
+     * 组内条目「账号+密码+URL」完全一致时视为无冲突（[DuplicateGroupInfo.isConflict] 为 false），
+     * 可直接自动合并；存在差异的组需要手动逐字段选择。
+     */
+    fun detectDuplicateGroups(localPath: String, masterPassword: String, entryIds: List<Long>): List<DuplicateGroupInfo> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val infos = entryIds.mapNotNull { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@mapNotNull null
+                buildDuplicateEntryInfo(db, entry)
+            }
+            groupDuplicateInfos(infos)
+        }
+    }
+
+    /**
+     * 合并一组重复条目：将 [sourceEntryIds] 合并进 [masterEntryId]，源条目移入回收站。
+     *
+     * 字段取值规则（key 为 [MergeFieldKeys] 标准键或自定义字段名）：
+     * - [fieldSelections] 中指定的字段：采用对应源条目的值；
+     * - 未指定的字段：主条目优先，主条目为空时取第一个非空的源条目值；
+     * - 自定义字段按名（不区分大小写）并集去重，冲突时按上述规则；
+     * - 附件并集去重（忽略大小写重名保留主条目）；
+     * - 源条目历史并入主条目历史，主条目合并前的旧版本保留在历史中；
+     * - 图标保留主条目。
+     *
+     * @return 成功合并（移入回收站）的源条目数
+     */
+    fun mergeEntryGroup(
+        localPath: String,
+        masterPassword: String,
+        masterEntryId: Long,
+        sourceEntryIds: List<Long>,
+        fieldSelections: Map<String, Long>
+    ): Int {
+        if (sourceEntryIds.isEmpty()) {
+            return 0
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val master = findEntryByStableId(db, masterEntryId, includeRecycleBin = false)
+                ?: return@withDatabase 0
+            val sources = sourceEntryIds
+                .mapNotNull { findEntryByStableId(db, it, includeRecycleBin = false) }
+                .filter { it !== master }
+            if (sources.isEmpty()) {
+                return@withDatabase 0
+            }
+
+            val masterInfo = master.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+            val sourceInfos = sources.map { source ->
+                toStableId(source) to source.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+            }.toMap()
+
+            // 1. 主条目当前版本先入历史，防止合并覆盖后丢失
+            master.addEntryToHistory(Entry(master, copyHistory = false))
+
+            // 2. 标准字段：fieldSelections 指定则采用对应源条目，否则主条目优先、主条目为空时取第一个非空源条目
+            val sourceInfoOf: (Long?) -> EntryInfo = { sourceId ->
+                sourceId?.let { sourceInfos[it] } ?: masterInfo
+            }
+            fun <T> pickStandard(key: String, masterValue: T, isEmpty: (T) -> Boolean, getter: (EntryInfo) -> T): T {
+                val sourceId = fieldSelections[key]
+                if (sourceId != null) {
+                    return getter(sourceInfoOf(sourceId))
+                }
+                if (!isEmpty(masterValue)) {
+                    return masterValue
+                }
+                return sourceInfos.values.firstOrNull { !isEmpty(getter(it)) }?.let { getter(it) } ?: masterValue
+            }
+
+            masterInfo.title = pickStandard(MergeFieldKeys.TITLE, masterInfo.title, { it.isBlank() }) { it.title }
+            masterInfo.username = pickStandard(MergeFieldKeys.ACCOUNT, masterInfo.username, { it.isBlank() }) { it.username }
+            masterInfo.password = pickStandard(MergeFieldKeys.PASSWORD, masterInfo.password, { it.isBlank() }) { it.password }
+            masterInfo.url = pickStandard(MergeFieldKeys.URL, masterInfo.url, { it.isBlank() }) { it.url }
+            masterInfo.notes = pickStandard(MergeFieldKeys.NOTES, masterInfo.notes, { it.isBlank() }) { it.notes }
+            masterInfo.tags = pickStandard(MergeFieldKeys.TAGS, masterInfo.tags, { it.isEmpty() }) { it.tags }
+
+            // 3. 自定义字段：并集去重，fieldSelections 指定则采用对应源条目，否则主优先、主空补从
+            val mergedFields = ArrayList(masterInfo.customFields)
+            val mergedLowerNames = mergedFields.map { it.name.lowercase() }.toMutableSet()
+            for ((sourceId, sourceInfo) in sourceInfos) {
+                for (field in sourceInfo.customFields) {
+                    val lowerName = field.name.lowercase()
+                    if (mergedLowerNames.add(lowerName)) {
+                        mergedFields.add(field)
+                        continue
+                    }
+                    // 同名冲突：用户显式指定该字段采用此源条目 → 替换；否则保留主条目
+                    if (fieldSelections[lowerName] == sourceId || fieldSelections[field.name] == sourceId) {
+                        val existingIndex = mergedFields.indexOfFirst { it.name.lowercase() == lowerName }
+                        if (existingIndex >= 0) {
+                            mergedFields[existingIndex] = field
+                        }
+                    }
+                }
+            }
+            masterInfo.customFields = mergedFields
+
+            // 4. 附件：并集去重（忽略大小写重名保留主条目），源条目附件复制二进制
+            val mergedAttachments = mutableListOf<Attachment>()
+            val usedAttachmentNames = mutableSetOf<String>()
+            master.getAttachments(db.attachmentPool).forEach { att ->
+                if (usedAttachmentNames.add(att.name.lowercase())) {
+                    mergedAttachments.add(att)
+                }
+            }
+            for (source in sources) {
+                for (att in source.getAttachments(db.attachmentPool)) {
+                    if (!usedAttachmentNames.add(att.name.lowercase())) {
+                        continue
+                    }
+                    val binary = db.buildNewBinaryAttachment() ?: continue
+                    att.binaryData.getInputDataStream(db.binaryCache).use { input ->
+                        binary.getOutputDataStream(db.binaryCache).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    mergedAttachments.add(Attachment(att.name, binary))
+                }
+            }
+            masterInfo.attachments = mergedAttachments.toMutableList()
+
+            // 5. 源条目历史并入主条目
+            for (source in sources) {
+                source.getHistory().forEach { historyEntry ->
+                    master.addEntryToHistory(historyEntry)
+                }
+            }
+
+            master.setEntryInfo(db, masterInfo)
+            db.removeUnlinkedAttachments()
+
+            // 6. 源条目移入回收站
+            var mergedCount = 0
+            for (source in sources) {
+                if (!db.canRecycle(source)) {
+                    continue
+                }
+                val oldParent = source.parent
+                db.recycle(source, resolveRecycleBinTitle(db))
+                source.setPreviousParentGroup(oldParent)
+                mergedCount++
+            }
+            mergedCount
+        }
+    }
+
+    /**
+     * 构建单条目合并摘要。
+     */
+    private fun buildDuplicateEntryInfo(database: Database, entry: Entry): DuplicateEntryInfo {
+        val info = entry.getEntryInfo(database, raw = true, removeTemplateConfiguration = false)
+        val fieldValues = linkedMapOf<String, String>()
+        fieldValues[MergeFieldKeys.TITLE] = info.title
+        fieldValues[MergeFieldKeys.ACCOUNT] = info.username
+        fieldValues[MergeFieldKeys.PASSWORD] = info.password
+        fieldValues[MergeFieldKeys.URL] = info.url
+        fieldValues[MergeFieldKeys.NOTES] = info.notes
+        fieldValues[MergeFieldKeys.TAGS] = info.tags.toString()
+        info.customFields.forEach { field ->
+            fieldValues[field.name] = field.protectedValue.stringValue
+        }
+        return DuplicateEntryInfo(
+            entryId = toStableId(entry),
+            title = info.title,
+            account = info.username,
+            url = info.url,
+            hasPassword = info.password.isNotEmpty(),
+            modifiedTime = info.lastModificationTime.toMilliseconds(),
+            fieldValues = fieldValues,
+            attachmentNames = entry.getAttachments(database.attachmentPool).map { it.name }
+        )
+    }
+
+    /**
+     * 将条目摘要分组为重复候选组（并查集合并交集组）。
+     */
+    private fun groupDuplicateInfos(infos: List<DuplicateEntryInfo>): List<DuplicateGroupInfo> {
+        if (infos.size < 2) {
+            return emptyList()
+        }
+        val parent = IntArray(infos.size) { it }
+        fun find(x: Int): Int {
+            var root = x
+            while (parent[root] != root) {
+                root = parent[root]
+            }
+            var current = x
+            while (parent[current] != current) {
+                val next = parent[current]
+                parent[current] = root
+                current = next
+            }
+            return root
+        }
+        fun union(a: Int, b: Int) {
+            val ra = find(a)
+            val rb = find(b)
+            if (ra != rb) {
+                parent[rb] = ra
+            }
+        }
+
+        val norms = infos.map { info ->
+            Triple(
+                info.title.trim().lowercase(),
+                info.account.trim().lowercase(),
+                info.url.trim().lowercase()
+            )
+        }
+        val passwords = infos.map { it.fieldValue(MergeFieldKeys.PASSWORD) }
+        for (i in infos.indices) {
+            for (j in i + 1 until infos.size) {
+                val (title1, account1, url1) = norms[i]
+                val (title2, account2, url2) = norms[j]
+                var hits = 0
+                if (account1.isNotEmpty() && account1 == account2) {
+                    hits++
+                }
+                if (title1.isNotEmpty() && title2.isNotEmpty() && (title1.contains(title2) || title2.contains(title1))) {
+                    hits++
+                }
+                if (url1.isNotEmpty() && url2.isNotEmpty() && (url1.contains(url2) || url2.contains(url1))) {
+                    hits++
+                }
+                // 账号与密码都不同（两两精确比较）则不算重复，即使标题/URL 匹配
+                val samePassword = passwords[i] == passwords[j]
+                if (hits >= 2 && (account1 == account2 || samePassword)) {
+                    union(i, j)
+                }
+            }
+        }
+
+        val groupMap = mutableMapOf<Int, MutableList<DuplicateEntryInfo>>()
+        infos.forEachIndexed { index, info ->
+            groupMap.getOrPut(find(index)) { mutableListOf() }.add(info)
+        }
+        return groupMap.values
+            .filter { it.size >= 2 }
+            .mapIndexed { index, list ->
+                DuplicateGroupInfo(
+                    groupId = index,
+                    entries = list.sortedByDescending { it.modifiedTime },
+                    isConflict = hasFieldConflict(list)
+                )
+            }
+    }
+
+    /**
+     * 判断组内条目「账号/密码/URL」是否存在差异（任一维度不一致即视为冲突）。
+     */
+    private fun hasFieldConflict(infos: List<DuplicateEntryInfo>): Boolean {
+        if (infos.size < 2) {
+            return false
+        }
+        val first = infos.first()
+        return infos.any { other ->
+            other.account != first.account ||
+                other.url != first.url ||
+                other.hasPassword != first.hasPassword ||
+                other.fieldValue(MergeFieldKeys.PASSWORD) != first.fieldValue(MergeFieldKeys.PASSWORD)
+        }
+    }
+
+    /**
      * 删除条目（仅回收站删除）。
      */
     fun deletePasswordEntry(localPath: String, masterPassword: String, entryId: Long): Boolean {

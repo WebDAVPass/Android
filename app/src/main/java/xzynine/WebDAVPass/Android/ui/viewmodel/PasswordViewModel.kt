@@ -5,6 +5,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
+import xzynine.WebDAVPass.Android.data.DuplicateEntryInfo
+import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
@@ -363,6 +365,59 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         }
         return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = 0) { path, pwd ->
             kdbxTokenRepository.solidifyEntryBrandIcons(path, pwd, iconUpdates)
+        }
+    }
+
+    /**
+     * 加载指定条目的合并摘要（标准字段 + 自定义字段 + 附件名）。
+     */
+    suspend fun loadEntryMergeInfos(
+        entryIds: List<Long>,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): List<DuplicateEntryInfo> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = emptyList()) { path, pwd ->
+            kdbxTokenRepository.loadEntryMergeInfos(path, pwd, entryIds)
+        }
+    }
+
+    /**
+     * 检测重复候选组（账号/标题/URL 三个维度命中 ≥2 个）。
+     */
+    suspend fun detectDuplicateGroups(
+        entryIds: List<Long>,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): List<DuplicateGroupInfo> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = emptyList()) { path, pwd ->
+            kdbxTokenRepository.detectDuplicateGroups(path, pwd, entryIds)
+        }
+    }
+
+    /**
+     * 合并一组重复条目（源条目移入回收站）。
+     */
+    suspend fun mergeEntryGroup(
+        masterEntryId: Long,
+        sourceEntryIds: List<Long>,
+        fieldSelections: Map<String, Long>,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String
+    ): Int {
+        if (sourceEntryIds.isEmpty()) {
+            return 0
+        }
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = 0) { path, pwd ->
+            kdbxTokenRepository.mergeEntryGroup(path, pwd, masterEntryId, sourceEntryIds, fieldSelections)
         }
     }
 

@@ -12,6 +12,8 @@ import xzynine.WebDAVPass.Android.data.AppSetting
 import xzynine.WebDAVPass.Android.data.DatabaseManager
 import xzynine.WebDAVPass.Android.data.DatabaseSettingsInfo
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
+import xzynine.WebDAVPass.Android.data.DuplicateEntryInfo
+import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
@@ -544,6 +546,52 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     suspend fun solidifyEntryBrandIcons(iconUpdates: Map<Long, ByteArray>): Int {
         val count = passwordViewModel.solidifyEntryBrandIcons(
             iconUpdates,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+        if (count > 0) {
+            onPasswordWriteSuccess()
+        }
+        return count
+    }
+
+    /**
+     * 加载指定条目的合并摘要（标准字段 + 自定义字段 + 附件名）。
+     */
+    suspend fun loadEntryMergeInfos(entryIds: List<Long>): List<DuplicateEntryInfo> {
+        return passwordViewModel.loadEntryMergeInfos(
+            entryIds,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+    }
+
+    /**
+     * 检测重复候选组（账号/标题/URL 三个维度命中 ≥2 个）。
+     */
+    suspend fun detectDuplicateGroups(entryIds: List<Long>): List<DuplicateGroupInfo> {
+        return passwordViewModel.detectDuplicateGroups(
+            entryIds,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal()
+        )
+    }
+
+    /**
+     * 合并一组重复条目（源条目移入回收站）。
+     */
+    suspend fun mergeEntryGroup(
+        masterEntryId: Long,
+        sourceEntryIds: List<Long>,
+        fieldSelections: Map<String, Long>
+    ): Int {
+        val count = passwordViewModel.mergeEntryGroup(
+            masterEntryId,
+            sourceEntryIds,
+            fieldSelections,
             libraryViewModel.isLibraryUnlocked.value,
             libraryViewModel.currentLibrary.value?.localPath,
             libraryViewModel.getMasterPasswordInternal()

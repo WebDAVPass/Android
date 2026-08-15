@@ -78,12 +78,16 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Flip
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
+import xzynine.WebDAVPass.Android.data.DuplicateEntryInfo
+import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.DuplicateScanDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.EntryMergeDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.TemplatePickerDialog
@@ -150,6 +154,17 @@ fun PasswordListScreen(
     var pickerGroups by remember { mutableStateOf<List<GroupNodeInfo>>(emptyList()) }
     val showSolidifyDialog = remember { mutableStateOf(false) }
     var solidifyUpdates by remember { mutableStateOf<Map<Long, ByteArray>>(emptyMap()) }
+
+    val duplicateGroups = remember { mutableStateOf<List<DuplicateGroupInfo>>(emptyList()) }
+    val showDuplicateScanDialog = remember { mutableStateOf(false) }
+    val mergeDialogEntries = remember { mutableStateOf<List<DuplicateEntryInfo>>(emptyList()) }
+    val showMergeDialog = remember { mutableStateOf(false) }
+    var mergeDialogMasterId by remember { mutableStateOf<Long?>(null) }
+    var mergeDialogFromScan by remember { mutableStateOf(false) }
+    val showAutoMergeConfirm = remember { mutableStateOf(false) }
+    var autoMergeTarget by remember { mutableStateOf<Pair<Long, List<Long>>?>(null) }
+    val showMergeConfirm = remember { mutableStateOf(false) }
+    var mergeConfirmTarget by remember { mutableStateOf<Pair<Long, Map<String, Long>>?>(null) }
 
     var createEntryTitle by remember { mutableStateOf("") }
     var createEntryUsername by remember { mutableStateOf("") }
@@ -287,6 +302,112 @@ fun PasswordListScreen(
         }
         solidifyUpdates = matched
         showSolidifyDialog.value = true
+    }
+
+    /** 当前视图条目 ID（排除分组占位项），用于扫描与多选合并。 */
+    fun visibleEntryIds(): List<Long> {
+        return entries.filter { !it.isFolderPlaceholder }.map { it.entryId }
+    }
+
+    /** 扫描当前视图，检测重复候选组。 */
+    fun scanDuplicateEntries() {
+        coroutineScope.launch {
+            val entryIds = visibleEntryIds()
+            if (entryIds.size < 2) {
+                ToastUtils.showShortToast(context, "当前视图条目不足，无法检测")
+                return@launch
+            }
+            val groups = tokenViewModel.detectDuplicateGroups(entryIds)
+            if (groups.isEmpty()) {
+                ToastUtils.showShortToast(context, "未发现重复条目")
+                return@launch
+            }
+            duplicateGroups.value = groups
+            showDuplicateScanDialog.value = true
+        }
+    }
+
+    /** 合并成功后重新扫描，刷新检测结果（全部处理完时自动关闭对话框）。 */
+    fun refreshDuplicateGroupsAfterMerge() {
+        coroutineScope.launch {
+            val groups = tokenViewModel.detectDuplicateGroups(visibleEntryIds())
+            duplicateGroups.value = groups
+            if (groups.isEmpty()) {
+                showDuplicateScanDialog.value = false
+            }
+        }
+    }
+
+    /** 多选合并入口：将选中的条目作为一组打开合并编辑器。 */
+    fun openEntryMergeForSelection() {
+        val entryIds = selectedTargets.keys.filter { selectedTargets[it] == false }.toList()
+        if (entryIds.size < 2) {
+            ToastUtils.showShortToast(context, "至少选择两个条目")
+            return
+        }
+        coroutineScope.launch {
+            val infos = tokenViewModel.loadEntryMergeInfos(entryIds)
+            if (infos.size < 2) {
+                ToastUtils.showShortToast(context, "无法加载所选条目")
+                return@launch
+            }
+            mergeDialogEntries.value = infos
+            mergeDialogMasterId = infos.maxByOrNull { it.modifiedTime }?.entryId
+            mergeDialogFromScan = false
+            showMergeDialog.value = true
+        }
+    }
+
+    /** 冲突组：关闭扫描结果对话框，打开逐项选择编辑器。 */
+    fun openManualMergeForGroup(group: DuplicateGroupInfo, masterEntryId: Long) {
+        showDuplicateScanDialog.value = false
+        mergeDialogEntries.value = group.entries
+        mergeDialogMasterId = masterEntryId
+        mergeDialogFromScan = true
+        showMergeDialog.value = true
+    }
+
+    /** 关闭合并编辑器；若来自扫描结果对话框则恢复它，避免取消后需要重新扫描。 */
+    fun dismissMergeDialog() {
+        showMergeDialog.value = false
+        if (mergeDialogFromScan) {
+            mergeDialogFromScan = false
+            showDuplicateScanDialog.value = true
+        }
+    }
+
+    /** 编辑器确认：先弹最终确认对话框。 */
+    fun requestMerge(masterEntryId: Long, fieldSelections: Map<String, Long>) {
+        mergeConfirmTarget = masterEntryId to fieldSelections
+        showMergeConfirm.value = true
+    }
+
+    /** 执行合并（编辑器或扫描结果触发的自动合并统一走这里）。 */
+    fun executeMerge(masterEntryId: Long, sourceEntryIds: List<Long>, fieldSelections: Map<String, Long>) {
+        coroutineScope.launch {
+            val count = tokenViewModel.mergeEntryGroup(masterEntryId, sourceEntryIds, fieldSelections)
+            if (count > 0) {
+                ToastUtils.showShortToast(context, "已合并 $count 条条目")
+            } else {
+                ToastUtils.showShortToast(context, "合并失败")
+            }
+            mergeConfirmTarget = null
+            autoMergeTarget = null
+            showMergeDialog.value = false
+            showMergeConfirm.value = false
+            showAutoMergeConfirm.value = false
+            mergeDialogFromScan = false
+            mergeDialogEntries.value = emptyList()
+            clearSelectionMode()
+            refreshDuplicateGroupsAfterMerge()
+        }
+    }
+
+    /** 自动合并组：弹出确认框后执行。 */
+    fun requestAutoMerge(group: DuplicateGroupInfo, masterEntryId: Long) {
+        val sourceIds = group.entries.map { it.entryId }.filter { it != masterEntryId }
+        autoMergeTarget = masterEntryId to sourceIds
+        showAutoMergeConfirm.value = true
     }
 
     BackHandler(enabled = isSelectionMode.value) {
@@ -499,6 +620,14 @@ fun PasswordListScreen(
                                     DropdownEntry(
                                         items = listOf(
                                             DropdownItem(
+                                                text = "合并条目",
+                                                onClick = { openEntryMergeForSelection() }
+                                            )
+                                        )
+                                    ),
+                                    DropdownEntry(
+                                        items = listOf(
+                                            DropdownItem(
                                                 text = "移动",
                                                 onClick = {
                                                     if (selectedTargets.isNotEmpty()) {
@@ -586,6 +715,24 @@ fun PasswordListScreen(
                             Icon(
                                 imageVector = MiuixIcons.Sort,
                                 contentDescription = "排序与过滤"
+                            )
+                        }
+                        WindowIconDropdownMenu(
+                            entries = listOf(
+                                DropdownEntry(
+                                    items = listOf(
+                                        DropdownItem(
+                                            text = "检测重复条目",
+                                            onClick = { scanDuplicateEntries() }
+                                        )
+                                    )
+                                )
+                            ),
+                            collapseOnSelection = true
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.MoreCircle,
+                                contentDescription = "更多操作"
                             )
                         }
                         if (enableGroupNavigation) {
@@ -937,6 +1084,51 @@ fun PasswordListScreen(
         onDismiss = { showGroupPicker.value = false },
         onPick = { targetGroupId -> moveOrCopySelectedEntries(targetGroupId) }
     )
+
+    if (duplicateGroups.value.isNotEmpty() && showDuplicateScanDialog.value) {
+        DuplicateScanDialog(
+            groups = duplicateGroups.value,
+            show = showDuplicateScanDialog.value,
+            onDismiss = { showDuplicateScanDialog.value = false },
+            onAutoMerge = { group, masterId -> requestAutoMerge(group, masterId) },
+            onManualMerge = { group, masterId -> openManualMergeForGroup(group, masterId) }
+        )
+    }
+
+    if (mergeDialogEntries.value.isNotEmpty() && showMergeDialog.value) {
+        EntryMergeDialog(
+            entries = mergeDialogEntries.value,
+            show = showMergeDialog.value,
+            initialMasterEntryId = mergeDialogMasterId,
+            onDismiss = { dismissMergeDialog() },
+            onConfirm = { masterId, selections -> requestMerge(masterId, selections) }
+        )
+    }
+
+    if (showAutoMergeConfirm.value && autoMergeTarget != null) {
+        val (masterId, sourceIds) = autoMergeTarget!!
+        ConfirmationDialog(
+            title = "确认合并",
+            summary = "将合并 ${sourceIds.size + 1} 条条目为 1 条，其余 ${sourceIds.size} 条将移入回收站（可恢复）。",
+            show = showAutoMergeConfirm,
+            onDismiss = { showAutoMergeConfirm.value = false },
+            confirmButtonText = "合并",
+            onConfirm = { executeMerge(masterId, sourceIds, emptyMap()) }
+        )
+    }
+
+    if (showMergeConfirm.value && mergeConfirmTarget != null) {
+        val (masterId, selections) = mergeConfirmTarget!!
+        val sourceIds = mergeDialogEntries.value.map { it.entryId }.filter { it != masterId }
+        ConfirmationDialog(
+            title = "确认合并",
+            summary = "将把 ${sourceIds.size} 条条目合并进所选主条目，并移入回收站（可恢复）。",
+            show = showMergeConfirm,
+            onDismiss = { showMergeConfirm.value = false },
+            confirmButtonText = "合并",
+            onConfirm = { executeMerge(masterId, sourceIds, selections) }
+        )
+    }
 }
 
 /**
