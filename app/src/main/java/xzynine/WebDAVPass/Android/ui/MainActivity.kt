@@ -12,6 +12,7 @@ import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -79,9 +80,15 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.component.AppNavigationRail
 import xzynine.WebDAVPass.Android.ui.component.CategoryNavigationItem
+import xzynine.WebDAVPass.Android.ui.component.LandscapePasswordPanes
+import androidx.compose.animation.ContentTransform
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.ui.NavDisplay
+import androidx.navigation3.ui.NavDisplayTransitionEffects
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -220,6 +227,7 @@ fun MainScreen() {
     // 横屏模式下导航项选择处理
     val handleNavigationItemSelected = remember(tokenViewModel, navigator) {
         { item: CategoryNavigationItem ->
+            selectedEntryId = null
             when (item) {
                 CategoryNavigationItem.ALL_PASSWORDS -> {
                     selectedNavIndex = 0
@@ -280,6 +288,19 @@ fun MainScreen() {
                             entryDecorators = listOf(
                                 rememberSaveableStateHolderNavEntryDecorator()
                             ),
+                            transitionSpec = {
+                                ContentTransform(
+                                    targetContentEnter = fadeIn(animationSpec = tween(200)),
+                                    initialContentExit = fadeOut(animationSpec = tween(200))
+                                )
+                            },
+                            popTransitionSpec = {
+                                ContentTransform(
+                                    targetContentEnter = fadeIn(animationSpec = tween(200)),
+                                    initialContentExit = fadeOut(animationSpec = tween(200))
+                                )
+                            },
+                            transitionEffects = NavDisplayTransitionEffects.None,
                             onBack = {
                                 if (showCloudBindingDialog.value) {
                                     showCloudBindingDialog.value = false
@@ -287,6 +308,10 @@ fun MainScreen() {
                                 }
                                 if (showScanBottomSheet.value) {
                                     showScanBottomSheet.value = false
+                                    return@NavDisplay
+                                }
+                                if (selectedEntryId != null) {
+                                    selectedEntryId = null
                                     return@NavDisplay
                                 }
                                 if (navigator.backStackSize() > 1) {
@@ -361,6 +386,11 @@ fun MainScreen() {
                         }
                     }
 
+                    // 横屏主页：不显示四卡片导航，直接以三栏布局接管（列表 + 详情）
+                    LaunchedEffect(Unit) {
+                        tokenViewModel.passwordViewModel.setPasswordListMode(PasswordListMode.ALL_PASSWORDS, refreshNow = true)
+                    }
+
                     Box(modifier = Modifier.fillMaxSize()) {
                         Scaffold(
                             popupHost = {},
@@ -399,16 +429,18 @@ fun MainScreen() {
                                         .fillMaxSize()
                                         .padding(paddingValues)
                                 ) {
-                                    HomeScreen(
+                                    LandscapePasswordPanes(
                                         tokenViewModel = tokenViewModel,
-                                        onNavigateToPasswordList = { listMode ->
-                                            navigator.push(Route.PasswordList(listMode))
+                                        listMode = PasswordListMode.ALL_PASSWORDS,
+                                        selectedEntryId = selectedEntryId,
+                                        onEntryClick = { entryId ->
+                                            selectedEntryId = entryId
                                         },
-                                        onNavigateToTokenList = {
-                                            navigator.push(Route.TokenList)
+                                        onDetailBack = {
+                                            selectedEntryId = null
                                         },
-                                        onNavigateToSecurityCheck = {
-                                            navigator.push(Route.SecurityCheck)
+                                        onDetailDeleted = {
+                                            selectedEntryId = null
                                         }
                                     )
                                 }
@@ -701,19 +733,20 @@ fun MainScreen() {
                     }
 
                     Box(modifier = Modifier.fillMaxSize()) {
-                        PasswordListScreen(
+                        LandscapePasswordPanes(
                             tokenViewModel = tokenViewModel,
-                            title = if (listMode == PasswordListMode.RECENT_DELETED) "最近删除" else "全部密码",
-                            emptyStateText = if (listMode == PasswordListMode.RECENT_DELETED) "暂无最近删除条目" else "暂无条目",
-                            emptySearchStateText = "无匹配条目",
-                            enableGroupNavigation = listMode == PasswordListMode.ALL_PASSWORDS,
-                            enableRecycleBinActions = listMode == PasswordListMode.RECENT_DELETED,
+                            listMode = listMode,
+                            selectedEntryId = selectedEntryId,
                             onEntryClick = { entryId ->
-                                navigator.push(Route.PasswordEntryDetail(entryId))
+                                selectedEntryId = entryId
                             },
-                            onNavigateBack = {
-                                navigator.pop()
-                            }
+                            onDetailBack = {
+                                selectedEntryId = null
+                            },
+                            onDetailDeleted = {
+                                selectedEntryId = null
+                            },
+                            statusBarsPadding = true
                         )
                         MiuixPopupHost()
                     }
@@ -736,16 +769,35 @@ fun MainScreen() {
                         }
                     }
 
+                    // 横屏详情：中间列表跟随导航栏分类，右侧显示详情
+                    LaunchedEffect(selectedNavIndex) {
+                        val mode = if (selectedNavIndex == 3) {
+                            PasswordListMode.RECENT_DELETED
+                        } else {
+                            PasswordListMode.ALL_PASSWORDS
+                        }
+                        tokenViewModel.passwordViewModel.setPasswordListMode(mode, refreshNow = true)
+                    }
+
                     Box(modifier = Modifier.fillMaxSize()) {
-                        PasswordEntryDetailScreen(
+                        LandscapePasswordPanes(
                             tokenViewModel = tokenViewModel,
-                            entryId = entryId,
-                            onNavigateBack = {
-                                navigator.pop()
+                            listMode = if (selectedNavIndex == 3) {
+                                PasswordListMode.RECENT_DELETED
+                            } else {
+                                PasswordListMode.ALL_PASSWORDS
                             },
-                            onDeleted = {
-                                navigator.pop()
-                            }
+                            selectedEntryId = selectedEntryId ?: entryId,
+                            onEntryClick = { clickedEntryId ->
+                                selectedEntryId = clickedEntryId
+                            },
+                            onDetailBack = {
+                                selectedEntryId = null
+                            },
+                            onDetailDeleted = {
+                                selectedEntryId = null
+                            },
+                            statusBarsPadding = true
                         )
                         MiuixPopupHost()
                     }
