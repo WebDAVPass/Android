@@ -2,12 +2,9 @@
 
 KeePass 密码/2FA 令牌管理器（WebDAV 云同步），Jetpack Compose + Miuix UI。注释与提交信息均为中文。
 
-## 构建与验证
+## 关键信息
 
-- Windows 用 `gradlew.bat`，JDK 17。Gradle 9.6.1（wrapper）、AGP 9.3.1、Kotlin 2.4.10，版本统一在 `gradle/libs.versions.toml` 管理。
-- 常用命令：`gradlew.bat assembleDebug`、`gradlew.bat assembleRelease`、`gradlew.bat :app:printVersionName`。
-- CI（`.github/workflows/android-build.yml`）仅 `workflow_dispatch` 手动触发，无 push/PR 自动构建。
-- 无有效单元测试（仅示例 InstrumentedTest），`test` 任务基本无覆盖。
+Docs\项目简介.md
 
 ## 签名（易踩坑）
 
