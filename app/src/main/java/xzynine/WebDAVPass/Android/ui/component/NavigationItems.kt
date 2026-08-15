@@ -1,5 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.component
 
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -11,6 +12,7 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.icon.extended.Recent
+import top.yukonga.miuix.kmp.icon.extended.Settings
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 
 /**
@@ -24,18 +26,22 @@ enum class CategoryNavigationItem(
     ALL_PASSWORDS("全部密码", MiuixIcons.ListView, PasswordListMode.ALL_PASSWORDS),
     TOKENS("动态令牌", MiuixIcons.Recent, null),
     SECURITY("安全性", MiuixIcons.Lock, null),
-    RECENT_DELETED("最近删除", MiuixIcons.Delete, PasswordListMode.RECENT_DELETED)
+    RECENT_DELETED("最近删除", MiuixIcons.Delete, PasswordListMode.RECENT_DELETED),
+    SETTINGS("设置", MiuixIcons.Settings, null)
 }
 
 /**
  * 横屏侧边导航栏
+ *
+ * @param header 顶部区域内容（如库名、设置入口），不占用内容区高度
  */
 @Composable
 fun AppNavigationRail(
     selectedIndex: Int,
     onItemSelected: (CategoryNavigationItem) -> Unit,
     modifier: Modifier = Modifier,
-    expanded: Boolean = false
+    expanded: Boolean = false,
+    header: (@Composable ColumnScope.() -> Unit)? = null
 ) {
     val railState = rememberNavigationRailState(
         initialValue = if (expanded) {
@@ -47,6 +53,7 @@ fun AppNavigationRail(
 
     NavigationRail(
         state = railState,
+        header = header,
         modifier = modifier
     ) {
         CategoryNavigationItem.entries.forEachIndexed { index, item ->

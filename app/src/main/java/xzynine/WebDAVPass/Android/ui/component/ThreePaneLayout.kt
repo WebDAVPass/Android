@@ -32,7 +32,6 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
  * @param onEntryClick 点击列表项回调（用于更新选中状态）
  * @param onDetailBack 详情栏返回/关闭回调
  * @param onDetailDeleted 详情栏条目删除回调
- * @param statusBarsPadding 是否为顶部留出状态栏高度（路由自身无 Scaffold/TopAppBar 时开启）
  */
 @Composable
 fun LandscapePasswordPanes(
@@ -41,13 +40,10 @@ fun LandscapePasswordPanes(
     selectedEntryId: Long?,
     onEntryClick: (Long) -> Unit,
     onDetailBack: () -> Unit,
-    onDetailDeleted: () -> Unit,
-    statusBarsPadding: Boolean = false
+    onDetailDeleted: () -> Unit
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(if (statusBarsPadding) Modifier.statusBarsPadding() else Modifier)
+        modifier = Modifier.fillMaxSize()
     ) {
         // 中间：密码列表
         Box(
@@ -88,6 +84,7 @@ fun LandscapePasswordPanes(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
+                        .statusBarsPadding()
                         .padding(24.dp),
                     contentAlignment = Alignment.Center
                 ) {

@@ -8,7 +8,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.documentfile.provider.DocumentFile
 import androidx.compose.foundation.layout.fillMaxSize
@@ -47,6 +49,7 @@ import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -674,52 +677,9 @@ fun PasswordListScreen(
         }
     }
 
-    if (isEmbedded) {
-        // 嵌入模式：不显示 Scaffold，直接显示内容
-        PasswordListContent()
-    } else {
-        // 独立模式：显示完整 Scaffold
-        Scaffold(
-            popupHost = {},
-            topBar = {
-                TopAppBar(
-                    title = if (isSelectionMode.value) "已选 ${selectedTargets.size} 项" else title,
-                    navigationIcon = {
-                        if (isSelectionMode.value) {
-                            IconButton(
-                                onClick = {
-                                    clearSelectionMode()
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Close,
-                                    contentDescription = "取消选择"
-                                )
-                            }
-                        } else if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
-                                }
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Back,
-                                    contentDescription = "返回上一级"
-                                )
-                            }
-                        } else {
-                            IconButton(
-                                onClick = onNavigateBack
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Back,
-                                    contentDescription = "返回"
-                                )
-                            }
-                        }
-                    },
-                    actions = {
-                        if (isSelectionMode.value) {
+    // 顶栏功能区（多选/排序/新建等），嵌入模式与独立模式共用
+    val topBarActions: @Composable RowScope.() -> Unit = {
+        if (isSelectionMode.value) {
                             IconButton(
                                 onClick = {
                                     selectAllVisible()
@@ -929,16 +889,89 @@ fun PasswordListScreen(
                                 }
                             }
                         }
+                    }
+
+    // 嵌入模式与独立模式共用 Scaffold：保留顶栏功能区
+    // 嵌入模式用紧凑 SmallTopAppBar（由 TopAppBar 自行处理状态栏 insets，缓解高度压缩）
+    Scaffold(
+        popupHost = {},
+        topBar = {
+            if (isEmbedded) {
+                SmallTopAppBar(
+                    title = if (isSelectionMode.value) "已选 ${selectedTargets.size} 项" else title,
+                    navigationIcon = {
+                        if (isSelectionMode.value) {
+                            IconButton(
+                                onClick = {
+                                    clearSelectionMode()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Close,
+                                    contentDescription = "取消选择"
+                                )
+                            }
+                        } else if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Back,
+                                    contentDescription = "返回上一级"
+                                )
+                            }
+                        }
                     },
-                    defaultWindowInsetsPadding = true
+                    actions = topBarActions
+                )
+            } else {
+                TopAppBar(
+                    title = if (isSelectionMode.value) "已选 ${selectedTargets.size} 项" else title,
+                    navigationIcon = {
+                        if (isSelectionMode.value) {
+                            IconButton(
+                                onClick = {
+                                    clearSelectionMode()
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Close,
+                                    contentDescription = "取消选择"
+                                )
+                            }
+                        } else if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
+                            IconButton(
+                                onClick = {
+                                    tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Back,
+                                    contentDescription = "返回上一级"
+                                )
+                            }
+                        } else {
+                            IconButton(
+                                onClick = onNavigateBack
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Back,
+                                    contentDescription = "返回"
+                                )
+                            }
+                        }
+                    },
+                    actions = topBarActions
                 )
             }
-        ) { paddingValues ->
+        }
+    ) { paddingValues ->
             PasswordListContent(
                 modifier = Modifier.padding(paddingValues)
             )
         }
-    }
 
     PasswordEntryEditorDialog(
         title = "新建条目",

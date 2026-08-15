@@ -10,6 +10,10 @@ import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,10 +37,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import xzylib.base.util.ToastUtils
 import top.yukonga.miuix.kmp.basic.FabPosition
@@ -44,6 +52,7 @@ import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -245,6 +254,10 @@ fun MainScreen() {
                     selectedNavIndex = 3
                     navigator.replaceAll(listOf(Route.PasswordList(PasswordListMode.RECENT_DELETED)))
                 }
+                CategoryNavigationItem.SETTINGS -> {
+                    selectedNavIndex = 4
+                    navigator.replaceAll(listOf(Route.Settings))
+                }
             }
         }
     }
@@ -270,11 +283,22 @@ fun MainScreen() {
             } else if (isLandscapeWideScreen && navigator.current() !is Route.Welcome && navigator.current() !is Route.Locked) {
                 // 横屏三栏布局（欢迎页/锁定页不使用三栏）
                 Row(modifier = Modifier.fillMaxSize()) {
-                    // 左侧导航栏
+                    // 左侧导航栏（顶部为库名，不占内容区高度；设置为第五个导航项）
                     AppNavigationRail(
                         selectedIndex = selectedNavIndex,
                         onItemSelected = handleNavigationItemSelected,
-                        expanded = configuration.screenWidthDp >= 1200
+                        expanded = configuration.screenWidthDp >= 1200,
+                        header = {
+                            Text(
+                                text = currentLibrary?.displayName ?: "WebDAVPass",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Medium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                modifier = Modifier.padding(horizontal = 8.dp)
+                            )
+                        }
                     )
 
                     // 内容区域
@@ -288,16 +312,55 @@ fun MainScreen() {
                             entryDecorators = listOf(
                                 rememberSaveableStateHolderNavEntryDecorator()
                             ),
+                            // 自定义转场（参照 miuix-nav 的 MiuixDefault 风格）：
+                            // 前进：新页全宽右滑入场 + 微缩放 + 渐隐出现，旧页左移四分之一退出
+                            // 后退：反向，旧页右滑退出、下层页面复位
                             transitionSpec = {
                                 ContentTransform(
-                                    targetContentEnter = fadeIn(animationSpec = tween(200)),
-                                    initialContentExit = fadeOut(animationSpec = tween(200))
+                                    targetContentEnter =
+                                        slideInHorizontally(
+                                            animationSpec = tween(300),
+                                            initialOffsetX = { it }
+                                        ) +
+                                            scaleIn(
+                                                initialScale = 0.95f,
+                                                animationSpec = tween(300)
+                                            ) +
+                                            fadeIn(animationSpec = tween(300)),
+                                    initialContentExit =
+                                        slideOutHorizontally(
+                                            animationSpec = tween(300),
+                                            targetOffsetX = { -it / 4 }
+                                        ) +
+                                            scaleOut(
+                                                targetScale = 0.95f,
+                                                animationSpec = tween(300)
+                                            ) +
+                                            fadeOut(animationSpec = tween(300))
                                 )
                             },
                             popTransitionSpec = {
                                 ContentTransform(
-                                    targetContentEnter = fadeIn(animationSpec = tween(200)),
-                                    initialContentExit = fadeOut(animationSpec = tween(200))
+                                    targetContentEnter =
+                                        slideInHorizontally(
+                                            animationSpec = tween(300),
+                                            initialOffsetX = { -it / 4 }
+                                        ) +
+                                            scaleIn(
+                                                initialScale = 0.95f,
+                                                animationSpec = tween(300)
+                                            ) +
+                                            fadeIn(animationSpec = tween(300)),
+                                    initialContentExit =
+                                        slideOutHorizontally(
+                                            animationSpec = tween(300),
+                                            targetOffsetX = { it }
+                                        ) +
+                                            scaleOut(
+                                                targetScale = 0.95f,
+                                                animationSpec = tween(300)
+                                            ) +
+                                            fadeOut(animationSpec = tween(300))
                                 )
                             },
                             transitionEffects = NavDisplayTransitionEffects.None,
@@ -387,65 +450,39 @@ fun MainScreen() {
                     }
 
                     // 横屏主页：不显示四卡片导航，直接以三栏布局接管（列表 + 详情）
+                    // 库名与设置入口已移至左侧导航栏顶部，不再占内容区高度
                     LaunchedEffect(Unit) {
                         tokenViewModel.passwordViewModel.setPasswordListMode(PasswordListMode.ALL_PASSWORDS, refreshNow = true)
                     }
 
                     Box(modifier = Modifier.fillMaxSize()) {
-                        Scaffold(
-                            popupHost = {},
-                            topBar = {
-                                TopAppBar(
-                                    title = currentLibrary?.displayName ?: "WebDAVPass",
-                                    navigationIcon = {},
-                                    actions = {
-                                        IconButton(onClick = {
-                                            navigator.push(Route.Settings)
-                                        }) {
-                                            Icon(
-                                                imageVector = MiuixIcons.Settings,
-                                                contentDescription = "设置"
-                                            )
-                                        }
-                                    }
-                                )
+                        LandscapePasswordPanes(
+                            tokenViewModel = tokenViewModel,
+                            listMode = PasswordListMode.ALL_PASSWORDS,
+                            selectedEntryId = selectedEntryId,
+                            onEntryClick = { entryId ->
+                                selectedEntryId = entryId
                             },
-                            floatingActionButton = {
-                                FloatingActionButton(
-                                    onClick = {
-                                        showScanBottomSheet.value = true
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = MiuixIcons.Scan,
-                                        contentDescription = "扫描二维码"
-                                    )
-                                }
+                            onDetailBack = {
+                                selectedEntryId = null
                             },
-                            floatingActionButtonPosition = FabPosition.Companion.End,
-                            content = { paddingValues ->
-                                Box(
-                                    modifier = Modifier.Companion
-                                        .fillMaxSize()
-                                        .padding(paddingValues)
-                                ) {
-                                    LandscapePasswordPanes(
-                                        tokenViewModel = tokenViewModel,
-                                        listMode = PasswordListMode.ALL_PASSWORDS,
-                                        selectedEntryId = selectedEntryId,
-                                        onEntryClick = { entryId ->
-                                            selectedEntryId = entryId
-                                        },
-                                        onDetailBack = {
-                                            selectedEntryId = null
-                                        },
-                                        onDetailDeleted = {
-                                            selectedEntryId = null
-                                        }
-                                    )
-                                }
+                            onDetailDeleted = {
+                                selectedEntryId = null
                             }
                         )
+                        FloatingActionButton(
+                            onClick = {
+                                showScanBottomSheet.value = true
+                            },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = MiuixIcons.Scan,
+                                contentDescription = "扫描二维码"
+                            )
+                        }
                         MiuixPopupHost()
                     }
                 }
@@ -745,8 +782,7 @@ fun MainScreen() {
                             },
                             onDetailDeleted = {
                                 selectedEntryId = null
-                            },
-                            statusBarsPadding = true
+                            }
                         )
                         MiuixPopupHost()
                     }
@@ -796,8 +832,7 @@ fun MainScreen() {
                             },
                             onDetailDeleted = {
                                 selectedEntryId = null
-                            },
-                            statusBarsPadding = true
+                            }
                         )
                         MiuixPopupHost()
                     }
