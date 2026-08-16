@@ -12,12 +12,10 @@ Docs\项目简介.md
 - 密钥库文件在仓库根目录 `PublicHub`（已 gitignore，CI 从 `KEYSTORE_BASE64` 解密生成）。本地需要自行放置。
 - 凭据从 `local.properties` 读取：`KEY_ALIAS` / `KEY_PASSWORD` / `STORE_PASSWORD`，缺省回退同名环境变量。切勿提交真实凭据。
 
-## 版本号自动计算，勿硬编码
 
-- `buildSrc/src/main/kotlin/Versioning.kt` 用 JGit 从 git 历史计算：versionName = `major.main提交数.MMddHHmm`（main 分支加 `-release` 后缀），versionCode = `major*1_000_000 + mainCount*1_000 + MMddHHmm`。
-- 改版本只动 `app/build.gradle.kts` 顶部的 `versionMajor` / `versionMajorSubtract`，不要动 gradle.properties。
-- 依赖本地存在 main 分支引用（`refs/heads/main`、`origin/main` 等），找不到时回退到 HEAD 计数——浅克隆会导致版本号异常。
-- 每次构建版本都会随提交数/时间变化；查当前值用 `:app:printVersionName`。
+- `version.properties` 修改仅限major非用户要求勿改。
+版本号由ci决定
+- 查当前值：`:app:printVersionName`
 
 ## 模块结构
 
@@ -25,7 +23,6 @@ Docs\项目简介.md
 - `webdav`、`checkupdates`：**git 子模块**（SSH URL `git@github.com:xzy-nine-common/...`），clone 需 `--recursive`。云同步与文件浏览 UI 由 `webdav` 子模块提供，主应用只调用其组合；子模块代码应在对应仓库修改，勿在本仓库直接改。
 - `crypto`（含 JNI aes/argon2）、`database`：源自 Keepass2Android 的加密与 KDBX 读写层（`com.kunzisoft.keepass`）。
 - `base`、`icon-pack`(+classic/material)、`text-drawable`、`token-images`：工具与图标模块。
-- `buildSrc`：仅版本计算（JGit）。
 
 ## 构建配置注意
 
