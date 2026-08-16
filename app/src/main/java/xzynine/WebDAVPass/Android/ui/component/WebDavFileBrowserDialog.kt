@@ -208,16 +208,18 @@ fun WebDavFileBrowserDialog(
      * 拼接文件完整地址（不带尾部斜杠）
      */
     fun buildFileUrl(baseUrl: String, relativePath: String): String {
+        val root = normalizeServerRootUrl(baseUrl)
         val rel = encodeRelativePath(relativePath)
-        return if (rel.isBlank()) baseUrl else "$baseUrl$rel"
+        return if (rel.isBlank()) root else "$root$rel"
     }
 
     /**
      * 拼接目录完整地址（带尾部斜杠）
      */
     fun buildDirectoryUrl(baseUrl: String, relativeDirectory: String): String {
+        val root = normalizeServerRootUrl(baseUrl)
         val rel = encodeRelativePath(relativeDirectory)
-        return if (rel.isBlank()) baseUrl else "$baseUrl$rel/"
+        return if (rel.isBlank()) root else "$root$rel/"
     }
 
     /**
@@ -399,6 +401,18 @@ fun WebDavFileBrowserDialog(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             when {
+                showDeleteConfirm && detailEntry != null -> DeleteConfirmView(
+                    entry = detailEntry!!,
+                    working = working,
+                    onCancel = { showDeleteConfirm = false },
+                    onConfirm = {
+                        showDeleteConfirm = false
+                        detailEntry?.let { target ->
+                            coroutineScope.launch { deleteEntry(target) }
+                        }
+                    }
+                )
+
                 detailEntry != null -> DetailView(
                     entry = detailEntry!!,
                     working = working,
@@ -408,7 +422,9 @@ fun WebDavFileBrowserDialog(
                         message = null
                     },
                     onDownload = {
-                        coroutineScope.launch { downloadEntry(detailEntry!!) }
+                        detailEntry?.let { target ->
+                            coroutineScope.launch { downloadEntry(target) }
+                        }
                     },
                     onDelete = { showDeleteConfirm = true }
                 )
@@ -457,16 +473,6 @@ fun WebDavFileBrowserDialog(
                                 working = false
                             }
                         }
-                    }
-                )
-
-                showDeleteConfirm -> DeleteConfirmView(
-                    entry = detailEntry!!,
-                    working = working,
-                    onCancel = { showDeleteConfirm = false },
-                    onConfirm = {
-                        showDeleteConfirm = false
-                        coroutineScope.launch { deleteEntry(detailEntry!!) }
                     }
                 )
 

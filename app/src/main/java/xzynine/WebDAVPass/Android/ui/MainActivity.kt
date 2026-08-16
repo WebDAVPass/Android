@@ -246,7 +246,7 @@ fun MainScreen() {
                     (context as? Activity)?.finish()
                 } else {
                     lastExitPressTime = now
-                    ToastUtils.showShortToast(context, "再按一次返回键退出")
+                    ToastUtils.showShortToast(context, "再次返回以退出")
                 }
             } else if (isLandscapeWideScreen) {
                 handleNavigationItemSelected(CategoryNavigationItem.ALL_PASSWORDS)

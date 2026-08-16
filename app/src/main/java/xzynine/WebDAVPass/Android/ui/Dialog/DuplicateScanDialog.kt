@@ -55,13 +55,15 @@ fun DuplicateScanDialog(
     val expandedGroups = remember { mutableStateMapOf<Int, Boolean>() }
     val masterSelections = remember { mutableStateMapOf<Int, Long>() }
 
-    LaunchedEffect(show) {
+    LaunchedEffect(show, groups) {
         if (show) {
             expandedGroups.clear()
             masterSelections.clear()
             groups.forEachIndexed { index, group ->
-                masterSelections[index] = group.entries.maxByOrNull { it.modifiedTime }?.entryId ?: -1L
-                expandedGroups[index] = index == 0
+                group.entries.maxByOrNull { it.modifiedTime }?.entryId?.let { id ->
+                    masterSelections[group.groupId] = id
+                }
+                expandedGroups[group.groupId] = index == 0
             }
         }
     }
