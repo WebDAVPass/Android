@@ -13,8 +13,7 @@ Docs\项目简介.md
 - 凭据从 `local.properties` 读取：`KEY_ALIAS` / `KEY_PASSWORD` / `STORE_PASSWORD`，缺省回退同名环境变量。切勿提交真实凭据。
 
 
-- `version.properties` 修改仅限major非用户要求勿改。
-版本号由ci决定
+- `version.properties` 修改仅限 major；非用户要求勿改，版本号由 CI 决定。
 - 查当前值：`:app:printVersionName`
 
 ## 模块结构
