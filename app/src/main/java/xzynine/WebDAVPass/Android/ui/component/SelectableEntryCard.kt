@@ -19,7 +19,8 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.withTimeoutOrNull
-import top.yukonga.miuix.kmp.preference.ArrowPreference
+import xzynine.WebDAVPass.Android.ui.component.Preference
+import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
 
@@ -117,7 +118,8 @@ fun SelectableEntryCard(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Box(modifier = Modifier.weight(1f)) {
-            ArrowPreference(
+            Preference(
+                type = PreferenceType.Arrow,
                 title = title,
                 summary = summary,
                 startAction = {
@@ -130,7 +132,7 @@ fun SelectableEntryCard(
                 onClick = {
                     if (skipNextClick) {
                         skipNextClick = false
-                        return@ArrowPreference
+                        return@Preference
                     }
                     onClick()
                 }

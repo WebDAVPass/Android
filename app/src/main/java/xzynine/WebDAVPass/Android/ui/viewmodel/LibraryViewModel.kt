@@ -11,6 +11,7 @@ import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.DatabaseManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -82,6 +83,16 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
         } else {
             null
         }
+    }
+
+    /**
+     * 同步读取当前选中的库（阻塞式预热内存缓存，仅启动期一次性调用）。
+     *
+     * 用于 MainActivity 确定初始路由：此时 currentLibrary 流可能尚未预热完成，
+     * 直接读取内存缓存避免首帧路由闪烁。
+     */
+    fun getCurrentLibrarySync(): LibraryContext? {
+        return libraryContextStore.getCurrentLibrary()
     }
 
     /**
@@ -343,6 +354,8 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
             // 快照重建开始时的写入代次：若代次不同说明 KDF 期间有并发写入。
             val startGeneration = DatabaseManager.currentSaveGeneration()
             try {
+                // 已被取消（锁定/切库）则立即退出，避免无谓跑一遍 KDF
+                ensureActive()
                 val rebuilt = runCatching {
                     // validatePassword 内部会打开数据库并存入 DatabaseManager 缓存，
                     // store() 时会再快照一次 currentSaveGeneration 作为 storeGeneration。
@@ -352,8 +365,23 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
                         keyFileData = null  // 已由 invalidateCacheKeepKeyFile 保留在 DatabaseManager 中
                     )
                 }.getOrDefault(false)
+
+                // 重建期间 UI 已被锁定：validatePassword 是阻塞代码，cancel 无法中断它，
+                // 其内部 store() 会把解密数据重新塞回 DatabaseManager——这里必须立即丢弃，
+                // 否则锁定态下任何 tryGet 命中缓存都能无密码读取全量数据（安全性页泄漏）。
+                // 同时避免把用户刚完成的手动解锁状态覆盖掉。
+                if (!_isLibraryUnlocked.value) {
+                    DatabaseManager.close()
+                    Logger.w(
+                        UNLOCK_STATE_LOG_TAG,
+                        "缓存重建期间 UI 已锁定，丢弃重建缓存: path=$localPath"
+                    )
+                    return@launch
+                }
+
                 if (!rebuilt) {
-                    // 重建失败（凭据失配/文件损坏/权限失效等）：切回锁定态
+                    // 重建失败（凭据失配/文件损坏/权限失效等）：切回锁定态。
+                    // 此时已确认 UI 仍处于解锁态（上面早退过），回落不会覆盖手动解锁状态。
                     withContext(Dispatchers.Main.immediate) {
                         Logger.w(
                             UNLOCK_STATE_LOG_TAG,

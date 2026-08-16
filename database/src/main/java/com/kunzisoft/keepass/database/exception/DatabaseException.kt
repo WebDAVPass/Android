@@ -83,7 +83,7 @@ class InvalidAlgorithmDatabaseException : DatabaseInputException {
 
 class UnknownDatabaseLocationException : DatabaseException()
 
-class RegisterInReadOnlyDatabaseException() : DatabaseException()
+class RegisterInReadOnlyDatabaseException : DatabaseException()
 
 class HardwareKeyDatabaseException : DatabaseException()
 

@@ -10,11 +10,9 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -51,7 +49,7 @@ import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.model.RegisterInfo
 import xzynine.WebDAVPass.Android.model.SearchInfo
 import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.theme.AppTheme
 
 class AutofillPickerActivity : AppCompatActivity() {
@@ -149,14 +147,14 @@ class AutofillPickerActivity : AppCompatActivity() {
                         AutofillManager.EXTRA_AUTHENTICATION_RESULT,
                         response
                     )
-                    setResult(Activity.RESULT_OK, replyIntent)
+                    setResult(RESULT_OK, replyIntent)
                 } else {
                     Log.w(TAG, "Failed to build fill response")
-                    setResult(Activity.RESULT_CANCELED)
+                    setResult(RESULT_CANCELED)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error loading entries", e)
-                setResult(Activity.RESULT_CANCELED)
+                setResult(RESULT_CANCELED)
             }
             finish()
         }
@@ -220,7 +218,7 @@ class AutofillPickerActivity : AppCompatActivity() {
     }
 
     private fun cancelAndFinish() {
-        setResult(Activity.RESULT_CANCELED)
+        setResult(RESULT_CANCELED)
         finish()
     }
 }

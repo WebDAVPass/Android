@@ -126,13 +126,19 @@ class BiometricKeyStoreManager(private val context: Context) {
     fun authenticate(
         activity: FragmentActivity,
         cipher: Cipher?, // Can be null if using Keyguard fallback (no CryptoObject)
-        title: String = "验证身份",
+        title: String? = null,
         subtitle: String = "使用生物识别或设备密码解锁",
         negativeButtonText: String = "取消",
         authMode: Int = 0,
+        libraryFileName: String? = null,
         onSuccess: (Cipher?) -> Unit,
         onFailure: (Int, CharSequence) -> Unit
     ) {
+        // 默认标题：自动解锁场景（未显式指定标题）时展示"验证身份并自动解锁{库文件名}"，
+        // 未提供库文件名时回退为通用"验证身份"。
+        val resolvedTitle = title
+            ?: if (libraryFileName.isNullOrBlank()) "验证身份" else "验证身份并自动解锁$libraryFileName"
+
         // API 29 的 PIN 模式由外层使用 Keyguard Intent 处理。
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R && authMode == 2) {
             onFailure(ERROR_REQUIRE_DEVICE_CREDENTIAL, "需要设备凭据认证")
@@ -166,16 +172,11 @@ class BiometricKeyStoreManager(private val context: Context) {
                 onFailure(errorCode, errString)
             }
 
-            override fun onAuthenticationFailed() {
-                super.onAuthenticationFailed()
-                // Biometric recognized but rejected (e.g. wrong fingerprint)
-                // Do not call onFailure here, let user retry (BiometricPrompt handles retries)
-            }
         }
 
         val biometricPrompt = BiometricPrompt(activity, executor, callback)
         val promptInfoBuilder = BiometricPrompt.PromptInfo.Builder()
-            .setTitle(title)
+            .setTitle(resolvedTitle)
             .setSubtitle(subtitle)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {

@@ -1,6 +1,7 @@
 package xzynine.WebDAVPass.Android.ui.component
 
 import android.content.Context
+import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -31,6 +32,9 @@ import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzylib.base.util.HapticFeedbackUtils
 
+/** 两次振动之间的最小间隔（毫秒），避免快速拖动时持续震动。 */
+private const val VIBRATE_MIN_INTERVAL_MS = 80L
+
 /**
  * 默认的字母索引列表（A-Z + #）。
  */
@@ -59,6 +63,7 @@ fun AlphabetIndexScrollbar(
     var barHeightPx by remember { mutableStateOf(0) }
     var indicatorLetter by remember { mutableStateOf<String?>(null) }
     var lastVibratedLetter by remember { mutableStateOf<String?>(null) } // 上次振动的字母
+    var lastVibratedAt by remember { mutableStateOf(0L) } // 上次振动的时间戳（毫秒）
     var currentY by remember { mutableStateOf(0f) } // 当前触摸的Y轴位置（像素）
 
     /**
@@ -70,11 +75,13 @@ fun AlphabetIndexScrollbar(
         val index = (y / itemHeight).toInt().coerceIn(0, letters.lastIndex)
         val letter = letters[index]
         if (enabledLetters.contains(letter)) {
-            // 只有当字母发生变化时才振动
-            if (letter != lastVibratedLetter) {
-                // 加强振动效果，增加振动时长
+            // 仅当字母变化且距上次振动超过最小间隔时才振动，避免快速拖动时持续震动
+            if (letter != lastVibratedLetter &&
+                SystemClock.uptimeMillis() - lastVibratedAt >= VIBRATE_MIN_INTERVAL_MS
+            ) {
                 HapticFeedbackUtils.performLightHaptic(context, 50L)
                 lastVibratedLetter = letter
+                lastVibratedAt = SystemClock.uptimeMillis()
             }
             indicatorLetter = letter
             currentY = y // 更新当前触摸的Y轴位置

@@ -1,6 +1,13 @@
 package xzynine.WebDAVPass.Android.ui
 
+import android.app.Activity
+import android.app.ActivityManager
+import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
+import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -10,65 +17,47 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import xzylib.base.util.ToastUtils
-import top.yukonga.miuix.kmp.basic.FabPosition
-import top.yukonga.miuix.kmp.basic.FloatingActionButton
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Scan
-import top.yukonga.miuix.kmp.icon.extended.Settings
-import top.yukonga.miuix.kmp.icon.extended.Back
-import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
+import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
-import xzynine.WebDAVPass.Android.ui.navigation.Navigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
-import xzynine.WebDAVPass.Android.ui.navigation.rememberNavigator
-import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
-import xzynine.WebDAVPass.Android.ui.Screen.DatabaseSettingsScreen
+import xzynine.WebDAVPass.Android.ui.navigation.replaceAll
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
 import xzynine.WebDAVPass.Android.ui.Dialog.ScanTokenScreen
-import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
-import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
-import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
-import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
-import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
-import xzynine.WebDAVPass.Android.ui.Screen.SecurityCheckScreen
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.Screen.OnboardingScreen
+import xzynine.WebDAVPass.Android.ui.Screen.isOnboardingCompleted
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
-import androidx.navigation3.runtime.entryProvider
-import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
-import androidx.navigation3.ui.NavDisplay
+import xzynine.WebDAVPass.Android.ui.component.CategoryNavigationItem
+import kotlin.time.Duration.Companion.milliseconds
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // 截图防泄密：全局禁止截屏/录屏（涉及密码与令牌内容）
-        window.setFlags(
-            android.view.WindowManager.LayoutParams.FLAG_SECURE,
-            android.view.WindowManager.LayoutParams.FLAG_SECURE
-        )
         this.setContent {
             AppTheme {
                 SetupSystemBars()
@@ -81,11 +70,41 @@ class MainActivity : FragmentActivity() {
 /** 后台自动锁定阈值：退到后台超过该时长，回到前台即锁定。 */
 private const val BACKGROUND_LOCK_THRESHOLD_MS = 30_000L
 
+/** 栈底双击退出时间窗口（毫秒）。 */
+private const val EXIT_BACK_THRESHOLD_MS = 2000L
+
 @Composable
 fun MainScreen() {
     val context = LocalContext.current
     val tokenViewModel: TokenViewModel = remember(context.applicationContext) {
         TokenViewModel.getSharedInstance(context.applicationContext)
+    }
+
+    // 截屏防护：按开关动态启停 FLAG_SECURE（临时关闭 5 分钟后自动恢复开启，进程重建默认恢复防护）
+    val isSecureRecentsEnabled by tokenViewModel.isSecureRecentsEnabled.collectAsState()
+    val activity = context as? Activity
+    LaunchedEffect(isSecureRecentsEnabled) {
+        val window = activity?.window ?: return@LaunchedEffect
+        if (isSecureRecentsEnabled) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE
+            )
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
+    // 最近任务占位预览颜色：FLAG_SECURE 生效时系统按该颜色绘制占位块（API 33+，随主题色变化）
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val placeholderColor = MiuixTheme.colorScheme.surface.toArgb()
+        LaunchedEffect(placeholderColor) {
+            activity?.setTaskDescription(
+                ActivityManager.TaskDescription.Builder()
+                    .setBackgroundColor(placeholderColor)
+                    .build()
+            )
+        }
     }
 
     // 超时锁定：
@@ -131,7 +150,7 @@ fun MainScreen() {
     // 无操作超时：任何触摸操作重置计时，无操作超过设定分钟数即锁定（每 30 秒检查一次）
     LaunchedEffect(Unit) {
         while (true) {
-            delay(30_000L)
+            delay(30_000L.milliseconds)
             val timeoutMinutes = tokenViewModel.lockTimeoutMinutes.value
             val timeoutMs = timeoutMinutes * 60_000L
             if (timeoutMs > 0L &&
@@ -145,16 +164,106 @@ fun MainScreen() {
     }
 
     val showCloudBindingDialog = remember { mutableStateOf(false) }
-    var showWelcome by rememberSaveable { mutableStateOf(true) }
+    val showWelcomeState = rememberSaveable { mutableStateOf(true) }
+    var showWelcome by showWelcomeState
+    // 首次启动引导：异步读取完成标记（内部 IO），读取完成前不渲染任何路由，
+    // 避免首帧 runBlocking 阻塞主线程，也避免引导/主页误闪
+    val onboardingCompleted = produceState<Boolean?>(initialValue = null) {
+        value = isOnboardingCompleted(context)
+    }
+    var showOnboarding by remember { mutableStateOf(false) }
+    LaunchedEffect(onboardingCompleted.value) {
+        if (onboardingCompleted.value == false) {
+            showOnboarding = true
+        }
+    }
     val currentLibrary by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
     val showScanBottomSheet = remember { mutableStateOf(false) }
 
-    val startRoute = remember(showWelcome) {
-        if (showWelcome) Route.Welcome else Route.Home
-    }
-    val navigator = rememberNavigator(startRoute)
+    // 横屏模式检测
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isWideScreen = configuration.screenWidthDp >= 600
+    val isLandscapeWideScreen = isLandscape && isWideScreen
 
-    CompositionLocalProvider(LocalNavigator provides navigator) {
+    // 横屏模式下的导航状态（rememberSaveable：配置变更/进程重建后与 backStack 保持一致）
+    var selectedNavIndex by rememberSaveable { mutableIntStateOf(0) }
+    var selectedEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    // 初始路由：存在已记录的库文件 → 锁定页（解锁目标为上次库）；否则欢迎页。
+    // 用同步快照一次性决定，避免首帧 currentLibrary 流尚未预热导致初始路由闪烁或旋转后丢失导航栈。
+    val startRoute = remember {
+        if (tokenViewModel.libraryViewModel.getCurrentLibrarySync() != null) {
+            Route.Locked
+        } else {
+            Route.Welcome
+        }
+    }
+    val backStack = rememberNavBackStack<Route>(startRoute)
+
+    // 横屏模式下导航项选择处理
+    val handleNavigationItemSelected = remember(tokenViewModel, backStack) {
+        { item: CategoryNavigationItem ->
+            selectedEntryId = null
+            when (item) {
+                CategoryNavigationItem.ALL_PASSWORDS -> {
+                    selectedNavIndex = 0
+                    backStack.replaceAll(listOf(Route.PasswordList(PasswordListMode.ALL_PASSWORDS)))
+                }
+                CategoryNavigationItem.TOKENS -> {
+                    selectedNavIndex = 1
+                    backStack.replaceAll(listOf(Route.TokenList))
+                }
+                CategoryNavigationItem.SECURITY -> {
+                    selectedNavIndex = 2
+                    backStack.replaceAll(listOf(Route.SecurityCheck))
+                }
+                CategoryNavigationItem.RECENT_DELETED -> {
+                    selectedNavIndex = 3
+                    backStack.replaceAll(listOf(Route.PasswordList(PasswordListMode.RECENT_DELETED)))
+                }
+                CategoryNavigationItem.SETTINGS -> {
+                    selectedNavIndex = 4
+                    backStack.replaceAll(listOf(Route.Settings))
+                }
+            }
+        }
+    }
+
+    var lastExitPressTime by remember { mutableLongStateOf(0L) }
+
+    CompositionLocalProvider(LocalNavigator provides backStack) {
+        // 栈底返回拦截（NavDisplay 对栈底返回事件不消费，会直接传给系统导致退出）：
+        // 竖屏卡片主页 / 横屏密码列表 tab 且右侧详情为空 → 双击返回才退出；
+        // 其余栈底页面（横屏 tab 切换用 replaceAll 遗留的单页栈）→ 先回主页/tab。
+        BackHandler(
+            enabled = backStack.size == 1 &&
+                backStack.lastOrNull() !is Route.Welcome &&
+                backStack.lastOrNull() !is Route.Locked &&
+                !showScanBottomSheet.value &&
+                !showCloudBindingDialog.value
+        ) {
+            val top = backStack.lastOrNull()
+            if (selectedEntryId != null) {
+                selectedEntryId = null
+                return@BackHandler
+            }
+            val atMainPage = top is Route.Home ||
+                (top is Route.PasswordList && top.listMode == PasswordListMode.ALL_PASSWORDS)
+            if (atMainPage) {
+                val now = SystemClock.uptimeMillis()
+                if (now - lastExitPressTime < EXIT_BACK_THRESHOLD_MS) {
+                    (context as? Activity)?.finish()
+                } else {
+                    lastExitPressTime = now
+                    ToastUtils.showShortToast(context, "再次返回以退出")
+                }
+            } else if (isLandscapeWideScreen) {
+                handleNavigationItemSelected(CategoryNavigationItem.ALL_PASSWORDS)
+            } else {
+                backStack.replaceAll(listOf(Route.Home))
+            }
+        }
         // 全局触摸监听：任何触摸操作都重置无操作超时计时
         Box(
             modifier = Modifier
@@ -166,310 +275,40 @@ fun MainScreen() {
                     }
                 }
         ) {
-            NavDisplay(
-                backStack = navigator.backStack,
-                entryDecorators = listOf(
-                    rememberSaveableStateHolderNavEntryDecorator()
-                ),
-                onBack = {
-                    if (showCloudBindingDialog.value) {
-                        showCloudBindingDialog.value = false
-                        return@NavDisplay
+            if (onboardingCompleted.value == null) {
+                // 引导状态读取中：空白占位，不渲染路由
+            } else if (showOnboarding) {
+                OnboardingScreen(
+                    onFinish = {
+                        showOnboarding = false
                     }
-                    if (showScanBottomSheet.value) {
-                        showScanBottomSheet.value = false
-                        return@NavDisplay
-                    }
-                    if (navigator.backStackSize() > 1) {
-                        navigator.pop()
-                    }
-                },
-            entryProvider = entryProvider {
-                entry<Route.Welcome> {
-                    WelcomeScreen(
-                        tokenViewModel = tokenViewModel,
-                        onEnterLibrary = {
-                            navigator.replaceAll(listOf(Route.Home))
-                            showWelcome = false
-                        },
-                        onBackPressed = {
-                            if (navigator.backStackSize() > 1) {
-                                navigator.pop()
-                                true
-                            } else {
-                                false
-                            }
-                        }
-                    )
-                }
-                entry<Route.Home> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
-
-                    LaunchedEffect(isLibraryUnlocked, lib) {
-                        if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
-                            showWelcome = true
-                        }
-                    }
-
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        Scaffold(
-                            popupHost = {},
-                            topBar = {
-                                TopAppBar(
-                                    title = currentLibrary?.displayName ?: "WebDAVPass",
-                                    navigationIcon = {},
-                                    actions = {
-                                        IconButton(onClick = {
-                                            navigator.push(Route.Settings)
-                                        }) {
-                                            Icon(
-                                                imageVector = MiuixIcons.Settings,
-                                                contentDescription = "设置"
-                                            )
-                                        }
-                                    }
-                                )
-                            },
-                            floatingActionButton = {
-                                FloatingActionButton(
-                                    onClick = {
-                                        showScanBottomSheet.value = true
-                                    }
-                                ) {
-                                    Icon(
-                                        imageVector = MiuixIcons.Scan,
-                                        contentDescription = "扫描二维码"
-                                    )
-                                }
-                            },
-                            floatingActionButtonPosition = FabPosition.Companion.End,
-                            content = { paddingValues ->
-                                Box(
-                                    modifier = Modifier.Companion
-                                        .fillMaxSize()
-                                        .padding(paddingValues)
-                                ) {
-                                    HomeScreen(
-                                        tokenViewModel = tokenViewModel,
-                                        onNavigateToPasswordList = { listMode ->
-                                            navigator.push(Route.PasswordList(listMode))
-                                        },
-                                        onNavigateToTokenList = {
-                                            navigator.push(Route.TokenList)
-                                        },
-                                        onNavigateToSecurityCheck = {
-                                            navigator.push(Route.SecurityCheck)
-                                        }
-                                    )
-                                }
-                            }
-                        )
-                        MiuixPopupHost()
-                    }
-                }
-                entry<Route.SecurityCheck> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
-
-                    LaunchedEffect(isLibraryUnlocked, lib) {
-                        if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
-                            showWelcome = true
-                        }
-                    }
-
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        SecurityCheckScreen(
-                            tokenViewModel = tokenViewModel,
-                            onNavigateBack = {
-                                navigator.pop()
-                            },
-                            onEntryClick = { entryId ->
-                                navigator.push(Route.PasswordEntryDetail(entryId))
-                            }
-                        )
-                        MiuixPopupHost()
-                    }
-                }
-                entry<Route.Settings> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
-
-                    LaunchedEffect(isLibraryUnlocked, lib) {
-                        if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
-                            showWelcome = true
-                        }
-                    }
-
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        SettingsScreen(
-                            viewModel = tokenViewModel,
-                            onCloudBindingClick = {
-                                if (currentLibrary == null) {
-                                    ToastUtils.showShortToast(context, "请先选择数据库文件")
-                                } else {
-                                    showCloudBindingDialog.value = true
-                                }
-                            },
-                            onSwitchLibraryClick = {
-                                tokenViewModel.libraryViewModel.clearCurrentLibrarySelection()
-                                navigator.replaceAll(listOf(Route.Welcome))
-                                showWelcome = true
-                            },
-                            onDatabaseSettingsClick = {
-                                navigator.push(Route.DatabaseSettings)
-                            },
-                            onNavigateBack = {
-                                navigator.pop()
-                            }
-                        )
-                        MiuixPopupHost()
-                    }
-                }
-                entry<Route.DatabaseSettings> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
-
-                    LaunchedEffect(isLibraryUnlocked, lib) {
-                        if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
-                            showWelcome = true
-                        }
-                    }
-
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        DatabaseSettingsScreen(
-                            viewModel = tokenViewModel,
-                            onNavigateBack = {
-                                navigator.pop()
-                            }
-                        )
-                        MiuixPopupHost()
-                    }
-                }
-                entry<Route.TokenList> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
-
-                    LaunchedEffect(isLibraryUnlocked, lib) {
-                        if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
-                            showWelcome = true
-                        }
-                    }
-
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        Scaffold(
-                            popupHost = {},
-                            topBar = {
-                                TopAppBar(
-                                    title = "令牌列表",
-                                    navigationIcon = {
-                                        IconButton(onClick = {
-                                            navigator.pop()
-                                        }) {
-                                            Icon(
-                                                imageVector = MiuixIcons.Back,
-                                                contentDescription = "返回"
-                                            )
-                                        }
-                                    },
-                                    actions = {}
-                                )
-                            },
-                            content = { paddingValues ->
-                                Box(
-                                    modifier = Modifier.Companion
-                                        .fillMaxSize()
-                                        .padding(paddingValues)
-                                ) {
-                                    TokenListScreen(
-                                        tokenViewModel = tokenViewModel,
-                                        onEntryClick = { entryId ->
-                                            navigator.push(Route.PasswordEntryDetail(entryId))
-                                        }
-                                    )
-                                }
-                            }
-                        )
-                        MiuixPopupHost()
-                    }
-                }
-                entry<Route.PasswordList> { key ->
-                    val listMode = key.listMode
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
-
-                    LaunchedEffect(listMode) {
-                        tokenViewModel.passwordViewModel.setPasswordListMode(listMode, refreshNow = true)
-                        tokenViewModel.passwordViewModel.refreshRecentDeletedCount()
-                    }
-
-                    LaunchedEffect(isLibraryUnlocked, lib) {
-                        if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
-                            showWelcome = true
-                        }
-                    }
-
-                    DisposableEffect(listMode) {
-                        onDispose {
-                            tokenViewModel.passwordViewModel.resetPasswordGroupStackOnly()
-                            if (listMode == PasswordListMode.RECENT_DELETED) {
-                                tokenViewModel.passwordViewModel.setPasswordListMode(PasswordListMode.ALL_PASSWORDS, refreshNow = true)
-                            }
-                        }
-                    }
-
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        PasswordListScreen(
-                            tokenViewModel = tokenViewModel,
-                            title = if (listMode == PasswordListMode.RECENT_DELETED) "最近删除" else "全部密码",
-                            emptyStateText = if (listMode == PasswordListMode.RECENT_DELETED) "暂无最近删除条目" else "暂无条目",
-                            emptySearchStateText = "无匹配条目",
-                            enableGroupNavigation = listMode == PasswordListMode.ALL_PASSWORDS,
-                            enableRecycleBinActions = listMode == PasswordListMode.RECENT_DELETED,
-                            onEntryClick = { entryId ->
-                                navigator.push(Route.PasswordEntryDetail(entryId))
-                            },
-                            onNavigateBack = {
-                                navigator.pop()
-                            }
-                        )
-                        MiuixPopupHost()
-                    }
-                }
-                entry<Route.PasswordEntryDetail> { key ->
-                    val entryId = key.entryId
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState(null)
-
-                    LaunchedEffect(isLibraryUnlocked, lib) {
-                        if (!isLibraryUnlocked || lib == null) {
-                            navigator.replaceAll(listOf(Route.Welcome))
-                            showWelcome = true
-                        }
-                    }
-
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        PasswordEntryDetailScreen(
-                            tokenViewModel = tokenViewModel,
-                            entryId = entryId,
-                            onNavigateBack = {
-                                navigator.pop()
-                            },
-                            onDeleted = {
-                                navigator.pop()
-                            }
-                        )
-                        MiuixPopupHost()
-                    }
-                }
+                )
+            } else if (isLandscapeWideScreen && backStack.lastOrNull() !is Route.Welcome && backStack.lastOrNull() !is Route.Locked) {
+                // 横屏三栏布局（欢迎页/锁定页不使用三栏）
+                LandscapeMainNavigation(
+                    backStack = backStack,
+                    tokenViewModel = tokenViewModel,
+                    currentLibrary = currentLibrary,
+                    selectedNavIndex = selectedNavIndex,
+                    onNavigationItemSelected = handleNavigationItemSelected,
+                    railExpanded = configuration.screenWidthDp >= 1200,
+                    selectedEntryId = selectedEntryId,
+                    onSelectedEntryIdChange = { selectedEntryId = it },
+                    showWelcome = showWelcomeState,
+                    showCloudBindingDialog = showCloudBindingDialog,
+                    showScanBottomSheet = showScanBottomSheet
+                )
+            } else {
+                // 竖屏单栏布局
+                PortraitMainNavigation(
+                    backStack = backStack,
+                    tokenViewModel = tokenViewModel,
+                    currentLibrary = currentLibrary,
+                    showWelcome = showWelcomeState,
+                    showCloudBindingDialog = showCloudBindingDialog,
+                    showScanBottomSheet = showScanBottomSheet
+                )
             }
-        )
         }
     }
 
@@ -502,7 +341,7 @@ fun MainScreen() {
             },
             content = {
                 Box(
-                    modifier = Modifier.Companion
+                    modifier = Modifier
                         .fillMaxWidth()
                         .height(500.dp)
                 ) {

@@ -49,8 +49,8 @@ public class NativeAESCipherSpi extends CipherSpi {
     private static final String TAG = NativeAESCipherSpi.class.getName();
 
     private static boolean mIsStaticInit = false;
-    private static HashMap<PhantomReference<NativeAESCipherSpi>, Long> mCleanup = new HashMap<>();
-    private static ReferenceQueue<NativeAESCipherSpi> mQueue = new ReferenceQueue<>();
+    private static final HashMap<PhantomReference<NativeAESCipherSpi>, Long> mCleanup = new HashMap<>();
+    private static final ReferenceQueue<NativeAESCipherSpi> mQueue = new ReferenceQueue<>();
 
     private final int AES_BLOCK_SIZE = 16;
     private byte[] mIV;

@@ -2,6 +2,7 @@ package xzynine.WebDAVPass.Android.ui.Dialog
 
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import android.content.Context
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +35,7 @@ import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
+import xzynine.WebDAVPass.Android.ui.component.buildBrandIconBytes
 import java.io.ByteArrayOutputStream
 
 /**
@@ -44,9 +46,10 @@ private const val MAX_ICON_BYTES = 512 * 1024
 /**
  * 图标选择对话框。
  *
- * 提供 KeePass 标准图标网格选择、从图片读取自定义图标与恢复默认三个操作。
- * 确认后通过 [onPick] 回调返回 (standardIconId, customIconBytes)：
- * 恢复默认 / 选择标准图标时 customIconBytes 为 null；选择自定义图片时 standardIconId 为 null。
+ * 提供 KeePass 标准图标网格选择、品牌图标（写入自定义图标）、从图片读取自定义图标
+ * 与恢复默认四个操作。确认后通过 [onPick] 回调返回 (standardIconId, customIconBytes)：
+ * 恢复默认 / 选择标准图标时 customIconBytes 为 null；选择品牌图标或自定义图片时
+ * standardIconId 为 null。
  */
 @Composable
 fun IconPickerDialog(
@@ -54,7 +57,9 @@ fun IconPickerDialog(
     currentStandardIconId: Int,
     currentCustomIconBytes: ByteArray?,
     onDismiss: () -> Unit,
-    onPick: (standardIconId: Int?, customIconBytes: ByteArray?) -> Unit
+    onPick: (standardIconId: Int?, customIconBytes: ByteArray?) -> Unit,
+    iconPrimary: String? = null,
+    iconSecondary: String? = null
 ) {
     val context = LocalContext.current
 
@@ -127,6 +132,15 @@ fun IconPickerDialog(
                     modifier = Modifier.size(48.dp)
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(text = "品牌图标", onClick = {
+                        val brandBytes = buildBrandIconBytes(context, iconPrimary, iconSecondary)
+                        if (brandBytes == null) {
+                            Toast.makeText(context, "该条目无匹配的品牌图标", Toast.LENGTH_SHORT).show()
+                        } else {
+                            selectedStandardId = null
+                            customBytes = brandBytes
+                        }
+                    })
                     TextButton(text = "从图片选择", onClick = { imagePicker.launch("image/*") })
                     TextButton(text = "恢复默认", onClick = {
                         selectedStandardId = 0

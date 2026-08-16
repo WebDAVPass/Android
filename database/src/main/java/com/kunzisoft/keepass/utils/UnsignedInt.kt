@@ -59,9 +59,7 @@ class UnsignedInt(private var unsignedValue: Int) {
 
         other as UnsignedInt
 
-        if (unsignedValue != other.unsignedValue) return false
-
-        return true
+        return unsignedValue == other.unsignedValue
     }
 
     override fun hashCode(): Int {

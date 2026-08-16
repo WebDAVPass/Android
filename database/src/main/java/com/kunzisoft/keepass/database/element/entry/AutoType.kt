@@ -73,8 +73,7 @@ class AutoType : Parcelable {
     private data class AutoTypeItem(var key: String, var value: String): Parcelable {
         constructor(parcel: Parcel) : this(
                 parcel.readString() ?: "",
-                parcel.readString() ?: "") {
-        }
+                parcel.readString() ?: "")
 
         override fun writeToParcel(parcel: Parcel, flags: Int) {
             parcel.writeString(key)

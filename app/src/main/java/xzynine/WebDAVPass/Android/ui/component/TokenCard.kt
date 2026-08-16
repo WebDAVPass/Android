@@ -1,49 +1,115 @@
 package xzynine.WebDAVPass.Android.ui.component
 
+import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.widget.ImageView
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import android.graphics.Bitmap
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.viewinterop.AndroidView
-import com.amulyakhare.textdrawable.TextDrawable
 import com.kunzisoft.keepass.icon.IconPack
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.liberty.android.freeotp.token_images.TokenImage
 import org.liberty.android.freeotp.token_images.matchToken
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.TokenCode
+
+/**
+ * 进程级 IconPack 单例。
+ *
+ * IconPack 构造会循环调用 69+2 次 resources.getIdentifier()，代价高昂；
+ * 原实现每行 remember 新建一次，全平铺大库时主线程开销显著。
+ */
+private object IconPackHolder {
+    @Volatile
+    private var instance: IconPack? = null
+
+    fun get(context: Context): IconPack {
+        instance?.let { return it }
+        return synchronized(this) {
+            instance ?: IconPack(
+                context.applicationContext.packageName,
+                context.applicationContext.resources,
+                com.kunzisoft.keepass.icon.material.R.string.resource_id
+            ).also { instance = it }
+        }
+    }
+}
+
+/**
+ * 图标资源 ID 的全局 LRU 缓存（容量 256，访问序淘汰）。
+ *
+ * 键为 (标准图标ID, 主文案, 副文案)，覆盖 KeePass 标准图标与 Token 品牌图标两条路径，
+ * 避免滚动回看时每行重复构建 IconPack 与线性扫描 ~270 个 TokenImage 枚举。
+ */
+private const val ICON_RES_CACHE_MAX_SIZE = 256
+
+private data class IconResCacheKey(
+    val standardIconId: Int?,
+    val primary: String?,
+    val secondary: String?
+)
+
+private val iconResCache = object : LinkedHashMap<IconResCacheKey, Int?>(16, 0.75f, true) {
+    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<IconResCacheKey, Int?>) =
+        size > ICON_RES_CACHE_MAX_SIZE
+}
+
+/**
+ * 解析条目图标资源 ID：优先 KeePass 标准图标，其次 Token 品牌图标。
+ */
+private fun computeEntryIconRes(
+    context: Context,
+    standardIconId: Int?,
+    primary: String?,
+    secondary: String?
+): Int? {
+    if (standardIconId != null) {
+        val keepassRes = runCatching {
+            IconPackHolder.get(context).iconToResId(standardIconId)
+        }.getOrNull()?.takeIf { it != com.kunzisoft.keepass.icon.R.drawable.ic_blank_32dp }
+        if (keepassRes != null) {
+            return keepassRes
+        }
+    }
+    return TokenImage.entries.firstOrNull { it.matchToken(primary, secondary) }?.resource
+}
 
 @Composable
 fun EntryIcon(
@@ -57,10 +123,10 @@ fun EntryIcon(
     val context = LocalContext.current
 
     /**
-     * 1) 优先渲染 KeePass 自定义图标（二进制）。
+     * 1) 优先渲染自定义图标（二进制，含固化的品牌图标）。
      * 在后台线程解码，避免主线程阻塞导致滚动卡顿。
      */
-    val customBitmap: Bitmap? by produceState<Bitmap?>(initialValue = null, key1 = customIconBytes) {
+    val customBitmap: Bitmap? by produceState(initialValue = null, key1 = customIconBytes) {
         value = if (customIconBytes != null) {
             withContext(Dispatchers.Default) {
                 runCatching {
@@ -73,67 +139,115 @@ fun EntryIcon(
     }
 
     if (customBitmap != null) {
-        Image(
-            bitmap = customBitmap!!.asImageBitmap(),
-            contentDescription = contentDescription,
-            modifier = modifier
-        )
+        BrandIconFrame(modifier = modifier) {
+            Image(
+                bitmap = customBitmap!!.asImageBitmap(),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
         return
     }
 
     /**
-     * 2) 渲染 KeePass 标准图标（数据库标准图标ID）。
+     * 2) 渲染 Token 品牌图标（按 issuer/label 匹配）。
+     * 仅当数字标准图标未选择（默认 0 或空）时生效；
+     * 显式标准图标时直接返回 null，避免每行首次组合都线性扫描 TokenImage 枚举。
      */
-    val keepassIconRes: Int? = remember(standardIconId) {
-        val iconId = standardIconId ?: return@remember null
-        runCatching {
-            val iconPack = IconPack(
-                context.packageName,
-                context.resources,
-                com.kunzisoft.keepass.icon.material.R.string.resource_id
-            )
-            iconPack.iconToResId(iconId)
-        }.getOrNull()?.takeIf { it != com.kunzisoft.keepass.icon.R.drawable.ic_blank_32dp }
-    }
-
-    if (keepassIconRes != null) {
-        Image(
-            painter = painterResource(id = keepassIconRes),
-            contentDescription = contentDescription,
-            modifier = modifier
-        )
-        return
-    }
-
-    val matchedRes: Int? = remember(primary, secondary) {
-        TokenImage.values().firstOrNull {
-            it.matchToken(primary, secondary)
-        }?.resource
-    }
-
-    if (matchedRes != null) {
-        Image(
-            painter = painterResource(id = matchedRes),
-            contentDescription = contentDescription,
-            modifier = modifier
-        )
-        return
-    }
-
-    val letter = remember(primary, secondary) {
-        (primary ?: secondary).orEmpty().firstOrNull()?.uppercase() ?: "?"
-    }
-    val colorInt = MiuixTheme.colorScheme.primary.toArgb()
-
-    AndroidView(
-        modifier = modifier,
-        factory = { context ->
-            ImageView(context).apply {
-                val drawable = TextDrawable.builder().buildRound(letter, colorInt)
-                setImageDrawable(drawable)
-            }
+    val tokenImageRes: Int? = remember(standardIconId, primary, secondary) {
+        if (standardIconId != null && standardIconId != 0) {
+            null
+        } else {
+            TokenImage.entries.firstOrNull { it.matchToken(primary, secondary) }?.resource
         }
-    )
+    }
+    tokenImageRes?.let {
+        BrandIconFrame(modifier = modifier) {
+            Image(
+                painter = painterResource(id = it),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        return
+    }
+
+    /**
+     * 3) 渲染 KeePass 标准图标的现代化版本（Miuix / Material 矢量图标）。
+     * 显式选择的数字标准图标（ID != 0）优先于令牌品牌图标，
+     * 使「有品牌图标的条目也能设置数字标准类型」。
+     * 语义映射见 StandardIconIcons.kt；使用 primary 主题色着色。
+     */
+    if (standardIconId != null) {
+        standardIconVectorMap[standardIconId]?.let { vector ->
+            BrandIconFrame(modifier = modifier, background = MiuixTheme.colorScheme.surface) {
+                Icon(
+                    imageVector = vector,
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    tint = MiuixTheme.colorScheme.primary
+                )
+            }
+            return
+        }
+    }
+
+    /**
+     * 4) 渲染 KeePass 标准图标（数据库标准图标ID）或 Token 品牌图标兜底。
+     * 结果按 (standardIconId, primary, secondary) 全局 LRU 缓存；
+     * IconPack 为进程级单例，避免每行重复 71 次 getIdentifier。
+     */
+    val iconRes: Int? = remember(standardIconId, primary, secondary) {
+        iconResCache.getOrPut(IconResCacheKey(standardIconId, primary, secondary)) {
+            computeEntryIconRes(context, standardIconId, primary, secondary)
+        }
+    }
+
+    if (iconRes != null) {
+        BrandIconFrame(modifier = modifier) {
+            Image(
+                painter = painterResource(id = iconRes),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        return
+    }
+
+    /**
+     * 5) 无任何图标时的统一兜底：按 0 号标准图标（钥匙）渲染，
+     * 与密码条目列表（standardIconId=0）的显示一致；原首字母圆形已废弃。
+     */
+    BrandIconFrame(modifier = modifier, background = MiuixTheme.colorScheme.surface) {
+        Icon(
+            imageVector = standardIconVectorMap[0] ?: Icons.Rounded.VpnKey,
+            contentDescription = contentDescription,
+            modifier = Modifier.fillMaxSize(),
+            tint = MiuixTheme.colorScheme.primary
+        )
+    }
+}
+
+/**
+ * 品牌图标背景容器：圆角底板，默认纯白。
+ * 深色主题下纯白底板衬托苹果等深色系品牌图标；不存在纯白 logo，白色底板足够。
+ * 矢量/兜底图标传主题 surface 色，避免深色主题下纯白底 + primary 主题色对比度不足。
+ * 图标内容填满容器不缩放。
+ */
+@Composable
+private fun BrandIconFrame(
+    modifier: Modifier,
+    background: Color = Color.White,
+    content: @Composable () -> Unit
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(background),
+        contentAlignment = Alignment.Center
+    ) {
+        content()
+    }
 }
 
 @Composable
@@ -171,7 +285,11 @@ fun TokenCard(
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                // 占据剩余宽度并约束文本列，防止账号过长把右侧倒计时挤出/顶歪
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 12.dp)
             ) {
                 EntryIcon(
                     customIconBytes = customIconBytes,
@@ -186,14 +304,14 @@ fun TokenCard(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     if (token.issuer != null) {
-                        Text(
+                        MarqueeText(
                             text = token.issuer,
                             fontSize = 14.sp,
                             color = MiuixTheme.colorScheme.onSurface
                         )
                     }
 
-                    Text(
+                    MarqueeText(
                         text = token.label,
                         fontSize = 12.sp,
                         color = MiuixTheme.colorScheme.onSurfaceSecondary
@@ -211,6 +329,11 @@ fun TokenCard(
         }
     }
 }
+
+/**
+ * 单行跑马灯文本：超长时自动横向滚动循环显示完整内容，不做省略号截断；
+ * 长度未超限时静态显示（实现见 MarqueeText）。
+ */
 
 @Composable
 private fun TokenCodeDisplay(code: TokenCode, currentTimeMillis: Long) {

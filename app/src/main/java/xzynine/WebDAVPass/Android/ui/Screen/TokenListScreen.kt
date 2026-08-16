@@ -20,7 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Text
@@ -48,15 +48,15 @@ fun TokenListScreen(tokenViewModel: TokenViewModel, onEntryClick: (Long) -> Unit
 
     if (isLoading) {
         Box(
-            modifier = Modifier.Companion.fillMaxSize(),
-            contentAlignment = Alignment.Companion.Center
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
             CircularProgressIndicator()
         }
     } else if (tokens.isEmpty()) {
         Box(
-            modifier = Modifier.Companion.fillMaxSize(),
-            contentAlignment = Alignment.Companion.Center
+            modifier = Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center
         ) {
             Text(
                 text = "暂无令牌，请添加新的2FA令牌",
@@ -65,7 +65,7 @@ fun TokenListScreen(tokenViewModel: TokenViewModel, onEntryClick: (Long) -> Unit
         }
     } else {
         LazyColumn(
-            modifier = Modifier.Companion.fillMaxSize(),
+            modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             items(
@@ -98,7 +98,7 @@ fun TokenListScreen(tokenViewModel: TokenViewModel, onEntryClick: (Long) -> Unit
                         .padding(horizontal = 16.dp, vertical = 4.dp)
                 )
                 HorizontalDivider(
-                    modifier = Modifier.Companion.padding(horizontal = 16.dp),
+                    modifier = Modifier.padding(horizontal = 16.dp),
                     thickness = 0.5.dp
                 )
             }

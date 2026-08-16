@@ -1,4 +1,4 @@
-package xzynine.WebDAVPass.Android.ui.ViewModel
+package xzynine.WebDAVPass.Android.ui.viewmodel
 
 import android.icu.text.Transliterator
 import kotlinx.coroutines.CoroutineDispatcher
@@ -15,6 +15,8 @@ import xzynine.WebDAVPass.Android.data.PasswordEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
+import kotlin.time.Duration.Companion.milliseconds
 
 internal data class PasswordDataAccess(
     val isLibraryUnlocked: Boolean,
@@ -161,7 +163,7 @@ internal class PasswordPagingSubViewModel(
             // 搜索输入防抖：快速连续输入时只保留最后一次刷新。
             // delay 是可取消的挂起点，refreshJob?.cancel() 会在新一轮输入时中断未完成的等待。
             if (searchQuery.isNotBlank()) {
-                delay(SEARCH_DEBOUNCE_MS)
+                delay(SEARCH_DEBOUNCE_MS.milliseconds)
             }
             val access = accessProvider()
             if (!access.isReady()) {
@@ -277,11 +279,11 @@ internal class PasswordPagingSubViewModel(
         pagingMutex.withLock {
             // 计算预期的先前条目数（仅统计大小，开销远小于复制所有元素）
             val expectedPrevEntriesCount = allSections.take(prevCount).sumOf { it.items.size }
-            if (accumulatedEntries.size != expectedPrevEntriesCount) {
+            accumulatedEntries = if (accumulatedEntries.size != expectedPrevEntriesCount) {
                 // 出现并发变更：重建到当前 loadedSectionCount 的累积列表以保证一致性
-                accumulatedEntries = allSections.take(loadedSectionCount).flatMap { it.items }
+                allSections.take(loadedSectionCount).flatMap { it.items }
             } else {
-                accumulatedEntries = accumulatedEntries + gapEntries
+                accumulatedEntries + gapEntries
             }
             _passwordEntries.value = accumulatedEntries
             _passwordHasMore.value = loadedSectionCount < allSections.size
@@ -310,7 +312,7 @@ internal class PasswordPagingSubViewModel(
         if (_passwordGroupStack.value.lastOrNull() == groupStableId) {
             return
         }
-        _passwordGroupStack.value = _passwordGroupStack.value + groupStableId
+        _passwordGroupStack.value += groupStableId
         refreshPasswordEntries(searchQuery)
     }
 
@@ -377,6 +379,9 @@ internal class PasswordPagingSubViewModel(
         ascending: Boolean = true,
         hideExpired: Boolean = false
     ): List<IndexedSection> {
+        // 预计算排序键缓存：lowercase() 若在比较器内每次比较都重算，全量排序退化为 O(n log n) 字符串小写。
+        // 以 entryId 为键避免用 PasswordEntry 作 HashMap 键（深哈希抵消缓存收益）
+        val sortKeyCache = HashMap<Long, String>()
         val values = source
             .asSequence()
             .filter { item ->
@@ -385,7 +390,7 @@ internal class PasswordPagingSubViewModel(
                 }
                 keyword.isBlank() || matchesKeyword(item, keyword, caseSensitive)
             }
-            .sortedWith(passwordEntryComparator(sortMode, ascending))
+            .sortedWith(passwordEntryComparator(sortMode, ascending, sortKeyCache))
             .toList()
 
         // 时间排序时跳过字母分组：所有非文件夹条目归入单一分组，保持全局时间序。
@@ -425,12 +430,18 @@ internal class PasswordPagingSubViewModel(
 
     /**
      * 构造排序比较器：文件夹始终置前，再按选定键排序。
+     *
+     * @param sortKeyCache 排序键缓存，避免每次比较都重复 lowercase()
      */
-    private fun passwordEntryComparator(sortMode: PasswordSortMode, ascending: Boolean): Comparator<PasswordEntry> {
+    private fun passwordEntryComparator(
+        sortMode: PasswordSortMode,
+        ascending: Boolean,
+        sortKeyCache: HashMap<Long, String>
+    ): Comparator<PasswordEntry> {
         val byKey: Comparator<PasswordEntry> = when (sortMode) {
-            PasswordSortMode.DEFAULT -> compareBy { it.title.ifBlank { it.account }.lowercase() }
-            PasswordSortMode.TITLE -> compareBy { it.title.lowercase() }
-            PasswordSortMode.ACCOUNT -> compareBy { it.account.lowercase() }
+            PasswordSortMode.DEFAULT -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.title.ifBlank { it.account }.lowercase() } }
+            PasswordSortMode.TITLE -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.title.lowercase() } }
+            PasswordSortMode.ACCOUNT -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.account.lowercase() } }
             PasswordSortMode.MODIFIED_TIME -> compareBy { it.modifiedTime }
             PasswordSortMode.CREATED_TIME -> compareBy { it.creationTime }
         }
@@ -500,6 +511,13 @@ internal class PasswordPagingSubViewModel(
 }
 
 internal fun PasswordEntry.toPasswordIndexKey(): String {
+    cachedIndexKey?.let { return it }
+    val key = computePasswordIndexKey()
+    cachedIndexKey = key
+    return key
+}
+
+private fun PasswordEntry.computePasswordIndexKey(): String {
     if (isFolderGroup) {
         return PasswordFolderIndexLabel
     }

@@ -6,8 +6,9 @@ plugins {
     alias(libs.plugins.ksp)
 }
 
-import java.io.File
-import java.util.Properties
+        import java.io.File
+        import java.util.Properties
+
 
 // 使用 buildSrc 的 JGit 实现计算版本信息
 
@@ -94,12 +95,13 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        // miuix-nav（0.9.4-rc01）以 JVM 21 编译并大量使用 inline 函数，调用方必须同版本
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     kotlin {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
         }
     }
     
@@ -131,6 +133,10 @@ dependencies {
     implementation(libs.hutool.core) // Hutool工具库
     // 复用 WebDAV 库
     implementation(project(":webdav"))
+    // content:// Uri 定位支持（WebDAV 文件浏览）
+    implementation("androidx.documentfile:documentfile:1.0.1")
+    // WebDAV 文件浏览图标支持
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
     implementation(project(":crypto"))
     implementation(project(":database"))
     implementation(project(":icon-pack"))
@@ -138,7 +144,6 @@ dependencies {
     implementation(project(":base"))
     implementation("com.google.code.gson:gson:2.10.1") // Gson JSON解析库
     // 接入令牌图标系统模块
-    implementation(project(":text-drawable"))
     implementation(project(":token-images"))
     // 检查更新模块
     implementation(project(":checkupdates"))
@@ -161,12 +166,8 @@ dependencies {
     implementation(libs.compose.runtime)
     implementation(libs.compose.foundation)
     implementation(libs.compose.runtime.livedata)
-    // 导航库依赖
-    implementation(libs.androidx.navigation3.runtime)
-    implementation(libs.miuix.navigation3.ui)
-    implementation(libs.androidx.navigationevent.compose)
-    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
-    implementation(libs.dev.rikka.parcelablelist)
+    // 导航库依赖（miuix-nav，navigationevent 由其传递引入）
+    implementation(libs.miuix.nav)
     
     // Coroutines 相关依赖
     implementation(libs.kotlinx.coroutines.core)

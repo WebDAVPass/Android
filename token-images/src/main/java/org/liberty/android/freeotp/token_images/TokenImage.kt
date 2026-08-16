@@ -267,6 +267,9 @@ enum class TokenImage(val resource: Int,
     Zendesk(R.drawable.token_image_zendesk),
     Zoho(R.drawable.token_image_zoho),
     Zoom(R.drawable.token_image_zoom);
+
+    /** 预归一化匹配目标（issuer 或枚举名），每个枚举只计算一次，避免每行匹配时重复 lowercase+过滤 */
+    val normalizedTarget: String by lazy { normalize(issuer ?: name) }
 }
 
 private fun normalize(text: String): String {
@@ -275,8 +278,7 @@ private fun normalize(text: String): String {
 }
 
 fun TokenImage.matchToken(issuer: String?, label: String?): Boolean {
-    val targetRaw = this.issuer ?: this.name
-    val target = normalize(targetRaw)
+    val target = normalizedTarget
 
     val issuerMatched = issuer?.let { normalize(it).contains(target) } ?: false
 

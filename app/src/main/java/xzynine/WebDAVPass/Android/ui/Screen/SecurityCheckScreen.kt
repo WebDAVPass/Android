@@ -12,24 +12,22 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -39,7 +37,7 @@ import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.data.SecurityIssueEntry
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 import xzynine.WebDAVPass.Android.util.strengthLabel
 
@@ -52,12 +50,21 @@ fun SecurityCheckScreen(
     onNavigateBack: () -> Unit,
     onEntryClick: (Long) -> Unit
 ) {
-    val coroutineScope = rememberCoroutineScope()
+    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
     var expiredEntries by remember { mutableStateOf<List<SecurityIssueEntry>>(emptyList()) }
     var weakEntries by remember { mutableStateOf<List<SecurityIssueEntry>>(emptyList()) }
     var loading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(Unit) {
+    // 仅在库已解锁时加载数据；锁定后清空已加载条目并停止加载，
+    // 防止导航回退生效前的首帧或残留状态暴露已解密内容。
+    LaunchedEffect(isLibraryUnlocked) {
+        if (!isLibraryUnlocked) {
+            expiredEntries = emptyList()
+            weakEntries = emptyList()
+            loading = false
+            return@LaunchedEffect
+        }
+        loading = true
         val issues = tokenViewModel.loadSecurityIssues()
         expiredEntries = issues.expiredEntries
         weakEntries = issues.weakPasswordEntries
@@ -90,7 +97,13 @@ fun SecurityCheckScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (loading) {
+            if (!isLibraryUnlocked) {
+                Text(
+                    text = "库已锁定，请解锁后再查看",
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                )
+            } else if (loading) {
                 Text(text = "加载中...", fontSize = 14.sp)
             } else {
                 Text(

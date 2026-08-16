@@ -71,8 +71,7 @@ class KdbxTokenRepository(context: Context) {
     }
 
     fun initializeDatabase(localPath: String, masterPassword: String, keyFileData: ByteArray? = null) {
-        val location = resolveLocation(localPath)
-        when (location) {
+        when (val location = resolveLocation(localPath)) {
             is DatabaseLocation.FileLocation -> {
                 val file = location.file
                 file.parentFile?.mkdirs()
@@ -163,7 +162,8 @@ class KdbxTokenRepository(context: Context) {
     }
 
     fun loadTokens(localPath: String, masterPassword: String): List<OtpToken> {
-        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            migrateLegacyTokenConvention(db)
             val entries = collectEntriesOutsideRecycleBin(db, db.rootGroup)
             entries.mapNotNull { entry -> toToken(entry) }
                 .sortedBy { it.ordinal }
@@ -177,7 +177,8 @@ class KdbxTokenRepository(context: Context) {
      * 若 [DatabaseManager] 已有缓存实例，则跳过解密直接读取，性能更优。
      */
     fun loadTokensFlow(localPath: String, masterPassword: String): Flow<OtpToken> = channelFlow {
-        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+        withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            migrateLegacyTokenConvention(db)
             collectEntriesOutsideRecycleBin(db, db.rootGroup)
                 .mapNotNull { entry -> toToken(entry) }
                 .sortedBy { it.ordinal }
@@ -457,6 +458,333 @@ class KdbxTokenRepository(context: Context) {
 
             db.updateEntry(entry)
             true
+        }
+    }
+
+    /**
+     * 批量将条目图标固化为自定义图标（品牌图标写入密码库图标池）。
+     *
+     * 相同图片字节使用确定性 UUID（[UUID.nameUUIDFromBytes]），
+     * 同一品牌的所有条目共享同一个图标池条目，避免重复膨胀。
+     *
+     * @return 成功写入的条目数
+     */
+    fun solidifyEntryBrandIcons(
+        localPath: String,
+        masterPassword: String,
+        iconUpdates: Map<Long, ByteArray>,
+    ): Int {
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            var count = 0
+            iconUpdates.forEach { (entryId, bytes) ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
+                    ?: return@forEach
+                val customIconId = UUID.nameUUIDFromBytes(bytes)
+                db.buildNewCustomIcon(customIconId) { customIcon, binary ->
+                    if (customIcon != null && binary != null) {
+                        binary.getOutputDataStream(db.binaryCache).use { output ->
+                            output.write(bytes)
+                        }
+                        val entryInfo = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+                        entryInfo.icon = IconImage(customIcon)
+                        entry.setEntryInfo(db, entryInfo)
+                        db.updateEntry(entry)
+                        count++
+                    }
+                }
+            }
+            count
+        }
+    }
+
+    /**
+     * 加载指定条目的合并摘要（标准字段 + 自定义字段 + 附件名），不进行重复分组判断。
+     */
+    fun loadEntryMergeInfos(localPath: String, masterPassword: String, entryIds: List<Long>): List<DuplicateEntryInfo> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            entryIds.mapNotNull { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@mapNotNull null
+                buildDuplicateEntryInfo(db, entry)
+            }
+        }
+    }
+
+    /**
+     * 检测重复候选组。
+     *
+     * 候选规则：两个条目的「账号完全相等 / 标题互含 / URL 互含」三个维度中命中 ≥2 个
+     * 即视为重复候选（均不区分大小写、去除首尾空白）；密码不参与候选判定。
+     * 组内条目「账号+密码+URL」完全一致时视为无冲突（[DuplicateGroupInfo.isConflict] 为 false），
+     * 可直接自动合并；存在差异的组需要手动逐字段选择。
+     */
+    fun detectDuplicateGroups(localPath: String, masterPassword: String, entryIds: List<Long>): List<DuplicateGroupInfo> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val infos = entryIds.mapNotNull { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@mapNotNull null
+                buildDuplicateEntryInfo(db, entry)
+            }
+            groupDuplicateInfos(infos)
+        }
+    }
+
+    /**
+     * 合并一组重复条目：将 [sourceEntryIds] 合并进 [masterEntryId]，源条目移入回收站。
+     *
+     * 字段取值规则（key 为 [MergeFieldKeys] 标准键或自定义字段名）：
+     * - [fieldSelections] 中指定的字段：采用对应源条目的值；
+     * - 未指定的字段：主条目优先，主条目为空时取第一个非空的源条目值；
+     * - 自定义字段按名（不区分大小写）并集去重，冲突时按上述规则；
+     * - 附件并集去重（忽略大小写重名保留主条目）；
+     * - 源条目历史并入主条目历史，主条目合并前的旧版本保留在历史中；
+     * - 图标保留主条目。
+     *
+     * @return 成功合并（移入回收站）的源条目数
+     */
+    fun mergeEntryGroup(
+        localPath: String,
+        masterPassword: String,
+        masterEntryId: Long,
+        sourceEntryIds: List<Long>,
+        fieldSelections: Map<String, Long>
+    ): Int {
+        if (sourceEntryIds.isEmpty()) {
+            return 0
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            val master = findEntryByStableId(db, masterEntryId, includeRecycleBin = false)
+                ?: return@withDatabase 0
+            val sources = sourceEntryIds
+                .mapNotNull { findEntryByStableId(db, it, includeRecycleBin = false) }
+                .filter { it !== master }
+            if (sources.isEmpty()) {
+                return@withDatabase 0
+            }
+
+            val masterInfo = master.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+            val sourceInfos = sources.associate { source ->
+                toStableId(source) to source.getEntryInfo(
+                    db,
+                    raw = true,
+                    removeTemplateConfiguration = false
+                )
+            }
+
+            // 1. 主条目当前版本先入历史，防止合并覆盖后丢失
+            master.addEntryToHistory(Entry(master, copyHistory = false))
+
+            // 2. 标准字段：fieldSelections 指定则采用对应源条目，否则主条目优先、主条目为空时取第一个非空源条目
+            val sourceInfoOf: (Long?) -> EntryInfo = { sourceId ->
+                sourceId?.let { sourceInfos[it] } ?: masterInfo
+            }
+            fun <T> pickStandard(key: String, masterValue: T, isEmpty: (T) -> Boolean, getter: (EntryInfo) -> T): T {
+                val sourceId = fieldSelections[key]
+                if (sourceId != null) {
+                    return getter(sourceInfoOf(sourceId))
+                }
+                if (!isEmpty(masterValue)) {
+                    return masterValue
+                }
+                return sourceInfos.values.firstOrNull { !isEmpty(getter(it)) }?.let { getter(it) } ?: masterValue
+            }
+
+            masterInfo.title = pickStandard(MergeFieldKeys.TITLE, masterInfo.title, { it.isBlank() }) { it.title }
+            masterInfo.username = pickStandard(MergeFieldKeys.ACCOUNT, masterInfo.username, { it.isBlank() }) { it.username }
+            masterInfo.password = pickStandard(MergeFieldKeys.PASSWORD, masterInfo.password, { it.isBlank() }) { it.password }
+            masterInfo.url = pickStandard(MergeFieldKeys.URL, masterInfo.url, { it.isBlank() }) { it.url }
+            masterInfo.notes = pickStandard(MergeFieldKeys.NOTES, masterInfo.notes, { it.isBlank() }) { it.notes }
+            masterInfo.tags = pickStandard(MergeFieldKeys.TAGS, masterInfo.tags, { it.isEmpty() }) { it.tags }
+
+            // 3. 自定义字段：并集去重，fieldSelections 指定则采用对应源条目，否则主优先、主空补从
+            val mergedFields = ArrayList(masterInfo.customFields)
+            val mergedLowerNames = mergedFields.map { it.name.lowercase() }.toMutableSet()
+            for ((sourceId, sourceInfo) in sourceInfos) {
+                for (field in sourceInfo.customFields) {
+                    val lowerName = field.name.lowercase()
+                    if (mergedLowerNames.add(lowerName)) {
+                        mergedFields.add(field)
+                        continue
+                    }
+                    // 同名冲突：用户显式指定该字段采用此源条目 → 替换；否则保留主条目
+                    if (fieldSelections[lowerName] == sourceId || fieldSelections[field.name] == sourceId) {
+                        val existingIndex = mergedFields.indexOfFirst { it.name.lowercase() == lowerName }
+                        if (existingIndex >= 0) {
+                            mergedFields[existingIndex] = field
+                        }
+                    }
+                }
+            }
+            masterInfo.customFields = mergedFields
+
+            // 4. 附件：并集去重（忽略大小写重名保留主条目），源条目附件复制二进制
+            val mergedAttachments = mutableListOf<Attachment>()
+            val usedAttachmentNames = mutableSetOf<String>()
+            master.getAttachments(db.attachmentPool).forEach { att ->
+                if (usedAttachmentNames.add(att.name.lowercase())) {
+                    mergedAttachments.add(att)
+                }
+            }
+            for (source in sources) {
+                for (att in source.getAttachments(db.attachmentPool)) {
+                    if (!usedAttachmentNames.add(att.name.lowercase())) {
+                        continue
+                    }
+                    val binary = db.buildNewBinaryAttachment() ?: continue
+                    att.binaryData.getInputDataStream(db.binaryCache).use { input ->
+                        binary.getOutputDataStream(db.binaryCache).use { output ->
+                            input.copyTo(output)
+                        }
+                    }
+                    mergedAttachments.add(Attachment(att.name, binary))
+                }
+            }
+            masterInfo.attachments = mergedAttachments.toMutableList()
+
+            // 5. 源条目历史并入主条目
+            for (source in sources) {
+                source.getHistory().forEach { historyEntry ->
+                    master.addEntryToHistory(historyEntry)
+                }
+            }
+
+            master.setEntryInfo(db, masterInfo)
+            db.removeUnlinkedAttachments()
+
+            // 6. 源条目移入回收站
+            var mergedCount = 0
+            for (source in sources) {
+                if (!db.canRecycle(source)) {
+                    continue
+                }
+                val oldParent = source.parent
+                db.recycle(source, resolveRecycleBinTitle(db))
+                source.setPreviousParentGroup(oldParent)
+                mergedCount++
+            }
+            mergedCount
+        }
+    }
+
+    /**
+     * 构建单条目合并摘要。
+     */
+    private fun buildDuplicateEntryInfo(database: Database, entry: Entry): DuplicateEntryInfo {
+        val info = entry.getEntryInfo(database, raw = true, removeTemplateConfiguration = false)
+        val fieldValues = linkedMapOf<String, String>()
+        fieldValues[MergeFieldKeys.TITLE] = info.title
+        fieldValues[MergeFieldKeys.ACCOUNT] = info.username
+        fieldValues[MergeFieldKeys.PASSWORD] = info.password
+        fieldValues[MergeFieldKeys.URL] = info.url
+        fieldValues[MergeFieldKeys.NOTES] = info.notes
+        fieldValues[MergeFieldKeys.TAGS] = info.tags.toString()
+        info.customFields.forEach { field ->
+            fieldValues[field.name] = field.protectedValue.stringValue
+        }
+        return DuplicateEntryInfo(
+            entryId = toStableId(entry),
+            title = info.title,
+            account = info.username,
+            url = info.url,
+            hasPassword = info.password.isNotEmpty(),
+            modifiedTime = info.lastModificationTime.toMilliseconds(),
+            fieldValues = fieldValues,
+            attachmentNames = entry.getAttachments(database.attachmentPool).map { it.name }
+        )
+    }
+
+    /**
+     * 将条目摘要分组为重复候选组（并查集合并交集组）。
+     */
+    private fun groupDuplicateInfos(infos: List<DuplicateEntryInfo>): List<DuplicateGroupInfo> {
+        if (infos.size < 2) {
+            return emptyList()
+        }
+        val parent = IntArray(infos.size) { it }
+        fun find(x: Int): Int {
+            var root = x
+            while (parent[root] != root) {
+                root = parent[root]
+            }
+            var current = x
+            while (parent[current] != current) {
+                val next = parent[current]
+                parent[current] = root
+                current = next
+            }
+            return root
+        }
+        fun union(a: Int, b: Int) {
+            val ra = find(a)
+            val rb = find(b)
+            if (ra != rb) {
+                parent[rb] = ra
+            }
+        }
+
+        val norms = infos.map { info ->
+            Triple(
+                info.title.trim().lowercase(),
+                info.account.trim().lowercase(),
+                info.url.trim().lowercase()
+            )
+        }
+        val passwords = infos.map { it.fieldValue(MergeFieldKeys.PASSWORD) }
+        for (i in infos.indices) {
+            for (j in i + 1 until infos.size) {
+                val (title1, account1, url1) = norms[i]
+                val (title2, account2, url2) = norms[j]
+                var hits = 0
+                if (account1.isNotEmpty() && account1 == account2) {
+                    hits++
+                }
+                if (title1.isNotEmpty() && title2.isNotEmpty() && (title1.contains(title2) || title2.contains(title1))) {
+                    hits++
+                }
+                if (url1.isNotEmpty() && url2.isNotEmpty() && (url1.contains(url2) || url2.contains(url1))) {
+                    hits++
+                }
+                // 账号与密码都不同（两两精确比较）则不算重复，即使标题/URL 匹配；
+                // 账号比较需双方非空，避免两账号皆空时误判为同一账号而合并
+                val samePassword = passwords[i] == passwords[j]
+                if (hits >= 2 && ((account1.isNotEmpty() && account1 == account2) || samePassword)) {
+                    union(i, j)
+                }
+            }
+        }
+
+        val groupMap = mutableMapOf<Int, MutableList<DuplicateEntryInfo>>()
+        infos.forEachIndexed { index, info ->
+            groupMap.getOrPut(find(index)) { mutableListOf() }.add(info)
+        }
+        return groupMap.values
+            .filter { it.size >= 2 }
+            .mapIndexed { index, list ->
+                DuplicateGroupInfo(
+                    groupId = index,
+                    entries = list.sortedByDescending { it.modifiedTime },
+                    isConflict = hasFieldConflict(list)
+                )
+            }
+    }
+
+    /**
+     * 判断组内条目「账号/密码/URL」是否存在差异（任一维度不一致即视为冲突）。
+     */
+    private fun hasFieldConflict(infos: List<DuplicateEntryInfo>): Boolean {
+        if (infos.size < 2) {
+            return false
+        }
+        val first = infos.first()
+        return infos.any { other ->
+            other.account != first.account ||
+                other.url != first.url ||
+                other.hasPassword != first.hasPassword ||
+                other.fieldValue(MergeFieldKeys.PASSWORD) != first.fieldValue(MergeFieldKeys.PASSWORD)
         }
     }
 
@@ -804,11 +1132,7 @@ class KdbxTokenRepository(context: Context) {
 
             // 优先复用已解锁的缓存实例，避免重复解密
             val cachedPair = DatabaseManager.tryGet(localPath)
-            val (database, cacheDirectory) = if (cachedPair != null) {
-                cachedPair
-            } else {
-                openDatabase(location, masterPassword, currentKeyFile)
-            }
+            val (database, cacheDirectory) = cachedPair ?: openDatabase(location, masterPassword, currentKeyFile)
             try {
                 kdfEngineName?.let { name ->
                     val engine = when (name) {
@@ -861,10 +1185,10 @@ class KdbxTokenRepository(context: Context) {
     ): DatabaseSettingsInfo {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val kdfName = db.kdfEngine?.let {
-                when {
-                    it.uuid == KdfFactory.aesKdf.uuid -> "AES"
-                    it.uuid == KdfFactory.argon2dKdf.uuid -> "Argon2d"
-                    it.uuid == KdfFactory.argon2idKdf.uuid -> "Argon2id"
+                when (it.uuid) {
+                    KdfFactory.aesKdf.uuid -> "AES"
+                    KdfFactory.argon2dKdf.uuid -> "Argon2d"
+                    KdfFactory.argon2idKdf.uuid -> "Argon2id"
                     else -> it.toString()
                 }
             } ?: "未知"
@@ -894,11 +1218,7 @@ class KdbxTokenRepository(context: Context) {
             val location = resolveLocation(localPath)
             // 优先复用已解锁的缓存实例，避免重复解密
             val cachedPair = DatabaseManager.tryGet(localPath)
-            val (database, cacheDirectory) = if (cachedPair != null) {
-                cachedPair
-            } else {
-                openDatabase(location, masterPassword)
-            }
+            val (database, cacheDirectory) = cachedPair ?: openDatabase(location, masterPassword)
             val cacheFile = File.createTempFile("kdbx-export-", ".tmp", cacheDirectory)
             try {
                 database.saveData(
@@ -989,7 +1309,7 @@ class KdbxTokenRepository(context: Context) {
                 val password = entry.password
                 val strengthBits = PasswordStrength.estimateBits(password)
 
-                if (expiryMillis > 0L && expiryMillis < nowMillis) {
+                if (expiryMillis in 1..<nowMillis) {
                     expired.add(
                         SecurityIssueEntry(
                             entryId = entryId,
@@ -1190,11 +1510,13 @@ class KdbxTokenRepository(context: Context) {
                 return@withDatabase false
             }
 
-            otpElement.counter = otpElement.counter + 1L
+            otpElement.counter += 1L
+            // 按当前条目约定的字段顺序组装 OTP URI：title=issuer、username=label（旧版反存数据按反向传入）
+            val oldConvention = isOldTokenConvention(entry, otpElement)
             val otpField = OtpEntryFields.buildOtpField(
                 otpElement,
-                entry.username,
-                entry.title
+                if (oldConvention) entry.username else entry.title,
+                if (oldConvention) entry.title else entry.username
             )
 
             val entryInfo = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false).apply {
@@ -1242,6 +1564,42 @@ class KdbxTokenRepository(context: Context) {
         return source.firstOrNull { toStableId(it) == entryId }
     }
 
+    /**
+     * 判断令牌条目是否为旧版反存约定（title=label、username=issuer）。
+     *
+     * 新约定为 title=issuer、username=label，与 OTP 字段内的 issuer/name 对照：
+     * 若标题与 OTP name 相同、账号与 OTP issuer 相同，即判定为旧版反存。
+     * 两字段均非空时才认定，避免 label 恰与 issuer 相同导致误判。
+     */
+    private fun isOldTokenConvention(entry: Entry, otpElement: OtpElement): Boolean {
+        return entry.title == otpElement.name &&
+            entry.username == otpElement.issuer &&
+            entry.title.isNotBlank() &&
+            entry.username.isNotBlank()
+    }
+
+    /**
+     * 迁移旧版反存约定的令牌条目（title=label、username=issuer → 互相对换）。
+     *
+     * 仅处理含 OTP 字段且符合旧约定的条目：直接交换标准字段 title/username，
+     * 不触碰 OTP 自定义字段与其余字段。返回迁移条目数，供调用方决定是否落盘
+     * （withDatabase 的 saveAfter 会在 [Database.dataModifiedSinceLastLoading] 为真时保存）。
+     */
+    private fun migrateLegacyTokenConvention(db: Database): Int {
+        var migrated = 0
+        collectEntriesOutsideRecycleBin(db, db.rootGroup).forEach { entry ->
+            val otpElement = entry.getOtpElement() ?: return@forEach
+            if (isOldTokenConvention(entry, otpElement)) {
+                val oldTitle = entry.title
+                entry.title = entry.username
+                entry.username = oldTitle
+                db.updateEntry(entry)
+                migrated++
+            }
+        }
+        return migrated
+    }
+
     private fun toToken(entry: Entry): OtpToken? {
         val otpElement = entry.getOtpElement() ?: return null
         val secret = otpElement.getBase32Secret().takeIf { it.isNotBlank() } ?: return null
@@ -1262,10 +1620,15 @@ class KdbxTokenRepository(context: Context) {
             period
         )
 
-        val label = entry.title.takeIf { it.isNotBlank() }
+        // 约定：title = 服务商（issuer），username = 账号（label），与 EntryInfo.setOtp 一致。
+        // 旧版本曾把两者反存（title=label、username=issuer），按 OTP 字段中的 issuer/name 判定迁移。
+        val oldConvention = isOldTokenConvention(entry, otpElement)
+        val label = if (oldConvention) entry.title else entry.username.takeIf { it.isNotBlank() }
+        val issuer = if (oldConvention) entry.username else entry.title.takeIf { it.isNotBlank() }
+        val finalLabel = label
             ?: otpElement.name.takeIf { it.isNotBlank() }
             ?: "Token"
-        val issuer = entry.username.takeIf { it.isNotBlank() }
+        val finalIssuer = issuer
             ?: otpElement.issuer.takeIf { it.isNotBlank() }
         val description = entry.notes.takeIf { it.isNotBlank() }
 
@@ -1274,8 +1637,8 @@ class KdbxTokenRepository(context: Context) {
         return OtpToken(
             id = toStableId(entry),
             ordinal = ordinal,
-            issuer = issuer,
-            label = label,
+            issuer = finalIssuer,
+            label = finalLabel,
             description = description,
             imagePath = null,
             tokenType = tokenType,
@@ -1319,8 +1682,8 @@ class KdbxTokenRepository(context: Context) {
             }
 
         val entryInfo = EntryInfo().apply {
-            title = token.label
-            username = token.issuer ?: ""
+            title = token.issuer?.takeIf { it.isNotBlank() } ?: token.label
+            username = token.label
             password = ""
             notes = token.description ?: ""
             customFields = filteredFields
@@ -1409,6 +1772,8 @@ class KdbxTokenRepository(context: Context) {
         includeFieldDetails: Boolean
     ): List<PasswordEntry> {
         val result = mutableListOf<PasswordEntry>()
+        // 自定义图标按 UUID 记忆化：共享同一图标的条目只解压复制一次
+        val customIconBytesCache = HashMap<String, ByteArray?>()
 
         groups.forEach { group ->
             val groupTitle = group.title.takeIf { it.isNotBlank() } ?: "未命名文件夹"
@@ -1457,7 +1822,7 @@ class KdbxTokenRepository(context: Context) {
                     title = title,
                     account = account,
                     standardIconId = entry.icon.standard.id,
-                    customIconBytes = readCustomIconBytes(database, entry),
+                    customIconBytes = readCustomIconBytes(database, entry, customIconBytesCache),
                     keyValues = values,
                     attachments = attachments,
                     expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
@@ -1472,10 +1837,17 @@ class KdbxTokenRepository(context: Context) {
             )
         }
 
+        // 排序键缓存：避免比较器内每次比较都重复 lowercase()，O(n log n) → 每项仅计算一次。
+        // 以 entryId 为键避免用 PasswordEntry 作 HashMap 键（深哈希抵消缓存收益）
+        val sortKeyCache = HashMap<Long, Pair<String, String>>()
+        val keysOf: (PasswordEntry) -> Pair<String, String> = { entry ->
+            sortKeyCache.getOrPut(entry.entryId) { entry.title.lowercase() to entry.account.lowercase() }
+        }
+
         return result.sortedWith(
             compareBy<PasswordEntry> { if (it.isFolderGroup) 0 else 1 }
-                .thenBy { it.title.lowercase() }
-                .thenBy { it.account.lowercase() }
+                .thenBy { keysOf(it).first }
+                .thenBy { keysOf(it).second }
         )
     }
 
@@ -1561,7 +1933,7 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 按节点 UUID 查找分组（含自身），用于恢复条目到原分组。
      */
-    private fun findGroupByUuid(group: Group?, uuid: java.util.UUID): Group? {
+    private fun findGroupByUuid(group: Group?, uuid: UUID): Group? {
         if (group == null) {
             return null
         }
@@ -1643,8 +2015,7 @@ class KdbxTokenRepository(context: Context) {
     private fun toStableGroupId(group: Group): Long {
         val uuid = (group.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
             ?: UUID(0L, 0L)
-        val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits
-        val absolute = when (mixed) {
+        val absolute = when (val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits) {
             Long.MIN_VALUE -> 0L
             else -> abs(mixed)
         }
@@ -1921,7 +2292,7 @@ class KdbxTokenRepository(context: Context) {
     private fun queryUriSize(uri: Uri): Long? {
         val cursor = appContext.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
             ?: return null
-        return try {
+        return cursor.use { cursor ->
             if (!cursor.moveToFirst()) {
                 return null
             }
@@ -1931,16 +2302,13 @@ class KdbxTokenRepository(context: Context) {
             } else {
                 cursor.getLong(sizeIndex)
             }
-        } finally {
-            cursor.close()
         }
     }
 
     private fun toStableId(entry: Entry): Long {
         val uuid = (entry.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
             ?: UUID(0L, 0L)
-        val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits
-        return when (mixed) {
+        return when (val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits) {
             Long.MIN_VALUE -> 0L
             else -> abs(mixed)
         }
@@ -1958,19 +2326,29 @@ class KdbxTokenRepository(context: Context) {
      * 读取条目自定义图标二进制数据。
      *
      * 优先从条目的 custom icon UUID 读取数据库中的二进制，读取失败时返回 null。
+     * 按图标 UUID 记忆化：同一图标被多条目共享时只解压复制一次。
      */
-    private fun readCustomIconBytes(database: Database, entry: Entry): ByteArray? {
+    private fun readCustomIconBytes(
+        database: Database,
+        entry: Entry,
+        cache: MutableMap<String, ByteArray?>
+    ): ByteArray? {
         val iconUuid = entry.icon.custom.uuid
         if (iconUuid == DatabaseVersioned.UUID_ZERO) {
             return null
         }
+        val uuidKey = iconUuid.toString()
+        if (cache.containsKey(uuidKey)) {
+            return cache[uuidKey]
+        }
 
-        return runCatching {
-            val binary = database.getBinaryForCustomIcon(iconUuid) ?: return null
-            binary.getUnGzipInputDataStream(database.binaryCache).use { input ->
-                input.readBytes()
-            }
+        val bytes = runCatching {
+            database.getBinaryForCustomIcon(iconUuid)
+                ?.getUnGzipInputDataStream(database.binaryCache)
+                ?.use { input -> input.readBytes() }
         }.getOrNull()
+        cache[uuidKey] = bytes
+        return bytes
     }
 
     /**

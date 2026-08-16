@@ -20,6 +20,8 @@ class AutoUnlockViewModel(private val context: Context) : ViewModel() {
         const val AUTO_UNLOCK_AUTH_MODE_PIN = 2
 
         private const val MANUAL_UNLOCK_WINDOW_MILLIS = 48L * 60L * 60L * 1000L
+        /** 凭据解锁硬性截止时长：超过该时长只能手动输入主密码（宽限期为 48h→64h）。 */
+        private const val CREDENTIAL_UNLOCK_DEADLINE_MILLIS = 64L * 60L * 60L * 1000L
         private const val MINUTE_MILLIS = 60L * 1000L
     }
 
@@ -80,6 +82,38 @@ class AutoUnlockViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
+     * 凭据（PIN/生物识别）解锁是否已超过 64 小时硬性截止。
+     *
+     * 超过该时限后凭据解锁不再可用，只能手动输入主密码；
+     * 关闭强制主密码校验策略时恒为 false（不拦截）。
+     */
+    fun isCredentialUnlockExpired(
+        library: LibraryContext,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Boolean {
+        if (!isManualUnlockWindowEnabled(library)) {
+            return false
+        }
+        val lastManualUnlockAt = library.lastManualMasterUnlockAt ?: return true
+        return nowMillis - lastManualUnlockAt >= CREDENTIAL_UNLOCK_DEADLINE_MILLIS
+    }
+
+    /**
+     * 获取凭据解锁 64 小时硬性截止的剩余时长（供文案展示）。
+     */
+    fun getCredentialUnlockRemainingMillis(
+        library: LibraryContext,
+        nowMillis: Long = System.currentTimeMillis()
+    ): Long? {
+        if (!isManualUnlockWindowEnabled(library)) {
+            return null
+        }
+        val lastManualUnlockAt = library.lastManualMasterUnlockAt ?: return 0L
+        val deadline = lastManualUnlockAt + CREDENTIAL_UNLOCK_DEADLINE_MILLIS
+        return (deadline - nowMillis).coerceAtLeast(0L)
+    }
+
+    /**
      * 将剩余毫秒格式化为"X小时Y分钟"。
      */
     fun formatRemainingHoursMinutes(remainingMillis: Long): String {
@@ -103,7 +137,13 @@ class AutoUnlockViewModel(private val context: Context) : ViewModel() {
         if (currentValue == enabled) {
             return
         }
-        onPersist(library.copy(forceManualUnlockEvery48Hours = enabled))
+        // 关闭时清零剩余时间；重新开启时置 null，使下次凭据/生物解锁回到"需手动输入一次主密码"。
+        onPersist(
+            library.copy(
+                forceManualUnlockEvery48Hours = enabled,
+                lastManualMasterUnlockAt = null
+            )
+        )
     }
 
     /**
@@ -180,7 +220,10 @@ class AutoUnlockViewModel(private val context: Context) : ViewModel() {
                 encryptedMasterPasswordIv = iv,
                 autoUnlockAuthMode = normalizeAutoUnlockAuthMode(authMode),
                 autoUnlockInvalidated = false,
-                autoUnlockEnrollDismissed = false
+                autoUnlockEnrollDismissed = false,
+                // 进入自动解锁即代表主密码刚被正确输入，刷新48小时窗口时间戳，
+                // 覆盖 unlockCurrentLibrary 内 autoRestoreTokens 可能带来的覆盖副作用。
+                lastManualMasterUnlockAt = System.currentTimeMillis()
             )
             onPersist(updated)
             true

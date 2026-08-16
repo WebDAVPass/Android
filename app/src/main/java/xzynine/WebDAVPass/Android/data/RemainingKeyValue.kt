@@ -68,7 +68,14 @@ data class PasswordEntry(
     val modifiedTime: Long = 0L,
     val isFolderGroup: Boolean = false,
     val isFolderPlaceholder: Boolean = false
-)
+) {
+    /**
+     * 索引键缓存：IO 线程排序分组与主线程 UI 分组会对同一条目重复执行 ICU 转写
+     * （Han-Latin; Latin-ASCII），此字段保证每次刷新每条目只转写一次。
+     * 仅作临时缓存，不参与 equals/hashCode/copy。
+     */
+    internal var cachedIndexKey: String? = null
+}
 
 /**
  * 条目历史版本摘要（用于历史列表展示）。
