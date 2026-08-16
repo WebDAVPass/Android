@@ -102,6 +102,7 @@ fun LandscapeMainNavigation(
                     if (backStack.size > 1) {
                         backStack.pop()
                     }
+                    // 栈底返回（回密码列表 tab/双击退出）由 MainScreen 的 BackHandler 统一处理
                 },
             ) {
                 // 欢迎页/锁定页在横屏下由 PortraitMainNavigation 渲染（MainScreen 路由分流），

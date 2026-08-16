@@ -5,7 +5,9 @@ import android.app.ActivityManager
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
 import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -22,6 +24,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -64,6 +67,9 @@ class MainActivity : FragmentActivity() {
 
 /** 后台自动锁定阈值：退到后台超过该时长，回到前台即锁定。 */
 private const val BACKGROUND_LOCK_THRESHOLD_MS = 30_000L
+
+/** 栈底双击退出时间窗口（毫秒）。 */
+private const val EXIT_BACK_THRESHOLD_MS = 2000L
 
 @Composable
 fun MainScreen() {
@@ -214,7 +220,40 @@ fun MainScreen() {
         }
     }
 
+    var lastExitPressTime by remember { mutableLongStateOf(0L) }
+
     CompositionLocalProvider(LocalNavigator provides backStack) {
+        // 栈底返回拦截（NavDisplay 对栈底返回事件不消费，会直接传给系统导致退出）：
+        // 竖屏卡片主页 / 横屏密码列表 tab 且右侧详情为空 → 双击返回才退出；
+        // 其余栈底页面（横屏 tab 切换用 replaceAll 遗留的单页栈）→ 先回主页/tab。
+        BackHandler(
+            enabled = backStack.size == 1 &&
+                backStack.lastOrNull() !is Route.Welcome &&
+                backStack.lastOrNull() !is Route.Locked &&
+                !showScanBottomSheet.value &&
+                !showCloudBindingDialog.value
+        ) {
+            val top = backStack.lastOrNull()
+            if (selectedEntryId != null) {
+                selectedEntryId = null
+                return@BackHandler
+            }
+            val atMainPage = top is Route.Home ||
+                (top is Route.PasswordList && top.listMode == PasswordListMode.ALL_PASSWORDS)
+            if (atMainPage) {
+                val now = SystemClock.uptimeMillis()
+                if (now - lastExitPressTime < EXIT_BACK_THRESHOLD_MS) {
+                    (context as? Activity)?.finish()
+                } else {
+                    lastExitPressTime = now
+                    ToastUtils.showShortToast(context, "再按一次返回键退出")
+                }
+            } else if (isLandscapeWideScreen) {
+                handleNavigationItemSelected(CategoryNavigationItem.ALL_PASSWORDS)
+            } else {
+                backStack.replaceAll(listOf(Route.Home))
+            }
+        }
         // 全局触摸监听：任何触摸操作都重置无操作超时计时
         Box(
             modifier = Modifier

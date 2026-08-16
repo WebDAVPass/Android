@@ -58,6 +58,7 @@ fun PortraitMainNavigation(
             if (backStack.size > 1) {
                 backStack.pop()
             }
+            // 栈底返回（双击退出/回主页）由 MainScreen 的 BackHandler 统一处理
         },
     ) {
         addCommonMainEntries(
