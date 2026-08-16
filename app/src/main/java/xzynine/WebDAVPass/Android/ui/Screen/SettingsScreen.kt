@@ -1,223 +1,251 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
-import android.content.ComponentName
-import android.content.Intent
-import android.provider.Settings
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import xzynine.WebDAVPass.Android.service.TwoFasAutofillService
-import xzynine.WebDAVPass.Android.theme.getAppRoundedCorner
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
-import top.yukonga.miuix.kmp.basic.BasicComponent
-import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
+import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Backup
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
-import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.GridView
-import top.yukonga.miuix.kmp.icon.extended.UploadCloud
+import top.yukonga.miuix.kmp.icon.extended.Info
+import top.yukonga.miuix.kmp.icon.extended.Lock
+import top.yukonga.miuix.kmp.icon.extended.Months
+import top.yukonga.miuix.kmp.icon.extended.Settings
+import xzynine.WebDAVPass.Android.data.LibrarySourceType
+import xzynine.WebDAVPass.Android.ui.component.Preference
+import xzynine.WebDAVPass.Android.ui.component.PreferenceType
+import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
+import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
+import xzynine.WebDAVPass.Android.ui.navigation.Route
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 /**
- * 设置界面组件
- * @param viewModel TokenViewModel实例
- * @param onWebDavConfigClick 点击WebDAV配置的回调
+ * 设置界面主索引页。
+ *
+ * 将原有单屏拆为多级结构：点击分组进入对应的二级子设置页。
+ * 每个入口与子页面的设置项均包裹在圆角浅色卡片中。
  */
 @Composable
 fun SettingsScreen(
     viewModel: TokenViewModel,
-    onWebDavConfigClick: () -> Unit
+    onCloudBindingClick: () -> Unit,
+    onSwitchLibraryClick: () -> Unit,
+    onDatabaseSettingsClick: () -> Unit,
+    onNavigateBack: () -> Unit,
 ) {
-    // 获取统一的圆角半径
-    val cornerRadius = getAppRoundedCorner()
-    
-    // 收集状态流
-    val backupStatus = viewModel.backupStatus.collectAsState()
-    val isBackupInProgress = viewModel.isBackupInProgress.collectAsState()
-    val backupProgress = viewModel.backupProgress.collectAsState()
-    val isRestoreInProgress = viewModel.isRestoreInProgress.collectAsState()
-    val restoreProgress = viewModel.restoreProgress.collectAsState()
-    val context = LocalContext.current
+    val navigator = LocalNavigator.current
+    val currentLibraryState by viewModel.libraryViewModel.currentLibrary.collectAsState()
+    val backupStatus =
+        viewModel.cloudSyncViewModel.backupStatus
+            .collectAsState()
+            .value
+
+    /**
+     * 当前库是否已具备云端同步所需信息。
+     */
+    val isCurrentLibraryCloudBound =
+        run {
+            val current = currentLibraryState
+            current != null &&
+                current.sourceType == LibrarySourceType.CLOUD &&
+                !current.remoteFilePath.isNullOrBlank() &&
+                !current.username.isNullOrBlank() &&
+                !current.password.isNullOrBlank()
+        }
+
+    /**
+     * 将同步状态编码映射为可读文案。
+     */
+    val cloudSyncStatusText =
+        when (currentLibraryState?.lastSyncStatus) {
+            "syncing" -> "同步中"
+            "success" -> "同步成功"
+            "merged" -> "已自动合并"
+            "conflict" -> "同步冲突"
+            "failed" -> "同步失败"
+            else -> "未同步"
+        }
+
+    /**
+     * 当前库云端摘要。
+     */
+    val cloudBindingSummary =
+        run {
+            val current = currentLibraryState
+            if (current == null) {
+                "当前未选择数据库文件"
+            } else if (isCurrentLibraryCloudBound) {
+                val remote = current.remoteFilePath ?: current.remoteBaseUrl.orEmpty()
+                "$remote | $cloudSyncStatusText"
+            } else {
+                "当前库未绑定云端 .kdbx，点击配置"
+            }
+        }
+
+    /**
+     * 入口摘要：备份状态文本优先，未发生时展示云端绑定摘要。
+     */
+    val backupEntrySummary =
+        if (backupStatus.isBlank()) {
+            cloudBindingSummary
+        } else if (cloudBindingSummary.isBlank()) {
+            backupStatus
+        } else {
+            "$backupStatus | $cloudBindingSummary"
+        }
 
     Scaffold(
         popupHost = { },
         topBar = {
-            TopAppBar(
+            SettingsTopAppBar(
                 title = "设置",
-                navigationIcon = {},
-                actions = {},
-                defaultWindowInsetsPadding = true
+                onNavigateBack = onNavigateBack,
             )
-        }
+        },
     ) {
         Column(
-            modifier = Modifier.Companion
-                .fillMaxSize()
-                .padding(it)
-                .padding(16.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(it)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
         ) {
-            Text(
-                text = "系统设置",
-                modifier = Modifier.padding(8.dp)
-            )
-
-            BasicComponent(
-                title = "设置为自动填充器",
-                summary = "跳转到系统自动填充设置",
-                startAction = {
-                    Icon(
-                        modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.GridView,
-                        contentDescription = "设置为自动填充器",
-                    )
-                },
-                onClick = {
-                    val autofillServiceExtra = "android.provider.extra.AUTOFILL_SERVICE"
-                    val autofillSettingsAction = "android.settings.AUTOFILL_SETTINGS"
-                    val requestIntent = Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
-                        putExtra(
-                            autofillServiceExtra,
-                            ComponentName(context, TwoFasAutofillService::class.java)
-                        )
-                    }
-                    val credentialsPickerIntent = Intent().apply {
-                        component = ComponentName(
-                            "com.android.settings",
-                            "com.android.settings.applications.credentials.CredentialsPickerActivity"
-                        )
-                    }
-                    val fallbackIntent = Intent(autofillSettingsAction)
-                    val intent = when {
-                        requestIntent.resolveActivity(context.packageManager) != null -> requestIntent
-                        credentialsPickerIntent.resolveActivity(context.packageManager) != null -> credentialsPickerIntent
-                        fallbackIntent.resolveActivity(context.packageManager) != null -> fallbackIntent
-                        else -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                            data = android.net.Uri.fromParts("package", context.packageName, null)
-                        }
-                    }
-                    context.startActivity(intent)
-                },
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-                    .border(1.dp, Color.Companion.LightGray, RoundedCornerShape(cornerRadius))
-            )
-
-            Spacer(modifier = Modifier.Companion.height(16.dp))
-
-            // WebDAV配置
-            BasicComponent(
-                title = "WebDAV 配置",
-                startAction = {
-                    Icon(
-                        modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.CloudFill,
-                        contentDescription = "WebDAV 配置",
-                    )
-                },
-                onClick = onWebDavConfigClick,
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
-            )
-
-            Spacer(modifier = Modifier.Companion.height(16.dp))
-
-            // 备份和恢复标题
-            Text(
-                text = "备份与恢复",
-                modifier = Modifier.padding(8.dp)
-            )
-
-            // 备份状态显示
-            BasicComponent(
-                title = "备份状态",
-                summary = backupStatus.value,
-                startAction = {
-                    Icon(
-                        modifier = Modifier.Companion.padding(end = 16.dp),
-                        imageVector = MiuixIcons.Backup,
-                        contentDescription = "备份状态",
-                    )
-                },
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-                    .border(1.dp, Color.Companion.LightGray, RoundedCornerShape(cornerRadius))
-            )
-
-            Spacer(modifier = Modifier.Companion.height(8.dp))
-
-            // 备份按钮
-            BasicComponent(
-                title = if (isBackupInProgress.value) "备份中..." else "备份令牌",
-                summary = if (isBackupInProgress.value) "正在备份到WebDAV服务器... ${backupProgress.value}%" else "点击开始备份",
-                startAction = {
-                    if (isBackupInProgress.value) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(end = 16.dp)
-                        )
-                    } else {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Preference(
+                    type = PreferenceType.Arrow,
+                    title = "切换数据库文件",
+                    summary = "返回欢迎页，选择其他 .kdbx",
+                    startAction = {
                         Icon(
                             modifier = Modifier.padding(end = 16.dp),
-                            imageVector = MiuixIcons.UploadCloud,
-                            contentDescription = "备份令牌",
+                            imageVector = MiuixIcons.Months,
+                            contentDescription = "切换数据库文件",
                         )
-                    }
-                },
-                onClick = {
-                    if (!isBackupInProgress.value) {
-                        viewModel.backupTokens()
-                    }
-                },
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
-            )
+                    },
+                    onClick = onSwitchLibraryClick,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // 手动恢复按钮
-            BasicComponent(
-                title = if (isRestoreInProgress.value) "恢复中..." else "手动恢复",
-                summary = if (isRestoreInProgress.value) "正在从WebDAV服务器恢复... ${restoreProgress.value}%" else "点击开始手动恢复",
-                startAction = {
-                    if (isRestoreInProgress.value) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.padding(end = 16.dp)
-                        )
-                    } else {
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Preference(
+                    type = PreferenceType.Arrow,
+                    title = "填充器设置",
+                    summary = "自动填充相关设置",
+                    startAction = {
                         Icon(
                             modifier = Modifier.padding(end = 16.dp),
-                            imageVector = MiuixIcons.Download,
-                            contentDescription = "手动恢复",
+                            imageVector = MiuixIcons.GridView,
+                            contentDescription = "填充器设置",
                         )
-                    }
-                },
-                onClick = {
-                    if (!isRestoreInProgress.value) {
-                        viewModel.manualRestoreTokens()
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .border(1.dp, Color.LightGray, RoundedCornerShape(cornerRadius))
-            )
+                    },
+                    onClick = { navigator.add(Route.GeneralSettings) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
 
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Preference(
+                    type = PreferenceType.Arrow,
+                    title = "安全",
+                    summary = "自动解锁、超时锁定与后台锁定",
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Lock,
+                            contentDescription = "安全",
+                        )
+                    },
+                    onClick = { navigator.add(Route.SecuritySettings) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Preference(
+                    type = PreferenceType.Arrow,
+                    title = "备份设置",
+                    summary = backupEntrySummary,
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.CloudFill,
+                            contentDescription = "备份详情查看",
+                        )
+                    },
+                    onClick = { navigator.add(Route.BackupSettings) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Preference(
+                    type = PreferenceType.Arrow,
+                    title = "数据库设置",
+                    summary = "导出/合并与修改主密码、KDF 算法、压缩设置",
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Settings,
+                            contentDescription = "数据库设置",
+                        )
+                    },
+                    onClick = onDatabaseSettingsClick,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Preference(
+                    type = PreferenceType.Arrow,
+                    title = "关于",
+                    summary = "版本、更新日志与检查更新",
+                    startAction = {
+                        Icon(
+                            modifier = Modifier.padding(end = 16.dp),
+                            imageVector = MiuixIcons.Info,
+                            contentDescription = "关于",
+                        )
+                    },
+                    onClick = { navigator.add(Route.About) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            }
         }
     }
 }

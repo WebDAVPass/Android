@@ -17,15 +17,17 @@ object OtpTokenFactory {
      */
     fun createFromUri(uri: Uri): OtpToken {
         // 检查URI协议是否为otpauth
-        if (uri.scheme != "otpauth")
+        if (uri.scheme != "otpauth") {
             throw IllegalArgumentException("URI必须以otpauth开头")
+        }
 
         // 确定令牌类型
-        val type = when (uri.authority) {
-            "totp" -> OtpTokenType.TOTP
-            "hotp" -> OtpTokenType.HOTP
-            else -> throw IllegalArgumentException("URI必须包含totp或hotp类型")
-        }
+        val type =
+            when (uri.authority) {
+                "totp" -> OtpTokenType.TOTP
+                "hotp" -> OtpTokenType.HOTP
+                else -> throw IllegalArgumentException("URI必须包含totp或hotp类型")
+            }
 
         // 获取路径
         var path = uri.path
@@ -65,8 +67,9 @@ object OtpTokenFactory {
         }
         val digits = d.toInt()
         // 验证位数范围
-        if (issuerExt != "Steam" && digits !in 5..8)
+        if (issuerExt != "Steam" && digits !in 5..8) {
             throw IllegalArgumentException("位数必须为5到8之间")
+        }
 
         // 解析周期
         var p = uri.getQueryParameter("period")
@@ -74,13 +77,14 @@ object OtpTokenFactory {
         val period = p.toInt()
 
         // 解析计数器（仅HOTP需要）
-        val counter = if (type == OtpTokenType.HOTP) {
-            var c = uri.getQueryParameter("counter")
-            if (c == null) c = "0"
-            c.toLong() - 1
-        } else {
-            0
-        }
+        val counter =
+            if (type == OtpTokenType.HOTP) {
+                var c = uri.getQueryParameter("counter")
+                if (c == null) c = "0"
+                c.toLong() - 1
+            } else {
+                0
+            }
 
         // 解析密钥
         val secret = uri.getQueryParameter("secret") ?: throw IllegalArgumentException("密钥不能为空")
@@ -90,9 +94,9 @@ object OtpTokenFactory {
 
         // 生成唯一标识符
         val uniqueId = UniqueIdGenerator.generate(secret, algo, digits, period)
-        
+
         // 创建并返回OtpToken对象
-        return OtpToken (
+        return OtpToken(
             id = 0,
             ordinal = -System.currentTimeMillis(), // 使新令牌出现在列表顶部
             issuer = issuer,
@@ -106,7 +110,7 @@ object OtpTokenFactory {
             counter = counter,
             period = period,
             encryptionType = EncryptionType.NONE, // 使用NONE加密类型
-            uniqueId = uniqueId
+            uniqueId = uniqueId,
         )
     }
 }

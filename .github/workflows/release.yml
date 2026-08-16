@@ -1,22 +1,20 @@
+# 发布：仅手动触发。版本号与 tag 由 update.yml（push 到 main 时）维护，
+# 本工作流只负责构建 APK、发布预发布 Release 并将上一 CI 预发布转正。
 name: Release
 
 on:
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: 'Dry run（只预览计算出的版本并验证构建，不实际发布）'
-        type: boolean
-        default: false
 
 concurrency:
   group: release
   cancel-in-progress: false
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -26,10 +24,10 @@ jobs:
           submodules: true
           persist-credentials: false
 
-      - name: Set up JDK 17
+      - name: Set up JDK 21
         uses: actions/setup-java@v4
         with:
-          java-version: '17'
+          java-version: '21'
           distribution: 'temurin'
 
       - name: Grant execute permission for gradlew
@@ -38,31 +36,21 @@ jobs:
       - name: 解码签名密钥库
         run: echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > PublicHub
 
-      - name: 计算发版版本号
+      - name: 读取版本号
         id: version
         run: |
           set -euo pipefail
-          # 基准：上次修改 version.properties 的 commit；不存在时增量为 0
-          BASE=$(git log -1 --format=%H -- version.properties 2>/dev/null || true)
-          N=0
-          if [ -n "$BASE" ]; then
-            N=$(git rev-list --count "$BASE..HEAD")
-          fi
           CUR_CODE=$(grep '^versionCode=' version.properties | cut -d= -f2)
           CUR_NAME=$(grep '^versionName=' version.properties | cut -d= -f2)
-          MAJOR=${CUR_NAME%%.*}
-          MINOR=$(echo "$CUR_NAME" | cut -d. -f2)
-          VERSION="$MAJOR.$((MINOR + N)).$(date +%m%d%H%M)"
-          VERSION_CODE=$((CUR_CODE + N))
-          echo "::notice::计算出的发版版本: $VERSION (versionCode $VERSION_CODE, 提交增量 $N)"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "versioncode=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "::notice::发布版本: $CUR_NAME (versionCode $CUR_CODE)"
+          echo "version=$CUR_NAME" >> "$GITHUB_OUTPUT"
+          echo "versioncode=$CUR_CODE" >> "$GITHUB_OUTPUT"
 
-      - name: 校验发版分支（仅允许 main，避免版本号写回错误分支）
-        if: ${{ !inputs.dry_run }}
+      - name: 校验 tag 存在（由 update.yml 创建）
         run: |
-          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
-            echo "::error::发版必须从 main 分支触发，当前为 ${{ github.ref }}"
+          TAG="v${{ steps.version.outputs.version }}"
+          if ! git rev-parse -q --verify "refs/tags/$TAG" >/dev/null; then
+            echo "::error::tag $TAG 不存在，请先由 update.yml（push 到 main）创建"
             exit 1
           fi
 
@@ -86,8 +74,7 @@ jobs:
             -PversionName="${{ steps.version.outputs.version }}" \
             -PversionCode="${{ steps.version.outputs.versioncode }}"
 
-      - name: 发布 GitHub Release（打 tag + 附 APK；上一次 CI 预发布转正，本次仍为预发布）
-        if: ${{ !inputs.dry_run }}
+      - name: 发布 GitHub Release（挂到 update.yml 创建的 tag；上一 CI 预发布转正）
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -100,10 +87,6 @@ jobs:
               -F prerelease=false -F make_latest=true > /dev/null
             echo "::notice::已将上一次 CI 预发布 $PREV_TAG 转正为正式发布（本次创建新预发布）"
           fi
-          # 用 API 创建轻量 tag（指向本次运行 SHA），避免依赖 checkout 持久化凭据
-          gh api -X POST "repos/${{ github.repository }}/git/refs" \
-            -f ref="refs/tags/v${{ steps.version.outputs.version }}" \
-            -f sha="$GITHUB_SHA" > /dev/null
           gh release create "v${{ steps.version.outputs.version }}" \
             --title "${{ steps.version.outputs.version }}" \
             --prerelease \
@@ -112,22 +95,3 @@ jobs:
             app/build/outputs/apk/debug/app-debug.apk
           BODY=$(gh release view "v${{ steps.version.outputs.version }}" --json body --jq .body)
           gh release edit "v${{ steps.version.outputs.version }}" --notes "$BODY"$'\n\n<!-- ci-automatic-release -->'
-
-      - name: 回写版本号（该提交成为下次递增基准）
-        if: ${{ !inputs.dry_run }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          sed -i "s/^versionCode=.*/versionCode=${{ steps.version.outputs.versioncode }}/" version.properties
-          sed -i "s/^versionName=.*/versionName=${{ steps.version.outputs.version }}/" version.properties
-          SHA=$(gh api repos/${{ github.repository }}/contents/version.properties --jq .sha)
-          gh api -X PUT repos/${{ github.repository }}/contents/version.properties \
-            -f message="chore: 发版 v${{ steps.version.outputs.version }} 后回写版本号" \
-            -f content="$(base64 -w0 version.properties)" \
-            -f sha="$SHA" \
-            --jq '.commit.sha'
-
-      - name: 版本预览
-        if: ${{ inputs.dry_run }}
-        run: |
-          echo "::notice::Dry run 完成，正式发布将使用 v${{ steps.version.outputs.version }}（versionCode ${{ steps.version.outputs.versioncode }}）"

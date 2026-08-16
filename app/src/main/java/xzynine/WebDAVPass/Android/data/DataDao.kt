@@ -4,93 +4,8 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.RawQuery
-import androidx.room.Transaction
 import androidx.room.Update
-import androidx.sqlite.db.SimpleSQLiteQuery
-import androidx.sqlite.db.SupportSQLiteQuery
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.withContext
-
-/**
- * OTP令牌数据访问对象
- */
-@Dao
-interface OtpTokenDao {
-
-    @Query("select * from otp_tokens order by ordinal")
-    fun getAll(): Flow<List<OtpToken>>
-
-    @Query("select * from otp_tokens order by ordinal")
-    suspend fun getAllOnce(): List<OtpToken>
-
-    @Query("select * from otp_tokens where id = :id")
-    fun get(id: Long): Flow<OtpToken?>
-
-    @Query("select ordinal from otp_tokens order by ordinal desc limit 1")
-    fun getLastOrdinal(): Long?
-
-
-
-    @Query("select count(*) from otp_tokens where secret = :secret and algorithm = :algorithm and digits = :digits and period = :period")
-    suspend fun countBySecretAlgorithmDigitsPeriod(secret: String, algorithm: String, digits: Int, period: Int): Int
-
-    /**
-     * 根据唯一标识查询令牌
-     * 唯一标识由secret、algorithm、digits和period生成
-     */
-    @Query("select * from otp_tokens where secret = :secret and algorithm = :algorithm and digits = :digits and period = :period limit 1")
-    suspend fun getByUniqueIdentifier(secret: String, algorithm: String, digits: Int, period: Int): OtpToken?
-    
-    @Query("select * from otp_tokens where uniqueId = :uniqueId limit 1")
-    suspend fun getByUniqueId(uniqueId: String): OtpToken?
-
-    @Query("delete from otp_tokens where id = :id")
-    suspend fun deleteById(id: Long): Void
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertAll(otpTokenList: List<OtpToken>)
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insert(otpTokenList: OtpToken)
-
-    @Update
-    suspend fun update(otpTokenList: OtpToken)
-
-    @Query("update otp_tokens set ordinal = :ordinal where id = :id")
-    suspend fun updateOrdinal(id: Long, ordinal: Long)
-
-    /**
-     * 递增计数器（使用原始查询避免触发Flow更新）
-     */
-    suspend fun incrementCounter(id: Long) {
-        incrementCounterRaw(
-            SimpleSQLiteQuery("update otp_tokens set counter = counter + 1 where id = ?",
-                arrayOf(id))
-        )
-    }
-
-    @RawQuery
-    suspend fun incrementCounterRaw(query: SupportSQLiteQuery): Int
-
-    @Transaction
-    suspend fun movePairs(pairs : List<Pair<Long,Long>>){
-        for(pair in pairs.listIterator()) {
-            withContext(Dispatchers.IO) {
-                val token1 = get(pair.first).first()
-                val token2 = get(pair.second).first()
-
-                if (token1 == null || token2 == null) {
-                    return@withContext
-                }
-                updateOrdinal(pair.first, token2.ordinal)
-                updateOrdinal(pair.second, token1.ordinal)
-            }
-        }
-    }
-}
 
 /**
  * WebDAV配置数据访问对象
@@ -138,18 +53,45 @@ interface WebDavConfigDao {
     @Update
     suspend fun update(config: WebDavConfig)
 
-    /**
+/**
      * 删除WebDAV配置
      * @param config WebDAV配置对象
      */
     @Query("DELETE FROM webdav_configs WHERE id = :id")
     suspend fun deleteById(id: Long)
 
-    /**
+/**
      * 删除WebDAV配置
      * @param config WebDAV配置对象
      */
     suspend fun delete(config: WebDavConfig) {
         deleteById(config.id)
     }
+}
+
+/**
+ * 应用设置数据访问对象（key-value）
+ */
+@Dao
+interface AppSettingsDao {
+    /**
+     * 根据 key 获取设置
+     * @param key 设置键
+     */
+    @Query("SELECT * FROM app_settings WHERE `key` = :key")
+    suspend fun getValue(key: String): AppSetting?
+
+    /**
+     * 写入设置（存在则替换）
+     * @param setting 设置项
+     */
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun put(setting: AppSetting)
+
+    /**
+     * 按 key 删除设置
+     * @param key 设置键
+     */
+    @Query("DELETE FROM app_settings WHERE `key` = :key")
+    suspend fun delete(key: String)
 }

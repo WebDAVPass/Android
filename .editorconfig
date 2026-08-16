@@ -1,0 +1,22 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+insert_final_newline = true
+
+[*.{kt,kts}]
+indent_size = 4
+indent_style = space
+max_line_length = off
+ktlint_code_style = ktlint_official
+# 命名/结构类规则豁免：包名 xzynine.WebDAVPass.Android 含大写为历史遗留无法改动；
+# @Composable 函数按惯例首字母大写；旧代码（FreeOTP/Keepass2Android 复制）存在通配符导入等
+ktlint_standard_package-name = disabled
+ktlint_standard_function-naming = disabled
+ktlint_standard_property-naming = disabled
+ktlint_standard_backing-property-naming = disabled
+ktlint_standard_filename = disabled
+ktlint_standard_no-wildcard-imports = disabled
+ktlint_standard_no-consecutive-comments = disabled
+ktlint_standard_enum-entry-name-case = disabled

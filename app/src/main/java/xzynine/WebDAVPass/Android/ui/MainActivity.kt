@@ -1,237 +1,376 @@
 package xzynine.WebDAVPass.Android.ui
 
+import android.app.Activity
+import android.app.ActivityManager
+import android.content.res.Configuration
+import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import android.os.SystemClock
+import android.view.WindowManager
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
-import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigationevent.NavigationEventDispatcher
-import androidx.navigationevent.NavigationEventDispatcherOwner
-import androidx.navigationevent.compose.LocalNavigationEventDispatcherOwner
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import top.yukonga.miuix.kmp.basic.FabPosition
-import top.yukonga.miuix.kmp.basic.FloatingActionButton
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.NavigationBar
-import top.yukonga.miuix.kmp.basic.NavigationBarItem
-import top.yukonga.miuix.kmp.basic.NavigationItem
-import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TopAppBar
-import top.yukonga.miuix.kmp.extra.SuperBottomSheet
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Months
-import top.yukonga.miuix.kmp.icon.extended.Scan
-import top.yukonga.miuix.kmp.icon.extended.Settings
-import top.yukonga.miuix.kmp.utils.MiuixPopupUtils.Companion.MiuixPopupHost
-import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
-import xzynine.WebDAVPass.Android.ui.Dialog.WebDavConfigDialog
+import androidx.fragment.app.FragmentActivity
+import kotlinx.coroutines.delay
+import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
+import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
-import xzynine.WebDAVPass.Android.ui.Screen.ScanTokenScreen
-import xzynine.WebDAVPass.Android.ui.Screen.HomeScreen
-import xzynine.WebDAVPass.Android.ui.ViewModel.TokenViewModel
-import xzynine.WebDAVPass.Android.ui.utils.NavigationEventDispatcherProvider
-import top.yukonga.miuix.kmp.theme.MiuixTheme
+import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
+import xzynine.WebDAVPass.Android.ui.Dialog.ScanTokenScreen
+import xzynine.WebDAVPass.Android.ui.Screen.OnboardingScreen
+import xzynine.WebDAVPass.Android.ui.Screen.isOnboardingCompleted
+import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
+import xzynine.WebDAVPass.Android.ui.component.CategoryNavigationItem
+import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
+import xzynine.WebDAVPass.Android.ui.navigation.Route
+import xzynine.WebDAVPass.Android.ui.navigation.replaceAll
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import kotlin.time.Duration.Companion.milliseconds
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         this.setContent {
-            NavigationEventDispatcherProvider {
-                AppTheme {
-                    // 设置系统栏外观
-                    SetupSystemBars()
-                    MainScreen()
-                }
+            AppTheme {
+                SetupSystemBars()
+                MainScreen()
             }
         }
     }
 }
+
+/** 后台自动锁定阈值：退到后台超过该时长，回到前台即锁定。 */
+private const val BACKGROUND_LOCK_THRESHOLD_MS = 30_000L
+
+/** 栈底双击退出时间窗口（毫秒）。 */
+private const val EXIT_BACK_THRESHOLD_MS = 2000L
 
 @Composable
 fun MainScreen() {
     val context = LocalContext.current
-    // 在顶层创建并共享一个 TokenViewModel，传递给各子界面
-    val tokenViewModel: TokenViewModel = viewModel(
-        factory = object : ViewModelProvider.Factory {
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
-                return TokenViewModel(context.applicationContext) as T
-            }
+    val tokenViewModel: TokenViewModel =
+        remember(context.applicationContext) {
+            TokenViewModel.getSharedInstance(context.applicationContext)
         }
-    )
 
-    // 控制WebDAV配置弹窗的显示与隐藏
-    val showWebDavDialog = remember { mutableStateOf(false) }
-    // 当前选中的WebDAV配置
-    val selectedWebDavConfig = remember { mutableStateOf<xzynine.WebDAVPass.Android.data.WebDavConfig?>(null) }
-
-    // 导航状态管理 - 使用rememberSaveable保存状态，防止配置变更时丢失
-    var selectedIndex by rememberSaveable { mutableStateOf(0) }
-
-    // 导航项配置
-    val navigationItems = listOf(
-        NavigationItem("首页", MiuixIcons.Months),
-        NavigationItem("设置", MiuixIcons.Settings)
-    )
-
-    // 控制扫描界面的显示与隐藏
-    val showScanBottomSheet = remember { mutableStateOf(false) }
-
-
-
-    // 基于Miuix Scaffold的主界面
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            popupHost = {},
-            topBar = {
-                // 只有在首页时显示标题
-                if (selectedIndex == 0) {
-                    TopAppBar(
-                        title = "WebDAVPass",
-                        navigationIcon = {},
-                        actions = {}
-                    )
-                }
-            },
-            floatingActionButton = {
-                // 只有在首页时显示悬浮扫描按钮
-                if (selectedIndex == 0) {
-                    FloatingActionButton(
-                        onClick = {
-                            showScanBottomSheet.value = true
-                        }
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Scan,
-                            contentDescription = "扫描二维码"
-                        )
-                    }
-                }
-            },
-            floatingActionButtonPosition = FabPosition.Companion.End,
-            content = { paddingValues ->
-                // 主界面内容区域，根据选中的导航项显示不同内容
-                Box(
-                    modifier = Modifier.Companion
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                ) {
-                    when (selectedIndex) {
-                        0 -> {
-                            HomeScreen(
-                                tokenViewModel = tokenViewModel
-                            )
-                        }
-
-                        1 -> {
-                            // 设置页面
-                            SettingsScreen(
-                                viewModel = tokenViewModel,
-                                onWebDavConfigClick = {
-                                    // 加载第一个WebDAV配置（如果存在）
-                                    tokenViewModel.viewModelScope.launch {
-                                        val firstConfig = tokenViewModel.getFirstWebDavConfig()
-                                        selectedWebDavConfig.value = firstConfig
-                                        showWebDavDialog.value = true
-                                    }
-                                }
-                            )
-                        }
-                    }
-                }
-            },
-            bottomBar = {
-                // 底部导航栏
-                NavigationBar {
-                    navigationItems.forEachIndexed { index, item ->
-                        NavigationBarItem(
-                            selected = selectedIndex == index,
-                            onClick = { selectedIndex = index },
-                            icon = item.icon,
-                            label = item.label
-                        )
-                    }
-                }
-            }
-        )
-        // 在 Scaffold 外部放置 MiuixPopupHost
-        MiuixPopupHost()
+    // 截屏防护：按开关动态启停 FLAG_SECURE（临时关闭 5 分钟后自动恢复开启，进程重建默认恢复防护）
+    val isSecureRecentsEnabled by tokenViewModel.isSecureRecentsEnabled.collectAsState()
+    val activity = context as? Activity
+    LaunchedEffect(isSecureRecentsEnabled) {
+        val window = activity?.window ?: return@LaunchedEffect
+        if (isSecureRecentsEnabled) {
+            window.setFlags(
+                WindowManager.LayoutParams.FLAG_SECURE,
+                WindowManager.LayoutParams.FLAG_SECURE,
+            )
+        } else {
+            window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
+        }
     }
 
-    // 使用外部文件中的WebDAV配置弹窗组件
-        WebDavConfigDialog(
-            showDialog = showWebDavDialog,
-            onDismissRequest = { 
-                showWebDavDialog.value = false
-                // 重置选中的配置
-                selectedWebDavConfig.value = null
-            },
-            onConfigSaved = { config ->
-                // 使用 ViewModel 的 viewModelScope 来管理协程，确保生命周期安全
-                tokenViewModel.viewModelScope.launch(Dispatchers.IO) {
-                    try {
-                        if (config.id == 0L) {
-                            // 新配置，插入数据库
-                            tokenViewModel.addWebDavConfig(config)
-                        } else {
-                            // 现有配置，更新数据库
-                            tokenViewModel.updateWebDavConfig(config)
+    // 最近任务占位预览颜色：FLAG_SECURE 生效时系统按该颜色绘制占位块（API 33+，随主题色变化）
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val placeholderColor = MiuixTheme.colorScheme.surface.toArgb()
+        LaunchedEffect(placeholderColor) {
+            activity?.setTaskDescription(
+                ActivityManager.TaskDescription
+                    .Builder()
+                    .setBackgroundColor(placeholderColor)
+                    .build(),
+            )
+        }
+    }
+
+    // 超时锁定：
+    // 1) 后台自动锁定：退到后台超过 30 秒（开关开启时）回到前台即锁定；
+    // 2) 无操作超时：前台无任何操作超过设定分钟数（默认 5 分钟）即锁定。
+    //    用 AtomicLong 保存时间戳，触摸事件高频写入时不触发重组。
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    var lastBackgroundAt by remember { mutableStateOf(0L) }
+    val lastActivityAt =
+        remember {
+            java.util.concurrent.atomic
+                .AtomicLong(System.currentTimeMillis())
+        }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer =
+            androidx.lifecycle.LifecycleEventObserver { _, event ->
+                when (event) {
+                    // 使用 ON_STOP/ON_START 而非 ON_PAUSE/ON_RESUME 判断后台：
+                    // ON_PAUSE 在半透明 Activity、系统权限对话框和生物识别提示覆盖时也会触发，
+                    // 此时应用并未真正退到后台，会误触发锁定。
+                    androidx.lifecycle.Lifecycle.Event.ON_STOP -> {
+                        lastBackgroundAt = System.currentTimeMillis()
+                    }
+
+                    androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                        // 后台自动锁定：退后台 ≥30 秒则锁定
+                        val backgroundAt = lastBackgroundAt
+                        lastBackgroundAt = 0L
+                        if (backgroundAt > 0L &&
+                            tokenViewModel.lockOnBackground.value &&
+                            System.currentTimeMillis() - backgroundAt >= BACKGROUND_LOCK_THRESHOLD_MS
+                        ) {
+                            tokenViewModel.libraryViewModel.lockCurrentLibrary()
                         }
-                    } catch (e: Exception) {
-                        // 错误处理
-                        e.printStackTrace()
+                        // 回到前台重新开始无操作计时
+                        lastActivityAt.set(System.currentTimeMillis())
+                    }
+
+                    else -> {}
+                }
+            }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // 无操作超时：任何触摸操作重置计时，无操作超过设定分钟数即锁定（每 30 秒检查一次）
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(30_000L.milliseconds)
+            val timeoutMinutes = tokenViewModel.lockTimeoutMinutes.value
+            val timeoutMs = timeoutMinutes * 60_000L
+            if (timeoutMs > 0L &&
+                System.currentTimeMillis() - lastActivityAt.get() >= timeoutMs
+            ) {
+                tokenViewModel.libraryViewModel.lockCurrentLibrary()
+                // 锁定后重新计时，避免解锁页停留期间反复触发
+                lastActivityAt.set(System.currentTimeMillis())
+            }
+        }
+    }
+
+    val showCloudBindingDialog = remember { mutableStateOf(false) }
+    val showWelcomeState = rememberSaveable { mutableStateOf(true) }
+    var showWelcome by showWelcomeState
+    // 首次启动引导：异步读取完成标记（内部 IO），读取完成前不渲染任何路由，
+    // 避免首帧 runBlocking 阻塞主线程，也避免引导/主页误闪
+    val onboardingCompleted =
+        produceState<Boolean?>(initialValue = null) {
+            value = isOnboardingCompleted(context)
+        }
+    var showOnboarding by remember { mutableStateOf(false) }
+    LaunchedEffect(onboardingCompleted.value) {
+        if (onboardingCompleted.value == false) {
+            showOnboarding = true
+        }
+    }
+    val currentLibrary by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+    val showScanBottomSheet = remember { mutableStateOf(false) }
+
+    // 横屏模式检测
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val isWideScreen = configuration.screenWidthDp >= 600
+    val isLandscapeWideScreen = isLandscape && isWideScreen
+
+    // 横屏模式下的导航状态（rememberSaveable：配置变更/进程重建后与 backStack 保持一致）
+    var selectedNavIndex by rememberSaveable { mutableIntStateOf(0) }
+    var selectedEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
+
+    // 初始路由：存在已记录的库文件 → 锁定页（解锁目标为上次库）；否则欢迎页。
+    // 用同步快照一次性决定，避免首帧 currentLibrary 流尚未预热导致初始路由闪烁或旋转后丢失导航栈。
+    val startRoute =
+        remember {
+            if (tokenViewModel.libraryViewModel.getCurrentLibrarySync() != null) {
+                Route.Locked
+            } else {
+                Route.Welcome
+            }
+        }
+    val backStack = rememberNavBackStack<Route>(startRoute)
+
+    // 横屏模式下导航项选择处理
+    val handleNavigationItemSelected =
+        remember(tokenViewModel, backStack) {
+            { item: CategoryNavigationItem ->
+                selectedEntryId = null
+                when (item) {
+                    CategoryNavigationItem.ALL_PASSWORDS -> {
+                        selectedNavIndex = 0
+                        backStack.replaceAll(listOf(Route.PasswordList(PasswordListMode.ALL_PASSWORDS)))
+                    }
+                    CategoryNavigationItem.TOKENS -> {
+                        selectedNavIndex = 1
+                        backStack.replaceAll(listOf(Route.TokenList))
+                    }
+                    CategoryNavigationItem.SECURITY -> {
+                        selectedNavIndex = 2
+                        backStack.replaceAll(listOf(Route.SecurityCheck))
+                    }
+                    CategoryNavigationItem.RECENT_DELETED -> {
+                        selectedNavIndex = 3
+                        backStack.replaceAll(listOf(Route.PasswordList(PasswordListMode.RECENT_DELETED)))
+                    }
+                    CategoryNavigationItem.SETTINGS -> {
+                        selectedNavIndex = 4
+                        backStack.replaceAll(listOf(Route.Settings))
                     }
                 }
-                // 重置选中的配置
-                selectedWebDavConfig.value = null
-            },
-            existingConfig = selectedWebDavConfig.value
-        )
+            }
+        }
 
-    // 扫描二维码底部抽屉
-    SuperBottomSheet(
-        show = showScanBottomSheet,
-        title = "扫描二维码",
-        onDismissRequest = {
-            showScanBottomSheet.value = false
-        },
-        content = {
-            // 扫描界面内容
-            Box(
-                modifier = Modifier.Companion
-                    .fillMaxWidth()
-                    .height(500.dp) // 设置固定高度，避免全屏显示
-            ) {
-                ScanTokenScreen(
-                    tokenViewModel = tokenViewModel,
-                    onTokenScanned = {
-                        // 关闭抽屉，令牌列表将通过同一个 ViewModel 自动刷新
-                        showScanBottomSheet.value = false
+    var lastExitPressTime by remember { mutableLongStateOf(0L) }
+
+    CompositionLocalProvider(LocalNavigator provides backStack) {
+        // 栈底返回拦截（NavDisplay 对栈底返回事件不消费，会直接传给系统导致退出）：
+        // 竖屏卡片主页 / 横屏密码列表 tab 且右侧详情为空 → 双击返回才退出；
+        // 其余栈底页面（横屏 tab 切换用 replaceAll 遗留的单页栈）→ 先回主页/tab。
+        BackHandler(
+            enabled =
+                backStack.size == 1 &&
+                    backStack.lastOrNull() !is Route.Welcome &&
+                    backStack.lastOrNull() !is Route.Locked &&
+                    !showScanBottomSheet.value &&
+                    !showCloudBindingDialog.value,
+        ) {
+            val top = backStack.lastOrNull()
+            if (selectedEntryId != null) {
+                selectedEntryId = null
+                return@BackHandler
+            }
+            val atMainPage =
+                top is Route.Home ||
+                    (top is Route.PasswordList && top.listMode == PasswordListMode.ALL_PASSWORDS)
+            if (atMainPage) {
+                val now = SystemClock.uptimeMillis()
+                if (now - lastExitPressTime < EXIT_BACK_THRESHOLD_MS) {
+                    (context as? Activity)?.finish()
+                } else {
+                    lastExitPressTime = now
+                    ToastUtils.showShortToast(context, "再次返回以退出")
+                }
+            } else if (isLandscapeWideScreen) {
+                handleNavigationItemSelected(CategoryNavigationItem.ALL_PASSWORDS)
+            } else {
+                backStack.replaceAll(listOf(Route.Home))
+            }
+        }
+        // 全局触摸监听：任何触摸操作都重置无操作超时计时
+        Box(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .pointerInput(Unit) {
+                        awaitEachGesture {
+                            awaitFirstDown()
+                            lastActivityAt.set(System.currentTimeMillis())
+                        }
                     },
-                    onDismiss = {
-                        showScanBottomSheet.value = false
-                    }
+        ) {
+            if (onboardingCompleted.value == null) {
+                // 引导状态读取中：空白占位，不渲染路由
+            } else if (showOnboarding) {
+                OnboardingScreen(
+                    onFinish = {
+                        showOnboarding = false
+                    },
+                )
+            } else if (isLandscapeWideScreen && backStack.lastOrNull() !is Route.Welcome && backStack.lastOrNull() !is Route.Locked) {
+                // 横屏三栏布局（欢迎页/锁定页不使用三栏）
+                LandscapeMainNavigation(
+                    backStack = backStack,
+                    tokenViewModel = tokenViewModel,
+                    currentLibrary = currentLibrary,
+                    selectedNavIndex = selectedNavIndex,
+                    onNavigationItemSelected = handleNavigationItemSelected,
+                    railExpanded = configuration.screenWidthDp >= 1200,
+                    selectedEntryId = selectedEntryId,
+                    onSelectedEntryIdChange = { selectedEntryId = it },
+                    showWelcome = showWelcomeState,
+                    showCloudBindingDialog = showCloudBindingDialog,
+                    showScanBottomSheet = showScanBottomSheet,
+                )
+            } else {
+                // 竖屏单栏布局
+                PortraitMainNavigation(
+                    backStack = backStack,
+                    tokenViewModel = tokenViewModel,
+                    currentLibrary = currentLibrary,
+                    showWelcome = showWelcomeState,
+                    showCloudBindingDialog = showCloudBindingDialog,
+                    showScanBottomSheet = showScanBottomSheet,
                 )
             }
         }
-    )
-}
+    }
 
+    if (showCloudBindingDialog.value) {
+        CloudLibraryDialog(
+            tokenViewModel = tokenViewModel,
+            mode = CloudMode.BIND,
+            initialLibraryContext = currentLibrary,
+            onDismiss = {
+                showCloudBindingDialog.value = false
+            },
+            onSelected = { library, _ ->
+                val saved = tokenViewModel.libraryViewModel.bindCurrentLibraryToCloud(library)
+                if (saved) {
+                    ToastUtils.showShortToast(context, "当前库云端绑定已保存")
+                    showCloudBindingDialog.value = false
+                } else {
+                    ToastUtils.showShortToast(context, "保存失败，请重新选择当前库")
+                }
+            },
+        )
+    }
+
+    if (!showWelcome) {
+        WindowBottomSheet(
+            show = showScanBottomSheet.value,
+            title = "扫描二维码",
+            onDismissRequest = {
+                showScanBottomSheet.value = false
+            },
+            content = {
+                Box(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .height(500.dp),
+                ) {
+                    ScanTokenScreen(
+                        tokenViewModel = tokenViewModel,
+                        onTokenScanned = {
+                            showScanBottomSheet.value = false
+                        },
+                        onDismiss = {
+                            showScanBottomSheet.value = false
+                        },
+                    )
+                }
+            },
+        )
+    }
+}

@@ -22,9 +22,8 @@ val INITIAL_GSON: Gson by lazy {
     GsonBuilder()
         .registerTypeAdapter(
             object : TypeToken<Map<String?, Any?>?>() {}.type,
-            MapDeserializerDoubleAsIntFix()
-        )
-        .registerTypeAdapter(Int::class.java, IntJsonDeserializer())
+            MapDeserializerDoubleAsIntFix(),
+        ).registerTypeAdapter(Int::class.java, IntJsonDeserializer())
         .registerTypeAdapter(String::class.java, StringJsonDeserializer())
         .setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE)
         .disableHtmlEscaping()
@@ -37,23 +36,23 @@ val GSON: Gson by lazy {
 }
 
 val GSONStrict: Gson by lazy {
-    INITIAL_GSON.newBuilder()
+    INITIAL_GSON
+        .newBuilder()
         .create()
 }
 
 inline fun <reified T> genericType(): Type = object : TypeToken<T>() {}.type
 
-inline fun <reified T> Gson.fromJsonObject(json: String?): Result<T> {
-    return runCatching {
+inline fun <reified T> Gson.fromJsonObject(json: String?): Result<T> =
+    runCatching {
         if (json == null) {
             throw JsonSyntaxException("解析字符串为空")
         }
         fromJson(json, genericType<T>()) as T
     }
-}
 
-inline fun <reified T> Gson.fromJsonArray(json: String?): Result<List<T>> {
-    return runCatching {
+inline fun <reified T> Gson.fromJsonArray(json: String?): Result<List<T>> =
+    runCatching {
         if (json == null) {
             throw JsonSyntaxException("解析字符串为空")
         }
@@ -61,26 +60,24 @@ inline fun <reified T> Gson.fromJsonArray(json: String?): Result<List<T>> {
         val list = fromJson(json, type) as List<T?>
         if (list.contains(null)) {
             throw JsonSyntaxException(
-                "列表不能存在null元素，可能是json格式错误，通常为列表存在多余的逗号所致"
+                "列表不能存在null元素，可能是json格式错误，通常为列表存在多余的逗号所致",
             )
         }
         @Suppress("UNCHECKED_CAST")
         list as List<T>
     }
-}
 
-inline fun <reified T> Gson.fromJsonObject(inputStream: InputStream?): Result<T> {
-    return runCatching {
+inline fun <reified T> Gson.fromJsonObject(inputStream: InputStream?): Result<T> =
+    runCatching {
         if (inputStream == null) {
             throw JsonSyntaxException("解析流为空")
         }
         val reader = InputStreamReader(inputStream)
         fromJson(reader, genericType<T>()) as T
     }
-}
 
-inline fun <reified T> Gson.fromJsonArray(inputStream: InputStream?): Result<List<T>> {
-    return runCatching {
+inline fun <reified T> Gson.fromJsonArray(inputStream: InputStream?): Result<List<T>> =
+    runCatching {
         if (inputStream == null) {
             throw JsonSyntaxException("解析流为空")
         }
@@ -89,15 +86,17 @@ inline fun <reified T> Gson.fromJsonArray(inputStream: InputStream?): Result<Lis
         val list = fromJson(reader, type) as List<T?>
         if (list.contains(null)) {
             throw JsonSyntaxException(
-                "列表不能存在null元素，可能是json格式错误，通常为列表存在多余的逗号所致"
+                "列表不能存在null元素，可能是json格式错误，通常为列表存在多余的逗号所致",
             )
         }
         @Suppress("UNCHECKED_CAST")
         list as List<T>
     }
-}
 
-fun Gson.writeToOutputStream(out: OutputStream, any: Any) {
+fun Gson.writeToOutputStream(
+    out: OutputStream,
+    any: Any,
+) {
     val writer = JsonWriter(OutputStreamWriter(out, "UTF-8"))
     writer.setIndent("  ")
     if (any is List<*>) {
@@ -118,32 +117,28 @@ fun Gson.writeToOutputStream(out: OutputStream, any: Any) {
  *
  */
 class StringJsonDeserializer : JsonDeserializer<String?> {
-
     override fun deserialize(
         json: JsonElement,
         typeOfT: Type,
-        context: JsonDeserializationContext?
-    ): String? {
-        return when {
+        context: JsonDeserializationContext?,
+    ): String? =
+        when {
             json.isJsonPrimitive -> json.asString
             json.isJsonNull -> null
             else -> json.toString()
         }
-    }
-
 }
 
 /**
  * int类型转化失败时跳过
  */
 class IntJsonDeserializer : JsonDeserializer<Int?> {
-
     override fun deserialize(
         json: JsonElement,
         typeOfT: Type?,
-        context: JsonDeserializationContext?
-    ): Int? {
-        return when {
+        context: JsonDeserializationContext?,
+    ): Int? =
+        when {
             json.isJsonPrimitive -> {
                 val prim = json.asJsonPrimitive
                 if (prim.isNumber) {
@@ -155,21 +150,17 @@ class IntJsonDeserializer : JsonDeserializer<Int?> {
 
             else -> null
         }
-    }
-
 }
 
 /**
  * 修复Int变为Double的问题
  */
-class MapDeserializerDoubleAsIntFix :
-    JsonDeserializer<Map<String, Any?>?> {
-
+class MapDeserializerDoubleAsIntFix : JsonDeserializer<Map<String, Any?>?> {
     @Throws(JsonParseException::class)
     override fun deserialize(
         jsonElement: JsonElement,
         type: Type,
-        jsonDeserializationContext: JsonDeserializationContext
+        jsonDeserializationContext: JsonDeserializationContext,
     ): Map<String, Any?>? {
         @Suppress("unchecked_cast")
         return read(jsonElement) as? Map<String, Any?>
@@ -225,5 +216,4 @@ class MapDeserializerDoubleAsIntFix :
         }
         return null
     }
-
 }

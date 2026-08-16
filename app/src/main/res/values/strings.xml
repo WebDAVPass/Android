@@ -1,4 +1,19 @@
 <resources>
     <string name="app_name">WebDAVPass</string>
     <string name="autofill_service_description">Autofill service for WebDAVPass</string>
+    <string name="autofill_sign_in_prompt">使用 WebDAVPass 登录</string>
+    <string name="autofill_select_entry">选择条目</string>
+    <string name="autofill_inline_suggestions_keyboard">建议已显示在键盘上</string>
+    <string name="autofill_block_restart">此应用不允许自动填充</string>
+    <string name="autofill_preference_title">自动填充设置</string>
+    <string name="autofill_ask_to_save_data_title">询问保存数据</string>
+    <string name="autofill_ask_to_save_data_summary">填写表单后询问是否保存用户名和密码</string>
+    <string name="autofill_manual_selection_title">手动选择</string>
+    <string name="autofill_manual_selection_summary">显示手动选择条目的选项</string>
+    <string name="autofill_inline_suggestions_title">内联建议</string>
+    <string name="autofill_inline_suggestions_summary">在键盘上显示填充建议</string>
+    <string name="autofill_application_id_blocklist_title">应用黑名单</string>
+    <string name="autofill_application_id_blocklist_summary">在这些应用中禁用自动填充</string>
+    <string name="autofill_web_domain_blocklist_title">域名黑名单</string>
+    <string name="autofill_web_domain_blocklist_summary">在这些网站中禁用自动填充</string>
 </resources>

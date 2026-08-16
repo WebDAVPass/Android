@@ -7,16 +7,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import androidx.activity.compose.BackHandler
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
-import top.yukonga.miuix.kmp.extra.WindowDialog
+import top.yukonga.miuix.kmp.window.WindowDialog
 
 /**
  * 通用确认对话框
@@ -38,26 +35,22 @@ fun ConfirmationDialog(
     confirmButtonText: String,
     isDestructive: Boolean = false,
     onConfirm: () -> Unit,
-    dismissButtonText: String = "取消"
+    dismissButtonText: String = "取消",
 ) {
     WindowDialog(
         title = title,
         summary = summary,
-        show = show,
-        onDismissRequest = onDismiss
+        show = show.value,
+        onDismissRequest = onDismiss,
     ) {
-        BackHandler(enabled = true) {
-            onDismiss()
-        }
-        
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             TextButton(
                 text = dismissButtonText,
                 onClick = onDismiss,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f),
             )
 
             Spacer(modifier = Modifier.width(16.dp))
@@ -67,12 +60,12 @@ fun ConfirmationDialog(
                     text = confirmButtonText,
                     onClick = onConfirm,
                     modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.textButtonColorsPrimary()
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
                 )
             } else {
                 Button(
                     onClick = onConfirm,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text(text = confirmButtonText)
                 }

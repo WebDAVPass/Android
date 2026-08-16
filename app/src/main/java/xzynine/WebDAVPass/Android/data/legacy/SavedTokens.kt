@@ -5,7 +5,7 @@ package xzynine.WebDAVPass.Android.data.legacy
  */
 data class SavedTokens(
     val tokens: Map<String, LegacyToken>,
-    val tokenOrder: List<String>
+    val tokenOrder: List<String>,
 )
 
 /**
@@ -21,5 +21,5 @@ data class LegacyToken(
     val secret: String,
     val digits: Int,
     val counter: Long,
-    val period: Int
+    val period: Int,
 )
