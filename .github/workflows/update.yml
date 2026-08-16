@@ -1,6 +1,7 @@
 # 版本号更新：push 到 main 时按提交数递增版本号、跑 ktlintFormat 并回写，
 # 创建 v{版本号} tag 供 release.yml 发布使用。
-# 通过 GITHUB_TOKEN 提交/推送不会再次触发本工作流。
+# 回写使用 CI_PUSH_TOKEN（用户 PAT）直推 main（仓库级 ruleset 已为 xzy-nine 配置 bypass）；
+# PAT 推送会再次触发本工作流，commit message 带 [skip ci] 跳过，叠加 N=0 跳过逻辑防循环。
 name: 版本号更新
 
 on:
@@ -89,12 +90,14 @@ jobs:
             exit 0
           fi
           {
-            echo "CI:update${{ steps.version.outputs.version }}"
+            echo "CI:update${{ steps.version.outputs.version }} [skip ci]"
             echo
             cat /tmp/commit-summary.txt
           } > /tmp/commit-msg.txt
           git commit -F /tmp/commit-msg.txt
-          PUSH_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          # main 分支保护要求走 PR，但 GITHUB_TOKEN 无法绕过；
+          # 改用 CI_PUSH_TOKEN（用户 PAT，仓库级 ruleset 已为 xzy-nine 配置 bypass）
+          PUSH_URL="https://x-access-token:${{ secrets.CI_PUSH_TOKEN }}@github.com/${{ github.repository }}.git"
           git push "$PUSH_URL" HEAD:main
           echo "committed=true" >> "$GITHUB_OUTPUT"
 
@@ -103,6 +106,6 @@ jobs:
         run: |
           VERSION="v${{ steps.version.outputs.version }}"
           git tag "$VERSION"
-          PUSH_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          PUSH_URL="https://x-access-token:${{ secrets.CI_PUSH_TOKEN }}@github.com/${{ github.repository }}.git"
           git push "$PUSH_URL" "refs/tags/$VERSION"
           echo "::notice::已创建 tag $VERSION"
