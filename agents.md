@@ -1,27 +1,31 @@
-## ai的agent要求
-- 要求修改时直接修改不二次征求同意
-- 尽量最小化改动以避免无法预料的错误
-## UI与交互约定
-- UI 框架采用 Jetpack Compose，遵循 Miuix 设计规范。
-- 所有 Compose 组件优先使用 Miuix 主题库（如 `MiuixTheme`、`MiuixIcons`、`Button`、`Card` 等），详见[官方组件文档](https://miuix-kotlin-multiplatform.github.io/miuix/zh_CN/components/)。
+# AGENTS.md
 
-## 构建与依赖
-- 构建仅限 Android Studio IDE，不要使用支持命令行（如 gradlew）。
-### 应用 API 版本
-- 代码风格遵循 Kotlin 官方规范，使用 Ktlint 进行格式化。
-- 如需扩展功能或集成新依赖，优先查阅 Miuix 官方文档与本项目现有实现。
-本应用不会上架 Google Play等应用商店，仅限私有分发和自用,且没有对公网提供服务的计划。
-### 应用工具方法规范
-在使用工具方法前，请先查看 `app\src\main\java\github\xzynine\two_fas\*` 中个子文件夹中的文件中的的实现。
--如果已有类似功能的方法，请优先使用现有方法或者升级相关方法，避免重复实现。如果没有合适的方法，可以根据项目的代码风格和规范自行实现新的工具方法，并将其添加到该目录中以供后续使用。
-- 注意,新方法如果仅是对旧方法的拓展,请在旧方法的基础上进行修改,而不是新建一个类似的方法。
-## 编写规则:
-请使用doc风格的中文注释,务必都要有注释,并必要处补充普通注释
-## 应用版本号规则:
-版本号格式为 `主版本号.次版本号.修订号`，如 `0.190.13`。
-- 主版本号   （0）表示重大更新或架构变更，
-- 次版本号  （190）main的主线提交数，
-- 修订号    （日期）当前构建日期，格式为 `年月日时分`。
+KeePass 密码/2FA 令牌管理器（WebDAV 云同步），Jetpack Compose + Miuix UI。注释与提交信息均为中文。
 
-dev合并会main时使用非快进合并以保留dev分支的提交记录
---- --- IGNORE ---
+## 关键信息
+
+Docs\项目简介.md
+
+## 签名（易踩坑）
+
+- debug 与 release 共用同一 release 签名配置（`app/build.gradle.kts`），**没有密钥库则 `assembleDebug` 也会失败**。
+- 密钥库文件在仓库根目录 `PublicHub`（已 gitignore，CI 从 `KEYSTORE_BASE64` 解密生成）。本地需要自行放置。
+- 凭据从 `local.properties` 读取：`KEY_ALIAS` / `KEY_PASSWORD` / `STORE_PASSWORD`，缺省回退同名环境变量。切勿提交真实凭据。
+
+
+- `version.properties` 修改仅限major非用户要求勿改。
+版本号由ci决定
+- 查当前值：`:app:printVersionName`
+
+## 模块结构
+
+- `app`：主应用（applicationId `xzynine.webdavpass`）。autofill、biometric、Room（KSP）、CameraX/ZXing、KeePassJava2 均在此或下。
+- `webdav`、`checkupdates`：**git 子模块**（SSH URL `git@github.com:xzy-nine-common/...`），clone 需 `--recursive`。云同步与文件浏览 UI 由 `webdav` 子模块提供，主应用只调用其组合；子模块代码应在对应仓库修改，勿在本仓库直接改。
+- `crypto`（含 JNI aes/argon2）、`database`：源自 Keepass2Android 的加密与 KDBX 读写层（`com.kunzisoft.keepass`）。
+- `base`、`icon-pack`(+classic/material)、`text-drawable`、`token-images`：工具与图标模块。
+
+## 构建配置注意
+
+- `RepositoriesMode.FAIL_ON_PROJECT_REPOS`：模块内禁止再声明 repository。
+- ABI splits 仅当任务名含 "Release" 时启用：`assembleRelease` 产出 armeabi-v7a/arm64-v8a/x86_64 + universal APK，`assembleDebug` 只产出 universal。
+- app 的 compileSdk 使用 AGP 9 新写法 `compileSdk { version = release(37) }`；minSdk 29 / targetSdk 36，源码/目标均为 Java 17。
