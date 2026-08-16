@@ -255,7 +255,7 @@ public class NativeAESCipherSpi extends CipherSpi {
         if ( !mIsInit) {
             NativeLib.INSTANCE.init();
         }
-        if ( padding.length() == 0 ) {
+        if (padding.isEmpty()) {
             return;
         }
         if ( !padding.equals("PKCS5Padding") ) {
