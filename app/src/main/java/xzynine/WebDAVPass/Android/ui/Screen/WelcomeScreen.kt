@@ -1,8 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
 import android.net.Uri
-
-import xzylib.base.util.ToastUtils
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,15 +49,16 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
-import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
+import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CreateMasterPasswordDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.CreateMode
-import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 import xzynine.WebDAVPass.Android.util.resolveDisplayName
 
@@ -70,7 +69,7 @@ import xzynine.WebDAVPass.Android.util.resolveDisplayName
 fun WelcomeScreen(
     tokenViewModel: TokenViewModel,
     onEnterLibrary: () -> Unit,
-    onBackPressed: () -> Boolean = { false }
+    onBackPressed: () -> Boolean = { false },
 ) {
     val context = LocalContext.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -109,7 +108,10 @@ fun WelcomeScreen(
     /**
      * 设置历史项选择状态。
      */
-    fun setSelection(item: LibraryContext, checked: Boolean) {
+    fun setSelection(
+        item: LibraryContext,
+        checked: Boolean,
+    ) {
         if (checked) {
             isSelectionMode.value = true
             selectedHistoryIds[item.id] = true
@@ -178,69 +180,73 @@ fun WelcomeScreen(
         return history.firstOrNull { it.id == libraryContext.id } ?: libraryContext
     }
 
-    val localImportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-        onResult = { uri: Uri? ->
-            if (uri == null) {
-                return@rememberLauncherForActivityResult
-            }
-            coroutineScope.launch {
-                val path = tokenViewModel.persistKdbxFromUri(uri)
-                if (path == null) {
-                    ToastUtils.showShortToast(context, "导入失败：无法读取文件")
-                    return@launch
+    val localImportLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+            onResult = { uri: Uri? ->
+                if (uri == null) {
+                    return@rememberLauncherForActivityResult
                 }
+                coroutineScope.launch {
+                    val path = tokenViewModel.persistKdbxFromUri(uri)
+                    if (path == null) {
+                        ToastUtils.showShortToast(context, "导入失败：无法读取文件")
+                        return@launch
+                    }
 
-                val displayName = uri.resolveDisplayName(context, fallbackIfEmpty = "未命名.kdbx")
+                    val displayName = uri.resolveDisplayName(context, fallbackIfEmpty = "未命名.kdbx")
 
-                val item = LibraryContext(
-                    displayName = displayName,
-                    sourceType = LibrarySourceType.LOCAL,
-                    localPath = path
-                )
-                tokenViewModel.libraryViewModel.upsertAndSelectLibrary(item)
-                showInlineUnlock(item)
-            }
-        }
-    )
-
-    val localCreateLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
-        onResult = { uri: Uri? ->
-            if (uri == null) {
-                return@rememberLauncherForActivityResult
-            }
-            coroutineScope.launch {
-                val path = tokenViewModel.createLocalKdbx(uri, pendingCreateMasterPassword, pendingCreateKeyFileData)
-                if (path == null) {
-                    ToastUtils.showShortToast(context, "新建失败：无法创建文件")
-                    return@launch
-                }
-
-                val displayName = uri.resolveDisplayName(context, fallbackIfEmpty = "未命名.kdbx")
-
-                val item = LibraryContext(
-                    displayName = displayName,
-                    sourceType = LibrarySourceType.LOCAL,
-                    localPath = path,
-                    keyFileUri = pendingCreateKeyFileUri
-                )
-                tokenViewModel.libraryViewModel.upsertAndSelectLibrary(item)
-                val plainPassword = pendingCreateMasterPassword
-                val plainKeyFileData = pendingCreateKeyFileData
-                val unlockOk = tokenViewModel.unlockCurrentLibrary(plainPassword, keyFileData = plainKeyFileData)
-                pendingCreateMasterPassword = ""
-                pendingCreateKeyFileData = null
-                pendingCreateKeyFileUri = null
-                if (unlockOk) {
-                    promptAutoUnlockEnroll(context, tokenViewModel, item, plainPassword)
-                    onEnterLibrary()
-                } else {
+                    val item =
+                        LibraryContext(
+                            displayName = displayName,
+                            sourceType = LibrarySourceType.LOCAL,
+                            localPath = path,
+                        )
+                    tokenViewModel.libraryViewModel.upsertAndSelectLibrary(item)
                     showInlineUnlock(item)
                 }
-            }
-        }
-    )
+            },
+        )
+
+    val localCreateLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+            onResult = { uri: Uri? ->
+                if (uri == null) {
+                    return@rememberLauncherForActivityResult
+                }
+                coroutineScope.launch {
+                    val path = tokenViewModel.createLocalKdbx(uri, pendingCreateMasterPassword, pendingCreateKeyFileData)
+                    if (path == null) {
+                        ToastUtils.showShortToast(context, "新建失败：无法创建文件")
+                        return@launch
+                    }
+
+                    val displayName = uri.resolveDisplayName(context, fallbackIfEmpty = "未命名.kdbx")
+
+                    val item =
+                        LibraryContext(
+                            displayName = displayName,
+                            sourceType = LibrarySourceType.LOCAL,
+                            localPath = path,
+                            keyFileUri = pendingCreateKeyFileUri,
+                        )
+                    tokenViewModel.libraryViewModel.upsertAndSelectLibrary(item)
+                    val plainPassword = pendingCreateMasterPassword
+                    val plainKeyFileData = pendingCreateKeyFileData
+                    val unlockOk = tokenViewModel.unlockCurrentLibrary(plainPassword, keyFileData = plainKeyFileData)
+                    pendingCreateMasterPassword = ""
+                    pendingCreateKeyFileData = null
+                    pendingCreateKeyFileUri = null
+                    if (unlockOk) {
+                        promptAutoUnlockEnroll(context, tokenViewModel, item, plainPassword)
+                        onEnterLibrary()
+                    } else {
+                        showInlineUnlock(item)
+                    }
+                }
+            },
+        )
 
     Scaffold(
         popupHost = {},
@@ -255,41 +261,42 @@ fun WelcomeScreen(
                                 if (selectedHistoryIds.isNotEmpty()) {
                                     showDeleteDialog.value = true
                                 }
-                            }
+                            },
                         ) {
                             Icon(
                                 imageVector = MiuixIcons.Delete,
-                                contentDescription = "删除"
+                                contentDescription = "删除",
                             )
                         }
                         IconButton(
                             onClick = {
                                 clearSelectionMode()
-                            }
+                            },
                         ) {
                             Icon(
                                 imageVector = MiuixIcons.Close,
-                                contentDescription = "取消选择"
+                                contentDescription = "取消选择",
                             )
                         }
                     }
                 },
-                defaultWindowInsetsPadding = true
+                defaultWindowInsetsPadding = true,
             )
-        }
+        },
     ) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(it),
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(it),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // 分组标题（MIUI 设置分组样式）
             item {
                 SmallTitle(
                     text = "数据库",
-                    insideMargin = PaddingValues(horizontal = 8.dp, vertical = 8.dp)
+                    insideMargin = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                 )
             }
 
@@ -306,7 +313,7 @@ fun WelcomeScreen(
                             },
                             onDismiss = {
                                 pendingUnlockLibrary = null
-                            }
+                            },
                         )
                     }
                 }
@@ -316,29 +323,30 @@ fun WelcomeScreen(
                 // 空状态
                 item {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 48.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
                         Icon(
                             imageVector = MiuixIcons.Folder,
                             contentDescription = null,
                             modifier = Modifier.size(56.dp),
-                            tint = MiuixTheme.colorScheme.onSurfaceContainerVariant
+                            tint = MiuixTheme.colorScheme.onSurfaceContainerVariant,
                         )
                         Spacer(modifier = Modifier.height(16.dp))
                         Text(
                             text = "暂无历史库",
                             fontSize = 16.sp,
-                            color = MiuixTheme.colorScheme.onSurface
+                            color = MiuixTheme.colorScheme.onSurface,
                         )
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = "点击下方按钮导入或新建数据库",
                             fontSize = 13.sp,
                             color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
                         )
                     }
                 }
@@ -350,34 +358,39 @@ fun WelcomeScreen(
                             if (index > 0) {
                                 HorizontalDivider()
                             }
-                            val cloudSyncSummary = if (item.sourceType == LibrarySourceType.CLOUD) {
-                                val syncText = when (item.lastSyncStatus) {
-                                    "syncing" -> "同步中"
-                                    "success" -> "同步成功"
-                                    "merged" -> "已自动合并"
-                                    "conflict" -> "同步冲突"
-                                    "failed" -> "同步失败"
-                                    else -> "未同步"
+                            val cloudSyncSummary =
+                                if (item.sourceType == LibrarySourceType.CLOUD) {
+                                    val syncText =
+                                        when (item.lastSyncStatus) {
+                                            "syncing" -> "同步中"
+                                            "success" -> "同步成功"
+                                            "merged" -> "已自动合并"
+                                            "conflict" -> "同步冲突"
+                                            "failed" -> "同步失败"
+                                            else -> "未同步"
+                                        }
+                                    // 毫秒级时间戳按设备时区格式化为本地时间，避免直接显示原始数字
+                                    val syncAtText =
+                                        LocalTimeFormatter
+                                            .formatLocalDateTime(item.lastSyncAt)
+                                            .takeIf { it.isNotEmpty() }
+                                            ?.let { "，上次: $it" }
+                                            .orEmpty()
+                                    "$syncText$syncAtText"
+                                } else {
+                                    ""
                                 }
-                                // 毫秒级时间戳按设备时区格式化为本地时间，避免直接显示原始数字
-                                val syncAtText = LocalTimeFormatter.formatLocalDateTime(item.lastSyncAt)
-                                    .takeIf { it.isNotEmpty() }
-                                    ?.let { "，上次: $it" }
-                                    .orEmpty()
-                                "$syncText$syncAtText"
-                            } else {
-                                ""
-                            }
 
                             SelectableEntryCard(
                                 itemKey = item.id,
                                 title = item.displayName,
-                                summary = if (item.sourceType == LibrarySourceType.CLOUD) {
-                                    val remote = item.remoteFilePath ?: item.remoteBaseUrl.orEmpty()
-                                    "$remote | $cloudSyncSummary"
-                                } else {
-                                    item.localPath
-                                },
+                                summary =
+                                    if (item.sourceType == LibrarySourceType.CLOUD) {
+                                        val remote = item.remoteFilePath ?: item.remoteBaseUrl.orEmpty()
+                                        "$remote | $cloudSyncSummary"
+                                    } else {
+                                        item.localPath
+                                    },
                                 isSelectionMode = isSelectionMode.value,
                                 isSelected = selectedHistoryIds.containsKey(item.id),
                                 onLongClick = {
@@ -393,7 +406,7 @@ fun WelcomeScreen(
                                     Icon(
                                         modifier = Modifier.padding(end = 16.dp),
                                         imageVector = if (item.sourceType == LibrarySourceType.CLOUD) MiuixIcons.CloudFill else MiuixIcons.Folder,
-                                        contentDescription = "历史库"
+                                        contentDescription = "历史库",
                                     )
                                 },
                                 onClick = {
@@ -408,8 +421,9 @@ fun WelcomeScreen(
                                         showInlineUnlock(selectedLibrary)
                                     }
                                 },
-                                modifier = Modifier
-                                    .fillMaxWidth()
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth(),
                             )
                         }
                     }
@@ -428,7 +442,7 @@ fun WelcomeScreen(
                             localImportLauncher.launch(arrayOf("*/*"))
                         },
                         colors = ButtonDefaults.buttonColorsPrimary(),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(imageVector = MiuixIcons.Folder, contentDescription = "本地导入")
                         Text(text = "本地导入")
@@ -439,7 +453,7 @@ fun WelcomeScreen(
                             showCloudImportDialog = true
                         },
                         colors = ButtonDefaults.buttonColorsPrimary(),
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(imageVector = MiuixIcons.CloudFill, contentDescription = "云端导入")
                         Text(text = "云端导入")
@@ -455,7 +469,7 @@ fun WelcomeScreen(
                             createMode = CreateMode.LOCAL
                             showCreateMasterPasswordDialog = true
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(imageVector = MiuixIcons.AddFolder, contentDescription = "本地新建")
                         Text(text = "本地新建")
@@ -466,7 +480,7 @@ fun WelcomeScreen(
                             createMode = CreateMode.CLOUD
                             showCreateMasterPasswordDialog = true
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Icon(imageVector = MiuixIcons.UploadCloud, contentDescription = "云端新建")
                         Text(text = "云端新建")
@@ -487,7 +501,7 @@ fun WelcomeScreen(
                     showCloudImportDialog = false
                     showInlineUnlock(library)
                 }
-            }
+            },
         )
     }
 
@@ -516,7 +530,7 @@ fun WelcomeScreen(
                         showInlineUnlock(library)
                     }
                 }
-            }
+            },
         )
     }
 
@@ -539,7 +553,7 @@ fun WelcomeScreen(
                 } else {
                     showCloudCreateDialog = true
                 }
-            }
+            },
         )
     }
 
@@ -555,14 +569,15 @@ fun WelcomeScreen(
             isDestructive = true,
             onConfirm = {
                 val removedIds = selectedHistoryIds.keys.toSet()
-                val removedCount = tokenViewModel.libraryViewModel.removeLibraryHistoryByIds(removedIds) { id ->
-                    tokenViewModel.autoUnlockViewModel.deleteKey(id)
-                }
+                val removedCount =
+                    tokenViewModel.libraryViewModel.removeLibraryHistoryByIds(removedIds) { id ->
+                        tokenViewModel.autoUnlockViewModel.deleteKey(id)
+                    }
                 if (removedCount > 0 && pendingUnlockLibrary?.id in removedIds) {
                     clearInlineUnlock()
                 }
                 clearSelectionMode()
-            }
+            },
         )
     }
 }

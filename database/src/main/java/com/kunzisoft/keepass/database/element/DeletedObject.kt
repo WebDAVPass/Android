@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -27,7 +27,6 @@ import com.kunzisoft.keepass.utils.readParcelableCompat
 import java.util.*
 
 class DeletedObject : Parcelable {
-
     var uuid: UUID = DatabaseVersioned.UUID_ZERO
     var deletionTime: DateInstant = DateInstant()
 
@@ -44,35 +43,33 @@ class DeletedObject : Parcelable {
     }
 
     override fun equals(other: Any?): Boolean {
-        if (this === other)
+        if (this === other) {
             return true
-        if (other == null)
+        }
+        if (other == null) {
             return false
-        if (other !is DeletedObject)
+        }
+        if (other !is DeletedObject) {
             return false
+        }
         return uuid == other.uuid
     }
 
-    override fun hashCode(): Int {
-        return uuid.hashCode()
-    }
+    override fun hashCode(): Int = uuid.hashCode()
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(ParcelUuid(uuid), flags)
         parcel.writeParcelable(deletionTime, flags)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     companion object CREATOR : Parcelable.Creator<DeletedObject> {
-        override fun createFromParcel(parcel: Parcel): DeletedObject {
-            return DeletedObject(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): DeletedObject = DeletedObject(parcel)
 
-        override fun newArray(size: Int): Array<DeletedObject?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<DeletedObject?> = arrayOfNulls(size)
     }
 }

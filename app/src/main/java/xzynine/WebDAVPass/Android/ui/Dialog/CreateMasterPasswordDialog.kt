@@ -1,20 +1,17 @@
 package xzynine.WebDAVPass.Android.ui.Dialog
 
+import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,9 +24,6 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import android.content.Intent
-import android.widget.Toast
-import android.net.Uri
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -53,7 +47,7 @@ private const val MAX_KEY_FILE_BYTES = 1024 * 1024
  */
 enum class CreateMode {
     LOCAL,
-    CLOUD
+    CLOUD,
 }
 
 /**
@@ -66,7 +60,7 @@ enum class CreateMode {
 fun CreateMasterPasswordDialog(
     mode: CreateMode,
     onDismiss: () -> Unit,
-    onConfirm: (password: String, keyFileData: ByteArray?, keyFileUri: String?) -> Unit
+    onConfirm: (password: String, keyFileData: ByteArray?, keyFileUri: String?) -> Unit,
 ) {
     val context = LocalContext.current
     val show = remember { mutableStateOf(true) }
@@ -84,60 +78,62 @@ fun CreateMasterPasswordDialog(
     val passwordStrengthBits = remember(password) { PasswordStrength.estimateBits(password) }
     val passwordIsWeak = password.isNotEmpty() && PasswordStrength.isWeak(password)
 
-    val keyFilePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        // 先清除上一次选择，避免读取失败时仍显示旧文件名
-        keyFileName = ""
-        keyFileData = null
-        keyFileUri = null
-        runCatching {
-            // 持久化权限仅用于后续自动加载，失败不影响本次选择；
-            // 部分 provider 不支持 takePersistableUriPermission，不能因此让用户无法选文件。
+    val keyFilePicker =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            uri ?: return@rememberLauncherForActivityResult
+            // 先清除上一次选择，避免读取失败时仍显示旧文件名
+            keyFileName = ""
+            keyFileData = null
+            keyFileUri = null
             runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            }
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                val buffer = ByteArrayOutputStream(8 * 1024)
-                val chunk = ByteArray(8 * 1024)
-                var total = 0
-                while (true) {
-                    val read = input.read(chunk)
-                    if (read < 0) break
-                    total += read
-                    if (total > MAX_KEY_FILE_BYTES) {
-                        throw IllegalStateException("密钥文件过大")
+                // 持久化权限仅用于后续自动加载，失败不影响本次选择；
+                // 部分 provider 不支持 takePersistableUriPermission，不能因此让用户无法选文件。
+                runCatching {
+                    context.contentResolver.takePersistableUriPermission(
+                        uri,
+                        Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                    )
+                }
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    val buffer = ByteArrayOutputStream(8 * 1024)
+                    val chunk = ByteArray(8 * 1024)
+                    var total = 0
+                    while (true) {
+                        val read = input.read(chunk)
+                        if (read < 0) break
+                        total += read
+                        if (total > MAX_KEY_FILE_BYTES) {
+                            throw IllegalStateException("密钥文件过大")
+                        }
+                        buffer.write(chunk, 0, read)
                     }
-                    buffer.write(chunk, 0, read)
-                }
-                val bytes = buffer.toByteArray()
-                if (bytes.isNotEmpty()) {
-                    keyFileName = uri.resolveDisplayName(context, fallbackIfEmpty = "keyfile")
-                    keyFileData = bytes
-                    keyFileUri = uri.toString()
-                }
-            } ?: throw IllegalStateException("无法读取所选文件")
-        }.onFailure {
-            Toast.makeText(context, "密钥文件读取失败：${it.message ?: "未知错误"}", Toast.LENGTH_SHORT).show()
+                    val bytes = buffer.toByteArray()
+                    if (bytes.isNotEmpty()) {
+                        keyFileName = uri.resolveDisplayName(context, fallbackIfEmpty = "keyfile")
+                        keyFileData = bytes
+                        keyFileUri = uri.toString()
+                    }
+                } ?: throw IllegalStateException("无法读取所选文件")
+            }.onFailure {
+                Toast.makeText(context, "密钥文件读取失败：${it.message ?: "未知错误"}", Toast.LENGTH_SHORT).show()
+            }
         }
-    }
 
     WindowDialog(
         title = if (mode == CreateMode.LOCAL) "本地新建：设置主密码" else "云端新建：设置主密码",
         summary = "主密码用于解锁 .kdbx 数据库，可另选密钥文件增强安全性",
         show = show.value,
         onDismissRequest = onDismiss,
-        defaultWindowInsetsPadding = true
+        defaultWindowInsetsPadding = true,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             TextField(
                 value = password,
@@ -149,22 +145,23 @@ fun CreateMasterPasswordDialog(
                 label = "主密码",
                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                singleLine = true
+                singleLine = true,
             )
             if (password.isNotEmpty()) {
                 val bits = passwordStrengthBits
                 val label = strengthLabel(bits)
-                val color = if (bits < 60.0) {
-                    // strengthLabel 下的「非常弱 / 弱」两档共用 error 色
-                    MiuixTheme.colorScheme.error
-                } else {
-                    // strengthLabel 下的「中等 / 强」两档共用 primary 色
-                    MiuixTheme.colorScheme.primary
-                }
+                val color =
+                    if (bits < 60.0) {
+                        // strengthLabel 下的「非常弱 / 弱」两档共用 error 色
+                        MiuixTheme.colorScheme.error
+                    } else {
+                        // strengthLabel 下的「中等 / 强」两档共用 primary 色
+                        MiuixTheme.colorScheme.primary
+                    }
                 Text(
                     text = "强度：$label（${bits.toInt()} bits）",
                     fontSize = 12.sp,
-                    color = color
+                    color = color,
                 )
             }
             TextField(
@@ -176,7 +173,7 @@ fun CreateMasterPasswordDialog(
                 label = "确认主密码",
                 visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                singleLine = true
+                singleLine = true,
             )
 
             Button(onClick = { showPassword = !showPassword }) {
@@ -184,28 +181,33 @@ fun CreateMasterPasswordDialog(
             }
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { keyFilePicker.launch(arrayOf("application/octet-stream", "*/*")) }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .clickable { keyFilePicker.launch(arrayOf("application/octet-stream", "*/*")) }
+                        .padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
                 Icon(
                     imageVector = MiuixIcons.Lock,
                     contentDescription = "密钥文件",
-                    tint = MiuixTheme.colorScheme.primary
+                    tint = MiuixTheme.colorScheme.primary,
                 )
                 Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                     Text(
                         text = "密钥文件（可选）",
                         fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     )
                     Text(
                         text = if (keyFileName.isBlank()) "点击选择密钥文件" else keyFileName,
                         fontSize = 14.sp,
-                        color = if (keyFileName.isBlank()) MiuixTheme.colorScheme.primary
-                        else MiuixTheme.colorScheme.onSurface
+                        color =
+                            if (keyFileName.isBlank()) {
+                                MiuixTheme.colorScheme.primary
+                            } else {
+                                MiuixTheme.colorScheme.onSurface
+                            },
                     )
                 }
                 if (keyFileName.isNotBlank()) {
@@ -217,7 +219,7 @@ fun CreateMasterPasswordDialog(
                         Icon(
                             imageVector = MiuixIcons.Delete,
                             contentDescription = "清除密钥文件",
-                            tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                            tint = MiuixTheme.colorScheme.onSurfaceSecondary,
                         )
                     }
                 }
@@ -230,7 +232,7 @@ fun CreateMasterPasswordDialog(
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(
                     onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text("取消")
                 }
@@ -247,7 +249,7 @@ fun CreateMasterPasswordDialog(
                             else -> onConfirm(password, keyFileData, keyFileUri)
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text(if (keyFileData == null && passwordIsWeak && weakPasswordAcknowledged) "确认使用弱密码" else "继续")
                 }
@@ -255,5 +257,3 @@ fun CreateMasterPasswordDialog(
         }
     }
 }
-
-

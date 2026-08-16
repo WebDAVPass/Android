@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -27,89 +27,132 @@ import android.os.Parcelable
 import java.io.Serializable
 
 // -------- Intent --------
-inline fun <reified T : Parcelable> Intent.getParcelableExtraCompat(key: String?): T? = when {
-    key == null -> null
-    SDK_INT >= 33 -> getParcelableExtra(key, T::class.java)
-    else -> @Suppress("DEPRECATION") getParcelableExtra(key) as? T
-}
+inline fun <reified T : Parcelable> Intent.getParcelableExtraCompat(key: String?): T? =
+    when {
+        key == null -> null
+        SDK_INT >= 33 -> getParcelableExtra(key, T::class.java)
+        else ->
+            @Suppress("DEPRECATION")
+            getParcelableExtra(key)
+                as? T
+    }
 
-inline fun <reified T : Serializable> Intent.getSerializableExtraCompat(key: String?): T? = when {
-    key == null -> null
-    SDK_INT >= 33 -> getSerializableExtra(key, T::class.java)
-    else -> @Suppress("DEPRECATION") getSerializableExtra(key) as? T
-}
+inline fun <reified T : Serializable> Intent.getSerializableExtraCompat(key: String?): T? =
+    when {
+        key == null -> null
+        SDK_INT >= 33 -> getSerializableExtra(key, T::class.java)
+        else ->
+            @Suppress("DEPRECATION")
+            getSerializableExtra(key)
+                as? T
+    }
 
-inline fun <reified E : Parcelable> Intent.putParcelableList(key: String?, list: List<E>) {
+inline fun <reified E : Parcelable> Intent.putParcelableList(
+    key: String?,
+    list: List<E>,
+) {
     putExtra(key, list.toTypedArray())
 }
 
-inline fun <reified E : Parcelable> Intent.getParcelableList(key: String?): MutableList<E>? = when {
-    SDK_INT >= 33 -> getParcelableArrayExtra(key, E::class.java)?.toMutableList()
-    else -> @Suppress("DEPRECATION", "UNCHECKED_CAST") (getParcelableArrayExtra(key) as? Array<E>)?.toMutableList()
-}
+inline fun <reified E : Parcelable> Intent.getParcelableList(key: String?): MutableList<E>? =
+    when {
+        SDK_INT >= 33 -> getParcelableArrayExtra(key, E::class.java)?.toMutableList()
+        else ->
+            @Suppress("DEPRECATION", "UNCHECKED_CAST")
+            (getParcelableArrayExtra(key) as? Array<E>)?.toMutableList()
+    }
 
-inline fun <reified T : Enum<T>> Intent.getEnumExtra(key: String?) =
-    getStringExtra(key)?.let { enumValueOf<T>(it) }
+inline fun <reified T : Enum<T>> Intent.getEnumExtra(key: String?) = getStringExtra(key)?.let { enumValueOf<T>(it) }
 
-fun <T : Enum<T>> Intent.putEnumExtra(key: String?, value: T?) =
-    putExtra(key, value?.name)
+fun <T : Enum<T>> Intent.putEnumExtra(
+    key: String?,
+    value: T?,
+) = putExtra(key, value?.name)
 
 // -------- Bundle --------
-inline fun <reified T : Parcelable> Bundle.getParcelableCompat(key: String?): T? = when {
-    key == null -> null
-    SDK_INT >= 33 -> getParcelable(key, T::class.java)
-    else -> @Suppress("DEPRECATION") getParcelable(key) as? T
-}
-
-inline fun <reified T : Serializable> Bundle.getSerializableCompat(key: String?): T? = when {
-    SDK_INT >= 33 -> getSerializable(key, T::class.java)
-    else -> @Suppress("DEPRECATION") getSerializable(key) as? T
-}
-
-inline fun <reified T : Parcelable> Bundle.getParcelableArrayCompat(key: String?): Array<out T>? {
-    return when {
-        SDK_INT >= 33 -> getParcelableArray(key, T::class.java)
-        else -> @Suppress("DEPRECATION", "UNCHECKED_CAST") (getParcelableArray(key) as? Array<T>)
+inline fun <reified T : Parcelable> Bundle.getParcelableCompat(key: String?): T? =
+    when {
+        key == null -> null
+        SDK_INT >= 33 -> getParcelable(key, T::class.java)
+        else ->
+            @Suppress("DEPRECATION")
+            getParcelable(key)
+                as? T
     }
-}
 
-inline fun <reified E : Parcelable> Bundle.putParcelableList(key: String?, list: List<E>) {
+inline fun <reified T : Serializable> Bundle.getSerializableCompat(key: String?): T? =
+    when {
+        SDK_INT >= 33 -> getSerializable(key, T::class.java)
+        else ->
+            @Suppress("DEPRECATION")
+            getSerializable(key)
+                as? T
+    }
+
+inline fun <reified T : Parcelable> Bundle.getParcelableArrayCompat(key: String?): Array<out T>? =
+    when {
+        SDK_INT >= 33 -> getParcelableArray(key, T::class.java)
+        else ->
+            @Suppress("DEPRECATION", "UNCHECKED_CAST")
+            (getParcelableArray(key) as? Array<T>)
+    }
+
+inline fun <reified E : Parcelable> Bundle.putParcelableList(
+    key: String?,
+    list: List<E>,
+) {
     putParcelableArray(key, list.toTypedArray())
 }
 
-inline fun <reified E : Parcelable> Bundle.getParcelableList(key: String?): MutableList<E>? = when {
-    SDK_INT >= 33 -> getParcelableArray(key, E::class.java)?.toMutableList()
-    else -> @Suppress("DEPRECATION", "UNCHECKED_CAST") (getParcelableArray(key) as? Array<E>)?.toMutableList()
-}
+inline fun <reified E : Parcelable> Bundle.getParcelableList(key: String?): MutableList<E>? =
+    when {
+        SDK_INT >= 33 -> getParcelableArray(key, E::class.java)?.toMutableList()
+        else ->
+            @Suppress("DEPRECATION", "UNCHECKED_CAST")
+            (getParcelableArray(key) as? Array<E>)?.toMutableList()
+    }
 
-inline fun <reified T : Enum<T>> Bundle.putEnum(key: String?, value: T?) =
-    putString(key, value?.name)
+inline fun <reified T : Enum<T>> Bundle.putEnum(
+    key: String?,
+    value: T?,
+) = putString(key, value?.name)
 
-inline fun <reified T : Enum<T>> Bundle.getEnum(key: String?): T? {
-    return getString(key)?.let { enumValueOf<T>(it) }
-}
+inline fun <reified T : Enum<T>> Bundle.getEnum(key: String?): T? = getString(key)?.let { enumValueOf<T>(it) }
 
 // -------- Parcel --------
 
-inline fun <reified T : Parcelable> Parcel.readParcelableCompat(): T? = when {
-    SDK_INT >= 33 -> readParcelable(T::class.java.classLoader, T::class.java)
-    else -> @Suppress("DEPRECATION") readParcelable(T::class.java.classLoader) as? T
-}
+inline fun <reified T : Parcelable> Parcel.readParcelableCompat(): T? =
+    when {
+        SDK_INT >= 33 -> readParcelable(T::class.java.classLoader, T::class.java)
+        else ->
+            @Suppress("DEPRECATION")
+            readParcelable(T::class.java.classLoader)
+                as? T
+    }
 
-fun <T> Parcel.readParcelableCompat(clazz: Class<T>): T? = when {
-    SDK_INT >= 33 -> readParcelable(clazz.classLoader, clazz)
-    else -> @Suppress("DEPRECATION", "UNCHECKED_CAST") (readParcelable(clazz.classLoader) as? T)
-}
+fun <T> Parcel.readParcelableCompat(clazz: Class<T>): T? =
+    when {
+        SDK_INT >= 33 -> readParcelable(clazz.classLoader, clazz)
+        else ->
+            @Suppress("DEPRECATION", "UNCHECKED_CAST")
+            (readParcelable(clazz.classLoader) as? T)
+    }
 
-inline fun <reified T : Serializable> Parcel.readSerializableCompat(): T? = when {
-    SDK_INT >= 33 -> readSerializable(T::class.java.classLoader, T::class.java)
-    else -> @Suppress("DEPRECATION") readSerializable() as? T
-}
+inline fun <reified T : Serializable> Parcel.readSerializableCompat(): T? =
+    when {
+        SDK_INT >= 33 -> readSerializable(T::class.java.classLoader, T::class.java)
+        else ->
+            @Suppress("DEPRECATION")
+            readSerializable()
+                as? T
+    }
 
 inline fun <reified T> Parcel.readListCompat(outVal: MutableList<T>) {
     when {
         SDK_INT >= 33 -> readList(outVal, T::class.java.classLoader, T::class.java)
-        else -> @Suppress("DEPRECATION") readList(outVal, T::class.java.classLoader)
+        else ->
+            @Suppress("DEPRECATION")
+            readList(outVal, T::class.java.classLoader)
     }
 }
 
@@ -127,12 +170,13 @@ inline fun <reified T> Parcel.writeSetCompat(set: Set<T>) {
     writeList(set.toList())
 }
 
-inline fun <reified T> Parcel.readSetCompat(): Set<T> {
-    return readListCompat<T>().toSet()
-}
+inline fun <reified T> Parcel.readSetCompat(): Set<T> = readListCompat<T>().toSet()
 
 // For writing to a Parcel
-fun <K : Parcelable, V : Parcelable> Parcel.writeParcelableMap(map: Map<K, V>, flags: Int) {
+fun <K : Parcelable, V : Parcelable> Parcel.writeParcelableMap(
+    map: Map<K, V>,
+    flags: Int,
+) {
     writeInt(map.size)
     for ((key, value) in map) {
         writeParcelable(key, flags)
@@ -145,26 +189,40 @@ inline fun <reified K : Parcelable, reified V : Parcelable> Parcel.readParcelabl
     val size = readInt()
     val map = HashMap<K, V>(size)
     (0 until size).forEach { i ->
-        val key: K? = try {
-            when {
-                SDK_INT >= 33 -> readParcelable(K::class.java.classLoader, K::class.java)
-                else -> @Suppress("DEPRECATION") readParcelable(K::class.java.classLoader)
+        val key: K? =
+            try {
+                when {
+                    SDK_INT >= 33 -> readParcelable(K::class.java.classLoader, K::class.java)
+                    else ->
+                        @Suppress("DEPRECATION")
+                        readParcelable(K::class.java.classLoader)
+                }
+            } catch (_: Exception) {
+                null
             }
-        } catch (_: Exception) { null }
-        val value: V? = try {
-            when {
-                SDK_INT >= 33 -> readParcelable(V::class.java.classLoader, V::class.java)
-                else -> @Suppress("DEPRECATION") readParcelable(V::class.java.classLoader)
+        val value: V? =
+            try {
+                when {
+                    SDK_INT >= 33 -> readParcelable(V::class.java.classLoader, V::class.java)
+                    else ->
+                        @Suppress("DEPRECATION")
+                        readParcelable(V::class.java.classLoader)
+                }
+            } catch (_: Exception) {
+                null
             }
-        } catch (_: Exception) { null }
-        if (key != null && value != null)
+        if (key != null && value != null) {
             map[key] = value
+        }
     }
     return map
 }
 
 // For writing map with string key to a Parcel
-fun <V : Parcelable> Parcel.writeStringParcelableMap(map: HashMap<String, V>, flags: Int) {
+fun <V : Parcelable> Parcel.writeStringParcelableMap(
+    map: HashMap<String, V>,
+    flags: Int,
+) {
     writeInt(map.size)
     for ((key, value) in map) {
         writeString(key)
@@ -178,14 +236,20 @@ inline fun <reified V : Parcelable> Parcel.readStringParcelableMap(): LinkedHash
     val map = LinkedHashMap<String, V>(size)
     (0 until size).forEach { i ->
         val key: String? = readString()
-        val value: V? = try {
-            when {
-                SDK_INT >= 33 -> readParcelable(V::class.java.classLoader, V::class.java)
-                else -> @Suppress("DEPRECATION") readParcelable(V::class.java.classLoader)
+        val value: V? =
+            try {
+                when {
+                    SDK_INT >= 33 -> readParcelable(V::class.java.classLoader, V::class.java)
+                    else ->
+                        @Suppress("DEPRECATION")
+                        readParcelable(V::class.java.classLoader)
+                }
+            } catch (_: Exception) {
+                null
             }
-        } catch (_: Exception) { null }
-        if (key != null && value != null)
+        if (key != null && value != null) {
             map[key] = value
+        }
     }
     return map
 }
@@ -206,12 +270,12 @@ fun Parcel.readStringIntMap(): LinkedHashMap<String, Int> {
     (0 until size).forEach { i ->
         val key: String? = readString()
         val value: Int = readInt()
-        if (key != null)
+        if (key != null) {
             map[key] = value
+        }
     }
     return map
 }
-
 
 // For writing map with string key and string value to a Parcel
 fun Parcel.writeStringStringMap(map: MutableMap<String, String>) {
@@ -228,8 +292,9 @@ fun Parcel.readStringStringMap(): LinkedHashMap<String, String> {
     (0 until size).forEach { i ->
         val key: String? = readString()
         val value: String? = readString()
-        if (key != null && value != null)
+        if (key != null && value != null) {
             map[key] = value
+        }
     }
     return map
 }
@@ -254,11 +319,9 @@ fun Parcel.writeByteArrayCompat(data: ByteArray?) {
     }
 }
 
-inline fun <reified T : Enum<T>> Parcel.readEnum() =
-    readString()?.let { enumValueOf<T>(it) }
+inline fun <reified T : Enum<T>> Parcel.readEnum() = readString()?.let { enumValueOf<T>(it) }
 
-fun <T : Enum<T>> Parcel.writeEnum(value: T?) =
-    writeString(value?.name)
+fun <T : Enum<T>> Parcel.writeEnum(value: T?) = writeString(value?.name)
 
 fun Parcel.readBooleanCompat(): Boolean = readByte().toInt() != 0
 

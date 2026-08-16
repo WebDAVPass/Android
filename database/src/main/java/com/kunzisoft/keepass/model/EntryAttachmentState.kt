@@ -23,24 +23,29 @@ import android.os.Parcel
 import android.os.Parcelable
 import com.kunzisoft.keepass.database.element.Attachment
 import com.kunzisoft.keepass.database.element.binary.BinaryByte
-import com.kunzisoft.keepass.utils.readParcelableCompat
 import com.kunzisoft.keepass.utils.readEnum
+import com.kunzisoft.keepass.utils.readParcelableCompat
 import com.kunzisoft.keepass.utils.writeEnum
 
-data class EntryAttachmentState(var attachment: Attachment,
-                                var streamDirection: StreamDirection,
-                                var downloadState: AttachmentState = AttachmentState.NULL,
-                                var downloadProgression: Int = 0,
-                                var previewState: AttachmentState = AttachmentState.NULL) : Parcelable {
-
+data class EntryAttachmentState(
+    var attachment: Attachment,
+    var streamDirection: StreamDirection,
+    var downloadState: AttachmentState = AttachmentState.NULL,
+    var downloadProgression: Int = 0,
+    var previewState: AttachmentState = AttachmentState.NULL,
+) : Parcelable {
     constructor(parcel: Parcel) : this(
-            parcel.readParcelableCompat() ?: Attachment("", BinaryByte()),
-            parcel.readEnum<StreamDirection>() ?: StreamDirection.DOWNLOAD,
-            parcel.readEnum<AttachmentState>() ?: AttachmentState.NULL,
-            parcel.readInt(),
-            parcel.readEnum<AttachmentState>() ?: AttachmentState.NULL)
+        parcel.readParcelableCompat() ?: Attachment("", BinaryByte()),
+        parcel.readEnum<StreamDirection>() ?: StreamDirection.DOWNLOAD,
+        parcel.readEnum<AttachmentState>() ?: AttachmentState.NULL,
+        parcel.readInt(),
+        parcel.readEnum<AttachmentState>() ?: AttachmentState.NULL,
+    )
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(attachment, flags)
         parcel.writeEnum(streamDirection)
         parcel.writeEnum(downloadState)
@@ -48,9 +53,7 @@ data class EntryAttachmentState(var attachment: Attachment,
         parcel.writeEnum(previewState)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -61,21 +64,20 @@ data class EntryAttachmentState(var attachment: Attachment,
         return true
     }
 
-    override fun hashCode(): Int {
-        return attachment.hashCode()
-    }
+    override fun hashCode(): Int = attachment.hashCode()
 
     companion object CREATOR : Parcelable.Creator<EntryAttachmentState> {
-        override fun createFromParcel(parcel: Parcel): EntryAttachmentState {
-            return EntryAttachmentState(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): EntryAttachmentState = EntryAttachmentState(parcel)
 
-        override fun newArray(size: Int): Array<EntryAttachmentState?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<EntryAttachmentState?> = arrayOfNulls(size)
     }
 }
 
 enum class AttachmentState {
-    NULL, START, IN_PROGRESS, COMPLETE, CANCELED, ERROR
+    NULL,
+    START,
+    IN_PROGRESS,
+    COMPLETE,
+    CANCELED,
+    ERROR,
 }

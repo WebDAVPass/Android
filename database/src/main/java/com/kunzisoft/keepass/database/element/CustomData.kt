@@ -26,7 +26,6 @@ import com.kunzisoft.keepass.utils.writeStringParcelableMap
 import java.util.*
 
 class CustomData : Parcelable {
-
     private val mCustomDataItems = HashMap<String, CustomDataItem>()
 
     constructor()
@@ -41,25 +40,17 @@ class CustomData : Parcelable {
         mCustomDataItems.putAll(parcel.readStringParcelableMap())
     }
 
-    fun get(key: String): CustomDataItem? {
-        return mCustomDataItems[key]
-    }
+    fun get(key: String): CustomDataItem? = mCustomDataItems[key]
 
     fun put(customDataItem: CustomDataItem) {
         mCustomDataItems[customDataItem.key] = customDataItem
     }
 
-    fun containsItemWithValue(value: String): Boolean {
-        return mCustomDataItems.any { mapEntry -> mapEntry.value.value.equals(value, true) }
-    }
+    fun containsItemWithValue(value: String): Boolean = mCustomDataItems.any { mapEntry -> mapEntry.value.value.equals(value, true) }
 
-    fun containsItemWithLastModificationTime(): Boolean {
-        return mCustomDataItems.any { mapEntry -> mapEntry.value.lastModificationTime != null }
-    }
+    fun containsItemWithLastModificationTime(): Boolean = mCustomDataItems.any { mapEntry -> mapEntry.value.lastModificationTime != null }
 
-    fun isNotEmpty(): Boolean {
-        return mCustomDataItems.isNotEmpty()
-    }
+    fun isNotEmpty(): Boolean = mCustomDataItems.isNotEmpty()
 
     fun doForEachItems(action: (CustomDataItem) -> Unit) {
         for ((_, value) in mCustomDataItems) {
@@ -67,25 +58,20 @@ class CustomData : Parcelable {
         }
     }
 
-    override fun toString(): String {
-        return mCustomDataItems.toString()
-    }
+    override fun toString(): String = mCustomDataItems.toString()
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeStringParcelableMap(mCustomDataItems, flags)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     companion object CREATOR : Parcelable.Creator<CustomData> {
-        override fun createFromParcel(parcel: Parcel): CustomData {
-            return CustomData(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): CustomData = CustomData(parcel)
 
-        override fun newArray(size: Int): Array<CustomData?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<CustomData?> = arrayOfNulls(size)
     }
 }

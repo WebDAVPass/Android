@@ -4,8 +4,8 @@ import android.content.Context
 import android.os.SystemClock
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -55,7 +55,7 @@ fun AlphabetIndexScrollbar(
     enabledLetters: Set<String>,
     activeLetter: String?,
     onLetterSelected: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     if (letters.isEmpty()) return
 
@@ -91,56 +91,55 @@ fun AlphabetIndexScrollbar(
 
     Box(modifier = modifier) {
         Box(
-            modifier = Modifier
-                .align(Alignment.CenterEnd)
-                .width(30.dp)
-                .fillMaxHeight(0.92f)
-                .padding(vertical = 4.dp)
-                .border(
-                    width = 1.dp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.18f),
-                    shape = RoundedCornerShape(999.dp)
-                )
-                .background(
-                    color = MiuixTheme.colorScheme.surface.copy(alpha = 0.9f),
-                    shape = RoundedCornerShape(999.dp)
-                )
-                .onSizeChanged { barHeightPx = it.height }
-                .pointerInput(letters, enabledLetters) {
-                    detectTapGestures(
-                        onTap = { offset ->
-                            updateByTouchY(offset.y)
-                            indicatorLetter = null
-                            lastVibratedLetter = null // 重置上次振动的字母
-                        }
-                    )
-                }
-                .pointerInput(letters, enabledLetters) {
-                    detectVerticalDragGestures(
-                        onDragStart = { offset ->
-                            updateByTouchY(offset.y)
-                        },
-                        onVerticalDrag = { change, _ ->
-                            updateByTouchY(change.position.y)
-                        },
-                        onDragEnd = {
-                            indicatorLetter = null
-                            lastVibratedLetter = null // 重置上次振动的字母
-                        },
-                        onDragCancel = {
-                            indicatorLetter = null
-                            lastVibratedLetter = null // 重置上次振动的字母
-                        }
-                    )
-                },
-            contentAlignment = Alignment.Center
+            modifier =
+                Modifier
+                    .align(Alignment.CenterEnd)
+                    .width(30.dp)
+                    .fillMaxHeight(0.92f)
+                    .padding(vertical = 4.dp)
+                    .border(
+                        width = 1.dp,
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.18f),
+                        shape = RoundedCornerShape(999.dp),
+                    ).background(
+                        color = MiuixTheme.colorScheme.surface.copy(alpha = 0.9f),
+                        shape = RoundedCornerShape(999.dp),
+                    ).onSizeChanged { barHeightPx = it.height }
+                    .pointerInput(letters, enabledLetters) {
+                        detectTapGestures(
+                            onTap = { offset ->
+                                updateByTouchY(offset.y)
+                                indicatorLetter = null
+                                lastVibratedLetter = null // 重置上次振动的字母
+                            },
+                        )
+                    }.pointerInput(letters, enabledLetters) {
+                        detectVerticalDragGestures(
+                            onDragStart = { offset ->
+                                updateByTouchY(offset.y)
+                            },
+                            onVerticalDrag = { change, _ ->
+                                updateByTouchY(change.position.y)
+                            },
+                            onDragEnd = {
+                                indicatorLetter = null
+                                lastVibratedLetter = null // 重置上次振动的字母
+                            },
+                            onDragCancel = {
+                                indicatorLetter = null
+                                lastVibratedLetter = null // 重置上次振动的字母
+                            },
+                        )
+                    },
+            contentAlignment = Alignment.Center,
         ) {
             Column(
                 verticalArrangement = Arrangement.SpaceEvenly,
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .padding(PaddingValues(vertical = 2.dp))
+                modifier =
+                    Modifier
+                        .fillMaxHeight()
+                        .padding(PaddingValues(vertical = 2.dp)),
             ) {
                 letters.forEach { letter ->
                     val isEnabled = enabledLetters.contains(letter)
@@ -149,11 +148,12 @@ fun AlphabetIndexScrollbar(
                     Text(
                         text = letter,
                         fontSize = 10.sp,
-                        color = when {
-                            isHighlighted -> MiuixTheme.colorScheme.primary
-                            isEnabled -> MiuixTheme.colorScheme.onSurfaceSecondary
-                            else -> MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.45f)
-                        }
+                        color =
+                            when {
+                                isHighlighted -> MiuixTheme.colorScheme.primary
+                                isEnabled -> MiuixTheme.colorScheme.onSurfaceSecondary
+                                else -> MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.45f)
+                            },
                     )
                 }
             }
@@ -162,20 +162,20 @@ fun AlphabetIndexScrollbar(
         indicatorLetter?.let { letter ->
             val currentYDp = with(density) { currentY.toDp() }
             Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(top = (currentYDp - 20.dp).coerceAtLeast(0.dp), end = 24.dp) // 调整气泡位置，使其对准当前触摸的字母
-                    .background(
-                        color = MiuixTheme.colorScheme.primary,
-                        shape = RoundedCornerShape(24.dp) // 更圆润的气泡形状
-                    )
-                    .padding(horizontal = 20.dp, vertical = 10.dp)
-                    .shadow(6.dp, RoundedCornerShape(24.dp)) // 添加阴影，增强气泡效果
+                modifier =
+                    Modifier
+                        .align(Alignment.TopStart)
+                        .padding(top = (currentYDp - 20.dp).coerceAtLeast(0.dp), end = 24.dp) // 调整气泡位置，使其对准当前触摸的字母
+                        .background(
+                            color = MiuixTheme.colorScheme.primary,
+                            shape = RoundedCornerShape(24.dp), // 更圆润的气泡形状
+                        ).padding(horizontal = 20.dp, vertical = 10.dp)
+                        .shadow(6.dp, RoundedCornerShape(24.dp)), // 添加阴影，增强气泡效果
             ) {
                 Text(
                     text = letter,
                     color = MiuixTheme.colorScheme.onPrimary,
-                    fontSize = 16.sp // 增大字体
+                    fontSize = 16.sp, // 增大字体
                 )
             }
         }

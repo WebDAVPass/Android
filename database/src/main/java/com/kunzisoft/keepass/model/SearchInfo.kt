@@ -9,26 +9,31 @@ import com.kunzisoft.keepass.utils.ObjectNameResource
 import com.kunzisoft.keepass.utils.readBooleanCompat
 import com.kunzisoft.keepass.utils.writeBooleanCompat
 
-class SearchInfo : ObjectNameResource, Parcelable {
+class SearchInfo :
+    ObjectNameResource,
+    Parcelable {
     var manualSelection: Boolean = false
     var tag: String? = null
     var applicationId: String? = null
         set(value) {
-            field = when {
-                value == null -> null
-                Regex(APPLICATION_ID_REGEX).matches(value) -> value
-                else -> null
-            }
+            field =
+                when {
+                    value == null -> null
+                    Regex(APPLICATION_ID_REGEX).matches(value) -> value
+                    else -> null
+                }
         }
+
     // A web domain can also containing an IP
     var webDomain: String? = null
         set(value) {
-            field = when {
-                value == null -> null
-                Regex(WEB_DOMAIN_REGEX).matches(value) -> value
-                Regex(WEB_IP_REGEX).matches(value) -> value
-                else -> null
-            }
+            field =
+                when {
+                    value == null -> null
+                    Regex(WEB_DOMAIN_REGEX).matches(value) -> value
+                    Regex(WEB_IP_REGEX).matches(value) -> value
+                    else -> null
+                }
         }
     var webScheme: String? = null
         get() {
@@ -70,11 +75,12 @@ class SearchInfo : ObjectNameResource, Parcelable {
         otpString = if (readOtp.isNullOrEmpty()) null else readOtp
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeBooleanCompat(manualSelection)
         parcel.writeString(tag ?: "")
         parcel.writeString(applicationId ?: "")
@@ -94,15 +100,14 @@ class SearchInfo : ObjectNameResource, Parcelable {
         return toString()
     }
 
-    fun containsOnlyNullValues(): Boolean {
-        return tag == null
-                && applicationId == null
-                && webDomain == null
-                && webScheme == null
-                && relyingParty == null
-                && credentialIds.isEmpty()
-                && otpString == null
-    }
+    fun containsOnlyNullValues(): Boolean =
+        tag == null &&
+            applicationId == null &&
+            webDomain == null &&
+            webScheme == null &&
+            relyingParty == null &&
+            credentialIds.isEmpty() &&
+            otpString == null
 
     var isTagSearch: Boolean = false
         get() = tag != null
@@ -152,17 +157,11 @@ class SearchInfo : ObjectNameResource, Parcelable {
         return result
     }
 
-    override fun toString(): String {
-        return otpString ?: webDomain ?: applicationId ?: relyingParty ?: tag ?: ""
-    }
+    override fun toString(): String = otpString ?: webDomain ?: applicationId ?: relyingParty ?: tag ?: ""
 
-    fun optionsString(): List<String> {
-        return if (isPasskeySearch && credentialIds.isNotEmpty()) credentialIds else listOf()
-    }
+    fun optionsString(): List<String> = if (isPasskeySearch && credentialIds.isNotEmpty()) credentialIds else listOf()
 
-    fun toRegisterInfo(): RegisterInfo {
-        return RegisterInfo(this)
-    }
+    fun toRegisterInfo(): RegisterInfo = RegisterInfo(this)
 
     companion object {
         // https://gist.github.com/rishabhmhjn/8663966
@@ -171,14 +170,11 @@ class SearchInfo : ObjectNameResource, Parcelable {
         const val WEB_IP_REGEX = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\$"
 
         @JvmField
-        val CREATOR: Parcelable.Creator<SearchInfo> = object : Parcelable.Creator<SearchInfo> {
-            override fun createFromParcel(parcel: Parcel): SearchInfo {
-                return SearchInfo(parcel)
-            }
+        val CREATOR: Parcelable.Creator<SearchInfo> =
+            object : Parcelable.Creator<SearchInfo> {
+                override fun createFromParcel(parcel: Parcel): SearchInfo = SearchInfo(parcel)
 
-            override fun newArray(size: Int): Array<SearchInfo?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<SearchInfo?> = arrayOfNulls(size)
             }
-        }
     }
 }

@@ -21,8 +21,7 @@ package com.kunzisoft.keepass.database.element.node
 
 import com.kunzisoft.keepass.database.element.Group
 
-interface Node: NodeVersionedInterface<Group> {
-
+interface Node : NodeVersionedInterface<Group> {
     val nodeId: NodeId<*>?
 
     fun addParentFrom(node: Node) {
@@ -51,7 +50,6 @@ interface Node: NodeVersionedInterface<Group> {
  * Type of available Nodes
  */
 enum class Type {
-    GROUP, ENTRY
+    GROUP,
+    ENTRY,
 }
-
-

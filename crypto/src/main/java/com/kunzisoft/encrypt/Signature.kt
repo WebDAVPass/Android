@@ -50,7 +50,6 @@ import java.security.spec.ECGenParameterSpec
 import java.util.Locale
 
 object Signature {
-
     // see at https://www.iana.org/assignments/cose/cose.xhtml
     const val ES256_ALGORITHM: Long = -7
     const val RS256_ALGORITHM: Long = -257
@@ -61,26 +60,31 @@ object Signature {
     private const val BEGIN_PRIVATE_KEY = "-----BEGIN PRIVATE KEY-----"
     private const val BEGIN_PRIVATE_KEY_LINE_BREAK = "$BEGIN_PRIVATE_KEY\n"
     private const val END_PRIVATE_KEY = "-----END PRIVATE KEY-----"
-    private const val  END_PRIVATE_KEY_LINE_BREAK = "\n$END_PRIVATE_KEY"
+    private const val END_PRIVATE_KEY_LINE_BREAK = "\n$END_PRIVATE_KEY"
 
     init {
         Security.removeProvider(BouncyCastleProvider.PROVIDER_NAME)
         Security.addProvider(BouncyCastleProvider())
     }
 
-    fun sign(privateKeyPem: String, message: ByteArray): ByteArray {
+    fun sign(
+        privateKeyPem: String,
+        message: ByteArray,
+    ): ByteArray {
         val privateKey = createPrivateKey(privateKeyPem)
-        val algorithmSignature = when (val algorithmKey = privateKey.algorithm) {
-            "EC" -> "SHA256withECDSA"
-            "ECDSA" -> "SHA256withECDSA"
-            "RSA" -> "SHA256withRSA"
-            "Ed25519" -> "Ed25519"
-            else -> throw SecurityException("$algorithmKey algorithm is unknown")
-        }
-        val sig = Signature.getInstance(
-            algorithmSignature,
-            BouncyCastleProvider.PROVIDER_NAME
-        )
+        val algorithmSignature =
+            when (val algorithmKey = privateKey.algorithm) {
+                "EC" -> "SHA256withECDSA"
+                "ECDSA" -> "SHA256withECDSA"
+                "RSA" -> "SHA256withRSA"
+                "Ed25519" -> "Ed25519"
+                else -> throw SecurityException("$algorithmKey algorithm is unknown")
+            }
+        val sig =
+            Signature.getInstance(
+                algorithmSignature,
+                BouncyCastleProvider.PROVIDER_NAME,
+            )
         sig.initSign(privateKey)
         sig.update(message)
         return sig.sign()
@@ -113,7 +117,7 @@ object Signature {
         }
         System.setProperty(
             "org.bouncycastle.pkcs8.v1_info_only",
-            useV1Info.toString().lowercase()
+            useV1Info.toString().lowercase(),
         )
 
         val noOutputEncryption = null
@@ -130,7 +134,6 @@ object Signature {
     }
 
     fun generateKeyPair(keyTypeIdList: List<Long>): Pair<KeyPair, Long>? {
-
         for (typeId in keyTypeIdList) {
             when (typeId) {
                 ES256_ALGORITHM -> {
@@ -141,7 +144,6 @@ object Signature {
                     keyPairGen.initialize(spec)
                     val keyPair = keyPairGen.genKeyPair()
                     return Pair(keyPair, ES256_ALGORITHM)
-
                 }
                 RS256_ALGORITHM -> {
                     val keyPairGen =
@@ -149,7 +151,6 @@ object Signature {
                     keyPairGen.initialize(RS256_KEY_SIZE_IN_BITS)
                     val keyPair = keyPairGen.genKeyPair()
                     return Pair(keyPair, RS256_ALGORITHM)
-
                 }
                 ED_DSA_ALGORITHM -> {
                     val keyPairGen =
@@ -164,7 +165,10 @@ object Signature {
         return null
     }
 
-    fun convertPublicKey(publicKeyIn: PublicKey, keyTypeId: Long): ByteArray? {
+    fun convertPublicKey(
+        publicKeyIn: PublicKey,
+        keyTypeId: Long,
+    ): ByteArray? {
         if (keyTypeId == ES256_ALGORITHM) {
             if (publicKeyIn is BCECPublicKey) {
                 publicKeyIn.setPointFormat("UNCOMPRESSED")
@@ -179,8 +183,10 @@ object Signature {
         return null
     }
 
-    fun convertPublicKeyToMap(publicKeyIn: PublicKey, keyTypeId: Long): Map<Int, Any>? {
-
+    fun convertPublicKeyToMap(
+        publicKeyIn: PublicKey,
+        keyTypeId: Long,
+    ): Map<Int, Any>? {
         // https://www.iana.org/assignments/cose/cose.xhtml#key-common-parameters
         val keyTypeLabel = 1
         val algorithmLabel = 3
@@ -189,7 +195,7 @@ object Signature {
             if (publicKeyIn !is BCECPublicKey) {
                 Log.e(
                     this::class.java.simpleName,
-                    "publicKey object has wrong type for keyTypeId $ES256_ALGORITHM: ${publicKeyIn.javaClass.canonicalName}"
+                    "publicKey object has wrong type for keyTypeId $ES256_ALGORITHM: ${publicKeyIn.javaClass.canonicalName}",
                 )
                 return null
             }
@@ -209,12 +215,11 @@ object Signature {
             publicKeyMap[-3] = ecPoint.yCoord.encoded
 
             return publicKeyMap
-
         } else if (keyTypeId == RS256_ALGORITHM) {
             if (publicKeyIn !is BCRSAPublicKey) {
                 Log.e(
                     this::class.java.simpleName,
-                    "publicKey object has wrong type for keyTypeId $RS256_ALGORITHM: ${publicKeyIn.javaClass.canonicalName}"
+                    "publicKey object has wrong type for keyTypeId $RS256_ALGORITHM: ${publicKeyIn.javaClass.canonicalName}",
                 )
                 return null
             }
@@ -233,14 +238,14 @@ object Signature {
             publicKeyMap[-2] =
                 BigIntegers.asUnsignedByteArray(
                     rs256ExponentSizeInBytes,
-                    publicKeyIn.publicExponent
+                    publicKeyIn.publicExponent,
                 )
             return publicKeyMap
         } else if (keyTypeId == ED_DSA_ALGORITHM) {
             if (publicKeyIn !is BCEdDSAPublicKey) {
                 Log.e(
                     this::class.java.simpleName,
-                    "publicKey object has wrong type for keyTypeId $ED_DSA_ALGORITHM: ${publicKeyIn.javaClass.canonicalName}"
+                    "publicKey object has wrong type for keyTypeId $ED_DSA_ALGORITHM: ${publicKeyIn.javaClass.canonicalName}",
                 )
                 return null
             }
@@ -262,10 +267,11 @@ object Signature {
 
             val length = Ed25519PublicKeyParameters.KEY_SIZE
 
-            publicKeyMap[publicKeyLabel] = BigIntegers.asUnsignedByteArray(
-                length,
-                BigIntegers.fromUnsignedByteArray(publicKeyIn.pointEncoding)
-            )
+            publicKeyMap[publicKeyLabel] =
+                BigIntegers.asUnsignedByteArray(
+                    length,
+                    BigIntegers.fromUnsignedByteArray(publicKeyIn.pointEncoding),
+                )
 
             return publicKeyMap
         }
@@ -274,31 +280,31 @@ object Signature {
         return null
     }
 
-
     const val SIGNATURE_DELIMITER = "##SIG##"
 
     /**
      * Converts a Signature object into its SHA-256 fingerprint string.
      * The fingerprint is typically represented as uppercase hex characters separated by colons.
      */
-    private fun signatureToSha256Fingerprint(signature: android.content.pm.Signature): String? {
-        return try {
+    private fun signatureToSha256Fingerprint(signature: android.content.pm.Signature): String? =
+        try {
             val certificateFactory = CertificateFactory.getInstance("X.509")
-            val x509Certificate = certificateFactory.generateCertificate(
-                signature.toByteArray().inputStream()
-            ) as X509Certificate
+            val x509Certificate =
+                certificateFactory.generateCertificate(
+                    signature.toByteArray().inputStream(),
+                ) as X509Certificate
 
             val messageDigest = MessageDigest.getInstance("SHA-256")
             val digest = messageDigest.digest(x509Certificate.encoded)
 
             // Format as colon-separated HEX uppercase string
-            digest.joinToString(separator = ":") { byte -> "%02X".format(byte) }
+            digest
+                .joinToString(separator = ":") { byte -> "%02X".format(byte) }
                 .uppercase(Locale.US)
         } catch (e: Exception) {
             Log.e("SigningInfoUtil", "Error converting signature to SHA-256 fingerprint", e)
             null
         }
-    }
 
     /**
      * Retrieves all relevant SHA-256 signature fingerprints for a given package.
@@ -307,8 +313,9 @@ object Signature {
      */
     fun SigningInfo.getAllFingerprints(): Set<String>? {
         try {
-            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P)
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
                 throw AndroidException("API level ${Build.VERSION.SDK_INT} not supported")
+            }
             val signatures = mutableSetOf<String>()
             // Includes past and current keys if rotation occurred. This is generally preferred.
             signingCertificateHistory?.forEach { signature ->
@@ -349,9 +356,7 @@ object Signature {
     /**
      * Combines a set of signatures into a single string for database storage.
      */
-    fun Set<String>.singleLineFingerprints(): String {
-        return this.joinToString(SIGNATURE_DELIMITER)
-    }
+    fun Set<String>.singleLineFingerprints(): String = this.joinToString(SIGNATURE_DELIMITER)
 
     /**
      * Transforms a colon-separated hex fingerprint string into a URL-safe,

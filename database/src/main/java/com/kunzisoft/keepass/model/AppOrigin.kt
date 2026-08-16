@@ -35,7 +35,6 @@ data class AppOrigin(
     val androidOrigins: MutableList<AndroidOrigin> = mutableListOf(),
     val webOrigins: MutableList<WebOrigin> = mutableListOf(),
 ) : Parcelable {
-
     fun addAndroidOrigin(androidOrigin: AndroidOrigin) {
         androidOrigins.add(androidOrigin)
     }
@@ -47,9 +46,7 @@ data class AppOrigin(
     /**
      * Determine whether at least one signature is present in the Android origins
      */
-    fun containsAndroidOriginSignature(): Boolean {
-        return androidOrigins.any { !it.fingerprint.isNullOrEmpty() }
-    }
+    fun containsAndroidOriginSignature(): Boolean = androidOrigins.any { !it.fingerprint.isNullOrEmpty() }
 
     /**
      * Verify the app origin by comparing it to the list of android origins,
@@ -59,17 +56,18 @@ data class AppOrigin(
         if (compare.containsAndroidOriginSignature().not()) {
             throw SignatureNotFoundException(this, "Android origin not found")
         }
-        return androidOrigins.firstOrNull { androidOrigin ->
-            compare.androidOrigins.any {
-                it.packageName == androidOrigin.packageName
-                        && it.fingerprint == androidOrigin.fingerprint
-            }
-        }?.let {
-            AndroidOrigin(
-                packageName = it.packageName,
-                fingerprint = it.fingerprint
-            ).toOriginValue()
-        } ?: throw SecurityException("Wrong signature for ${toName()}")
+        return androidOrigins
+            .firstOrNull { androidOrigin ->
+                compare.androidOrigins.any {
+                    it.packageName == androidOrigin.packageName &&
+                        it.fingerprint == androidOrigin.fingerprint
+                }
+            }?.let {
+                AndroidOrigin(
+                    packageName = it.packageName,
+                    fingerprint = it.fingerprint,
+                ).toOriginValue()
+            } ?: throw SecurityException("Wrong signature for ${toName()}")
     }
 
     fun clear() {
@@ -77,25 +75,25 @@ data class AppOrigin(
         webOrigins.clear()
     }
 
-    fun isEmpty(): Boolean {
-        return androidOrigins.isEmpty() && webOrigins.isEmpty()
-    }
+    fun isEmpty(): Boolean = androidOrigins.isEmpty() && webOrigins.isEmpty()
 
-    fun toName(): String? {
-        return if (androidOrigins.isNotEmpty()) {
+    fun toName(): String? =
+        if (androidOrigins.isNotEmpty()) {
             androidOrigins.first().packageName
-        } else if (webOrigins.isNotEmpty()){
+        } else if (webOrigins.isNotEmpty()) {
             webOrigins.first().origin
-        } else null
-    }
+        } else {
+            null
+        }
 
-    override fun toString(): String {
-        return if (androidOrigins.isNotEmpty()) {
+    override fun toString(): String =
+        if (androidOrigins.isNotEmpty()) {
             androidOrigins.first().toString()
         } else if (webOrigins.isNotEmpty()) {
             webOrigins.first().toString()
-        } else super.toString()
-    }
+        } else {
+            super.toString()
+        }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -119,10 +117,13 @@ data class AppOrigin(
     }
 
     companion object {
-
         private val TAG = AppOrigin::class.java.simpleName
 
-        fun fromOrigin(origin: String, androidOrigin: AndroidOrigin, verified: Boolean): AppOrigin {
+        fun fromOrigin(
+            origin: String,
+            androidOrigin: AndroidOrigin,
+            verified: Boolean,
+        ): AppOrigin {
             val appOrigin = AppOrigin(verified)
             if (origin.startsWith(WEB_ORIGIN_DEFAULT_SCHEME)) {
                 appOrigin.apply {
@@ -144,7 +145,7 @@ data class AppOrigin(
  */
 class SignatureNotFoundException(
     val temptingApp: AppOrigin,
-    message: String
+    message: String,
 ) : Exception(message)
 
 /**
@@ -154,9 +155,8 @@ class SignatureNotFoundException(
 @Parcelize
 data class AndroidOrigin(
     val packageName: String,
-    val fingerprint: String?
+    val fingerprint: String?,
 ) : Parcelable {
-
     /**
      * Creates an Android App Origin string of the form "android:apk-key-hash:<base64_urlsafe_hash>"
      * from a colon-separated hex fingerprint string.
@@ -175,39 +175,32 @@ data class AndroidOrigin(
         return "android:apk-key-hash:${fingerprintToUrlSafeBase64(fingerprint)}"
     }
 
-    override fun toString(): String {
-        return "$packageName (${fingerprint})"
-    }
+    override fun toString(): String = "$packageName ($fingerprint)"
 }
 
 @Parcelize
 data class WebOrigin(
-    val origin: String
+    val origin: String,
 ) : Parcelable {
+    fun toOriginValue(): String = origin
 
-    fun toOriginValue(): String {
-        return origin
-    }
+    fun defaultAssetLinks(): String = "$origin/.well-known/assetlinks.json"
 
-    fun defaultAssetLinks(): String {
-        return "${origin}/.well-known/assetlinks.json"
-    }
-
-    override fun toString(): String {
-        return origin
-    }
+    override fun toString(): String = origin
 
     companion object {
         const val WEB_ORIGIN_DEFAULT_SCHEME = "https"
         const val WEB_ORIGIN_SCHEME_SEPARATOR = "://"
 
-        fun fromDomain(domain: String, scheme: String? = null): WebOrigin {
-            return if (domain.contains(WEB_ORIGIN_SCHEME_SEPARATOR)) {
+        fun fromDomain(
+            domain: String,
+            scheme: String? = null,
+        ): WebOrigin =
+            if (domain.contains(WEB_ORIGIN_SCHEME_SEPARATOR)) {
                 WebOrigin(domain)
             } else {
                 val webScheme = if (scheme.isNullOrEmpty()) WEB_ORIGIN_DEFAULT_SCHEME else scheme
                 WebOrigin("$webScheme$WEB_ORIGIN_SCHEME_SEPARATOR$domain")
             }
-        }
     }
 }

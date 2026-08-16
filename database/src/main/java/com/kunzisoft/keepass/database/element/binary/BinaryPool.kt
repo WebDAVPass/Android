@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -24,7 +24,6 @@ import java.io.IOException
 import kotlin.math.abs
 
 abstract class BinaryPool<T> {
-
     protected val pool = LinkedHashMap<T, BinaryData>()
 
     // To build unique file id
@@ -35,15 +34,15 @@ abstract class BinaryPool<T> {
     /**
      * To get a binary by the pool key (ref attribute in entry)
      */
-    operator fun get(key: T): BinaryData? {
-        return pool[key]
-    }
+    operator fun get(key: T): BinaryData? = pool[key]
 
     /**
      * Create and return a new binary file not yet linked to a binary
      */
-    fun put(key: T? = null,
-            builder: (uniqueBinaryId: String) -> BinaryData): KeyBinary<T> {
+    fun put(
+        key: T? = null,
+        builder: (uniqueBinaryId: String) -> BinaryData,
+    ): KeyBinary<T> {
         binaryFileIncrement++
         val newBinaryFile: BinaryData = builder("$poolId$creationId$binaryFileIncrement")
         val newKey = put(key, newBinaryFile)
@@ -53,11 +52,15 @@ abstract class BinaryPool<T> {
     /**
      * To linked a binary with a pool key, if the pool key doesn't exists, create an unused one
      */
-    fun put(key: T?, value: BinaryData): T {
-        if (key == null)
+    fun put(
+        key: T?,
+        value: BinaryData,
+    ): T {
+        if (key == null) {
             return put(value)
-        else
+        } else {
             pool[key] = value
+        }
         return key
     }
 
@@ -105,9 +108,9 @@ abstract class BinaryPool<T> {
      */
     private fun findKey(binaryDataToRetrieve: BinaryData): T? {
         val contains = pool.containsValue(binaryDataToRetrieve)
-        return if (!contains)
+        return if (!contains) {
             null
-        else {
+        } else {
             for ((key, binary) in pool) {
                 if (binary == binaryDataToRetrieve) {
                     return key
@@ -126,8 +129,9 @@ abstract class BinaryPool<T> {
                     for ((_, binary) in pool) {
                         if (binary.binaryHash() == searchBinaryMD5) {
                             i++
-                            if (i > 1)
+                            if (i > 1) {
                                 return true
+                            }
                         }
                     }
                 }
@@ -141,8 +145,10 @@ abstract class BinaryPool<T> {
     /**
      * To do an action on each binary in the pool (order is not important)
      */
-    private fun doForEachBinary(action: (key: T, binary: BinaryData) -> Unit,
-                                condition: (key: T, binary: BinaryData) -> Boolean) {
+    private fun doForEachBinary(
+        action: (key: T, binary: BinaryData) -> Unit,
+        condition: (key: T, binary: BinaryData) -> Boolean,
+    ) {
         for ((key, value) in pool) {
             if (condition.invoke(key, value)) {
                 action.invoke(key, value)
@@ -157,26 +163,25 @@ abstract class BinaryPool<T> {
     /**
      * Utility method to order binaries and solve index problem in database v4
      */
-    protected fun orderedBinariesWithoutDuplication(condition: ((binary: BinaryData) -> Boolean) = { true })
-    : List<KeyBinary<T>> {
+    protected fun orderedBinariesWithoutDuplication(condition: ((binary: BinaryData) -> Boolean) = { true }): List<KeyBinary<T>> {
         val keyBinaryList = ArrayList<KeyBinary<T>>()
         for ((key, binary) in pool) {
             // Don't deduplicate
             val existentBinary =
-            try {
-                if (binary.getSize() > 0) {
-                    keyBinaryList.find {
-                        val hash0 = it.binary.binaryHash()
-                        val hash1 = binary.binaryHash()
-                        hash0 != 0 && hash1 != 0 && hash0 == hash1
+                try {
+                    if (binary.getSize() > 0) {
+                        keyBinaryList.find {
+                            val hash0 = it.binary.binaryHash()
+                            val hash1 = binary.binaryHash()
+                            hash0 != 0 && hash1 != 0 && hash0 == hash1
+                        }
+                    } else {
+                        null
                     }
-                } else {
+                } catch (e: Exception) {
+                    Log.e(TAG, "Unable to check binary hash", e)
                     null
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Unable to check binary hash", e)
-                null
-            }
             if (existentBinary == null) {
                 val newKeyBinary = KeyBinary(binary, key)
                 if (condition.invoke(newKeyBinary.binary)) {
@@ -194,8 +199,10 @@ abstract class BinaryPool<T> {
     /**
      * Different from doForEach, provide an ordered index to each binary
      */
-    private fun doForEachBinaryWithoutDuplication(action: (keyBinary: KeyBinary<T>) -> Unit,
-                                                  conditionToAdd: (binary: BinaryData) -> Boolean) {
+    private fun doForEachBinaryWithoutDuplication(
+        action: (keyBinary: KeyBinary<T>) -> Unit,
+        conditionToAdd: (binary: BinaryData) -> Boolean,
+    ) {
         orderedBinariesWithoutDuplication(conditionToAdd).forEach { keyBinary ->
             action.invoke(keyBinary)
         }
@@ -208,8 +215,10 @@ abstract class BinaryPool<T> {
     /**
      * Different from doForEach, provide an ordered index to each binary
      */
-    private fun doForEachOrderedBinaryWithoutDuplication(action: (index: Int, binary: BinaryData) -> Unit,
-                                                         conditionToAdd: (binary: BinaryData) -> Boolean) {
+    private fun doForEachOrderedBinaryWithoutDuplication(
+        action: (index: Int, binary: BinaryData) -> Unit,
+        conditionToAdd: (binary: BinaryData) -> Boolean,
+    ) {
         orderedBinariesWithoutDuplication(conditionToAdd).forEachIndexed { index, keyBinary ->
             action.invoke(index, keyBinary.binary)
         }
@@ -219,9 +228,7 @@ abstract class BinaryPool<T> {
         doForEachOrderedBinaryWithoutDuplication(action, { true })
     }
 
-    fun isEmpty(): Boolean {
-        return pool.isEmpty()
-    }
+    fun isEmpty(): Boolean = pool.isEmpty()
 
     @Throws(IOException::class)
     fun clear() {
@@ -231,10 +238,11 @@ abstract class BinaryPool<T> {
     override fun toString(): String {
         val stringBuffer = StringBuffer()
         for ((key, value) in pool) {
-            if (stringBuffer.isNotEmpty())
+            if (stringBuffer.isNotEmpty()) {
                 stringBuffer.append(", {$key:$value}")
-            else
+            } else {
                 stringBuffer.append("{$key:$value}")
+            }
         }
         return stringBuffer.toString()
     }
@@ -242,8 +250,12 @@ abstract class BinaryPool<T> {
     /**
      * Utility class to order binaries
      */
-    class KeyBinary<T>(val binary: BinaryData, key: T) {
+    class KeyBinary<T>(
+        val binary: BinaryData,
+        key: T,
+    ) {
         val keys = HashSet<T>()
+
         init {
             addKey(key)
         }

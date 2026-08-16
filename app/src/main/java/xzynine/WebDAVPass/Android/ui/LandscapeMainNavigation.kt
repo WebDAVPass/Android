@@ -63,26 +63,28 @@ fun LandscapeMainNavigation(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                    modifier = Modifier.padding(horizontal = 8.dp)
+                    modifier = Modifier.padding(horizontal = 8.dp),
                 )
-            }
+            },
         )
 
         // 内容区域（三栏模式的中间/右侧 pane）：
         // clipToBounds 防止转场图层越出 pane 覆盖导航栏；pane 位于屏幕中部，禁用屏幕圆角裁剪
         Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .clipToBounds()
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .clipToBounds(),
         ) {
             NavDisplay(
                 backStack = backStack,
                 // 多栏模式：pane 边在屏幕中部，设备屏幕圆角只属于物理屏幕边缘，此处禁用
-                effects = NavDisplayEffects(
-                    cornerClipRadius = 0.dp,
-                    dimAmount = 0f,
-                ),
+                effects =
+                    NavDisplayEffects(
+                        cornerClipRadius = 0.dp,
+                        dimAmount = 0f,
+                    ),
                 onBack = {
                     if (showCloudBindingDialog.value) {
                         showCloudBindingDialog.value = false
@@ -133,19 +135,20 @@ fun LandscapeMainNavigation(
                             },
                             onDetailDeleted = {
                                 onSelectedEntryIdChange(null)
-                            }
+                            },
                         )
                         FloatingActionButton(
                             onClick = {
                                 showScanBottomSheet.value = true
                             },
-                            modifier = Modifier
-                                .align(Alignment.BottomEnd)
-                                .padding(16.dp)
+                            modifier =
+                                Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(16.dp),
                         ) {
                             Icon(
                                 imageVector = MiuixIcons.Scan,
-                                contentDescription = "扫描二维码"
+                                contentDescription = "扫描二维码",
                             )
                         }
                         MiuixPopupHost()
@@ -183,7 +186,7 @@ fun LandscapeMainNavigation(
                             },
                             onDetailDeleted = {
                                 onSelectedEntryIdChange(null)
-                            }
+                            },
                         )
                         MiuixPopupHost()
                     }
@@ -194,22 +197,24 @@ fun LandscapeMainNavigation(
 
                     // 横屏详情：中间列表跟随导航栏分类，右侧显示详情
                     LaunchedEffect(selectedNavIndex) {
-                        val mode = if (selectedNavIndex == 3) {
-                            PasswordListMode.RECENT_DELETED
-                        } else {
-                            PasswordListMode.ALL_PASSWORDS
-                        }
+                        val mode =
+                            if (selectedNavIndex == 3) {
+                                PasswordListMode.RECENT_DELETED
+                            } else {
+                                PasswordListMode.ALL_PASSWORDS
+                            }
                         tokenViewModel.passwordViewModel.setPasswordListMode(mode, refreshNow = true)
                     }
 
                     Box(modifier = Modifier.fillMaxSize()) {
                         LandscapePasswordPanes(
                             tokenViewModel = tokenViewModel,
-                            listMode = if (selectedNavIndex == 3) {
-                                PasswordListMode.RECENT_DELETED
-                            } else {
-                                PasswordListMode.ALL_PASSWORDS
-                            },
+                            listMode =
+                                if (selectedNavIndex == 3) {
+                                    PasswordListMode.RECENT_DELETED
+                                } else {
+                                    PasswordListMode.ALL_PASSWORDS
+                                },
                             selectedEntryId = selectedEntryId ?: entryId,
                             onEntryClick = { clickedEntryId ->
                                 onSelectedEntryIdChange(clickedEntryId)
@@ -219,7 +224,7 @@ fun LandscapeMainNavigation(
                             },
                             onDetailDeleted = {
                                 onSelectedEntryIdChange(null)
-                            }
+                            },
                         )
                         MiuixPopupHost()
                     }

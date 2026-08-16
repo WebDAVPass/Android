@@ -21,12 +21,12 @@ package com.kunzisoft.keepass.stream
 
 import java.io.IOException
 import java.io.OutputStream
-
 import javax.crypto.Mac
 
-class MacOutputStream(private val outputStream: OutputStream,
-                      private val mMac: Mac) : OutputStream() {
-
+class MacOutputStream(
+    private val outputStream: OutputStream,
+    private val mMac: Mac,
+) : OutputStream() {
     @Throws(IOException::class)
     override fun flush() {
         outputStream.flush()
@@ -44,7 +44,11 @@ class MacOutputStream(private val outputStream: OutputStream,
     }
 
     @Throws(IOException::class)
-    override fun write(buffer: ByteArray, offset: Int, count: Int) {
+    override fun write(
+        buffer: ByteArray,
+        offset: Int,
+        count: Int,
+    ) {
         mMac.update(buffer, offset, count)
         outputStream.write(buffer, offset, count)
     }

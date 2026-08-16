@@ -36,7 +36,7 @@ data class LibraryContextEntity(
     val forceManualUnlockEvery48Hours: Boolean?,
     val lastManualMasterUnlockAt: Long?,
     val autoUnlockInvalidated: Boolean,
-    val keyFileUri: String?
+    val keyFileUri: String?,
 )
 
 /**
@@ -45,12 +45,13 @@ data class LibraryContextEntity(
  * 说明：password 为密文时解密还原；解密失败（密钥缺失等异常）时置 null，
  * 由上层按"密码不可用"处理（如提示重新输入）。
  */
-fun LibraryContextEntity.toLibraryContext(): LibraryContext {
-    return LibraryContext(
+fun LibraryContextEntity.toLibraryContext(): LibraryContext =
+    LibraryContext(
         id = id,
         displayName = displayName,
-        sourceType = runCatching { LibrarySourceType.valueOf(sourceType) }
-            .getOrDefault(LibrarySourceType.LOCAL),
+        sourceType =
+            runCatching { LibrarySourceType.valueOf(sourceType) }
+                .getOrDefault(LibrarySourceType.LOCAL),
         localPath = localPath,
         remoteBaseUrl = remoteBaseUrl,
         remoteFilePath = remoteFilePath,
@@ -70,17 +71,16 @@ fun LibraryContextEntity.toLibraryContext(): LibraryContext {
         forceManualUnlockEvery48Hours = forceManualUnlockEvery48Hours,
         lastManualMasterUnlockAt = lastManualMasterUnlockAt,
         autoUnlockInvalidated = autoUnlockInvalidated,
-        keyFileUri = keyFileUri
+        keyFileUri = keyFileUri,
     )
-}
 
 /**
  * 领域模型转实体。
  *
  * 说明：password 非空时统一加密落库，保证库中不出现明文。
  */
-fun LibraryContext.toEntity(): LibraryContextEntity {
-    return LibraryContextEntity(
+fun LibraryContext.toEntity(): LibraryContextEntity =
+    LibraryContextEntity(
         id = id,
         displayName = displayName,
         sourceType = sourceType.name,
@@ -103,6 +103,5 @@ fun LibraryContext.toEntity(): LibraryContextEntity {
         forceManualUnlockEvery48Hours = forceManualUnlockEvery48Hours,
         lastManualMasterUnlockAt = lastManualMasterUnlockAt,
         autoUnlockInvalidated = autoUnlockInvalidated,
-        keyFileUri = keyFileUri
+        keyFileUri = keyFileUri,
     )
-}

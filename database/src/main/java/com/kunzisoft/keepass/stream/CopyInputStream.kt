@@ -27,14 +27,12 @@ import java.io.OutputStream
  * This class copies everything pulled through its input stream into the
  * output stream.
  */
-class CopyInputStream(private val inputStream: InputStream,
-                      private val outputStream: OutputStream
+class CopyInputStream(
+    private val inputStream: InputStream,
+    private val outputStream: OutputStream,
 ) : InputStream() {
-
     @Throws(IOException::class)
-    override fun available(): Int {
-        return inputStream.available()
-    }
+    override fun available(): Int = inputStream.available()
 
     @Throws(IOException::class)
     override fun close() {
@@ -46,9 +44,7 @@ class CopyInputStream(private val inputStream: InputStream,
         inputStream.mark(readlimit)
     }
 
-    override fun markSupported(): Boolean {
-        return inputStream.markSupported()
-    }
+    override fun markSupported(): Boolean = inputStream.markSupported()
 
     @Throws(IOException::class)
     override fun read(): Int {
@@ -62,7 +58,11 @@ class CopyInputStream(private val inputStream: InputStream,
     }
 
     @Throws(IOException::class)
-    override fun read(b: ByteArray, offset: Int, length: Int): Int {
+    override fun read(
+        b: ByteArray,
+        offset: Int,
+        length: Int,
+    ): Int {
         val len = inputStream.read(b, offset, length)
 
         if (len != -1) {
@@ -90,8 +90,5 @@ class CopyInputStream(private val inputStream: InputStream,
     }
 
     @Throws(IOException::class)
-    override fun skip(byteCount: Long): Long {
-        return inputStream.skip(byteCount)
-    }
-
+    override fun skip(byteCount: Long): Long = inputStream.skip(byteCount)
 }

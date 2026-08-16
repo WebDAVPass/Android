@@ -41,7 +41,7 @@ fun PasswordInputDialog(
     summary: String? = null,
     confirmButtonText: String = "确定",
     onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
+    onConfirm: (String) -> Unit,
 ) {
     var password by remember { mutableStateOf("") }
     var showPassword by remember { mutableStateOf(false) }
@@ -59,7 +59,7 @@ fun PasswordInputDialog(
         title = title,
         summary = summary,
         show = show,
-        onDismissRequest = onDismiss
+        onDismissRequest = onDismiss,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             TextField(
@@ -69,30 +69,31 @@ fun PasswordInputDialog(
                     status = ""
                 },
                 label = "主密码",
-                visualTransformation = if (showPassword) {
-                    VisualTransformation.None
-                } else {
-                    PasswordVisualTransformation()
-                },
+                visualTransformation =
+                    if (showPassword) {
+                        VisualTransformation.None
+                    } else {
+                        PasswordVisualTransformation()
+                    },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
             TextButton(
                 text = if (showPassword) "隐藏密码" else "显示密码",
-                onClick = { showPassword = !showPassword }
+                onClick = { showPassword = !showPassword },
             )
             if (status.isNotBlank()) {
                 Text(text = status)
             }
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 TextButton(
                     text = "取消",
                     onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
                 Spacer(modifier = Modifier.width(16.dp))
                 Button(
@@ -103,7 +104,7 @@ fun PasswordInputDialog(
                             onConfirm(password)
                         }
                     },
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Text(confirmButtonText)
                 }

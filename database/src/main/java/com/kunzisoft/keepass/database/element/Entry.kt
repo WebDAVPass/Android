@@ -47,8 +47,9 @@ import com.kunzisoft.keepass.utils.StringUtil.toFormattedColorString
 import com.kunzisoft.keepass.utils.readParcelableCompat
 import java.util.UUID
 
-class Entry : Node, EntryVersionedInterface<Group> {
-
+class Entry :
+    Node,
+    EntryVersionedInterface<Group> {
     var entryKDB: EntryKDB? = null
         private set
     var entryKDBX: EntryKDBX? = null
@@ -87,11 +88,12 @@ class Entry : Node, EntryVersionedInterface<Group> {
         entryKDBX = parcel.readParcelableCompat()
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         dest.writeParcelable(entryKDB, flags)
         dest.writeParcelable(entryKDBX, flags)
     }
@@ -151,15 +153,16 @@ class Entry : Node, EntryVersionedInterface<Group> {
             entryKDBX?.parent = value?.groupKDBX
         }
 
-    override fun containsParent(): Boolean {
-        return entryKDB?.containsParent() ?: entryKDBX?.containsParent() ?: false
-    }
+    override fun containsParent(): Boolean = entryKDB?.containsParent() ?: entryKDBX?.containsParent() ?: false
 
     override fun afterAssignNewParent() {
         entryKDBX?.afterChangeParent()
     }
 
-    override fun touch(modified: Boolean, touchParents: Boolean) {
+    override fun touch(
+        modified: Boolean,
+        touchParents: Boolean,
+    ) {
         entryKDB?.touch(modified, touchParents)
         entryKDBX?.touch(modified, touchParents)
     }
@@ -175,11 +178,10 @@ class Entry : Node, EntryVersionedInterface<Group> {
         return contained ?: false
     }
 
-    override fun nodeIndexInParentForNaturalOrder(): Int {
-        return entryKDB?.nodeIndexInParentForNaturalOrder()
-                ?: entryKDBX?.nodeIndexInParentForNaturalOrder()
-                ?: -1
-    }
+    override fun nodeIndexInParentForNaturalOrder(): Int =
+        entryKDB?.nodeIndexInParentForNaturalOrder()
+            ?: entryKDBX?.nodeIndexInParentForNaturalOrder()
+            ?: -1
 
     override var creationTime: DateInstant
         get() = entryKDB?.creationTime ?: entryKDBX?.creationTime ?: DateInstant()
@@ -253,7 +255,8 @@ class Entry : Node, EntryVersionedInterface<Group> {
             entryKDBX?.backgroundColor?.let {
                 try {
                     colorInt = it.toFormattedColorInt()
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                }
             }
             return colorInt
         }
@@ -267,7 +270,8 @@ class Entry : Node, EntryVersionedInterface<Group> {
             entryKDBX?.foregroundColor?.let {
                 try {
                     colorInt = it.toFormattedColorInt()
-                } catch (_: Exception) {}
+                } catch (_: Exception) {
+                }
             }
             return colorInt
         }
@@ -287,9 +291,7 @@ class Entry : Node, EntryVersionedInterface<Group> {
             entryKDBX?.autoType = value
         }
 
-    private fun isTan(): Boolean {
-        return title == PMS_TAN_ENTRY && username.isNotEmpty()
-    }
+    private fun isTan(): Boolean = title == PMS_TAN_ENTRY && username.isNotEmpty()
 
     /**
      * {@inheritDoc}
@@ -297,22 +299,24 @@ class Entry : Node, EntryVersionedInterface<Group> {
      * [.startManageEntry] and [.stopManageEntry] must be called
      * before and after [.getVisualTitle]
      */
-    fun getVisualTitle(): String {
-        return if (isTan()) {
+    fun getVisualTitle(): String =
+        if (isTan()) {
             "$PMS_TAN_ENTRY $username"
         } else {
-            if (title.isEmpty())
-                if (url.isEmpty())
-                    if (username.isEmpty())
-                            nodeId.toString()
-                    else
+            if (title.isEmpty()) {
+                if (url.isEmpty()) {
+                    if (username.isEmpty()) {
+                        nodeId.toString()
+                    } else {
                         username
-                else
+                    }
+                } else {
                     url
-            else
+                }
+            } else {
                 title
+            }
         }
-    }
 
     /*
       ------------
@@ -395,7 +399,10 @@ class Entry : Node, EntryVersionedInterface<Group> {
         entryKDBX?.stopToManageFieldReferences()
     }
 
-    fun getAttachments(attachmentPool: AttachmentPool, inHistory: Boolean = false): List<Attachment> {
+    fun getAttachments(
+        attachmentPool: AttachmentPool,
+        inHistory: Boolean = false,
+    ): List<Attachment> {
         val attachments = ArrayList<Attachment>()
         entryKDB?.getAttachment(attachmentPool)?.let {
             attachments.add(it)
@@ -406,10 +413,9 @@ class Entry : Node, EntryVersionedInterface<Group> {
         return attachments
     }
 
-    fun containsAttachment(): Boolean {
-        return entryKDB?.containsAttachment() == true
-                || entryKDBX?.containsAttachment() == true
-    }
+    fun containsAttachment(): Boolean =
+        entryKDB?.containsAttachment() == true ||
+            entryKDBX?.containsAttachment() == true
 
     private fun removeAttachment(attachment: Attachment) {
         entryKDB?.removeAttachment(attachment)
@@ -421,7 +427,10 @@ class Entry : Node, EntryVersionedInterface<Group> {
         entryKDBX?.removeAttachments()
     }
 
-    private fun putAttachment(attachment: Attachment, attachmentPool: AttachmentPool) {
+    private fun putAttachment(
+        attachment: Attachment,
+        attachmentPool: AttachmentPool,
+    ) {
         entryKDB?.putAttachment(attachment, attachmentPool)
         entryKDBX?.putAttachment(attachment, attachmentPool)
     }
@@ -449,15 +458,13 @@ class Entry : Node, EntryVersionedInterface<Group> {
     }
 
     fun removeOldestEntryFromHistory(): Entry? {
-         entryKDBX?.removeOldestEntryFromHistory()?.let {
+        entryKDBX?.removeOldestEntryFromHistory()?.let {
             return Entry(it)
         }
         return null
     }
 
-    fun getSize(attachmentPool: AttachmentPool): Long {
-        return entryKDBX?.getSize(attachmentPool) ?: 0L
-    }
+    fun getSize(attachmentPool: AttachmentPool): Long = entryKDBX?.getSize(attachmentPool) ?: 0L
 
     /*
       ------------
@@ -469,20 +476,25 @@ class Entry : Node, EntryVersionedInterface<Group> {
      * Retrieve generated entry info.
      * If are not [raw] data, remove parameter fields and add auto generated elements in auto custom fields
      */
-    fun getEntryInfo(database: Database?,
-                     raw: Boolean = false,
-                     removeTemplateConfiguration: Boolean = true): EntryInfo {
+    fun getEntryInfo(
+        database: Database?,
+        raw: Boolean = false,
+        removeTemplateConfiguration: Boolean = true,
+    ): EntryInfo {
         val entryInfo = EntryInfo()
         // Remove unwanted template fields
-        val baseInfo = if (removeTemplateConfiguration)
-            database?.removeTemplateConfiguration(this) ?: this
-        else
-            this
+        val baseInfo =
+            if (removeTemplateConfiguration) {
+                database?.removeTemplateConfiguration(this) ?: this
+            } else {
+                this
+            }
         baseInfo.apply {
-            if (raw)
+            if (raw) {
                 database?.stopManageEntry(this)
-            else
+            } else {
                 database?.startManageEntry(this)
+            }
 
             entryInfo.id = nodeId.id
             entryInfo.title = title
@@ -517,13 +529,17 @@ class Entry : Node, EntryVersionedInterface<Group> {
                 entryInfo.attachments = getAttachments(binaryPool).toMutableList()
             }
 
-            if (!raw)
+            if (!raw) {
                 database?.stopManageEntry(this)
+            }
         }
         return entryInfo
     }
 
-    fun setEntryInfo(database: Database?, newEntryInfo: EntryInfo) {
+    fun setEntryInfo(
+        database: Database?,
+        newEntryInfo: EntryInfo,
+    ) {
         database?.startManageEntry(this)
 
         removeAllFields()
@@ -581,19 +597,14 @@ class Entry : Node, EntryVersionedInterface<Group> {
         /**
          * True if [field] name is not a standard field name
          */
-        fun newExtraFieldNameAllowed(field: Field): Boolean {
-            return EntryKDBX.newCustomNameAllowed(field.name)
-        }
+        fun newExtraFieldNameAllowed(field: Field): Boolean = EntryKDBX.newCustomNameAllowed(field.name)
 
         @JvmField
-        val CREATOR: Parcelable.Creator<Entry> = object : Parcelable.Creator<Entry> {
-            override fun createFromParcel(parcel: Parcel): Entry {
-                return Entry(parcel)
-            }
+        val CREATOR: Parcelable.Creator<Entry> =
+            object : Parcelable.Creator<Entry> {
+                override fun createFromParcel(parcel: Parcel): Entry = Entry(parcel)
 
-            override fun newArray(size: Int): Array<Entry?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<Entry?> = arrayOfNulls(size)
             }
-        }
     }
 }

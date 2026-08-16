@@ -1,26 +1,22 @@
 package xzynine.WebDAVPass.Android.ui.Dialog
 
-import xzylib.base.util.ToastUtils
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.unit.DpSize
-import xzynine.WebDAVPass.Android.data.WebDavConfig
 import github.xzynine.webdav.Authorization
 import github.xzynine.webdav.WebDav
 import kotlinx.coroutines.Dispatchers
@@ -28,20 +24,16 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowDialog
-import top.yukonga.miuix.kmp.icon.basic.ArrowRight
-import top.yukonga.miuix.kmp.icon.basic.Check
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Contacts
-import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Info
 import top.yukonga.miuix.kmp.icon.extended.Lock
-import top.yukonga.miuix.kmp.icon.extended.Show
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
+import xzylib.base.util.ToastUtils
+import xzynine.WebDAVPass.Android.data.WebDavConfig
 
 /**
  * WebDAV配置内容组件
@@ -50,16 +42,17 @@ import top.yukonga.miuix.kmp.icon.extended.Show
 fun WebDavConfigContent(
     onDismiss: () -> Unit,
     onConfigSaved: (config: WebDavConfig) -> Unit,
-    existingConfig: WebDavConfig? = null
+    existingConfig: WebDavConfig? = null,
 ) {
     val context = LocalContext.current
-    val originalUrl = existingConfig?.url?.let {
-        if (it.endsWith("/WebDavPass/") || it.endsWith("/WebDavPass")) {
-            it.substringBeforeLast("/WebDavPass")
-        } else {
-            it
-        }
-    } ?: "https://dav.jianguoyun.com/dav/"
+    val originalUrl =
+        existingConfig?.url?.let {
+            if (it.endsWith("/WebDavPass/") || it.endsWith("/WebDavPass")) {
+                it.substringBeforeLast("/WebDavPass")
+            } else {
+                it
+            }
+        } ?: "https://dav.jianguoyun.com/dav/"
 
     var serverUrl by remember { mutableStateOf(originalUrl) }
     var username by remember { mutableStateOf(existingConfig?.username ?: "") }
@@ -75,23 +68,28 @@ fun WebDavConfigContent(
     val isExistingConfig = existingConfig != null
     val coroutineScope = rememberCoroutineScope()
 
-    fun validateUrl(url: String): String? {
-        return if (url.isNotEmpty() && !url.matches(Regex("^https?://.*"))) {
+    fun validateUrl(url: String): String? =
+        if (url.isNotEmpty() && !url.matches(Regex("^https?://.*"))) {
             "请输入有效的HTTP/HTTPS URL"
-        } else null
-    }
+        } else {
+            null
+        }
 
-    fun normalizeBaseUrl(raw: String, folderName: String): String {
+    fun normalizeBaseUrl(
+        raw: String,
+        folderName: String,
+    ): String {
         val base = if (raw.endsWith('/')) raw else "$raw/"
         val normalizedFolder = folderName.trim('/').ifBlank { "WebDavPass" }
         return "$base$normalizedFolder/"
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         TextField(
             value = serverUrl,
@@ -106,9 +104,9 @@ fun WebDavConfigContent(
                 Icon(
                     imageVector = MiuixIcons.Info,
                     contentDescription = "服务器地址",
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp),
                 )
-            }
+            },
         )
 
         if (urlError != null) {
@@ -116,9 +114,10 @@ fun WebDavConfigContent(
                 text = urlError!!,
                 color = MiuixTheme.colorScheme.error,
                 fontSize = 12.sp,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 16.dp, top = 4.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 16.dp, top = 4.dp),
             )
         }
 
@@ -132,9 +131,9 @@ fun WebDavConfigContent(
                 Icon(
                     imageVector = MiuixIcons.Contacts,
                     contentDescription = "用户名",
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp),
                 )
-            }
+            },
         )
 
         TextField(
@@ -147,9 +146,9 @@ fun WebDavConfigContent(
                 Icon(
                     imageVector = MiuixIcons.Info,
                     contentDescription = "远端目录",
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp),
                 )
-            }
+            },
         )
 
         TextField(
@@ -162,9 +161,9 @@ fun WebDavConfigContent(
                 Icon(
                     imageVector = MiuixIcons.Info,
                     contentDescription = "默认文件名",
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp),
                 )
-            }
+            },
         )
 
         TextField(
@@ -178,9 +177,9 @@ fun WebDavConfigContent(
                 Icon(
                     imageVector = MiuixIcons.Lock,
                     contentDescription = "密码",
-                    modifier = Modifier.padding(horizontal = 12.dp)
+                    modifier = Modifier.padding(horizontal = 12.dp),
                 )
-            }
+            },
         )
 
         Button(
@@ -194,11 +193,12 @@ fun WebDavConfigContent(
                     return@Button
                 }
 
-                val testPassword = if (password.isEmpty() && isExistingConfig) {
-                    existingConfig!!.password
-                } else {
-                    password
-                }
+                val testPassword =
+                    if (password.isEmpty() && isExistingConfig) {
+                        existingConfig!!.password
+                    } else {
+                        password
+                    }
 
                 if (testPassword.isEmpty()) {
                     ToastUtils.showShortToast(context, "请输入密码")
@@ -230,7 +230,7 @@ fun WebDavConfigContent(
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !isTesting
+            enabled = !isTesting,
         ) {
             Text(text = if (isTesting) "测试中..." else "测试连接")
         }
@@ -246,9 +246,11 @@ fun WebDavConfigContent(
                     try {
                         listStatus = "正在加载 .kdbx 列表..."
                         val webDav = WebDav(normalizeBaseUrl(serverUrl, remoteFolder), Authorization(username, password))
-                        val files = webDav.listFiles()
-                            .filter { !it.isDir && it.displayName.endsWith(".kdbx", ignoreCase = true) }
-                            .map { it.displayName }
+                        val files =
+                            webDav
+                                .listFiles()
+                                .filter { !it.isDir && it.displayName.endsWith(".kdbx", ignoreCase = true) }
+                                .map { it.displayName }
 
                         withContext(Dispatchers.Main) {
                             listing = files
@@ -262,7 +264,7 @@ fun WebDavConfigContent(
                 }
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !isTesting
+            enabled = !isTesting,
         ) {
             Text(text = "浏览远端 .kdbx")
         }
@@ -275,7 +277,7 @@ fun WebDavConfigContent(
             Button(
                 onClick = { defaultFileName = file },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isTesting
+                enabled = !isTesting,
             ) {
                 Text(text = file)
             }
@@ -292,11 +294,12 @@ fun WebDavConfigContent(
                     return@Button
                 }
 
-                val finalPassword = if (password.isEmpty() && isExistingConfig) {
-                    existingConfig!!.password
-                } else {
-                    password
-                }
+                val finalPassword =
+                    if (password.isEmpty() && isExistingConfig) {
+                        existingConfig!!.password
+                    } else {
+                        password
+                    }
 
                 if (finalPassword.isEmpty()) {
                     ToastUtils.showShortToast(context, "请输入密码")
@@ -304,33 +307,35 @@ fun WebDavConfigContent(
                 }
 
                 val normalizedFolder = remoteFolder.trim('/').ifBlank { "WebDavPass" }
-                val webdavUrl = if (serverUrl.endsWith("/")) {
-                    "${serverUrl}${normalizedFolder}/"
-                } else {
-                    "${serverUrl}/${normalizedFolder}/"
-                }
+                val webdavUrl =
+                    if (serverUrl.endsWith("/")) {
+                        "${serverUrl}$normalizedFolder/"
+                    } else {
+                        "$serverUrl/$normalizedFolder/"
+                    }
 
-                val config = if (isExistingConfig) {
-                    existingConfig!!.copy(
-                        url = webdavUrl,
-                        username = username,
-                        password = finalPassword
-                    )
-                } else {
-                    WebDavConfig(
-                        id = 0,
-                        name = "默认WebDAV",
-                        url = webdavUrl,
-                        username = username,
-                        password = finalPassword
-                    )
-                }
+                val config =
+                    if (isExistingConfig) {
+                        existingConfig!!.copy(
+                            url = webdavUrl,
+                            username = username,
+                            password = finalPassword,
+                        )
+                    } else {
+                        WebDavConfig(
+                            id = 0,
+                            name = "默认WebDAV",
+                            url = webdavUrl,
+                            username = username,
+                            password = finalPassword,
+                        )
+                    }
 
                 onConfigSaved(config)
                 onDismiss()
             },
             modifier = Modifier.fillMaxWidth(),
-            enabled = !isTesting
+            enabled = !isTesting,
         ) {
             Text(text = "保存配置")
         }
@@ -345,7 +350,7 @@ fun WebDavConfigDialog(
     showDialog: MutableState<Boolean>,
     onDismissRequest: () -> Unit,
     onConfigSaved: (config: WebDavConfig) -> Unit = { _ -> },
-    existingConfig: WebDavConfig? = null
+    existingConfig: WebDavConfig? = null,
 ) {
     WindowDialog(
         title = if (existingConfig != null) "编辑 WebDAV 配置" else "WebDAV 配置",
@@ -353,12 +358,12 @@ fun WebDavConfigDialog(
         show = showDialog.value,
         onDismissRequest = onDismissRequest,
         defaultWindowInsetsPadding = true,
-        insideMargin = DpSize(16.dp, 16.dp)
+        insideMargin = DpSize(16.dp, 16.dp),
     ) {
         WebDavConfigContent(
             onDismiss = onDismissRequest,
             onConfigSaved = onConfigSaved,
-            existingConfig = existingConfig
+            existingConfig = existingConfig,
         )
     }
 }

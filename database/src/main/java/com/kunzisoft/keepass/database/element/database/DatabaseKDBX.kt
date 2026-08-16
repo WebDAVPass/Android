@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -64,9 +64,7 @@ import java.util.UUID
 import javax.crypto.Mac
 import kotlin.math.min
 
-
 class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
-
     // To resave the database with same credential when already loaded
     private var mCompositeKey = CompositeKey()
 
@@ -79,11 +77,12 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         encryptionAlgorithm = EncryptionAlgorithm.getFrom(uuid)
     }
 
-    override val availableEncryptionAlgorithms: List<EncryptionAlgorithm> = listOf(
-        EncryptionAlgorithm.AESRijndael,
-        EncryptionAlgorithm.Twofish,
-        EncryptionAlgorithm.ChaCha20
-    )
+    override val availableEncryptionAlgorithms: List<EncryptionAlgorithm> =
+        listOf(
+            EncryptionAlgorithm.AESRijndael,
+            EncryptionAlgorithm.Twofish,
+            EncryptionAlgorithm.ChaCha20,
+        )
 
     var kdfParameters: KdfParameters? = null
 
@@ -91,8 +90,9 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         get() = getKdfEngineFromParameters(kdfParameters)
         set(value) {
             value?.let {
-                if (kdfParameters?.uuid != value.defaultParameters.uuid)
+                if (kdfParameters?.uuid != value.defaultParameters.uuid) {
                     kdfParameters = value.defaultParameters
+                }
                 numberKeyEncryptionRounds = value.defaultKeyRounds
                 memoryUsage = value.defaultMemoryUsage
                 parallelism = value.defaultParallelism
@@ -117,11 +117,12 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         }
     }
 
-    override val kdfAvailableList: List<KdfEngine> = listOf(
-        KdfFactory.aesKdf,
-        KdfFactory.argon2dKdf,
-        KdfFactory.argon2idKdf
-    )
+    override val kdfAvailableList: List<KdfEngine> =
+        listOf(
+            KdfFactory.aesKdf,
+            KdfFactory.argon2dKdf,
+            KdfFactory.argon2idKdf,
+        )
 
     var compressionAlgorithm = CompressionAlgorithm.GZIP
 
@@ -178,10 +179,11 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
     ) {
         name = databaseName
         kdbxVersion = FILE_VERSION_31
-        val group = createGroup().apply {
-            title = rootName
-            icon.standard = getStandardIcon(IconImageStandard.FOLDER_ID)
-        }
+        val group =
+            createGroup().apply {
+                title = rootName
+                icon.standard = getStandardIcon(IconImageStandard.FOLDER_ID)
+            }
         rootGroup = group
         if (templatesGroupName != null) {
             val templatesGroup = mTemplateEngine.createNewTemplatesGroup(templatesGroupName)
@@ -192,12 +194,13 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
 
     override val version: String
         get() {
-            val kdbxStringVersion = when (kdbxVersion) {
-                FILE_VERSION_31 -> "3.1"
-                FILE_VERSION_40 -> "4.0"
-                FILE_VERSION_41 -> "4.1"
-                else -> "UNKNOWN"
-            }
+            val kdbxStringVersion =
+                when (kdbxVersion) {
+                    FILE_VERSION_31 -> "3.1"
+                    FILE_VERSION_40 -> "4.0"
+                    FILE_VERSION_41 -> "4.1"
+                    else -> "UNKNOWN"
+                }
             return "V2 - KDBX$kdbxStringVersion"
         }
 
@@ -206,6 +209,7 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
 
     private open class NodeOperationHandler<T : NodeKDBXInterface> : NodeHandler<T>() {
         var containsCustomData = false
+
         override fun operate(node: T): Boolean {
             if (node.customData.isNotEmpty()) {
                 containsCustomData = true
@@ -216,6 +220,7 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
 
     private class EntryOperationHandler : NodeOperationHandler<EntryKDBX>() {
         var passwordQualityEstimationDisabled = false
+
         override fun operate(node: EntryKDBX): Boolean {
             if (!node.qualityCheck) {
                 passwordQualityEstimationDisabled = true
@@ -226,9 +231,11 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
 
     private class GroupOperationHandler : NodeOperationHandler<GroupKDBX>() {
         var containsTags = false
+
         override fun operate(node: GroupKDBX): Boolean {
-            if (node.tags.isNotEmpty())
+            if (node.tags.isNotEmpty()) {
                 containsTags = true
+            }
             return super.operate(node)
         }
     }
@@ -241,27 +248,43 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         val password = masterCredential.password
         val keyFileData = masterCredential.keyFileData
         val hardwareKey = masterCredential.hardwareKey
-        val passwordBytes = if (password != null) MasterCredential.retrievePasswordKey(
-            password,
-            passwordEncoding
-        ) else null
-        val keyFileBytes = if (keyFileData != null) MasterCredential.retrieveKeyFileDecodedKey(
-            keyFileData,
-            true
-        ) else null
-        val hardwareKeyBytes = if (hardwareKey != null) MasterCredential.retrieveHardwareKey(
-            challengeResponseRetriever.invoke(hardwareKey, transformSeed)
-        ) else null
+        val passwordBytes =
+            if (password != null) {
+                MasterCredential.retrievePasswordKey(
+                    password,
+                    passwordEncoding,
+                )
+            } else {
+                null
+            }
+        val keyFileBytes =
+            if (keyFileData != null) {
+                MasterCredential.retrieveKeyFileDecodedKey(
+                    keyFileData,
+                    true,
+                )
+            } else {
+                null
+            }
+        val hardwareKeyBytes =
+            if (hardwareKey != null) {
+                MasterCredential.retrieveHardwareKey(
+                    challengeResponseRetriever.invoke(hardwareKey, transformSeed),
+                )
+            } else {
+                null
+            }
 
         // Save to rebuild master password with new seed later
         mCompositeKey = CompositeKey(passwordBytes, keyFileBytes, hardwareKey)
 
         // Build the master key
-        this.masterKey = composedKeyToMasterKey(
-            passwordBytes,
-            keyFileBytes,
-            hardwareKeyBytes
-        )
+        this.masterKey =
+            composedKeyToMasterKey(
+                passwordBytes,
+                keyFileBytes,
+                hardwareKeyBytes,
+            )
 
         // Build check key
         this.checkKey = masterCredential.getCheckKey()
@@ -276,19 +299,22 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         val hardwareKey = mCompositeKey.hardwareKey
         if (hardwareKey == null) {
             // If no hardware key, simply rebuild from composed keys
-            this.masterKey = composedKeyToMasterKey(
-                passwordBytes,
-                keyFileBytes
-            )
+            this.masterKey =
+                composedKeyToMasterKey(
+                    passwordBytes,
+                    keyFileBytes,
+                )
         } else {
-            val hardwareKeyBytes = MasterCredential.retrieveHardwareKey(
-                challengeResponseRetriever.invoke(hardwareKey, transformSeed)
-            )
-            this.masterKey = composedKeyToMasterKey(
-                passwordBytes,
-                keyFileBytes,
-                hardwareKeyBytes
-            )
+            val hardwareKeyBytes =
+                MasterCredential.retrieveHardwareKey(
+                    challengeResponseRetriever.invoke(hardwareKey, transformSeed),
+                )
+            this.masterKey =
+                composedKeyToMasterKey(
+                    passwordBytes,
+                    keyFileBytes,
+                    hardwareKeyBytes,
+                )
         }
     }
 
@@ -296,13 +322,12 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         passwordData: ByteArray?,
         keyFileData: ByteArray?,
         hardwareKeyData: ByteArray? = null,
-    ): ByteArray {
-        return HashManager.hashSha256(
+    ): ByteArray =
+        HashManager.hashSha256(
             passwordData,
             keyFileData,
-            hardwareKeyData
+            hardwareKeyData,
         )
-    }
 
     fun copyMasterKeyFrom(databaseVersioned: DatabaseKDBX) {
         super.copyMasterKeyFrom(databaseVersioned)
@@ -333,15 +358,15 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
             entryHandler.containsCustomData || groupHandler.containsCustomData
 
         // Check each condition to determine version
-        return if (containsGroupWithTag
-            || containsEntryWithPasswordQualityEstimationDisabled
-            || containsCustomIconWithNameOrLastModificationTime
-            || containsHeaderCustomDataWithLastModificationTime
+        return if (containsGroupWithTag ||
+            containsEntryWithPasswordQualityEstimationDisabled ||
+            containsCustomIconWithNameOrLastModificationTime ||
+            containsHeaderCustomDataWithLastModificationTime
         ) {
             FILE_VERSION_41
-        } else if (kdfIsNotAes
-            || containsHeaderCustomData
-            || containsNodeCustomData
+        } else if (kdfIsNotAes ||
+            containsHeaderCustomData ||
+            containsNodeCustomData
         ) {
             FILE_VERSION_40
         } else {
@@ -349,10 +374,11 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         }
     }
 
-    val availableCompressionAlgorithms: List<CompressionAlgorithm> = listOf(
-        CompressionAlgorithm.NONE,
-        CompressionAlgorithm.GZIP
-    )
+    val availableCompressionAlgorithms: List<CompressionAlgorithm> =
+        listOf(
+            CompressionAlgorithm.NONE,
+            CompressionAlgorithm.GZIP,
+        )
 
     fun changeBinaryCompression(
         oldCompression: CompressionAlgorithm,
@@ -413,14 +439,16 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         get() {
             val kdfEngine = kdfEngine
             var numKeyEncRounds: Long = 0
-            if (kdfEngine != null && kdfParameters != null)
+            if (kdfEngine != null && kdfParameters != null) {
                 numKeyEncRounds = kdfEngine.getKeyRounds(kdfParameters!!)
+            }
             return numKeyEncRounds
         }
         set(rounds) {
             val kdfEngine = kdfEngine
-            if (kdfEngine != null && kdfParameters != null)
+            if (kdfEngine != null && kdfParameters != null) {
                 kdfEngine.setKeyRounds(kdfParameters!!, rounds)
+            }
         }
 
     var memoryUsage: Long
@@ -428,12 +456,15 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
             val kdfEngine = kdfEngine
             return if (kdfEngine != null && kdfParameters != null) {
                 kdfEngine.getMemoryUsage(kdfParameters!!)
-            } else KdfEngine.UNKNOWN_VALUE
+            } else {
+                KdfEngine.UNKNOWN_VALUE
+            }
         }
         set(memory) {
             val kdfEngine = kdfEngine
-            if (kdfEngine != null && kdfParameters != null)
+            if (kdfEngine != null && kdfParameters != null) {
                 kdfEngine.setMemoryUsage(kdfParameters!!, memory)
+            }
         }
 
     var parallelism: Long
@@ -441,20 +472,24 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
             val kdfEngine = kdfEngine
             return if (kdfEngine != null && kdfParameters != null) {
                 kdfEngine.getParallelism(kdfParameters!!)
-            } else KdfEngine.UNKNOWN_VALUE
+            } else {
+                KdfEngine.UNKNOWN_VALUE
+            }
         }
         set(parallelism) {
             val kdfEngine = kdfEngine
-            if (kdfEngine != null && kdfParameters != null)
+            if (kdfEngine != null && kdfParameters != null) {
                 kdfEngine.setParallelism(kdfParameters!!, parallelism)
+            }
         }
 
     override val passwordEncoding: Charset
         get() = Charsets.UTF_8
 
     private fun getGroupByUUID(groupUUID: UUID): GroupKDBX? {
-        if (groupUUID == UUID_ZERO)
+        if (groupUUID == UUID_ZERO) {
             return null
+        }
         return getGroupById(NodeIdUUID(groupUUID))
     }
 
@@ -468,9 +503,7 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
     val lastTopVisibleGroup: GroupKDBX?
         get() = getGroupByUUID(lastTopVisibleGroupUUID)
 
-    override fun getStandardIcon(iconId: Int): IconImageStandard {
-        return this.iconsManager.getIcon(iconId)
-    }
+    override fun getStandardIcon(iconId: Int): IconImageStandard = this.iconsManager.getIcon(iconId)
 
     fun buildNewCustomIcon(
         customIconId: UUID? = null,
@@ -497,26 +530,25 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         iconsManager.removeCustomIcon(iconUuid, binaryCache)
     }
 
-    fun isCustomIconBinaryDuplicate(binary: BinaryData): Boolean {
-        return iconsManager.isCustomIconBinaryDuplicate(binary)
-    }
+    fun isCustomIconBinaryDuplicate(binary: BinaryData): Boolean = iconsManager.isCustomIconBinaryDuplicate(binary)
 
-    fun getCustomIcon(iconUuid: UUID): IconImageCustom? {
-        return this.iconsManager.getIcon(iconUuid)
-    }
+    fun getCustomIcon(iconUuid: UUID): IconImageCustom? = this.iconsManager.getIcon(iconUuid)
 
-    fun isTemplatesGroupEnabled(): Boolean {
-        return entryTemplatesGroup != UUID_ZERO
-    }
+    fun isTemplatesGroupEnabled(): Boolean = entryTemplatesGroup != UUID_ZERO
 
-    fun enableTemplatesGroup(enable: Boolean, templatesGroupName: String) {
+    fun enableTemplatesGroup(
+        enable: Boolean,
+        templatesGroupName: String,
+    ) {
         // Create templates group only if a group with a valid name don't already exists
-        val firstGroupWithValidName = getGroupIndexes().firstOrNull {
-            it.title == templatesGroupName
-        }
+        val firstGroupWithValidName =
+            getGroupIndexes().firstOrNull {
+                it.title == templatesGroupName
+            }
         if (enable) {
-            val templatesGroup = firstGroupWithValidName
-                ?: mTemplateEngine.createNewTemplatesGroup(templatesGroupName)
+            val templatesGroup =
+                firstGroupWithValidName
+                    ?: mTemplateEngine.createNewTemplatesGroup(templatesGroupName)
             entryTemplatesGroup = templatesGroup.id
         } else {
             removeTemplatesGroup()
@@ -535,101 +567,104 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         return null
     }
 
-    fun getTemplates(templateCreation: Boolean): List<Template> {
-        return if (templateCreation)
+    fun getTemplates(templateCreation: Boolean): List<Template> =
+        if (templateCreation) {
             listOf(mTemplateEngine.getTemplateCreation())
-        else
+        } else {
             mTemplateEngine.getTemplates()
-    }
+        }
 
-    fun getTemplate(entry: EntryKDBX): Template? {
-        return mTemplateEngine.getTemplate(entry)
-    }
+    fun getTemplate(entry: EntryKDBX): Template? = mTemplateEngine.getTemplate(entry)
 
     fun decodeEntryWithTemplateConfiguration(
         entryKDBX: EntryKDBX,
         entryIsTemplate: Boolean,
-    ): EntryKDBX {
-        return if (entryIsTemplate) {
+    ): EntryKDBX =
+        if (entryIsTemplate) {
             mTemplateEngine.decodeTemplateEntry(entryKDBX)
         } else {
             mTemplateEngine.removeMetaTemplateRecognitionFromEntry(entryKDBX)
         }
-    }
 
     fun encodeEntryWithTemplateConfiguration(
         entryKDBX: EntryKDBX,
         entryIsTemplate: Boolean,
         template: Template,
-    ): EntryKDBX {
-        return if (entryIsTemplate) {
+    ): EntryKDBX =
+        if (entryIsTemplate) {
             mTemplateEngine.encodeTemplateEntry(entryKDBX)
         } else {
             mTemplateEngine.addMetaTemplateRecognitionToEntry(template, entryKDBX)
         }
-    }
 
     /*
      * Search methods
      */
 
-    fun getGroupById(id: UUID): GroupKDBX? {
-        return this.getGroupById(NodeIdUUID(id))
-    }
+    fun getGroupById(id: UUID): GroupKDBX? = this.getGroupById(NodeIdUUID(id))
 
-    fun getEntryById(id: UUID): EntryKDBX? {
-        return this.getEntryById(NodeIdUUID(id))
-    }
+    fun getEntryById(id: UUID): EntryKDBX? = this.getEntryById(NodeIdUUID(id))
 
-    fun getEntryByTitle(title: String, recursionLevel: Int): EntryKDBX? {
-        return findEntry { entry ->
+    fun getEntryByTitle(
+        title: String,
+        recursionLevel: Int,
+    ): EntryKDBX? =
+        findEntry { entry ->
             entry.decodeTitleKey(recursionLevel).equals(title, true)
         }
-    }
 
-    fun getEntryByUsername(username: String, recursionLevel: Int): EntryKDBX? {
-        return findEntry { entry ->
+    fun getEntryByUsername(
+        username: String,
+        recursionLevel: Int,
+    ): EntryKDBX? =
+        findEntry { entry ->
             entry.decodeUsernameKey(recursionLevel).equals(username, true)
         }
-    }
 
-    fun getEntryByURL(url: String, recursionLevel: Int): EntryKDBX? {
-        return findEntry { entry ->
+    fun getEntryByURL(
+        url: String,
+        recursionLevel: Int,
+    ): EntryKDBX? =
+        findEntry { entry ->
             entry.decodeUrlKey(recursionLevel).equals(url, true)
         }
-    }
 
-    fun getEntryByPassword(password: String, recursionLevel: Int): EntryKDBX? {
-        return findEntry { entry ->
+    fun getEntryByPassword(
+        password: String,
+        recursionLevel: Int,
+    ): EntryKDBX? =
+        findEntry { entry ->
             entry.decodePasswordKey(recursionLevel).equals(password, true)
         }
-    }
 
-    fun getEntryByNotes(notes: String, recursionLevel: Int): EntryKDBX? {
-        return findEntry { entry ->
+    fun getEntryByNotes(
+        notes: String,
+        recursionLevel: Int,
+    ): EntryKDBX? =
+        findEntry { entry ->
             entry.decodeNotesKey(recursionLevel).equals(notes, true)
         }
-    }
 
-    fun getEntryByCustomData(customDataValue: String): EntryKDBX? {
-        return findEntry { entry ->
+    fun getEntryByCustomData(customDataValue: String): EntryKDBX? =
+        findEntry { entry ->
             entry.customData.containsItemWithValue(customDataValue)
         }
-    }
 
     /**
      * Retrieve the value of a field reference
      */
-    fun getFieldReferenceValue(entry: EntryKDBX, textReference: String, recursionLevel: Int): String {
-        return mFieldReferenceEngine.compile(entry, textReference, recursionLevel)
-    }
+    fun getFieldReferenceValue(
+        entry: EntryKDBX,
+        textReference: String,
+        recursionLevel: Int,
+    ): String = mFieldReferenceEngine.compile(entry, textReference, recursionLevel)
 
     @Throws(IOException::class)
     fun makeFinalKey(masterSeed: ByteArray) {
-
         kdfParameters?.let { keyDerivationFunctionParameters ->
-            val kdfEngine = getKdfEngineFromParameters(keyDerivationFunctionParameters)
-                ?: throw IOException("Unknown key derivation function")
+            val kdfEngine =
+                getKdfEngineFromParameters(keyDerivationFunctionParameters)
+                    ?: throw IOException("Unknown key derivation function")
 
             var transformedMasterKey =
                 kdfEngine.transform(masterKey, keyDerivationFunctionParameters)
@@ -655,7 +690,10 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         }
     }
 
-    private fun resizeKey(inBytes: ByteArray, cbOut: Int): ByteArray {
+    private fun resizeKey(
+        inBytes: ByteArray,
+        cbOut: Int,
+    ): ByteArray {
         if (cbOut == 0) return ByteArray(0)
 
         val messageDigest = if (cbOut <= 32) HashManager.getHash256() else HashManager.getHash512()
@@ -714,36 +752,31 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         return newId
     }
 
-    override fun createGroup(): GroupKDBX {
-        return GroupKDBX()
-    }
+    override fun createGroup(): GroupKDBX = GroupKDBX()
 
-    override fun createEntry(): EntryKDBX {
-        return EntryKDBX()
-    }
+    override fun createEntry(): EntryKDBX = EntryKDBX()
 
-    override fun rootCanContainsEntry(): Boolean {
-        return true
-    }
+    override fun rootCanContainsEntry(): Boolean = true
 
     override fun isInRecycleBin(group: GroupKDBX): Boolean {
         // To keep compatibility with old V1 databases
         var currentGroup: GroupKDBX? = group
         while (currentGroup != null) {
-            if (currentGroup.parent == rootGroup
-                && currentGroup.title.equals(BACKUP_FOLDER_TITLE, ignoreCase = true)
+            if (currentGroup.parent == rootGroup &&
+                currentGroup.title.equals(BACKUP_FOLDER_TITLE, ignoreCase = true)
             ) {
                 return true
             }
             currentGroup = currentGroup.parent
         }
 
-        return if (recycleBin == null)
+        return if (recycleBin == null) {
             false
-        else if (!isRecycleBinEnabled)
+        } else if (!isRecycleBinEnabled) {
             false
-        else
+        } else {
             group.isContainedIn(recycleBin!!)
+        }
     }
 
     /**
@@ -753,22 +786,25 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
     fun ensureRecycleBinExists(recyclerBinTitle: String) {
         if (recycleBin == null) {
             // Create recycle bin only if a group with a valid name don't already exists
-            val firstGroupWithValidName = getGroupIndexes().firstOrNull {
-                it.title == recyclerBinTitle
-            }
-            val recycleBinGroup = if (firstGroupWithValidName == null) {
-                val newRecycleBinGroup = createGroup().apply {
-                    title = recyclerBinTitle
-                    icon.standard = getStandardIcon(IconImageStandard.TRASH_ID)
-                    enableAutoType = false
-                    enableSearching = false
-                    isExpanded = false
+            val firstGroupWithValidName =
+                getGroupIndexes().firstOrNull {
+                    it.title == recyclerBinTitle
                 }
-                addGroupTo(newRecycleBinGroup, rootGroup)
-                newRecycleBinGroup
-            } else {
-                firstGroupWithValidName
-            }
+            val recycleBinGroup =
+                if (firstGroupWithValidName == null) {
+                    val newRecycleBinGroup =
+                        createGroup().apply {
+                            title = recyclerBinTitle
+                            icon.standard = getStandardIcon(IconImageStandard.TRASH_ID)
+                            enableAutoType = false
+                            enableSearching = false
+                            isExpanded = false
+                        }
+                    addGroupTo(newRecycleBinGroup, rootGroup)
+                    newRecycleBinGroup
+                } else {
+                    firstGroupWithValidName
+                }
             recycleBinUUID = recycleBinGroup.id
             recycleBinChanged = DateInstant()
         }
@@ -786,22 +822,24 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
      * @return true if node can be recycle, false elsewhere
      */
     fun canRecycle(node: NodeVersioned<*, GroupKDBX, EntryKDBX>): Boolean {
-        if (!isRecycleBinEnabled)
+        if (!isRecycleBinEnabled) {
             return false
-        if (recycleBin == null)
+        }
+        if (recycleBin == null) {
             return false
-        if (node is GroupKDBX
-            && recycleBin!!.isContainedIn(node)
-        )
+        }
+        if (node is GroupKDBX &&
+            recycleBin!!.isContainedIn(node)
+        ) {
             return false
-        if (!node.isContainedIn(recycleBin!!))
+        }
+        if (!node.isContainedIn(recycleBin!!)) {
             return true
+        }
         return false
     }
 
-    fun getDeletedObject(nodeId: NodeId<UUID>): DeletedObject? {
-        return deletedObjects.find { it.uuid == nodeId.id }
-    }
+    fun getDeletedObject(nodeId: NodeId<UUID>): DeletedObject? = deletedObjects.find { it.uuid == nodeId.id }
 
     fun addDeletedObject(deletedObject: DeletedObject) {
         this.deletedObjects.add(deletedObject)
@@ -811,7 +849,10 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         addDeletedObject(DeletedObject(objectId))
     }
 
-    override fun addEntryTo(newEntry: EntryKDBX, parent: GroupKDBX?) {
+    override fun addEntryTo(
+        newEntry: EntryKDBX,
+        parent: GroupKDBX?,
+    ) {
         super.addEntryTo(newEntry, parent)
         tagPool.put(newEntry.tags)
         mFieldReferenceEngine.clear()
@@ -823,7 +864,10 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         mFieldReferenceEngine.clear()
     }
 
-    override fun removeEntryFrom(entryToRemove: EntryKDBX, parent: GroupKDBX?) {
+    override fun removeEntryFrom(
+        entryToRemove: EntryKDBX,
+        parent: GroupKDBX?,
+    ) {
         super.removeEntryFrom(entryToRemove, parent)
         // Do not remove tags from pool, it's only in temp memory
         mFieldReferenceEngine.clear()
@@ -834,13 +878,16 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         compression: Boolean,
         protection: Boolean,
         binaryPoolId: Int? = null,
-    ): BinaryData {
-        return attachmentPool.put(binaryPoolId) { uniqueBinaryId ->
-            binaryCache.getBinaryData(uniqueBinaryId, smallSize, compression, protection)
-        }.binary
-    }
+    ): BinaryData =
+        attachmentPool
+            .put(binaryPoolId) { uniqueBinaryId ->
+                binaryCache.getBinaryData(uniqueBinaryId, smallSize, compression, protection)
+            }.binary
 
-    fun removeUnlinkedAttachment(binary: BinaryData, clear: Boolean) {
+    fun removeUnlinkedAttachment(
+        binary: BinaryData,
+        clear: Boolean,
+    ) {
         val listBinaries = ArrayList<BinaryData>()
         listBinaries.add(binary)
         removeUnlinkedAttachments(listBinaries, clear)
@@ -850,7 +897,10 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
         removeUnlinkedAttachments(emptyList(), clear)
     }
 
-    private fun removeUnlinkedAttachments(binaries: List<BinaryData>, clear: Boolean) {
+    private fun removeUnlinkedAttachments(
+        binaries: List<BinaryData>,
+        clear: Boolean,
+    ) {
         // TODO check in icon pool
         // Build binaries to remove with all binaries known
         val binariesToRemove = ArrayList<BinaryData>()
@@ -862,29 +912,37 @@ class DatabaseKDBX : DatabaseVersioned<UUID, UUID, GroupKDBX, EntryKDBX> {
             binariesToRemove.addAll(binaries)
         }
         // Remove binaries from the list
-        rootGroup?.doForEachChild(object : NodeHandler<EntryKDBX>() {
-            override fun operate(node: EntryKDBX): Boolean {
-                node.getAttachments(attachmentPool, true).forEach {
-                    binariesToRemove.remove(it.binaryData)
+        rootGroup?.doForEachChild(
+            object : NodeHandler<EntryKDBX>() {
+                override fun operate(node: EntryKDBX): Boolean {
+                    node.getAttachments(attachmentPool, true).forEach {
+                        binariesToRemove.remove(it.binaryData)
+                    }
+                    return binariesToRemove.isNotEmpty()
                 }
-                return binariesToRemove.isNotEmpty()
-            }
-        }, null)
+            },
+            null,
+        )
         // Effective removing
         binariesToRemove.forEach {
             try {
                 attachmentPool.remove(it)
-                if (clear)
+                if (clear) {
                     it.clear(binaryCache)
+                }
             } catch (e: Exception) {
                 Log.w(TAG, "Unable to clean binaries", e)
             }
         }
     }
 
-    override fun isValidCredential(password: String?, containsKeyFile: Boolean): Boolean {
-        if (password == null)
+    override fun isValidCredential(
+        password: String?,
+        containsKeyFile: Boolean,
+    ): Boolean {
+        if (password == null) {
             return true
+        }
         return super.isValidCredential(password, containsKeyFile)
     }
 

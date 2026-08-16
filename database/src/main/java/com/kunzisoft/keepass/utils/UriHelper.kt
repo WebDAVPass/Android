@@ -34,24 +34,19 @@ import java.net.MalformedURLException
 import java.net.URL
 import java.util.*
 
-fun String.parseUri(): Uri? {
-    return if (this.isNotEmpty()) Uri.parse(this) else null
-}
+fun String.parseUri(): Uri? = if (this.isNotEmpty()) Uri.parse(this) else null
 
-fun String.decodeUri(): String {
-    return Uri.decode(this) ?: ""
-}
+fun String.decodeUri(): String = Uri.decode(this) ?: ""
 
-fun Context.getBinaryDir(): File {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+fun Context.getBinaryDir(): File =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
         this.applicationContext.noBackupFilesDir
     } else {
         this.applicationContext.filesDir
     }
-}
 
-fun String.buildURLFromDomain(): URL? {
-    return try {
+fun String.buildURLFromDomain(): URL? =
+    try {
         URL(this)
     } catch (e: MalformedURLException) {
         try {
@@ -60,42 +55,56 @@ fun String.buildURLFromDomain(): URL? {
             null
         }
     }
-}
 
-fun URL.inTheSameDomainAs(url: URL?, sameSubDomain: Boolean = false): Boolean {
+fun URL.inTheSameDomainAs(
+    url: URL?,
+    sameSubDomain: Boolean = false,
+): Boolean {
     val hostA = this.host
     val hostB = url?.host
-    if (hostA == null)
+    if (hostA == null) {
         return false
-    if (hostB == null)
+    }
+    if (hostB == null) {
         return false
+    }
     // Each domains are equals (ie: domain.org)
-    if (hostA.equals(hostB, ignoreCase = true))
+    if (hostA.equals(hostB, ignoreCase = true)) {
         return true
+    }
     // If we need exactly the same subdomain, it's not a match
-    if (sameSubDomain)
+    if (sameSubDomain) {
         return false
+    }
     // If contains subdomains (ie: subdomain.domain.org)
-    if (hostB.endsWith(".$hostA", ignoreCase = true))
+    if (hostB.endsWith(".$hostA", ignoreCase = true)) {
         return true
-    if (hostA.endsWith(".$hostB", ignoreCase = true))
+    }
+    if (hostA.endsWith(".$hostB", ignoreCase = true)) {
         return true
+    }
     return false
 }
 
-fun String.inTheSameDomainAs(value: String?, sameSubDomain: Boolean = false): Boolean {
+fun String.inTheSameDomainAs(
+    value: String?,
+    sameSubDomain: Boolean = false,
+): Boolean {
     // Don't need to construct URL object if strings are equals
-    if (this.equals(value, true))
+    if (this.equals(value, true)) {
         return true
+    }
     // Checks the real domains
-    return this.buildURLFromDomain()
+    return this
+        .buildURLFromDomain()
         ?.inTheSameDomainAs(value?.buildURLFromDomain(), sameSubDomain) == true
 }
 
 @Throws(FileNotFoundException::class)
 fun ContentResolver.getUriInputStream(fileUri: Uri?): InputStream? {
-    if (fileUri == null)
+    if (fileUri == null) {
         return null
+    }
     return when {
         fileUri.withFileScheme() -> fileUri.path?.let { FileInputStream(it) }
         fileUri.withContentScheme() -> this.openInputStream(fileUri)
@@ -106,8 +115,9 @@ fun ContentResolver.getUriInputStream(fileUri: Uri?): InputStream? {
 @SuppressLint("Recycle")
 @Throws(FileNotFoundException::class)
 fun ContentResolver.getUriOutputStream(fileUri: Uri?): OutputStream? {
-    if (fileUri == null)
+    if (fileUri == null) {
         return null
+    }
     return when {
         fileUri.withFileScheme() -> fileUri.path?.let { FileOutputStream(it) }
         fileUri.withContentScheme() -> {
@@ -135,20 +145,28 @@ fun Uri.withContentScheme(): Boolean {
     val scheme = this.scheme
     return scheme != null && scheme.lowercase(Locale.ENGLISH) == "content"
 }
-fun PackageManager.getPackageInfoCompat(packageName: String, flags: Int = 0): PackageInfo =
+
+fun PackageManager.getPackageInfoCompat(
+    packageName: String,
+    flags: Int = 0,
+): PackageInfo =
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         getPackageInfo(packageName, PackageManager.PackageInfoFlags.of(flags.toLong()))
     } else {
-        @Suppress("DEPRECATION") getPackageInfo(packageName, flags)
+        @Suppress("DEPRECATION")
+        getPackageInfo(packageName, flags)
     }
 
 @SuppressLint("QueryPermissionsNeeded")
-private fun PackageManager.queryIntentActivitiesCompat(intent: Intent, flags: Int): List<ResolveInfo> {
-    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+private fun PackageManager.queryIntentActivitiesCompat(
+    intent: Intent,
+    flags: Int,
+): List<ResolveInfo> =
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         queryIntentActivities(intent, PackageManager.ResolveInfoFlags.of(flags.toLong()))
     } else {
-        @Suppress("DEPRECATION") queryIntentActivities(intent, PackageManager.GET_META_DATA)
+        @Suppress("DEPRECATION")
+        queryIntentActivities(intent, PackageManager.GET_META_DATA)
     }
-}
 
 private const val TAG = "UriHelper"

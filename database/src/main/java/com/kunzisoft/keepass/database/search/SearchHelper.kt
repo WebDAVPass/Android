@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -36,14 +36,14 @@ import com.kunzisoft.keepass.utils.UUIDUtils.asHexString
 import com.kunzisoft.keepass.utils.inTheSameDomainAs
 
 class SearchHelper {
-
     private var incrementEntry = 0
 
-    fun createVirtualGroupWithSearchResult(database: Database,
-                                           searchParameters: SearchParameters,
-                                           fromGroup: NodeId<*>? = null,
-                                           max: Int): Group? {
-
+    fun createVirtualGroupWithSearchResult(
+        database: Database,
+        searchParameters: SearchParameters,
+        fromGroup: NodeId<*>? = null,
+        max: Int,
+    ): Group? {
         val searchGroup = database.createGroup(virtual = true)
         searchGroup?.title = "\"" + searchParameters.searchQuery + "\""
 
@@ -51,19 +51,22 @@ class SearchHelper {
         incrementEntry = 0
 
         val allowCustomSearchable = database.allowCustomSearchableGroup()
-        val startGroup = if (searchParameters.searchInCurrentGroup && fromGroup != null) {
-            database.getGroupById(fromGroup) ?: database.rootGroup
-        } else {
-            database.rootGroup
-        }
+        val startGroup =
+            if (searchParameters.searchInCurrentGroup && fromGroup != null) {
+                database.getGroupById(fromGroup) ?: database.rootGroup
+            } else {
+                database.rootGroup
+            }
         if (groupConditions(database, startGroup, searchParameters, allowCustomSearchable, max)) {
             startGroup?.doForEachChild(
                 object : NodeHandler<Entry>() {
                     override fun operate(node: Entry): Boolean {
-                        if (incrementEntry >= max)
+                        if (incrementEntry >= max) {
                             return false
-                        if (database.entryIsTemplate(node) && !searchParameters.searchInTemplates)
+                        }
+                        if (database.entryIsTemplate(node) && !searchParameters.searchInTemplates) {
                             return false
+                        }
                         if (entryContainsString(database, node, searchParameters)) {
                             searchGroup?.addChildEntry(node)
                             incrementEntry++
@@ -73,16 +76,16 @@ class SearchHelper {
                     }
                 },
                 object : NodeHandler<Group>() {
-                    override fun operate(node: Group): Boolean {
-                        return groupConditions(database,
+                    override fun operate(node: Group): Boolean =
+                        groupConditions(
+                            database,
                             node,
                             searchParameters,
                             allowCustomSearchable,
-                            max
+                            max,
                         )
-                    }
                 },
-                false
+                false,
             )
         }
 
@@ -90,30 +93,34 @@ class SearchHelper {
         return searchGroup
     }
 
-    private fun groupConditions(database: Database,
-                                group: Group?,
-                                searchParameters: SearchParameters,
-                                allowCustomSearchable: Boolean,
-                                max: Int): Boolean {
-        return if (group == null)
+    private fun groupConditions(
+        database: Database,
+        group: Group?,
+        searchParameters: SearchParameters,
+        allowCustomSearchable: Boolean,
+        max: Int,
+    ): Boolean =
+        if (group == null) {
             false
-        else if (incrementEntry >= max)
+        } else if (incrementEntry >= max) {
             false
-        else if (database.groupIsInRecycleBin(group))
+        } else if (database.groupIsInRecycleBin(group)) {
             searchParameters.searchInRecycleBin
-        else if (database.groupIsInTemplates(group))
+        } else if (database.groupIsInTemplates(group)) {
             searchParameters.searchInTemplates
-        else if (!allowCustomSearchable)
+        } else if (!allowCustomSearchable) {
             true
-        else if (searchParameters.searchInSearchableGroup)
+        } else if (searchParameters.searchInSearchableGroup) {
             group.isSearchable()
-        else
+        } else {
             true
-    }
+        }
 
-    private fun entryContainsString(database: Database,
-                                    entry: Entry,
-                                    searchParameters: SearchParameters): Boolean {
+    private fun entryContainsString(
+        database: Database,
+        entry: Entry,
+        searchParameters: SearchParameters,
+    ): Boolean {
         // To search in field references
         database.startManageEntry(entry)
         // Search all strings in the entry
@@ -124,114 +131,134 @@ class SearchHelper {
     }
 
     companion object {
-
         /**
          * Return true if the search query in search parameters is found in available parameters
          */
         fun searchInEntry(
             entry: Entry,
-            searchParameters: SearchParameters
+            searchParameters: SearchParameters,
         ): Boolean {
             // Not found if the search string is empty
-            if (searchParameters.searchQuery.isEmpty())
+            if (searchParameters.searchQuery.isEmpty()) {
                 return searchParameters.allowEmptyQuery
+            }
 
             // Exclude entry expired
             if (!searchParameters.searchInExpired) {
-                if (entry.isCurrentlyExpires)
+                if (entry.isCurrentlyExpires) {
                     return false
+                }
             }
 
             // Search all strings in the KDBX entry
             if (searchParameters.searchInTitles) {
-                if (checkSearchQuery(entry.title, searchParameters))
+                if (checkSearchQuery(entry.title, searchParameters)) {
                     return true
+                }
             }
             if (searchParameters.searchInUsernames) {
-                if (checkSearchQuery(entry.username, searchParameters))
+                if (checkSearchQuery(entry.username, searchParameters)) {
                     return true
+                }
             }
             if (searchParameters.searchInPasswords) {
-                if (checkSearchQuery(entry.password, searchParameters))
+                if (checkSearchQuery(entry.password, searchParameters)) {
                     return true
+                }
             }
             if (searchParameters.searchInAppIds) {
                 if (entry.getExtraFields().any { field ->
-                        field.isAppId()
-                        && checkSearchQuery(field.protectedValue.stringValue, searchParameters)
-                    })
+                        field.isAppId() &&
+                            checkSearchQuery(field.protectedValue.stringValue, searchParameters)
+                    }
+                ) {
                     return true
+                }
             }
             if (searchParameters.searchInUrls) {
                 if (checkSearchQuery(entry.url, searchParameters) { stringToCheck, word ->
-                    specialWebDomainComparison(searchParameters, stringToCheck, word)
-                }) {
+                        specialWebDomainComparison(searchParameters, stringToCheck, word)
+                    }
+                ) {
                     return true
                 } else if (entry.getExtraFields().any { field ->
-                        field.isWebDomain()
-                        && checkSearchQuery(field.protectedValue.stringValue, searchParameters) { stringToCheck, word ->
-                            specialWebDomainComparison(searchParameters, stringToCheck, word)
-                        }
-                    }) {
+                        field.isWebDomain() &&
+                            checkSearchQuery(field.protectedValue.stringValue, searchParameters) { stringToCheck, word ->
+                                specialWebDomainComparison(searchParameters, stringToCheck, word)
+                            }
+                    }
+                ) {
                     return true
                 }
             }
             if (searchParameters.searchInRelyingParty) {
                 val relyingParty = searchParameters.searchQuery
                 val credentialIds = searchParameters.searchOptions
-                val containsRelyingParty = entry.getExtraFields().any { field ->
-                        field.isRelyingParty()
-                                && field.protectedValue.stringValue
-                                    .equals(relyingParty, ignoreCase = true)
+                val containsRelyingParty =
+                    entry.getExtraFields().any { field ->
+                        field.isRelyingParty() &&
+                            field.protectedValue.stringValue
+                                .equals(relyingParty, ignoreCase = true)
                     }
                 // Check empty to allow any credential if not defined
                 val containsCredentialId =
-                    if (credentialIds.isEmpty())
+                    if (credentialIds.isEmpty()) {
                         true
-                    else entry.getExtraFields().any { field ->
-                        field.isCredentialId() && credentialIds.any { credentialId ->
-                           checkSearchQuery(
-                               stringToCheck =  field.protectedValue.stringValue,
-                               searchParameters = SearchParameters().apply {
-                                   searchQuery = credentialId
-                                   caseSensitive = false
-                                   isRegex = false
-                               }
-                           )
+                    } else {
+                        entry.getExtraFields().any { field ->
+                            field.isCredentialId() &&
+                                credentialIds.any { credentialId ->
+                                    checkSearchQuery(
+                                        stringToCheck = field.protectedValue.stringValue,
+                                        searchParameters =
+                                            SearchParameters().apply {
+                                                searchQuery = credentialId
+                                                caseSensitive = false
+                                                isRegex = false
+                                            },
+                                    )
+                                }
                         }
                     }
                 return containsRelyingParty && containsCredentialId
             }
             if (searchParameters.searchInNotes) {
-                if (checkSearchQuery(entry.notes, searchParameters))
+                if (checkSearchQuery(entry.notes, searchParameters)) {
                     return true
+                }
             }
             if (searchParameters.searchInUUIDs) {
                 val hexString = entry.nodeId.id.asHexString() ?: ""
-                if (checkSearchQuery(hexString, searchParameters))
+                if (checkSearchQuery(hexString, searchParameters)) {
                     return true
+                }
             }
             if (searchParameters.searchInOTP) {
                 if (entry.getExtraFields().any { field ->
-                    field.isOTPURIField()
-                    && checkSearchQuery(field.protectedValue.stringValue, searchParameters)
-                })
+                        field.isOTPURIField() &&
+                            checkSearchQuery(field.protectedValue.stringValue, searchParameters)
+                    }
+                ) {
                     return true
+                }
             }
             if (searchParameters.searchInOther) {
                 if (entry.getExtraFields().any { field ->
-                    !field.isAppId()
-                    && !field.isAppIdSignature()
-                    && !field.isWebDomain()
-                    && !field.isOTP()
-                    && !field.isPasskey()
-                    && checkSearchQuery(field.protectedValue.toString(), searchParameters)
-                })
+                        !field.isAppId() &&
+                            !field.isAppIdSignature() &&
+                            !field.isWebDomain() &&
+                            !field.isOTP() &&
+                            !field.isPasskey() &&
+                            checkSearchQuery(field.protectedValue.toString(), searchParameters)
+                    }
+                ) {
                     return true
+                }
             }
             if (searchParameters.searchInTags) {
-                if (checkSearchQuery(entry.tags.toString(), searchParameters))
+                if (checkSearchQuery(entry.tags.toString(), searchParameters)) {
                     return true
+                }
             }
             return false
         }
@@ -239,38 +266,42 @@ class SearchHelper {
         private fun specialWebDomainComparison(
             searchParameters: SearchParameters,
             stringToCheck: String,
-            word: String
-        ): Boolean? {
-            return if (searchParameters.searchByDomain) {
+            word: String,
+        ): Boolean? =
+            if (searchParameters.searchByDomain) {
                 try {
                     stringToCheck.inTheSameDomainAs(
                         value = word,
-                        sameSubDomain = searchParameters.searchBySubDomain
+                        sameSubDomain = searchParameters.searchBySubDomain,
                     )
                 } catch (_: Exception) {
                     false
                 }
-            } else null
-        }
+            } else {
+                null
+            }
 
         private fun checkSearchQuery(
             stringToCheck: String,
             searchParameters: SearchParameters,
-            specialComparison: ((check: String, word: String) -> Boolean?)? = null): Boolean {
+            specialComparison: ((check: String, word: String) -> Boolean?)? = null,
+        ): Boolean {
             /*
             // TODO Search settings
             var removeAccents = true <- Too much time, to study
-            */
-            if (stringToCheck.isEmpty())
+             */
+            if (stringToCheck.isEmpty()) {
                 return false
+            }
             return if (searchParameters.isRegex) {
-                val regex = if (searchParameters.caseSensitive) {
-                    searchParameters.searchQuery
-                        .toRegex(RegexOption.DOT_MATCHES_ALL)
-                } else {
-                    searchParameters.searchQuery
-                        .toRegex(setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
-                }
+                val regex =
+                    if (searchParameters.caseSensitive) {
+                        searchParameters.searchQuery
+                            .toRegex(RegexOption.DOT_MATCHES_ALL)
+                    } else {
+                        searchParameters.searchQuery
+                            .toRegex(setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
+                    }
                 regex.matches(stringToCheck)
             } else {
                 specialComparison?.invoke(stringToCheck, searchParameters.searchQuery)
@@ -278,11 +309,11 @@ class SearchHelper {
                         // Search with space separator #175
                         var searchFound = true
                         searchParameters.searchQuery.split(" ").forEach { word ->
-                            searchFound = searchFound
-                                    && stringToCheck.contains(
-                                word,
-                                !searchParameters.caseSensitive
-                                    )
+                            searchFound = searchFound &&
+                                stringToCheck.contains(
+                                    word,
+                                    !searchParameters.caseSensitive,
+                                )
                         }
                         searchFound
                     }

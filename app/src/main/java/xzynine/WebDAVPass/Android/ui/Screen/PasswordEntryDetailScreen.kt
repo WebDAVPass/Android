@@ -1,6 +1,5 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
-import androidx.documentfile.provider.DocumentFile
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
@@ -16,6 +15,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.documentfile.provider.DocumentFile
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -27,7 +28,6 @@ import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Ok
-import kotlinx.coroutines.launch
 import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
@@ -46,7 +46,7 @@ fun PasswordEntryDetailScreen(
     entryId: Long,
     onNavigateBack: () -> Unit,
     onDeleted: () -> Unit = {},
-    isEmbedded: Boolean = false
+    isEmbedded: Boolean = false,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -81,12 +81,14 @@ fun PasswordEntryDetailScreen(
 
     fun syncEditFields(entry: PasswordEntry) {
         val usernameField = entry.keyValues.firstOrNull { it.fieldName.equals("UserName", ignoreCase = true) }
-        val passwordField = entry.keyValues.firstOrNull {
-            it.fieldName.equals("Password", ignoreCase = true) || it.valueType == RemainingValueType.PASSWORD
-        }
-        val urlField = entry.keyValues.firstOrNull {
-            it.fieldName.equals("URL", ignoreCase = true) || it.valueType == RemainingValueType.URL
-        }
+        val passwordField =
+            entry.keyValues.firstOrNull {
+                it.fieldName.equals("Password", ignoreCase = true) || it.valueType == RemainingValueType.PASSWORD
+            }
+        val urlField =
+            entry.keyValues.firstOrNull {
+                it.fieldName.equals("URL", ignoreCase = true) || it.valueType == RemainingValueType.URL
+            }
         val notesField = entry.keyValues.firstOrNull { it.fieldName.equals("Notes", ignoreCase = true) }
 
         editTitle = entry.title
@@ -97,18 +99,19 @@ fun PasswordEntryDetailScreen(
         editAttachments = entry.attachments.map { EditableAttachmentDraft(name = it.name) }
         // 仅排除真正的标准字段（isStandard），保留同名但属于额外字段（extra）的合法字段，
         // 避免从其他工具迁移来的、命名为 Password 等的 extra 在保存时被静默删除。
-        editCustomFields = entry.keyValues
-            .filter { !it.isStandard }
-            .map {
-                EditableFieldDraft(
-                    name = it.fieldName,
-                    originalName = it.fieldName,
-                    value = it.rawValue,
-                    isProtected = it.isProtected,
-                    valueType = it.valueType,
-                    isStandard = it.isStandard
-                )
-            }
+        editCustomFields =
+            entry.keyValues
+                .filter { !it.isStandard }
+                .map {
+                    EditableFieldDraft(
+                        name = it.fieldName,
+                        originalName = it.fieldName,
+                        value = it.rawValue,
+                        isProtected = it.isProtected,
+                        valueType = it.valueType,
+                        isStandard = it.isStandard,
+                    )
+                }
         editExpiryTime = entry.expiryTime
         editIconStandardId = entry.standardIconId
         editCustomIconUuid = entry.customIconUuid
@@ -129,7 +132,10 @@ fun PasswordEntryDetailScreen(
     // 注意不可在 onStop 清理：打开系统查看器时 Activity 会 onStop，清理会破坏正在查看的文件。
     DisposableEffect(Unit) {
         onDispose {
-            java.io.File(context.cacheDir, "attachments").listFiles()?.forEach { it.delete() }
+            java.io
+                .File(context.cacheDir, "attachments")
+                .listFiles()
+                ?.forEach { it.delete() }
         }
     }
 
@@ -140,65 +146,69 @@ fun PasswordEntryDetailScreen(
     var isPasswordVisible by rememberSaveable(entryId) { mutableStateOf(false) }
 
     // 附件导入：选择文件后增量读取字节加入编辑态附件列表（带硬性大小上限，避免 OOM）
-    val attachmentPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        // 先用声明大小预检（content provider 可能返回 -1，故仅作软提示，真正上限在增量读取处强制）
-        val declaredSize = DocumentFile.fromSingleUri(context, uri)?.length() ?: -1L
-        if (declaredSize > KdbxTokenRepository.MAX_ATTACHMENT_BYTES) {
-            ToastUtils.showShortToast(context, "附件过大（上限 ${KdbxTokenRepository.MAX_ATTACHMENT_BYTES / 1024 / 1024} MiB），已取消")
-            return@rememberLauncherForActivityResult
-        }
-        runCatching {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                // 增量读取并强制上限：超过则抛异常，拒绝进入内存
-                val buffer = java.io.ByteArrayOutputStream(8 * 1024)
-                val chunk = ByteArray(8 * 1024)
-                var total = 0
-                while (true) {
-                    val read = input.read(chunk)
-                    if (read < 0) break
-                    total += read
-                    if (total > KdbxTokenRepository.MAX_ATTACHMENT_BYTES) {
-                        throw IllegalStateException("附件过大")
-                    }
-                    buffer.write(chunk, 0, read)
-                }
-                val bytes = buffer.toByteArray()
-                val name = uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-                    ?: "attachment_${System.currentTimeMillis()}"
-                editAttachments = editAttachments + EditableAttachmentDraft(
-                    name = name,
-                    data = bytes,
-                    isNew = true
-                )
+    val attachmentPicker =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.GetContent(),
+        ) { uri ->
+            uri ?: return@rememberLauncherForActivityResult
+            // 先用声明大小预检（content provider 可能返回 -1，故仅作软提示，真正上限在增量读取处强制）
+            val declaredSize = DocumentFile.fromSingleUri(context, uri)?.length() ?: -1L
+            if (declaredSize > KdbxTokenRepository.MAX_ATTACHMENT_BYTES) {
+                ToastUtils.showShortToast(context, "附件过大（上限 ${KdbxTokenRepository.MAX_ATTACHMENT_BYTES / 1024 / 1024} MiB），已取消")
+                return@rememberLauncherForActivityResult
             }
-        }.onFailure {
-            ToastUtils.showShortToast(context, "附件过大或读取失败，已取消")
+            runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    // 增量读取并强制上限：超过则抛异常，拒绝进入内存
+                    val buffer = java.io.ByteArrayOutputStream(8 * 1024)
+                    val chunk = ByteArray(8 * 1024)
+                    var total = 0
+                    while (true) {
+                        val read = input.read(chunk)
+                        if (read < 0) break
+                        total += read
+                        if (total > KdbxTokenRepository.MAX_ATTACHMENT_BYTES) {
+                            throw IllegalStateException("附件过大")
+                        }
+                        buffer.write(chunk, 0, read)
+                    }
+                    val bytes = buffer.toByteArray()
+                    val name =
+                        uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
+                            ?: "attachment_${System.currentTimeMillis()}"
+                    editAttachments = editAttachments +
+                        EditableAttachmentDraft(
+                            name = name,
+                            data = bytes,
+                            isNew = true,
+                        )
+                }
+            }.onFailure {
+                ToastUtils.showShortToast(context, "附件过大或读取失败，已取消")
+            }
         }
-    }
 
     // 保存当前编辑内容（编辑态顶栏保存按钮共用）
     fun saveEntry() {
         coroutineScope.launch {
             val existingDraft = tokenViewModel.loadPasswordEntryDraft(entryId) ?: return@launch
-            val updated = tokenViewModel.updatePasswordEntry(
-                existingDraft.copy(
-                    title = editTitle.trim(),
-                    username = editUsername.trim(),
-                    password = editPassword,
-                    url = editUrl.trim(),
-                    notes = editNotes,
-                    tags = parseTagsText(editTagsText),
-                    customFields = editCustomFields,
-                    attachments = editAttachments,
-                    expiryTime = editExpiryTime,
-                    customIconUuid = editCustomIconUuid,
-                    iconStandardId = editIconStandardId,
-                    newCustomIconBytes = editNewCustomIconBytes
+            val updated =
+                tokenViewModel.updatePasswordEntry(
+                    existingDraft.copy(
+                        title = editTitle.trim(),
+                        username = editUsername.trim(),
+                        password = editPassword,
+                        url = editUrl.trim(),
+                        notes = editNotes,
+                        tags = parseTagsText(editTagsText),
+                        customFields = editCustomFields,
+                        attachments = editAttachments,
+                        expiryTime = editExpiryTime,
+                        customIconUuid = editCustomIconUuid,
+                        iconStandardId = editIconStandardId,
+                        newCustomIconBytes = editNewCustomIconBytes,
+                    ),
                 )
-            )
             if (updated) {
                 selectedEntry = tokenViewModel.loadPasswordEntryDetail(entryId)
                 selectedEntry?.let { syncEditFields(it) }
@@ -215,34 +225,34 @@ fun PasswordEntryDetailScreen(
                     onClick = {
                         selectedEntry?.let { syncEditFields(it) }
                         isEditing = false
-                    }
+                    },
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Close,
-                        contentDescription = "取消编辑"
+                        contentDescription = "取消编辑",
                     )
                 }
                 IconButton(onClick = { saveEntry() }) {
                     Icon(
                         imageVector = MiuixIcons.Ok,
-                        contentDescription = "保存"
+                        contentDescription = "保存",
                     )
                 }
             } else {
                 IconButton(
                     onClick = {
                         showDeleteDialog.value = true
-                    }
+                    },
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Delete,
-                        contentDescription = "删除"
+                        contentDescription = "删除",
                     )
                 }
                 IconButton(onClick = { isEditing = true }) {
                     Icon(
                         imageVector = MiuixIcons.Edit,
-                        contentDescription = "编辑"
+                        contentDescription = "编辑",
                     )
                 }
             }
@@ -257,27 +267,27 @@ fun PasswordEntryDetailScreen(
                     title = selectedEntry?.title ?: "密码详情",
                     actions = {
                         detailActions()
-                    }
+                    },
                 )
             } else {
                 TopAppBar(
                     title = selectedEntry?.title ?: "密码详情",
                     navigationIcon = {
                         IconButton(
-                            onClick = onNavigateBack
+                            onClick = onNavigateBack,
                         ) {
                             Icon(
                                 imageVector = MiuixIcons.Back,
-                                contentDescription = "返回"
+                                contentDescription = "返回",
                             )
                         }
                     },
                     actions = {
                         detailActions()
-                    }
+                    },
                 )
             }
-        }
+        },
     ) { paddingValues ->
         PasswordEntryDetailContent(
             modifier = Modifier.padding(paddingValues),
@@ -320,7 +330,7 @@ fun PasswordEntryDetailScreen(
             onAddAttachment = { attachmentPicker.launch("*/*") },
             entryId = entryId,
             tokenViewModel = tokenViewModel,
-            coroutineScope = coroutineScope
+            coroutineScope = coroutineScope,
         )
     }
 
@@ -342,7 +352,7 @@ fun PasswordEntryDetailScreen(
                         onDeleted()
                     }
                 }
-            }
+            },
         )
     }
 
@@ -365,7 +375,7 @@ fun PasswordEntryDetailScreen(
                     ToastUtils.showShortToast(context, "恢复失败")
                 }
             }
-        }
+        },
     )
 
     if (showIconPicker) {
@@ -380,8 +390,11 @@ fun PasswordEntryDetailScreen(
                 showIconPicker = false
                 val currentBytes = selectedEntry?.customIconBytes
                 // 与打开时的图标完全一致视为无改动：保留原自定义图标，避免重复写入图标池
-                val unchanged = bytes != null && currentBytes != null &&
-                    bytes.contentEquals(currentBytes) && standardId == editIconStandardId
+                val unchanged =
+                    bytes != null &&
+                        currentBytes != null &&
+                        bytes.contentEquals(currentBytes) &&
+                        standardId == editIconStandardId
                 if (unchanged) {
                     editNewCustomIconBytes = null
                 } else {
@@ -389,8 +402,7 @@ fun PasswordEntryDetailScreen(
                     editCustomIconUuid = null
                     editNewCustomIconBytes = bytes
                 }
-            }
+            },
         )
     }
 }
-

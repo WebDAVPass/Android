@@ -39,13 +39,13 @@ import java.nio.charset.Charset
 import java.util.UUID
 
 class DatabaseKDB : DatabaseVersioned<Int, UUID, GroupKDB, EntryKDB>() {
-
     override var encryptionAlgorithm: EncryptionAlgorithm = EncryptionAlgorithm.AESRijndael
 
-    override val availableEncryptionAlgorithms: List<EncryptionAlgorithm> = listOf(
-        EncryptionAlgorithm.AESRijndael,
-        EncryptionAlgorithm.Twofish
-    )
+    override val availableEncryptionAlgorithms: List<EncryptionAlgorithm> =
+        listOf(
+            EncryptionAlgorithm.AESRijndael,
+            EncryptionAlgorithm.Twofish,
+        )
 
     override var kdfEngine: KdfEngine?
         get() = kdfAvailableList[0]
@@ -55,9 +55,10 @@ class DatabaseKDB : DatabaseVersioned<Int, UUID, GroupKDB, EntryKDB>() {
             }
         }
 
-    override val kdfAvailableList: List<KdfEngine> = listOf(
-        KdfFactory.aesKdf
-    )
+    override val kdfAvailableList: List<KdfEngine> =
+        listOf(
+            KdfFactory.aesKdf,
+        )
 
     override val passwordEncoding: Charset
         get() = Charsets.ISO_8859_1
@@ -72,9 +73,10 @@ class DatabaseKDB : DatabaseVersioned<Int, UUID, GroupKDB, EntryKDB>() {
 
     init {
         // New manual root because KDB contains multiple root groups (here available with getRootGroups())
-        rootGroup = createGroup().apply {
-            icon.standard = getStandardIcon(IconImageStandard.DATABASE_ID)
-        }
+        rootGroup =
+            createGroup().apply {
+                icon.standard = getStandardIcon(IconImageStandard.DATABASE_ID)
+            }
     }
 
     val backupGroup: GroupKDB?
@@ -120,7 +122,11 @@ class DatabaseKDB : DatabaseVersioned<Int, UUID, GroupKDB, EntryKDB>() {
     }
 
     @Throws(IOException::class)
-    fun makeFinalKey(masterSeed: ByteArray, transformSeed: ByteArray, numRounds: Long) {
+    fun makeFinalKey(
+        masterSeed: ByteArray,
+        transformSeed: ByteArray,
+        numRounds: Long,
+    ) {
         // Encrypt the master key a few times to make brute-force key-search harder
         val transformedKey = AESTransformer.transformKey(transformSeed, masterKey, numRounds) ?: ByteArray(0)
         // Write checksum Checksum
@@ -128,33 +134,47 @@ class DatabaseKDB : DatabaseVersioned<Int, UUID, GroupKDB, EntryKDB>() {
     }
 
     fun deriveMasterKey(
-        masterCredential: MasterCredential
+        masterCredential: MasterCredential,
     ) {
         // Exception when no password
-        if (masterCredential.hardwareKey != null)
+        if (masterCredential.hardwareKey != null) {
             throw HardwareKeyDatabaseException()
-        if (masterCredential.password == null && masterCredential.keyFileData == null)
+        }
+        if (masterCredential.password == null && masterCredential.keyFileData == null) {
             throw EmptyKeyDatabaseException()
+        }
 
         // Retrieve plain data
         val password = masterCredential.password
         val keyFileData = masterCredential.keyFileData
-        val passwordBytes = if (password != null) MasterCredential.retrievePasswordKey(
-            password,
-            passwordEncoding
-        ) else null
-        val keyFileBytes = if (keyFileData != null) MasterCredential.retrieveKeyFileDecodedKey(
-            keyFileData,
-            false
-        ) else null
+        val passwordBytes =
+            if (password != null) {
+                MasterCredential.retrievePasswordKey(
+                    password,
+                    passwordEncoding,
+                )
+            } else {
+                null
+            }
+        val keyFileBytes =
+            if (keyFileData != null) {
+                MasterCredential.retrieveKeyFileDecodedKey(
+                    keyFileData,
+                    false,
+                )
+            } else {
+                null
+            }
 
         // Build master key
-        if (passwordBytes != null
-            && keyFileBytes != null) {
-            this.masterKey = HashManager.hashSha256(
-                passwordBytes,
-                keyFileBytes
-            )
+        if (passwordBytes != null &&
+            keyFileBytes != null
+        ) {
+            this.masterKey =
+                HashManager.hashSha256(
+                    passwordBytes,
+                    keyFileBytes,
+                )
         } else {
             this.masterKey = passwordBytes ?: keyFileBytes ?: byteArrayOf(0)
         }
@@ -163,28 +183,21 @@ class DatabaseKDB : DatabaseVersioned<Int, UUID, GroupKDB, EntryKDB>() {
         this.checkKey = masterCredential.getCheckKey()
     }
 
-    override fun createGroup(): GroupKDB {
-        return GroupKDB()
-    }
+    override fun createGroup(): GroupKDB = GroupKDB()
 
-    override fun createEntry(): EntryKDB {
-        return EntryKDB()
-    }
+    override fun createEntry(): EntryKDB = EntryKDB()
 
-    override fun rootCanContainsEntry(): Boolean {
-        return false
-    }
+    override fun rootCanContainsEntry(): Boolean = false
 
-    override fun getStandardIcon(iconId: Int): IconImageStandard {
-        return this.iconsManager.getIcon(iconId)
-    }
+    override fun getStandardIcon(iconId: Int): IconImageStandard = this.iconsManager.getIcon(iconId)
 
     override fun isInRecycleBin(group: GroupKDB): Boolean {
         var currentGroup: GroupKDB? = group
         val currentBackupGroup = backupGroup ?: return false
 
-        if (currentGroup == currentBackupGroup)
+        if (currentGroup == currentBackupGroup) {
             return true
+        }
 
         val backupGroupId = currentBackupGroup.id
         while (currentGroup != null) {
@@ -199,11 +212,10 @@ class DatabaseKDB : DatabaseVersioned<Int, UUID, GroupKDB, EntryKDB>() {
     /**
      * Retrieve backup group with his name
      */
-    private fun retrieveBackup(): GroupKDB? {
-        return rootGroup?.searchChildGroup {
+    private fun retrieveBackup(): GroupKDB? =
+        rootGroup?.searchChildGroup {
             it.title.equals(BACKUP_FOLDER_TITLE, ignoreCase = true)
         }
-    }
 
     /**
      * Ensure that the backup tree exists if enabled, and create it
@@ -212,10 +224,11 @@ class DatabaseKDB : DatabaseVersioned<Int, UUID, GroupKDB, EntryKDB>() {
     fun ensureBackupExists() {
         if (backupGroup == null) {
             // Create recycle bin
-            val recycleBinGroup = createGroup().apply {
-                title = BACKUP_FOLDER_TITLE
-                icon.standard = getStandardIcon(IconImageStandard.TRASH_ID)
-            }
+            val recycleBinGroup =
+                createGroup().apply {
+                    title = BACKUP_FOLDER_TITLE
+                    icon.standard = getStandardIcon(IconImageStandard.TRASH_ID)
+                }
             addGroupTo(recycleBinGroup, rootGroup)
         }
     }
@@ -226,22 +239,26 @@ class DatabaseKDB : DatabaseVersioned<Int, UUID, GroupKDB, EntryKDB>() {
      * @return true if node can be recycle, false elsewhere
      */
     fun canRecycle(node: NodeVersioned<*, GroupKDB, EntryKDB>): Boolean {
-        if (backupGroup == null)
+        if (backupGroup == null) {
             ensureBackupExists()
-        if (node == backupGroup)
+        }
+        if (node == backupGroup) {
             return false
+        }
         backupGroup?.let {
-            if (node.isContainedIn(it))
+            if (node.isContainedIn(it)) {
                 return false
+            }
         }
         return true
     }
 
     fun buildNewBinaryAttachment(): BinaryData {
         // Generate an unique new file
-        return attachmentPool.put { uniqueBinaryId ->
-            binaryCache.getBinaryData(uniqueBinaryId, false)
-        }.binary
+        return attachmentPool
+            .put { uniqueBinaryId ->
+                binaryCache.getBinaryData(uniqueBinaryId, false)
+            }.binary
     }
 
     companion object {

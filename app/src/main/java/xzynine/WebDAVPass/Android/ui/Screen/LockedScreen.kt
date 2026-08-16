@@ -1,5 +1,6 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -25,7 +26,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.activity.compose.BackHandler
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -49,7 +49,7 @@ import java.io.File
 fun LockedScreen(
     tokenViewModel: TokenViewModel,
     onUnlocked: () -> Unit,
-    onSwitchLibrary: () -> Unit
+    onSwitchLibrary: () -> Unit,
 ) {
     val currentLibrary by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
     var isForeground by remember { mutableStateOf(true) }
@@ -57,13 +57,14 @@ fun LockedScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
 
     DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_START -> isForeground = true
-                Lifecycle.Event.ON_STOP -> isForeground = false
-                else -> {}
+        val observer =
+            LifecycleEventObserver { _, event ->
+                when (event) {
+                    Lifecycle.Event.ON_START -> isForeground = true
+                    Lifecycle.Event.ON_STOP -> isForeground = false
+                    else -> {}
+                }
             }
-        }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
@@ -76,20 +77,23 @@ fun LockedScreen(
     }
 
     // 取含后缀的库文件名（如 WebDavPass.kdbx），解析失败时留空文案
-    val libraryName = currentLibrary?.localPath
-        ?.let { path -> runCatching { File(path).name }.getOrNull() }
-        .orEmpty()
+    val libraryName =
+        currentLibrary
+            ?.localPath
+            ?.let { path -> runCatching { File(path).name }.getOrNull() }
+            .orEmpty()
     val library = currentLibrary
 
     Scaffold(
         popupHost = {},
         content = { paddingValues ->
             Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(horizontal = 24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                modifier =
+                    Modifier
+                        .fillMaxSize()
+                        .padding(paddingValues)
+                        .padding(horizontal = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Spacer(modifier = Modifier.weight(1f))
 
@@ -98,10 +102,11 @@ fun LockedScreen(
                 Image(
                     painter = painterResource(id = R.drawable.ic_launcher_playstore),
                     contentDescription = "应用图标",
-                    modifier = Modifier
-                        .size(96.dp)
-                        .shadow(elevation = 6.dp, shape = RoundedCornerShape(20.dp))
-                        .clip(RoundedCornerShape(20.dp))
+                    modifier =
+                        Modifier
+                            .size(96.dp)
+                            .shadow(elevation = 6.dp, shape = RoundedCornerShape(20.dp))
+                            .clip(RoundedCornerShape(20.dp)),
                 )
 
                 Spacer(modifier = Modifier.height(24.dp))
@@ -110,7 +115,7 @@ fun LockedScreen(
                 Text(
                     text = if (libraryName.isBlank()) "库已锁定" else "${libraryName}已锁定",
                     fontSize = 18.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
                 )
 
                 Spacer(modifier = Modifier.height(40.dp))
@@ -123,18 +128,20 @@ fun LockedScreen(
                             library = library,
                             onUnlockSuccess = onUnlocked,
                             onDismiss = { showUnlockPanel = false },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .widthIn(max = 420.dp)
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .widthIn(max = 420.dp),
                         )
                     } else {
                         // 标准蓝主按钮，按内容自适应宽度（非全宽）
                         Button(
                             onClick = { showUnlockPanel = true },
-                            colors = ButtonDefaults.buttonColors(
-                                color = Color(0xFF3A9FFD),
-                                disabledColor = Color(0xFF8EC8FD)
-                            )
+                            colors =
+                                ButtonDefaults.buttonColors(
+                                    color = Color(0xFF3A9FFD),
+                                    disabledColor = Color(0xFF8EC8FD),
+                                ),
                         ) {
                             Text(text = "解锁")
                         }
@@ -147,12 +154,12 @@ fun LockedScreen(
                 if (isForeground) {
                     TextButton(
                         text = "切换库",
-                        onClick = onSwitchLibrary
+                        onClick = onSwitchLibrary,
                     )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
             }
-        }
+        },
     )
 }

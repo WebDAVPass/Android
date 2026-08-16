@@ -19,7 +19,6 @@
  */
 package xzynine.WebDAVPass.Android.autofill
 
-import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
@@ -43,10 +42,8 @@ import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.model.RegisterInfo
 import xzynine.WebDAVPass.Android.model.SearchInfo
 
-
 @RequiresApi(api = Build.VERSION_CODES.O)
 class KeeAutofillService : AutofillService() {
-
     private var applicationIdBlocklist: Set<String> = emptySet()
     private var webDomainBlocklist: Set<String> = emptySet()
 
@@ -68,7 +65,7 @@ class KeeAutofillService : AutofillService() {
     override fun onFillRequest(
         request: FillRequest,
         cancellationSignal: CancellationSignal,
-        callback: FillCallback
+        callback: FillCallback,
     ) {
         cancellationSignal.setOnCancelListener { Log.w(TAG, "Cancel autofill.") }
 
@@ -81,19 +78,20 @@ class KeeAutofillService : AutofillService() {
         val latestStructure = request.fillContexts.last().structure
         StructureParser(latestStructure).parse(saveValue = false)?.let { parseResult ->
 
-            val searchInfo = SearchInfo().apply {
-                applicationId = parseResult.applicationId
-                webScheme = parseResult.webScheme
-                webDomain = parseResult.webDomain
-            }
+            val searchInfo =
+                SearchInfo().apply {
+                    applicationId = parseResult.applicationId
+                    webScheme = parseResult.webScheme
+                    webDomain = parseResult.webDomain
+                }
 
             if (autofillAllowedFor(
                     applicationId = parseResult.applicationId,
                     applicationIdBlocklist = applicationIdBlocklist,
                     webDomain = parseResult.webDomain,
-                    webDomainBlocklist = webDomainBlocklist)
-                ) {
-
+                    webDomainBlocklist = webDomainBlocklist,
+                )
+            ) {
                 if (parseResult.isValid()) {
                     val inlineSuggestionsRequest =
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -101,14 +99,17 @@ class KeeAutofillService : AutofillService() {
                         } else {
                             null
                         }
-                    val autofillComponent = AutofillComponent(
-                        latestStructure,
-                        inlineSuggestionsRequest
-                    )
-                    
+                    val autofillComponent =
+                        AutofillComponent(
+                            latestStructure,
+                            inlineSuggestionsRequest,
+                        )
+
                     showUIForEntrySelection(
                         parseResult,
-                        searchInfo, autofillComponent, callback
+                        searchInfo,
+                        autofillComponent,
+                        callback,
                     )
                 }
             }
@@ -119,73 +120,80 @@ class KeeAutofillService : AutofillService() {
         parseResult: StructureParser.Result,
         searchInfo: SearchInfo,
         autofillComponent: AutofillComponent,
-        callback: FillCallback
+        callback: FillCallback,
     ) {
         var success = false
         parseResult.allAutofillIds().let { autofillIds ->
             if (autofillIds.isNotEmpty()) {
-                AutofillHelper.getPendingIntentForSelection(
-                    this,
-                    searchInfo,
-                    autofillComponent
-                )?.intentSender?.let { intentSender ->
-                    val responseBuilder = FillResponse.Builder()
-                    val remoteViewsUnlock: RemoteViews = if (!parseResult.webDomain.isNullOrEmpty()) {
-                        RemoteViews(
-                            packageName,
-                            R.layout.item_autofill_unlock_web_domain
-                        ).apply {
-                            setTextViewText(
-                                R.id.autofill_web_domain_text,
-                                parseResult.webDomain
-                            )
-                        }
-                    } else if (!parseResult.applicationId.isNullOrEmpty()) {
-                        RemoteViews(packageName, R.layout.item_autofill_unlock_app_id).apply {
-                            setTextViewText(
-                                R.id.autofill_app_id_text,
-                                parseResult.applicationId
-                            )
-                        }
-                    } else {
-                        RemoteViews(packageName, R.layout.item_autofill_unlock)
-                    }
-
-                    if (AutofillSavePreferences.askToSaveData) {
-                        var types: Int = SaveInfo.SAVE_DATA_TYPE_GENERIC
-                        val requiredIds = ArrayList<AutofillId>()
-
-                        parseResult.passwordId?.let { passwordInfo ->
-                            parseResult.usernameId?.let { usernameInfo ->
-                                types = types or SaveInfo.SAVE_DATA_TYPE_USERNAME
-                                requiredIds.add(usernameInfo)
+                AutofillHelper
+                    .getPendingIntentForSelection(
+                        this,
+                        searchInfo,
+                        autofillComponent,
+                    )?.intentSender
+                    ?.let { intentSender ->
+                        val responseBuilder = FillResponse.Builder()
+                        val remoteViewsUnlock: RemoteViews =
+                            if (!parseResult.webDomain.isNullOrEmpty()) {
+                                RemoteViews(
+                                    packageName,
+                                    R.layout.item_autofill_unlock_web_domain,
+                                ).apply {
+                                    setTextViewText(
+                                        R.id.autofill_web_domain_text,
+                                        parseResult.webDomain,
+                                    )
+                                }
+                            } else if (!parseResult.applicationId.isNullOrEmpty()) {
+                                RemoteViews(packageName, R.layout.item_autofill_unlock_app_id).apply {
+                                    setTextViewText(
+                                        R.id.autofill_app_id_text,
+                                        parseResult.applicationId,
+                                    )
+                                }
+                            } else {
+                                RemoteViews(packageName, R.layout.item_autofill_unlock)
                             }
-                            types = types or SaveInfo.SAVE_DATA_TYPE_PASSWORD
-                            requiredIds.add(passwordInfo)
-                        }
-                        
-                        if (requiredIds.isNotEmpty()) {
-                            val builder = SaveInfo.Builder(types, requiredIds.toTypedArray())
-                            responseBuilder.setSaveInfo(builder.build())
-                        }
-                    }
 
-                    @Suppress("DEPRECATION")
-                    responseBuilder.setAuthentication(
-                        autofillIds,
-                        intentSender,
-                        remoteViewsUnlock
-                    )
-                    success = true
-                    callback.onSuccess(responseBuilder.build())
-                }
+                        if (AutofillSavePreferences.askToSaveData) {
+                            var types: Int = SaveInfo.SAVE_DATA_TYPE_GENERIC
+                            val requiredIds = ArrayList<AutofillId>()
+
+                            parseResult.passwordId?.let { passwordInfo ->
+                                parseResult.usernameId?.let { usernameInfo ->
+                                    types = types or SaveInfo.SAVE_DATA_TYPE_USERNAME
+                                    requiredIds.add(usernameInfo)
+                                }
+                                types = types or SaveInfo.SAVE_DATA_TYPE_PASSWORD
+                                requiredIds.add(passwordInfo)
+                            }
+
+                            if (requiredIds.isNotEmpty()) {
+                                val builder = SaveInfo.Builder(types, requiredIds.toTypedArray())
+                                responseBuilder.setSaveInfo(builder.build())
+                            }
+                        }
+
+                        @Suppress("DEPRECATION")
+                        responseBuilder.setAuthentication(
+                            autofillIds,
+                            intentSender,
+                            remoteViewsUnlock,
+                        )
+                        success = true
+                        callback.onSuccess(responseBuilder.build())
+                    }
             }
         }
-        if (!success)
+        if (!success) {
             callback.onFailure("Unable to get Autofill ids for UI selection")
+        }
     }
 
-    override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
+    override fun onSaveRequest(
+        request: SaveRequest,
+        callback: SaveCallback,
+    ) {
         // 功能关闭或系统版本不支持时静默接受，避免每次表单提交都提示保存失败
         if (!AutofillSavePreferences.askToSaveData || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
             callback.onSuccess()
@@ -197,12 +205,13 @@ class KeeAutofillService : AutofillService() {
             callback.onFailure("无法解析当前表单结构，暂不支持保存")
             return
         }
-        val blocklisted = !autofillAllowedFor(
-            applicationId = parseResult.applicationId,
-            applicationIdBlocklist = applicationIdBlocklist,
-            webDomain = parseResult.webDomain,
-            webDomainBlocklist = webDomainBlocklist
-        )
+        val blocklisted =
+            !autofillAllowedFor(
+                applicationId = parseResult.applicationId,
+                applicationIdBlocklist = applicationIdBlocklist,
+                webDomain = parseResult.webDomain,
+                webDomainBlocklist = webDomainBlocklist,
+            )
         if (blocklisted) {
             callback.onFailure("当前应用或网站已被加入黑名单，不允许保存表单")
             return
@@ -217,22 +226,26 @@ class KeeAutofillService : AutofillService() {
             return
         }
 
-        val searchInfo = SearchInfo().apply {
-            applicationId = parseResult.applicationId
-            webScheme = parseResult.webScheme
-            webDomain = parseResult.webDomain
-        }
-        val registerInfo = RegisterInfo(
-            searchInfo = searchInfo,
-            username = parseResult.usernameValue?.textValue?.toString(),
-            password = passwordText
-        )
+        val searchInfo =
+            SearchInfo().apply {
+                applicationId = parseResult.applicationId
+                webScheme = parseResult.webScheme
+                webDomain = parseResult.webDomain
+            }
+        val registerInfo =
+            RegisterInfo(
+                searchInfo = searchInfo,
+                username = parseResult.usernameValue?.textValue?.toString(),
+                password = passwordText,
+            )
 
         // 拉起注册界面：展示表单值并选择目标分组后创建条目
-        val intentSender = AutofillHelper.getPendingIntentForRegistration(
-            this,
-            registerInfo
-        )?.intentSender
+        val intentSender =
+            AutofillHelper
+                .getPendingIntentForRegistration(
+                    this,
+                    registerInfo,
+                )?.intentSender
         if (intentSender != null) {
             callback.onSuccess(intentSender)
         } else {
@@ -243,32 +256,36 @@ class KeeAutofillService : AutofillService() {
     companion object {
         private val TAG = KeeAutofillService::class.java.name
 
-        fun autofillAllowedFor(applicationId: String?,
-                               webDomain: String?,
-                               context: Context
-        ): Boolean {
-            return autofillAllowedFor(
+        fun autofillAllowedFor(
+            applicationId: String?,
+            webDomain: String?,
+            context: Context,
+        ): Boolean =
+            autofillAllowedFor(
                 applicationId = applicationId,
                 applicationIdBlocklist = emptySet(),
                 webDomain = webDomain,
-                webDomainBlocklist = emptySet())
-        }
+                webDomainBlocklist = emptySet(),
+            )
 
-        fun autofillAllowedFor(applicationId: String?,
-                               applicationIdBlocklist: Set<String>?,
-                               webDomain: String?,
-                               webDomainBlocklist: Set<String>?
+        fun autofillAllowedFor(
+            applicationId: String?,
+            applicationIdBlocklist: Set<String>?,
+            webDomain: String?,
+            webDomainBlocklist: Set<String>?,
+        ): Boolean =
+            autofillAllowedFor(applicationId, applicationIdBlocklist) &&
+                applicationId?.contains(APPLICATION_ID_POPUP_WINDOW) != true &&
+                autofillAllowedFor(webDomain, webDomainBlocklist)
+
+        fun autofillAllowedFor(
+            element: String?,
+            blockList: Set<String>?,
         ): Boolean {
-            return autofillAllowedFor(applicationId, applicationIdBlocklist)
-                    && applicationId?.contains(APPLICATION_ID_POPUP_WINDOW) != true
-                    && autofillAllowedFor(webDomain, webDomainBlocklist)
-        }
-
-        fun autofillAllowedFor(element: String?, blockList: Set<String>?): Boolean {
             element?.let { elementNotNull ->
                 if (blockList?.any { appIdBlocked ->
-                            elementNotNull.contains(appIdBlocked)
-                        } == true
+                        elementNotNull.contains(appIdBlocked)
+                    } == true
                 ) {
                     Log.d(TAG, "Autofill not allowed for $elementNotNull")
                     return false
@@ -280,10 +297,12 @@ class KeeAutofillService : AutofillService() {
         const val APPLICATION_ID_POPUP_WINDOW = "PopupWindow:"
 
         fun Context.isKeeAutofillActivated(): Boolean {
-            val activated = ContextCompat.getSystemService(
-                this,
-                AutofillManager::class.java
-            )?.hasEnabledAutofillServices() == true
+            val activated =
+                ContextCompat
+                    .getSystemService(
+                        this,
+                        AutofillManager::class.java,
+                    )?.hasEnabledAutofillServices() == true
             return activated
         }
 
@@ -293,7 +312,7 @@ class KeeAutofillService : AutofillService() {
                     Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
                         data = "package:${KeeAutofillService::class.java.canonicalName}".toUri()
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    }
+                    },
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Unable to choose the autofill service", e)

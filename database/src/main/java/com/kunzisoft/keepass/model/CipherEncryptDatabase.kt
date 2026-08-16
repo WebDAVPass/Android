@@ -22,18 +22,17 @@ package com.kunzisoft.keepass.model
 import android.net.Uri
 import android.os.Parcel
 import android.os.Parcelable
-import com.kunzisoft.keepass.utils.readParcelableCompat
 import com.kunzisoft.keepass.utils.readEnum
+import com.kunzisoft.keepass.utils.readParcelableCompat
 import com.kunzisoft.keepass.utils.writeEnum
 
-class CipherEncryptDatabase(): Parcelable {
-
+class CipherEncryptDatabase() : Parcelable {
     var databaseUri: Uri? = null
     var credentialStorage: CredentialStorage = CredentialStorage.DEFAULT
     var encryptedValue: ByteArray = byteArrayOf()
     var specParameters: ByteArray = byteArrayOf()
 
-    constructor(parcel: Parcel): this() {
+    constructor(parcel: Parcel) : this() {
         databaseUri = parcel.readParcelableCompat()
         credentialStorage = parcel.readEnum<CredentialStorage>() ?: credentialStorage
         encryptedValue = ByteArray(parcel.readInt())
@@ -42,7 +41,10 @@ class CipherEncryptDatabase(): Parcelable {
         parcel.readByteArray(specParameters)
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(databaseUri, flags)
         parcel.writeEnum(credentialStorage)
         parcel.writeInt(encryptedValue.size)
@@ -51,18 +53,12 @@ class CipherEncryptDatabase(): Parcelable {
         parcel.writeByteArray(specParameters)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     companion object CREATOR : Parcelable.Creator<CipherEncryptDatabase> {
-        override fun createFromParcel(parcel: Parcel): CipherEncryptDatabase {
-            return CipherEncryptDatabase(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): CipherEncryptDatabase = CipherEncryptDatabase(parcel)
 
-        override fun newArray(size: Int): Array<CipherEncryptDatabase?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<CipherEncryptDatabase?> = arrayOfNulls(size)
     }
 
     override fun equals(other: Any?): Boolean {
@@ -74,7 +70,5 @@ class CipherEncryptDatabase(): Parcelable {
         return databaseUri == other.databaseUri
     }
 
-    override fun hashCode(): Int {
-        return databaseUri.hashCode()
-    }
+    override fun hashCode(): Int = databaseUri.hashCode()
 }

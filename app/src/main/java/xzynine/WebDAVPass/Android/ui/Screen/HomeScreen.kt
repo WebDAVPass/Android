@@ -28,33 +28,35 @@ fun FeatureCard(
     title: String,
     value: String,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier
-            .height(100.dp),
-        colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.surfaceContainerHighest
-        ),
+        modifier =
+            modifier
+                .height(100.dp),
+        colors =
+            CardDefaults.defaultColors(
+                color = MiuixTheme.colorScheme.surfaceContainerHighest,
+            ),
         cornerRadius = CardDefaults.CornerRadius,
         insideMargin = CardDefaults.InsideMargin,
         pressFeedbackType = PressFeedbackType.Tilt,
         showIndication = true,
-        onClick = onClick
+        onClick = onClick,
     ) {
         Column(
             modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+            verticalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
                 text = title,
                 fontSize = 14.sp,
-                fontWeight = FontWeight.Medium
+                fontWeight = FontWeight.Medium,
             )
             Text(
                 text = value,
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold
+                fontWeight = FontWeight.Bold,
             )
         }
     }
@@ -68,7 +70,7 @@ fun HomeScreen(
     tokenViewModel: TokenViewModel,
     onNavigateToPasswordList: (PasswordListMode) -> Unit,
     onNavigateToTokenList: () -> Unit,
-    onNavigateToSecurityCheck: () -> Unit
+    onNavigateToSecurityCheck: () -> Unit,
 ) {
     val tokens by tokenViewModel.tokens.collectAsState(emptyList())
     val passwordTotalCount by tokenViewModel.passwordViewModel.passwordTotalCount.collectAsState(0)
@@ -81,8 +83,11 @@ fun HomeScreen(
     LaunchedEffect(passwordTotalCount, recentDeletedCount) {
         val issues = tokenViewModel.loadSecurityIssues()
         // 以不重复的问题条目计数（同一条目同时过期且弱密码只计一次）
-        securityIssueCount.intValue = (issues.expiredEntries.map { it.entryId } +
-            issues.weakPasswordEntries.map { it.entryId }).distinct().size
+        securityIssueCount.intValue =
+            (
+                issues.expiredEntries.map { it.entryId } +
+                    issues.weakPasswordEntries.map { it.entryId }
+            ).distinct().size
     }
 
     val tokenCount by remember {
@@ -93,18 +98,18 @@ fun HomeScreen(
 
     Box(
         modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.TopStart
+        contentAlignment = Alignment.TopStart,
     ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             // 功能块
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     // 密码
                     FeatureCard(
@@ -113,7 +118,7 @@ fun HomeScreen(
                         onClick = {
                             onNavigateToPasswordList(PasswordListMode.ALL_PASSWORDS)
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
 
                     // 动态令牌
@@ -123,7 +128,7 @@ fun HomeScreen(
                         onClick = {
                             onNavigateToTokenList()
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }
@@ -132,7 +137,7 @@ fun HomeScreen(
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     // 安全性
                     FeatureCard(
@@ -141,7 +146,7 @@ fun HomeScreen(
                         onClick = {
                             onNavigateToSecurityCheck()
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
 
                     // 最近删除
@@ -151,7 +156,7 @@ fun HomeScreen(
                         onClick = {
                             onNavigateToPasswordList(PasswordListMode.RECENT_DELETED)
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
                 }
             }

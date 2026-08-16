@@ -18,7 +18,6 @@ import javax.crypto.spec.GCMParameterSpec
  * - 卸载或清除应用数据时，AndroidKeyStore 密钥与数据库一并移除，无需额外清理。
  */
 object WebDavPasswordCipher {
-
     /**
      * 密文前缀标记，用于区分加密数据与异常数据
      */
@@ -111,11 +110,12 @@ object WebDavPasswordCipher {
             getKey()?.let { return it }
             val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
             keyGenerator.init(
-                KeyGenParameterSpec.Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+                KeyGenParameterSpec
+                    .Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
                     .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
                     .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
                     .setKeySize(256)
-                    .build()
+                    .build(),
             )
             return keyGenerator.generateKey().also { cachedKey = it }
         }

@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -28,13 +28,14 @@ import java.io.OutputStream
 /**
  * Output the GroupKDB to the stream
  */
-class GroupOutputKDB(private val mGroup: GroupKDB,
-                     private val mOutputStream: OutputStream) {
-
+class GroupOutputKDB(
+    private val mGroup: GroupKDB,
+    private val mOutputStream: OutputStream,
+) {
     @Throws(DatabaseOutputException::class)
     fun output() {
         try {
-            //NOTE: Need be to careful about using ints.  The actual type written to file is a unsigned int, but most values can't be greater than 2^31, so it probably doesn't matter.
+            // NOTE: Need be to careful about using ints.  The actual type written to file is a unsigned int, but most values can't be greater than 2^31, so it probably doesn't matter.
 
             // Group ID
             mOutputStream.write(GROUPID_FIELD_TYPE)
@@ -91,21 +92,21 @@ class GroupOutputKDB(private val mGroup: GroupKDB,
     companion object {
         // Constants
         private val GROUPID_FIELD_TYPE: ByteArray = uShortTo2Bytes(1)
-        private val NAME_FIELD_TYPE:ByteArray = uShortTo2Bytes(2)
-        private val CREATE_FIELD_TYPE:ByteArray = uShortTo2Bytes(3)
-        private val MOD_FIELD_TYPE:ByteArray = uShortTo2Bytes(4)
-        private val ACCESS_FIELD_TYPE:ByteArray = uShortTo2Bytes(5)
-        private val EXPIRE_FIELD_TYPE:ByteArray = uShortTo2Bytes(6)
-        private val IMAGEID_FIELD_TYPE:ByteArray = uShortTo2Bytes(7)
-        private val LEVEL_FIELD_TYPE:ByteArray = uShortTo2Bytes(8)
-        private val FLAGS_FIELD_TYPE:ByteArray = uShortTo2Bytes(9)
-        private val END_FIELD_TYPE:ByteArray = uShortTo2Bytes(0xFFFF)
+        private val NAME_FIELD_TYPE: ByteArray = uShortTo2Bytes(2)
+        private val CREATE_FIELD_TYPE: ByteArray = uShortTo2Bytes(3)
+        private val MOD_FIELD_TYPE: ByteArray = uShortTo2Bytes(4)
+        private val ACCESS_FIELD_TYPE: ByteArray = uShortTo2Bytes(5)
+        private val EXPIRE_FIELD_TYPE: ByteArray = uShortTo2Bytes(6)
+        private val IMAGEID_FIELD_TYPE: ByteArray = uShortTo2Bytes(7)
+        private val LEVEL_FIELD_TYPE: ByteArray = uShortTo2Bytes(8)
+        private val FLAGS_FIELD_TYPE: ByteArray = uShortTo2Bytes(9)
+        private val END_FIELD_TYPE: ByteArray = uShortTo2Bytes(0xFFFF)
 
-        private val GROUPID_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(4))
-        private val DATE_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(5))
-        private val IMAGEID_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(4))
-        private val LEVEL_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(2))
-        private val FLAGS_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(4))
-        private val ZERO_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(0))
+        private val GROUPID_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(4))
+        private val DATE_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(5))
+        private val IMAGEID_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(4))
+        private val LEVEL_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(2))
+        private val FLAGS_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(4))
+        private val ZERO_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(0))
     }
 }

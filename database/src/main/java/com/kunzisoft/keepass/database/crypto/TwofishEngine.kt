@@ -27,13 +27,12 @@ import javax.crypto.Cipher
 import javax.crypto.NoSuchPaddingException
 
 class TwofishEngine : CipherEngine() {
-
     @Throws(NoSuchAlgorithmException::class, NoSuchPaddingException::class, InvalidKeyException::class, InvalidAlgorithmParameterException::class)
-    override fun getCipher(opmode: Int, key: ByteArray, IV: ByteArray): Cipher {
-        return CipherFactory.getTwofish(opmode, key, IV, forcePaddingCompatibility)
-    }
+    override fun getCipher(
+        opmode: Int,
+        key: ByteArray,
+        IV: ByteArray,
+    ): Cipher = CipherFactory.getTwofish(opmode, key, IV, forcePaddingCompatibility)
 
-    override fun getEncryptionAlgorithm(): EncryptionAlgorithm {
-        return EncryptionAlgorithm.Twofish
-    }
+    override fun getEncryptionAlgorithm(): EncryptionAlgorithm = EncryptionAlgorithm.Twofish
 }

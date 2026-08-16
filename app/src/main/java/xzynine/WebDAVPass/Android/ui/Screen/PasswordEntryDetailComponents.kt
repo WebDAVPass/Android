@@ -1,8 +1,8 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
+import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.ClipDescription
-import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -36,38 +36,39 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
-import xzylib.base.util.ToastUtils
 
 @Composable
 fun AdditionalFieldRow(
     item: RemainingKeyValue,
-    onCopy: () -> Unit
+    onCopy: () -> Unit,
 ) {
     // 受保护字段默认以掩码展示，仅在用户主动切换后显示原值
     var showProtectedValue by remember { mutableStateOf(false) }
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(
             modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             val displayName = displayFieldName(item.fieldName)
             Text(
                 text = if (item.isProtected) "$displayName（已保护）" else displayName,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onSurface
+                color = MiuixTheme.colorScheme.onSurface,
             )
             Text(
                 text = if (item.isProtected && !showProtectedValue) "••••••" else item.rawValue,
                 fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                color = MiuixTheme.colorScheme.onSurfaceSecondary,
             )
         }
         if (item.isProtected) {
@@ -75,14 +76,14 @@ fun AdditionalFieldRow(
                 Icon(
                     imageVector = if (showProtectedValue) MiuixIcons.Hide else MiuixIcons.Show,
                     contentDescription = if (showProtectedValue) "隐藏受保护字段" else "显示受保护字段",
-                    tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                    tint = MiuixTheme.colorScheme.onSurfaceSecondary,
                 )
             }
         }
         IconButton(onClick = onCopy) {
             Icon(
                 imageVector = MiuixIcons.Copy,
-                contentDescription = "复制 ${item.fieldName}"
+                contentDescription = "复制 ${item.fieldName}",
             )
         }
     }
@@ -91,13 +92,12 @@ fun AdditionalFieldRow(
 /**
  * 模板装饰字段名（如 [SSID]）去除括号后展示，普通字段名原样返回。
  */
-fun displayFieldName(name: String): String {
-    return if (name.startsWith("[") && name.endsWith("]")) {
+fun displayFieldName(name: String): String =
+    if (name.startsWith("[") && name.endsWith("]")) {
         name.removePrefix("[").removeSuffix("]")
     } else {
         name
     }
-}
 
 /**
  * Passkey 信息行（依赖方/用户名/凭据 ID 展示）。
@@ -105,25 +105,26 @@ fun displayFieldName(name: String): String {
 @Composable
 fun PasskeyInfoRow(
     label: String,
-    value: String
+    value: String,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = label,
             fontSize = 13.sp,
             color = MiuixTheme.colorScheme.onSurfaceSecondary,
-            modifier = Modifier.width(72.dp)
+            modifier = Modifier.width(72.dp),
         )
         Text(
             text = value,
             fontSize = 14.sp,
             color = MiuixTheme.colorScheme.onSurface,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -134,7 +135,10 @@ fun PasskeyInfoRow(
  * API 30+ 包可见性限制下 resolveActivity 可能返回 null，因此不再预先判断，
  * 直接发起 chooser，无可用处理器时由 ActivityNotFoundException 兜底提示。
  */
-fun openUrl(context: Context, rawUrl: String) {
+fun openUrl(
+    context: Context,
+    rawUrl: String,
+) {
     val schemePattern = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
     val url = if (schemePattern.containsMatchIn(rawUrl)) rawUrl else "https://$rawUrl"
     try {
@@ -149,34 +153,35 @@ fun openUrl(context: Context, rawUrl: String) {
 /**
  * 将逗号/分号分隔的标签文本解析为去重后的标签列表。
  */
-fun parseTagsText(text: String): List<String> {
-    return text.split(',', ';')
+fun parseTagsText(text: String): List<String> =
+    text
+        .split(',', ';')
         .map { it.trim() }
         .filter { it.isNotEmpty() }
         .distinct()
-}
 
-fun isOtpField(item: RemainingKeyValue): Boolean {
-    return item.valueType == RemainingValueType.OTP
-        || item.fieldName.equals("otp", ignoreCase = true)
-        || item.rawValue.startsWith("otpauth://", ignoreCase = true)
-}
+fun isOtpField(item: RemainingKeyValue): Boolean =
+    item.valueType == RemainingValueType.OTP ||
+        item.fieldName.equals("otp", ignoreCase = true) ||
+        item.rawValue.startsWith("otpauth://", ignoreCase = true)
 
 fun copySensitiveToClipboard(
     context: Context,
     label: String,
-    content: String
+    content: String,
 ) {
     val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
     val clipData = ClipData.newPlainText(label, content)
-    val sensitiveExtras = PersistableBundle().apply {
-        val sensitiveKey = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            ClipDescription.EXTRA_IS_SENSITIVE
-        } else {
-            "android.content.extra.IS_SENSITIVE"
+    val sensitiveExtras =
+        PersistableBundle().apply {
+            val sensitiveKey =
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    ClipDescription.EXTRA_IS_SENSITIVE
+                } else {
+                    "android.content.extra.IS_SENSITIVE"
+                }
+            putBoolean(sensitiveKey, true)
         }
-        putBoolean(sensitiveKey, true)
-    }
     clipData.description.extras = sensitiveExtras
     clipboardManager.setPrimaryClip(clipData)
 }
@@ -185,25 +190,26 @@ fun copySensitiveToClipboard(
 fun AttachmentViewRow(
     name: String,
     sizeText: String,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = name,
                 fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurface
+                color = MiuixTheme.colorScheme.onSurface,
             )
             Text(
                 text = sizeText,
                 fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                color = MiuixTheme.colorScheme.onSurfaceSecondary,
             )
         }
     }
@@ -214,25 +220,26 @@ fun AttachmentEditRow(
     name: String,
     sizeText: String?,
     canDelete: Boolean,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = name,
                 fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurface
+                color = MiuixTheme.colorScheme.onSurface,
             )
             if (sizeText != null) {
                 Text(
                     text = sizeText,
                     fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
                 )
             }
         }
@@ -240,7 +247,7 @@ fun AttachmentEditRow(
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = MiuixIcons.Delete,
-                    contentDescription = "删除附件"
+                    contentDescription = "删除附件",
                 )
             }
         }
@@ -256,24 +263,31 @@ fun AttachmentEditRow(
  * API 30+ 包可见性限制下 resolveActivity 可能返回 null，因此不再预先判断，
  * 直接发起 chooser，无可用处理器时由 ActivityNotFoundException 兜底提示。
  */
-fun openAttachment(context: Context, name: String, file: java.io.File) {
+fun openAttachment(
+    context: Context,
+    name: String,
+    file: java.io.File,
+) {
     try {
-        val uri = androidx.core.content.FileProvider.getUriForFile(
-            context,
-            context.packageName + ".fileprovider",
-            file
-        )
+        val uri =
+            androidx.core.content.FileProvider.getUriForFile(
+                context,
+                context.packageName + ".fileprovider",
+                file,
+            )
         val ext = name.substringAfterLast('.', "").lowercase()
-        val mime = if (ext.isNotEmpty()) {
-            MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
-                ?: "application/octet-stream"
-        } else {
-            "application/octet-stream"
-        }
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, mime)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
+        val mime =
+            if (ext.isNotEmpty()) {
+                MimeTypeMap.getSingleton().getMimeTypeFromExtension(ext)
+                    ?: "application/octet-stream"
+            } else {
+                "application/octet-stream"
+            }
+        val intent =
+            Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mime)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
         context.startActivity(Intent.createChooser(intent, "打开附件"))
     } catch (e: ActivityNotFoundException) {
         ToastUtils.showShortToast(context, "没有可打开该类型附件的应用")

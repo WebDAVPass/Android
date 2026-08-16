@@ -4,11 +4,13 @@ import java.net.URL
 
 @Suppress("unused", "MemberVisibilityCanBePrivate")
 object NetworkUtil {
-
     /**
      * 获取绝对地址
      */
-    fun getAbsoluteURL(baseURL: String?, relativePath: String): String {
+    fun getAbsoluteURL(
+        baseURL: String?,
+        relativePath: String,
+    ): String {
         if (baseURL.isNullOrEmpty()) return relativePath.trim()
         var absoluteUrl: URL? = null
         try {
@@ -22,7 +24,10 @@ object NetworkUtil {
     /**
      * 获取绝对地址
      */
-    fun getAbsoluteURL(baseURL: URL?, relativePath: String): String {
+    fun getAbsoluteURL(
+        baseURL: URL?,
+        relativePath: String,
+    ): String {
         val relativePathTrim = relativePath.trim()
         if (baseURL == null) return relativePathTrim
         if (relativePathTrim.startsWith("http://", true) || relativePathTrim.startsWith("https://", true)) return relativePathTrim
@@ -44,15 +49,16 @@ object NetworkUtil {
      */
     fun getBaseUrl(url: String?): String? {
         url ?: return null
-        if (url.startsWith("http://", true)
-            || url.startsWith("https://", true)
+        if (url.startsWith("http://", true) ||
+            url.startsWith("https://", true)
         ) {
             val index = url.indexOf("/", 9)
             return if (index == -1) {
                 url
-            } else url.substring(0, index)
+            } else {
+                url.substring(0, index)
+            }
         }
         return null
     }
-
 }

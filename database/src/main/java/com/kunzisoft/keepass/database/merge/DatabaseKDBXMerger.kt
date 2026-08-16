@@ -38,9 +38,10 @@ import com.kunzisoft.keepass.utils.readAllBytes
 import java.io.IOException
 import java.util.UUID
 
-class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
-
-    var isRAMSufficient: (memoryWanted: Long) -> Boolean = {true}
+class DatabaseKDBXMerger(
+    private var database: DatabaseKDBX,
+) {
+    var isRAMSufficient: (memoryWanted: Long) -> Boolean = { true }
 
     /**
      * Merge a KDB database in a KDBX database, by default all data are copied from the KDB
@@ -73,14 +74,17 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
                     mergeGroup(rootGroup.nodeId, node, databaseToMerge)
                     return true
                 }
-            }
+            },
         )
     }
 
     /**
      * Utility method to transform KDB id nodes in KDBX id nodes
      */
-    private fun getNodeIdUUIDFrom(seed: NodeId<UUID>, intId: NodeId<Int>): NodeId<UUID> {
+    private fun getNodeIdUUIDFrom(
+        seed: NodeId<UUID>,
+        intId: NodeId<Int>,
+    ): NodeId<UUID> {
         val seedUUID = seed.id
         val idInt = intId.id
         return NodeIdUUID(UUID(seedUUID.mostSignificantBits, seedUUID.leastSignificantBits + idInt))
@@ -89,7 +93,11 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
     /**
      * Utility method to merge a KDB entry
      */
-    private fun mergeEntry(seed: NodeId<UUID>, nodeToMerge: EntryKDB, databaseToMerge: DatabaseKDB) {
+    private fun mergeEntry(
+        seed: NodeId<UUID>,
+        nodeToMerge: EntryKDB,
+        databaseToMerge: DatabaseKDB,
+    ) {
         val entryId: NodeId<UUID> = nodeToMerge.nodeId
         val entry = database.getEntryById(entryId)
 
@@ -106,14 +114,17 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
                 var newAttachment: Attachment? = null
                 srcEntryToMerge.getAttachment(databaseToMerge.attachmentPool)?.let { attachment ->
                     val binarySize = attachment.binaryData.getSize()
-                    val binaryData = database.buildNewBinaryAttachment(
-                        isRAMSufficient.invoke(binarySize),
-                        attachment.binaryData.isCompressed,
-                        attachment.binaryData.isProtected
-                    )
-                    attachment.binaryData.getInputDataStream(databaseToMerge.binaryCache)
+                    val binaryData =
+                        database.buildNewBinaryAttachment(
+                            isRAMSufficient.invoke(binarySize),
+                            attachment.binaryData.isCompressed,
+                            attachment.binaryData.isProtected,
+                        )
+                    attachment.binaryData
+                        .getInputDataStream(databaseToMerge.binaryCache)
                         .use { inputStream ->
-                            binaryData.getOutputDataStream(database.binaryCache)
+                            binaryData
+                                .getOutputDataStream(database.binaryCache)
                                 .use { outputStream ->
                                     inputStream.readAllBytes { buffer ->
                                         outputStream.write(buffer)
@@ -123,23 +134,24 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
                     newAttachment = Attachment(attachment.name, binaryData)
                 }
                 // Create new entry format
-                val entryToMerge = EntryKDBX().apply {
-                    this.nodeId = srcEntryToMerge.nodeId
-                    this.icon = srcEntryToMerge.icon
-                    this.creationTime = DateInstant(srcEntryToMerge.creationTime)
-                    this.lastModificationTime = DateInstant(srcEntryToMerge.lastModificationTime)
-                    this.lastAccessTime = DateInstant(srcEntryToMerge.lastAccessTime)
-                    this.expiryTime = DateInstant(srcEntryToMerge.expiryTime)
-                    this.expires = srcEntryToMerge.expires
-                    this.title = srcEntryToMerge.title
-                    this.username = srcEntryToMerge.username
-                    this.password = srcEntryToMerge.password
-                    this.url = srcEntryToMerge.url
-                    this.notes = srcEntryToMerge.notes
-                    newAttachment?.let {
-                        this.putAttachment(it, database.attachmentPool)
+                val entryToMerge =
+                    EntryKDBX().apply {
+                        this.nodeId = srcEntryToMerge.nodeId
+                        this.icon = srcEntryToMerge.icon
+                        this.creationTime = DateInstant(srcEntryToMerge.creationTime)
+                        this.lastModificationTime = DateInstant(srcEntryToMerge.lastModificationTime)
+                        this.lastAccessTime = DateInstant(srcEntryToMerge.lastAccessTime)
+                        this.expiryTime = DateInstant(srcEntryToMerge.expiryTime)
+                        this.expires = srcEntryToMerge.expires
+                        this.title = srcEntryToMerge.title
+                        this.username = srcEntryToMerge.username
+                        this.password = srcEntryToMerge.password
+                        this.url = srcEntryToMerge.url
+                        this.notes = srcEntryToMerge.notes
+                        newAttachment?.let {
+                            this.putAttachment(it, database.attachmentPool)
+                        }
                     }
-                }
                 if (entry != null) {
                     entry.updateWith(entryToMerge, false)
                 } else if (parentEntryToMerge != null) {
@@ -152,7 +164,11 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
     /**
      * Utility method to merge a KDB group
      */
-    private fun mergeGroup(seed: NodeId<UUID>, nodeToMerge: GroupKDB, databaseToMerge: DatabaseKDB) {
+    private fun mergeGroup(
+        seed: NodeId<UUID>,
+        nodeToMerge: GroupKDB,
+        databaseToMerge: DatabaseKDB,
+    ) {
         val groupId: NodeId<Int> = nodeToMerge.nodeId
         val group = database.getGroupById(getNodeIdUUIDFrom(seed, groupId))
 
@@ -163,16 +179,17 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
                 val parentGroupIdToMerge = getNodeIdUUIDFrom(seed, it)
                 parentGroupToMerge = database.getGroupById(parentGroupIdToMerge)
             }
-            val groupToMerge = GroupKDBX().apply {
-                this.nodeId = getNodeIdUUIDFrom(seed, srcGroupToMerge.nodeId)
-                this.icon = srcGroupToMerge.icon
-                this.creationTime = DateInstant(srcGroupToMerge.creationTime)
-                this.lastModificationTime = DateInstant(srcGroupToMerge.lastModificationTime)
-                this.lastAccessTime = DateInstant(srcGroupToMerge.lastAccessTime)
-                this.expiryTime = DateInstant(srcGroupToMerge.expiryTime)
-                this.expires = srcGroupToMerge.expires
-                this.title = srcGroupToMerge.title
-            }
+            val groupToMerge =
+                GroupKDBX().apply {
+                    this.nodeId = getNodeIdUUIDFrom(seed, srcGroupToMerge.nodeId)
+                    this.icon = srcGroupToMerge.icon
+                    this.creationTime = DateInstant(srcGroupToMerge.creationTime)
+                    this.lastModificationTime = DateInstant(srcGroupToMerge.lastModificationTime)
+                    this.lastAccessTime = DateInstant(srcGroupToMerge.lastAccessTime)
+                    this.expiryTime = DateInstant(srcGroupToMerge.expiryTime)
+                    this.expires = srcGroupToMerge.expires
+                    this.title = srcGroupToMerge.title
+                }
             if (group != null) {
                 group.updateWith(groupToMerge, false)
             } else if (parentGroupToMerge != null) {
@@ -187,7 +204,6 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
      * To make a merge as accurate as possible
      */
     fun merge(databaseToMerge: DatabaseKDBX) {
-
         // Merge settings
         if (database.nameChanged.isBefore(databaseToMerge.nameChanged)) {
             database.name = databaseToMerge.name
@@ -263,7 +279,7 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
                     mergeGroup(node, databaseToMerge)
                     return true
                 }
-            }
+            },
         )
 
         // Merge custom data in database header
@@ -279,7 +295,7 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
                     customIconUuid,
                     iconImageCustom.name,
                     iconImageCustom.lastModificationTime,
-                    false
+                    false,
                 ) { _, newBinaryData ->
                     binaryData.getInputDataStream(databaseToMerge.binaryCache).use { inputStream ->
                         newBinaryData?.getOutputDataStream(database.binaryCache).use { outputStream ->
@@ -318,8 +334,9 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
      */
     private fun deleteEntry(deletedEntry: DeletedObject) {
         val databaseEntry = database.getEntryById(deletedEntry.uuid)
-        if (databaseEntry != null
-            && deletedEntry.deletionTime.isAfter(databaseEntry.lastModificationTime)) {
+        if (databaseEntry != null &&
+            deletedEntry.deletionTime.isAfter(databaseEntry.lastModificationTime)
+        ) {
             database.removeEntryFrom(databaseEntry, databaseEntry.parent)
         }
     }
@@ -327,23 +344,19 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
     /**
      * Check whether a node is in the list of deleted objects
      */
-    private fun Set<DeletedObject>.containsNode(node: NodeVersioned<UUID, GroupKDBX, EntryKDBX>): Boolean {
-        return this.any { it.uuid == node.nodeId.id }
-    }
+    private fun Set<DeletedObject>.containsNode(node: NodeVersioned<UUID, GroupKDBX, EntryKDBX>): Boolean = this.any { it.uuid == node.nodeId.id }
 
     /**
      * Check whether a node is not in the list of deleted objects
      */
-    private fun Set<DeletedObject>.notContainsNode(node: NodeVersioned<UUID, GroupKDBX, EntryKDBX>): Boolean {
-        return !this.containsNode(node)
-    }
+    private fun Set<DeletedObject>.notContainsNode(node: NodeVersioned<UUID, GroupKDBX, EntryKDBX>): Boolean = !this.containsNode(node)
 
     /**
      * Get the first parent not deleted
      */
     private fun firstNotDeletedParent(
         node: NodeVersioned<UUID, GroupKDBX, EntryKDBX>,
-        deletedObjects: Set<DeletedObject>
+        deletedObjects: Set<DeletedObject>,
     ): GroupKDBX? {
         var parent = node.parent
         while (parent != null && deletedObjects.containsNode(parent)) {
@@ -357,10 +370,14 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
      * Recursively check whether a group to be deleted contains a node not to be deleted with [deletedObjects]
      * and move it to the first parent that has not been deleted.
      */
-    private fun deleteGroup(deletedGroup: DeletedObject, deletedObjects: Set<DeletedObject>) {
+    private fun deleteGroup(
+        deletedGroup: DeletedObject,
+        deletedObjects: Set<DeletedObject>,
+    ) {
         val databaseGroup = database.getGroupById(deletedGroup.uuid)
-        if (databaseGroup != null
-            && deletedGroup.deletionTime.isAfter(databaseGroup.lastModificationTime)) {
+        if (databaseGroup != null &&
+            deletedGroup.deletionTime.isAfter(databaseGroup.lastModificationTime)
+        ) {
             // Must be in dedicated list to prevent modification collision
             val entriesToMove = mutableListOf<EntryKDBX>()
             databaseGroup.getChildEntries().forEach { child ->
@@ -381,14 +398,14 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
                 database.removeEntryFrom(child, child.parent)
                 database.addEntryTo(
                     child,
-                    firstNotDeletedParent(databaseGroup, deletedObjects)
+                    firstNotDeletedParent(databaseGroup, deletedObjects),
                 )
             }
             groupsToMove.forEach { child ->
                 database.removeGroupFrom(child, child.parent)
                 database.addGroupTo(
                     child,
-                    firstNotDeletedParent(databaseGroup, deletedObjects)
+                    firstNotDeletedParent(databaseGroup, deletedObjects),
                 )
             }
             // Then delete the group
@@ -403,9 +420,11 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
         val deletedObjectId = deletedIcon.uuid
         val databaseIcon = database.iconsManager.getIcon(deletedObjectId)
         val databaseIconModificationTime = databaseIcon?.lastModificationTime
-        if (databaseIcon != null
-            && (databaseIconModificationTime == null
-                    || (deletedIcon.deletionTime.isAfter(databaseIconModificationTime)))
+        if (databaseIcon != null &&
+            (
+                databaseIconModificationTime == null ||
+                    (deletedIcon.deletionTime.isAfter(databaseIconModificationTime))
+            )
         ) {
             database.removeCustomIcon(deletedObjectId)
         }
@@ -414,7 +433,10 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
     /**
      * Merge [customDataToMerge] in [customData]
      */
-    private fun mergeCustomData(customData: CustomData, customDataToMerge: CustomData) {
+    private fun mergeCustomData(
+        customData: CustomData,
+        customDataToMerge: CustomData,
+    ) {
         customDataToMerge.doForEachItems { customDataItemToMerge ->
             val customDataItem = customData.get(customDataItemToMerge.key)
             if (customDataItem == null) {
@@ -439,18 +461,19 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
      * Guaranteed that a return group is linked to the database tree through its ancestors
      */
     private fun getAttachedParent(
-        group: GroupKDBX?
+        group: GroupKDBX?,
     ): GroupKDBX {
         var realParent: GroupKDBX = database.rootGroup!!
         group?.let { parent ->
             val parentInDatabase = database.getGroupById(parent.nodeId)
             if (parentInDatabase == null) {
-                realParent = GroupKDBX().apply {
-                    updateWith(parent, updateParents = false)
-                }
+                realParent =
+                    GroupKDBX().apply {
+                        updateWith(parent, updateParents = false)
+                    }
                 database.addGroupTo(
                     realParent,
-                    getAttachedParent(parent.parent)
+                    getAttachedParent(parent.parent),
                 )
             } else {
                 realParent = parentInDatabase
@@ -462,7 +485,10 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
     /**
      * Utility method to merge a KDBX entry
      */
-    private fun mergeEntry(nodeToMerge: EntryKDBX, databaseToMerge: DatabaseKDBX) {
+    private fun mergeEntry(
+        nodeToMerge: EntryKDBX,
+        databaseToMerge: DatabaseKDBX,
+    ) {
         val entryId = nodeToMerge.nodeId
         val entry = database.getEntryById(entryId)
         val deletedObject = database.getDeletedObject(entryId)
@@ -470,19 +496,21 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
         databaseToMerge.getEntryById(entryId)?.let { srcEntryToMerge ->
             // Retrieve parent in current database
             val parentEntryToMerge: GroupKDBX = getAttachedParent(srcEntryToMerge.parent)
-            val entryToMerge = EntryKDBX().apply {
-                updateWith(srcEntryToMerge, copyHistory = true, updateParents = false)
-            }
+            val entryToMerge =
+                EntryKDBX().apply {
+                    updateWith(srcEntryToMerge, copyHistory = true, updateParents = false)
+                }
 
             // Copy attachments in main pool
             val newAttachments = mutableListOf<Attachment>()
             entryToMerge.getAttachments(databaseToMerge.attachmentPool).forEach { attachment ->
                 val binarySize = attachment.binaryData.getSize()
-                val binaryData = database.buildNewBinaryAttachment(
-                    isRAMSufficient.invoke(binarySize),
-                    attachment.binaryData.isCompressed,
-                    attachment.binaryData.isProtected
-                )
+                val binaryData =
+                    database.buildNewBinaryAttachment(
+                        isRAMSufficient.invoke(binarySize),
+                        attachment.binaryData.isCompressed,
+                        attachment.binaryData.isProtected,
+                    )
                 attachment.binaryData.getInputDataStream(databaseToMerge.binaryCache).use { inputStream ->
                     binaryData.getOutputDataStream(database.binaryCache).use { outputStream ->
                         inputStream.readAllBytes { buffer ->
@@ -500,8 +528,11 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
             if (entry == null) {
                 // If it's a deleted object, but another instance was updated
                 // If entry parent to add exists and in current database
-                if ((deletedObject == null
-                    || deletedObject.deletionTime.isBefore(entryToMerge.lastModificationTime))) {
+                if ((
+                        deletedObject == null ||
+                            deletedObject.deletionTime.isBefore(entryToMerge.lastModificationTime)
+                    )
+                ) {
                     database.addEntryTo(entryToMerge, parentEntryToMerge)
                 }
             } else {
@@ -537,18 +568,21 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
             // If history not present
             if (!this.history.any {
                     it.lastModificationTime == history.lastModificationTime
-                }) {
+                }
+            ) {
                 this.addEntryToHistory(history)
             }
         }
         // Last entry not present
         if (this.history.find {
                 it.lastModificationTime == entryA.lastModificationTime
-            } == null) {
-            val history = EntryKDBX().apply {
-                updateWith(entryA, copyHistory = false, updateParents = false)
-                parent = null
-            }
+            } == null
+        ) {
+            val history =
+                EntryKDBX().apply {
+                    updateWith(entryA, copyHistory = false, updateParents = false)
+                    parent = null
+                }
             this.addEntryToHistory(history)
         }
     }
@@ -556,7 +590,10 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
     /**
      * Utility method to merge a KDBX group
      */
-    private fun mergeGroup(nodeToMerge: GroupKDBX, databaseToMerge: DatabaseKDBX) {
+    private fun mergeGroup(
+        nodeToMerge: GroupKDBX,
+        databaseToMerge: DatabaseKDBX,
+    ) {
         val groupId = nodeToMerge.nodeId
         val group = database.getGroupById(groupId)
         val deletedObject = database.getDeletedObject(groupId)
@@ -564,14 +601,18 @@ class DatabaseKDBXMerger(private var database: DatabaseKDBX) {
         databaseToMerge.getGroupById(groupId)?.let { srcGroupToMerge ->
             // Retrieve parent in current database
             val parentGroupToMerge: GroupKDBX = getAttachedParent(srcGroupToMerge.parent)
-            val groupToMerge = GroupKDBX().apply {
-                updateWith(srcGroupToMerge, updateParents = false)
-            }
+            val groupToMerge =
+                GroupKDBX().apply {
+                    updateWith(srcGroupToMerge, updateParents = false)
+                }
 
             if (group == null) {
                 // If group parent to add exists and in current database
-                if ((deletedObject == null
-                    || deletedObject.deletionTime.isBefore(groupToMerge.lastModificationTime))) {
+                if ((
+                        deletedObject == null ||
+                            deletedObject.deletionTime.isBefore(groupToMerge.lastModificationTime)
+                    )
+                ) {
                     database.addGroupTo(groupToMerge, parentGroupToMerge)
                 }
             } else {

@@ -6,26 +6,24 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import kotlin.time.Duration.Companion.milliseconds
 
 internal data class PasswordDataAccess(
     val isLibraryUnlocked: Boolean,
     val localPath: String?,
-    val masterPassword: String
+    val masterPassword: String,
 ) {
-    fun isReady(): Boolean {
-        return isLibraryUnlocked && !localPath.isNullOrBlank() && masterPassword.isNotBlank()
-    }
+    fun isReady(): Boolean = isLibraryUnlocked && !localPath.isNullOrBlank() && masterPassword.isNotBlank()
 }
 
 internal const val PasswordFolderIndexLabel = "文件夹"
@@ -42,7 +40,11 @@ internal const val PasswordTimeSortedIndexLabel = "时间排序"
  * 密码列表排序方式。
  */
 enum class PasswordSortMode {
-    DEFAULT, TITLE, ACCOUNT, MODIFIED_TIME, CREATED_TIME
+    DEFAULT,
+    TITLE,
+    ACCOUNT,
+    MODIFIED_TIME,
+    CREATED_TIME,
 }
 
 internal class PasswordPagingSubViewModel(
@@ -51,15 +53,16 @@ internal class PasswordPagingSubViewModel(
     private var accessProvider: () -> PasswordDataAccess,
     private val listModeProvider: () -> PasswordListMode,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
-    private val pageSectionSize: Int = 4
+    private val pageSectionSize: Int = 4,
 ) {
     private companion object {
         /** 搜索输入防抖时长（ms）：用户快速输入时只保留最后一次刷新，避免全库字段详情重复加载。 */
         const val SEARCH_DEBOUNCE_MS = 250L
     }
+
     private data class IndexedSection(
         val key: String,
-        val items: List<PasswordEntry>
+        val items: List<PasswordEntry>,
     )
 
     private val _passwordEntries = MutableStateFlow<List<PasswordEntry>>(emptyList())
@@ -84,6 +87,7 @@ internal class PasswordPagingSubViewModel(
     private val pagingMutex = Mutex()
     private var allSections: List<IndexedSection> = emptyList()
     private var loadedSectionCount: Int = 0
+
     // 增量累积已加载条目，避免每次翻页都重建全量列表（O(n²) → O(n)）
     private var accumulatedEntries: List<PasswordEntry> = emptyList()
 
@@ -113,25 +117,27 @@ internal class PasswordPagingSubViewModel(
         val listMode = listModeProvider()
 
         // 使用合并方法一次性加载列表与计数，避免同一数据库被打开两次
-        val (topLevelPasswordEntries, passwordEntryCount) = withContext(ioDispatcher) {
-            when (listMode) {
-                PasswordListMode.ALL_PASSWORDS -> repository.loadPasswordEntriesByTopLevelWithCount(localPath, masterPassword)
-                PasswordListMode.RECENT_DELETED -> repository.loadRecentDeletedPasswordEntriesWithCount(localPath, masterPassword)
+        val (topLevelPasswordEntries, passwordEntryCount) =
+            withContext(ioDispatcher) {
+                when (listMode) {
+                    PasswordListMode.ALL_PASSWORDS -> repository.loadPasswordEntriesByTopLevelWithCount(localPath, masterPassword)
+                    PasswordListMode.RECENT_DELETED -> repository.loadRecentDeletedPasswordEntriesWithCount(localPath, masterPassword)
+                }
             }
-        }
 
         // 在 IO 线程完成排序/分组，避免首次进入时主线程阻塞导致动画卡顿
         // 复用当前持有的排序/过滤配置，使重新加载（如解锁后）尊重用户已选设置
-        val sections = withContext(ioDispatcher) {
-            computeSections(
-                topLevelPasswordEntries,
-                "",
-                currentCaseSensitive,
-                currentSortMode,
-                currentAscending,
-                currentHideExpired
-            )
-        }
+        val sections =
+            withContext(ioDispatcher) {
+                computeSections(
+                    topLevelPasswordEntries,
+                    "",
+                    currentCaseSensitive,
+                    currentSortMode,
+                    currentAscending,
+                    currentHideExpired,
+                )
+            }
 
         pagingMutex.withLock {
             if (listMode == PasswordListMode.RECENT_DELETED) {
@@ -147,7 +153,7 @@ internal class PasswordPagingSubViewModel(
         caseSensitive: Boolean? = null,
         sortMode: PasswordSortMode? = null,
         ascending: Boolean? = null,
-        hideExpired: Boolean? = null
+        hideExpired: Boolean? = null,
     ) {
         // null 表示沿用当前持有状态，避免分组导航/写入刷新时重置用户的排序与过滤设置
         if (caseSensitive != null) currentCaseSensitive = caseSensitive
@@ -159,73 +165,77 @@ internal class PasswordPagingSubViewModel(
         val effAscending = currentAscending
         val effHideExpired = currentHideExpired
         refreshJob?.cancel()
-        refreshJob = scope.launch {
-            // 搜索输入防抖：快速连续输入时只保留最后一次刷新。
-            // delay 是可取消的挂起点，refreshJob?.cancel() 会在新一轮输入时中断未完成的等待。
-            if (searchQuery.isNotBlank()) {
-                delay(SEARCH_DEBOUNCE_MS.milliseconds)
-            }
-            val access = accessProvider()
-            if (!access.isReady()) {
-                pagingMutex.withLock {
-                    _passwordEntries.value = emptyList()
-                    _passwordIndexKeys.value = emptyList()
-                    _passwordHasMore.value = false
-                    allSections = emptyList()
-                    loadedSectionCount = 0
-                    accumulatedEntries = emptyList()
+        refreshJob =
+            scope.launch {
+                // 搜索输入防抖：快速连续输入时只保留最后一次刷新。
+                // delay 是可取消的挂起点，refreshJob?.cancel() 会在新一轮输入时中断未完成的等待。
+                if (searchQuery.isNotBlank()) {
+                    delay(SEARCH_DEBOUNCE_MS.milliseconds)
                 }
-                return@launch
-            }
+                val access = accessProvider()
+                if (!access.isReady()) {
+                    pagingMutex.withLock {
+                        _passwordEntries.value = emptyList()
+                        _passwordIndexKeys.value = emptyList()
+                        _passwordHasMore.value = false
+                        allSections = emptyList()
+                        loadedSectionCount = 0
+                        accumulatedEntries = emptyList()
+                    }
+                    return@launch
+                }
 
-            val localPath = access.localPath ?: return@launch
-            val masterPassword = access.masterPassword
-            val keyword = searchQuery.trim()
-            val listMode = listModeProvider()
-            val currentGroupId = if (listMode == PasswordListMode.ALL_PASSWORDS) {
-                _passwordGroupStack.value.lastOrNull()
-            } else {
-                null
-            }
+                val localPath = access.localPath ?: return@launch
+                val masterPassword = access.masterPassword
+                val keyword = searchQuery.trim()
+                val listMode = listModeProvider()
+                val currentGroupId =
+                    if (listMode == PasswordListMode.ALL_PASSWORDS) {
+                        _passwordGroupStack.value.lastOrNull()
+                    } else {
+                        null
+                    }
 
-            if (listMode == PasswordListMode.RECENT_DELETED && _passwordGroupStack.value.isNotEmpty()) {
-                _passwordGroupStack.value = emptyList()
-            }
+                if (listMode == PasswordListMode.RECENT_DELETED && _passwordGroupStack.value.isNotEmpty()) {
+                    _passwordGroupStack.value = emptyList()
+                }
 
-            val source = withContext(ioDispatcher) {
-                when (listMode) {
-                    PasswordListMode.ALL_PASSWORDS -> {
-                        if (keyword.isBlank()) {
-                            if (currentGroupId == null) {
-                                repository.loadPasswordEntriesByTopLevel(localPath, masterPassword)
-                            } else {
-                                repository.loadPasswordEntriesByGroup(localPath, masterPassword, currentGroupId)
+                val source =
+                    withContext(ioDispatcher) {
+                        when (listMode) {
+                            PasswordListMode.ALL_PASSWORDS -> {
+                                if (keyword.isBlank()) {
+                                    if (currentGroupId == null) {
+                                        repository.loadPasswordEntriesByTopLevel(localPath, masterPassword)
+                                    } else {
+                                        repository.loadPasswordEntriesByGroup(localPath, masterPassword, currentGroupId)
+                                    }
+                                } else {
+                                    // 搜索时加载字段详情，以便匹配备注/URL/自定义字段等
+                                    repository.loadPasswordEntries(localPath, masterPassword, includeFieldDetails = true)
+                                }
                             }
-                        } else {
-                            // 搜索时加载字段详情，以便匹配备注/URL/自定义字段等
-                            repository.loadPasswordEntries(localPath, masterPassword, includeFieldDetails = true)
+                            PasswordListMode.RECENT_DELETED -> {
+                                // 搜索时加载字段详情，以便匹配备注/URL/自定义字段等（与正常列表模式一致）
+                                repository.loadRecentDeletedPasswordEntries(
+                                    localPath,
+                                    masterPassword,
+                                    includeFieldDetails = keyword.isNotBlank(),
+                                )
+                            }
                         }
                     }
-                    PasswordListMode.RECENT_DELETED -> {
-                        // 搜索时加载字段详情，以便匹配备注/URL/自定义字段等（与正常列表模式一致）
-                        repository.loadRecentDeletedPasswordEntries(
-                            localPath,
-                            masterPassword,
-                            includeFieldDetails = keyword.isNotBlank()
-                        )
+
+                // 在 IO 线程完成排序/分组，避免主线程阻塞
+                val sections =
+                    withContext(ioDispatcher) {
+                        computeSections(source, keyword, effCaseSensitive, effSortMode, effAscending, effHideExpired)
                     }
+
+                pagingMutex.withLock {
+                    applyComputedSectionsLocked(sections)
                 }
             }
-
-            // 在 IO 线程完成排序/分组，避免主线程阻塞
-            val sections = withContext(ioDispatcher) {
-                computeSections(source, keyword, effCaseSensitive, effSortMode, effAscending, effHideExpired)
-            }
-
-            pagingMutex.withLock {
-                applyComputedSectionsLocked(sections)
-            }
-        }
     }
 
     fun loadNextPage() {
@@ -271,20 +281,22 @@ internal class PasswordPagingSubViewModel(
         if (prevCount == -1) return true
 
         // 在 IO 线程展开新增分组的 items（heavy），避免阻塞持锁区
-        val gapEntries = withContext(ioDispatcher) {
-            sectionsToLoad.flatMap { it.items }
-        }
+        val gapEntries =
+            withContext(ioDispatcher) {
+                sectionsToLoad.flatMap { it.items }
+            }
 
         // 合并到累积列表：再短锁验证/合并，若并发引起差异则安全降级为重建已加载区
         pagingMutex.withLock {
             // 计算预期的先前条目数（仅统计大小，开销远小于复制所有元素）
             val expectedPrevEntriesCount = allSections.take(prevCount).sumOf { it.items.size }
-            accumulatedEntries = if (accumulatedEntries.size != expectedPrevEntriesCount) {
-                // 出现并发变更：重建到当前 loadedSectionCount 的累积列表以保证一致性
-                allSections.take(loadedSectionCount).flatMap { it.items }
-            } else {
-                accumulatedEntries + gapEntries
-            }
+            accumulatedEntries =
+                if (accumulatedEntries.size != expectedPrevEntriesCount) {
+                    // 出现并发变更：重建到当前 loadedSectionCount 的累积列表以保证一致性
+                    allSections.take(loadedSectionCount).flatMap { it.items }
+                } else {
+                    accumulatedEntries + gapEntries
+                }
             _passwordEntries.value = accumulatedEntries
             _passwordHasMore.value = loadedSectionCount < allSections.size
         }
@@ -305,7 +317,10 @@ internal class PasswordPagingSubViewModel(
         }
     }
 
-    fun openPasswordGroup(groupStableId: Long, searchQuery: String = "") {
+    fun openPasswordGroup(
+        groupStableId: Long,
+        searchQuery: String = "",
+    ) {
         if (listModeProvider() == PasswordListMode.RECENT_DELETED) {
             return
         }
@@ -377,26 +392,27 @@ internal class PasswordPagingSubViewModel(
         caseSensitive: Boolean = false,
         sortMode: PasswordSortMode = PasswordSortMode.DEFAULT,
         ascending: Boolean = true,
-        hideExpired: Boolean = false
+        hideExpired: Boolean = false,
     ): List<IndexedSection> {
         // 预计算排序键缓存：lowercase() 若在比较器内每次比较都重算，全量排序退化为 O(n log n) 字符串小写。
         // 以 entryId 为键避免用 PasswordEntry 作 HashMap 键（深哈希抵消缓存收益）
         val sortKeyCache = HashMap<Long, String>()
-        val values = source
-            .asSequence()
-            .filter { item ->
-                if (hideExpired && item.isExpired) {
-                    return@filter false
-                }
-                keyword.isBlank() || matchesKeyword(item, keyword, caseSensitive)
-            }
-            .sortedWith(passwordEntryComparator(sortMode, ascending, sortKeyCache))
-            .toList()
+        val values =
+            source
+                .asSequence()
+                .filter { item ->
+                    if (hideExpired && item.isExpired) {
+                        return@filter false
+                    }
+                    keyword.isBlank() || matchesKeyword(item, keyword, caseSensitive)
+                }.sortedWith(passwordEntryComparator(sortMode, ascending, sortKeyCache))
+                .toList()
 
         // 时间排序时跳过字母分组：所有非文件夹条目归入单一分组，保持全局时间序。
         // 字母分组会使整体退化为 A、B、C 分组内各自有序，与用户预期不符。
-        val isTimeSort = sortMode == PasswordSortMode.MODIFIED_TIME ||
-                         sortMode == PasswordSortMode.CREATED_TIME
+        val isTimeSort =
+            sortMode == PasswordSortMode.MODIFIED_TIME ||
+                sortMode == PasswordSortMode.CREATED_TIME
 
         return values
             .groupBy { entry ->
@@ -405,8 +421,7 @@ internal class PasswordPagingSubViewModel(
                 } else {
                     entry.toPasswordIndexKey()
                 }
-            }
-            .toList()
+            }.toList()
             .sortedWith(
                 if (isTimeSort) {
                     // 时间排序：文件夹在前，其余条目作为单一分组在后
@@ -423,9 +438,8 @@ internal class PasswordPagingSubViewModel(
                     }.thenBy { (letter, _) ->
                         if (letter == PasswordFolderIndexLabel) "" else letter
                     }
-                }
-            )
-            .map { (key, items) -> IndexedSection(key = key, items = items) }
+                },
+            ).map { (key, items) -> IndexedSection(key = key, items = items) }
     }
 
     /**
@@ -436,15 +450,16 @@ internal class PasswordPagingSubViewModel(
     private fun passwordEntryComparator(
         sortMode: PasswordSortMode,
         ascending: Boolean,
-        sortKeyCache: HashMap<Long, String>
+        sortKeyCache: HashMap<Long, String>,
     ): Comparator<PasswordEntry> {
-        val byKey: Comparator<PasswordEntry> = when (sortMode) {
-            PasswordSortMode.DEFAULT -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.title.ifBlank { it.account }.lowercase() } }
-            PasswordSortMode.TITLE -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.title.lowercase() } }
-            PasswordSortMode.ACCOUNT -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.account.lowercase() } }
-            PasswordSortMode.MODIFIED_TIME -> compareBy { it.modifiedTime }
-            PasswordSortMode.CREATED_TIME -> compareBy { it.creationTime }
-        }
+        val byKey: Comparator<PasswordEntry> =
+            when (sortMode) {
+                PasswordSortMode.DEFAULT -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.title.ifBlank { it.account }.lowercase() } }
+                PasswordSortMode.TITLE -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.title.lowercase() } }
+                PasswordSortMode.ACCOUNT -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.account.lowercase() } }
+                PasswordSortMode.MODIFIED_TIME -> compareBy { it.modifiedTime }
+                PasswordSortMode.CREATED_TIME -> compareBy { it.creationTime }
+            }
         val keyComp = if (ascending) byKey else byKey.reversed()
         // 文件夹始终置前：Boolean 自然序为 false<true 会把文件夹排到末尾，
         // 显式映射为 0/1 使文件夹在前，且不受 ascending 反序影响。
@@ -454,7 +469,11 @@ internal class PasswordPagingSubViewModel(
     /**
      * 判断条目是否命中搜索关键词：匹配标题/账号/URL/备注/自定义字段键与值/标签。
      */
-    private fun matchesKeyword(item: PasswordEntry, keyword: String, caseSensitive: Boolean): Boolean {
+    private fun matchesKeyword(
+        item: PasswordEntry,
+        keyword: String,
+        caseSensitive: Boolean,
+    ): Boolean {
         val contains: (String) -> Boolean = { field ->
             if (caseSensitive) field.contains(keyword) else field.contains(keyword, ignoreCase = true)
         }

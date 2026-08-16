@@ -25,21 +25,23 @@ import com.kunzisoft.keepass.utils.readBytesLength
 import java.io.IOException
 import java.io.InputStream
 
-
-class HashedBlockInputStream(private val baseStream: InputStream) : InputStream() {
-
+class HashedBlockInputStream(
+    private val baseStream: InputStream,
+) : InputStream() {
     private var bufferPos = 0
     private var buffer: ByteArray = ByteArray(0)
     private var bufferIndex: Long = 0
     private var atEnd = false
 
     @Throws(IOException::class)
-    override fun read(b: ByteArray): Int {
-        return read(b, 0, b.size)
-    }
+    override fun read(b: ByteArray): Int = read(b, 0, b.size)
 
     @Throws(IOException::class)
-    override fun read(outBuffer: ByteArray, byteOffset: Int, length: Int): Int {
+    override fun read(
+        outBuffer: ByteArray,
+        byteOffset: Int,
+        length: Int,
+    ): Int {
         var offset = byteOffset
         if (atEnd) return -1
 
@@ -119,9 +121,7 @@ class HashedBlockInputStream(private val baseStream: InputStream) : InputStream(
     }
 
     @Throws(IOException::class)
-    override fun skip(n: Long): Long {
-        return 0
-    }
+    override fun skip(n: Long): Long = 0
 
     @Throws(IOException::class)
     override fun read(): Int {
@@ -143,7 +143,6 @@ class HashedBlockInputStream(private val baseStream: InputStream) : InputStream(
     }
 
     companion object {
-
         private const val HASH_SIZE = 32
     }
 }

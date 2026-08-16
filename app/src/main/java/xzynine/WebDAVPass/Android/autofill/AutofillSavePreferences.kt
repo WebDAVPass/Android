@@ -14,7 +14,6 @@ import xzynine.WebDAVPass.Android.data.AppSetting
  * 由 [KeeAutofillService] 在连接时读取，设置页可切换。
  */
 object AutofillSavePreferences {
-
     private const val KEY_ASK_TO_SAVE = "autofill_ask_to_save"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -32,7 +31,8 @@ object AutofillSavePreferences {
     fun load(context: Context) {
         scope.launch {
             runCatching {
-                AppDatabaseHolder.getInstance(context)
+                AppDatabaseHolder
+                    .getInstance(context)
                     .appSettingsDao()
                     .getValue(KEY_ASK_TO_SAVE)
                     ?.value
@@ -45,11 +45,15 @@ object AutofillSavePreferences {
     /**
      * 更新偏好并异步持久化（先即时写入 @Volatile 字段，再后台落库）。
      */
-    fun setAskToSaveData(context: Context, enabled: Boolean) {
+    fun setAskToSaveData(
+        context: Context,
+        enabled: Boolean,
+    ) {
         askToSaveData = enabled
         scope.launch {
             runCatching {
-                AppDatabaseHolder.getInstance(context)
+                AppDatabaseHolder
+                    .getInstance(context)
                     .appSettingsDao()
                     .put(AppSetting(KEY_ASK_TO_SAVE, enabled.toString()))
             }

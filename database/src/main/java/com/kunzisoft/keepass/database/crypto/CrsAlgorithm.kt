@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -20,26 +20,29 @@
 package com.kunzisoft.keepass.database.crypto
 
 import com.kunzisoft.encrypt.HashManager
-import com.kunzisoft.keepass.utils.UnsignedInt
 import com.kunzisoft.encrypt.StreamCipher
+import com.kunzisoft.keepass.utils.UnsignedInt
 
-enum class CrsAlgorithm(val id: UnsignedInt) {
-
+enum class CrsAlgorithm(
+    val id: UnsignedInt,
+) {
     Null(UnsignedInt(0)),
     ArcFourVariant(UnsignedInt(1)),
     Salsa20(UnsignedInt(2)),
-    ChaCha20(UnsignedInt(3));
+    ChaCha20(UnsignedInt(3)),
+    ;
 
     companion object {
-
         @Throws(Exception::class)
-        fun getCipher(algorithm: CrsAlgorithm?, key: ByteArray): StreamCipher {
-            return when (algorithm) {
+        fun getCipher(
+            algorithm: CrsAlgorithm?,
+            key: ByteArray,
+        ): StreamCipher =
+            when (algorithm) {
                 Salsa20 -> HashManager.getSalsa20(key)
                 ChaCha20 -> HashManager.getChaCha20(key)
                 else -> throw Exception("Invalid random cipher")
             }
-        }
 
         fun fromId(num: UnsignedInt): CrsAlgorithm? {
             for (e in values()) {
@@ -50,5 +53,4 @@ enum class CrsAlgorithm(val id: UnsignedInt) {
             return null
         }
     }
-
 }

@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX. Derived from KeePass for J2ME
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -28,19 +28,19 @@ import java.io.IOException
 import java.io.InputStream
 
 class DatabaseHeaderKDB : DatabaseHeader() {
-
     /**
      * Used for the dwKeyEncRounds AES transformations
      */
     var transformSeed = ByteArray(32)
 
-    var signature1 = UnsignedInt(0)                  // = DBSIG_1
-    var signature2 = UnsignedInt(0)                  // = DBSIG_2
-    var flags= UnsignedInt(0)
-    var version= UnsignedInt(0)
+    var signature1 = UnsignedInt(0) // = DBSIG_1
+    var signature2 = UnsignedInt(0) // = DBSIG_2
+    var flags = UnsignedInt(0)
+    var version = UnsignedInt(0)
 
     /** Number of groups in the database  */
     var numGroups = UnsignedInt(0)
+
     /** Number of entries in the database  */
     var numEntries = UnsignedInt(0)
 
@@ -77,12 +77,9 @@ class DatabaseHeaderKDB : DatabaseHeader() {
     /** Determine if the database version is compatible with this application
      * @return true, if it is compatible
      */
-    fun matchesVersion(): Boolean {
-        return compatibleHeaders(version, DBVER_DW)
-    }
+    fun matchesVersion(): Boolean = compatibleHeaders(version, DBVER_DW)
 
     companion object {
-
         // DB sig from KeePass 1.03
         val DBSIG_1 = UnsignedInt(-0x655d26fd) // 0x9AA2D903
         val DBSIG_2 = UnsignedInt(-0x4ab4049b) // 0xB54BFB65
@@ -96,14 +93,14 @@ class DatabaseHeaderKDB : DatabaseHeader() {
         /** Size of byte buffer needed to hold this struct.  */
         const val BUF_SIZE = 124
 
-        fun matchesHeader(sig1: UnsignedInt, sig2: UnsignedInt): Boolean {
-            return sig1.toKotlinInt() == DBSIG_1.toKotlinInt() && sig2.toKotlinInt() == DBSIG_2.toKotlinInt()
-        }
+        fun matchesHeader(
+            sig1: UnsignedInt,
+            sig2: UnsignedInt,
+        ): Boolean = sig1.toKotlinInt() == DBSIG_1.toKotlinInt() && sig2.toKotlinInt() == DBSIG_2.toKotlinInt()
 
-        fun compatibleHeaders(one: UnsignedInt, two: UnsignedInt): Boolean {
-            return one.toKotlinInt() and -0x100 == two.toKotlinInt() and -0x100
-        }
+        fun compatibleHeaders(
+            one: UnsignedInt,
+            two: UnsignedInt,
+        ): Boolean = one.toKotlinInt() and -0x100 == two.toKotlinInt() and -0x100
     }
-
-
 }

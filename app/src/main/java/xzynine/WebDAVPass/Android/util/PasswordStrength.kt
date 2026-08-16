@@ -11,7 +11,6 @@ import kotlin.math.log2
  * 60 bits 以下视为弱密码。
  */
 object PasswordStrength {
-
     /** 弱密码阈值（bits）：低于该值视为弱密码。 */
     const val WEAK_PASSWORD_THRESHOLD_BITS = 60.0
 
@@ -62,19 +61,16 @@ object PasswordStrength {
     /**
      * 判断密码是否为弱密码。
      */
-    fun isWeak(password: String): Boolean {
-        return password.isNotEmpty() && estimateBits(password) < WEAK_PASSWORD_THRESHOLD_BITS
-    }
+    fun isWeak(password: String): Boolean = password.isNotEmpty() && estimateBits(password) < WEAK_PASSWORD_THRESHOLD_BITS
 }
 
 /**
  * 熵 bits 转可视化等级（仅供 UI 展示）。
  */
-fun strengthLabel(bits: Double): String {
-    return when {
+fun strengthLabel(bits: Double): String =
+    when {
         bits < 30.0 -> "非常弱"
         bits < 60.0 -> "弱"
         bits < 100.0 -> "中等"
         else -> "强"
     }
-}

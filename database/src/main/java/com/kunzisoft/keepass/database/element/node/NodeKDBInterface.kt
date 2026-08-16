@@ -22,14 +22,13 @@ package com.kunzisoft.keepass.database.element.node
 import com.kunzisoft.keepass.database.element.DateInstant
 
 interface NodeKDBInterface : NodeTimeInterface {
-
     override var expires: Boolean
 
         get() = expiryTime.isNeverExpires()
 
         set(value) {
-            if (!value)
+            if (!value) {
                 expiryTime = DateInstant.NEVER_EXPIRES
+            }
         }
 }
-

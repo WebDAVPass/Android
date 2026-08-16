@@ -5,28 +5,28 @@ import org.junit.Assert
 import org.junit.Test
 
 class SignatureTest {
-
     // All private keys are for testing only.
     // DO NOT USE THEM
 
     // region ES256
     private val es256PemInKeePassXC =
         """
-            -----BEGIN PRIVATE KEY-----
-            MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgaIrmuL+0IpvMpZ4O
-            8+CpXEzVNoyNkhquyRqD8CtVWDmhRANCAARyucecj8E9YvcAZHEYgElcLjwLMWmM
-            vQ2BDZPVL4pLG1oBZer1mPEEQV7LzwGYvTzV/eb9GlXPwj/4la/bpVp1
-            -----END PRIVATE KEY-----
+        -----BEGIN PRIVATE KEY-----
+        MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgaIrmuL+0IpvMpZ4O
+        8+CpXEzVNoyNkhquyRqD8CtVWDmhRANCAARyucecj8E9YvcAZHEYgElcLjwLMWmM
+        vQ2BDZPVL4pLG1oBZer1mPEEQV7LzwGYvTzV/eb9GlXPwj/4la/bpVp1
+        -----END PRIVATE KEY-----
         """.trimIndent().trim()
 
-    private val es256PemInKeePassDX = """
-            -----BEGIN PRIVATE KEY-----
-            MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgaIrmuL+0IpvMpZ4O
-            8+CpXEzVNoyNkhquyRqD8CtVWDmgCgYIKoZIzj0DAQehRANCAARyucecj8E9YvcA
-            ZHEYgElcLjwLMWmMvQ2BDZPVL4pLG1oBZer1mPEEQV7LzwGYvTzV/eb9GlXPwj/4
-            la/bpVp1
-            -----END PRIVATE KEY-----          
-    """.trimIndent().trim()
+    private val es256PemInKeePassDX =
+        """
+        -----BEGIN PRIVATE KEY-----
+        MIGTAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBHkwdwIBAQQgaIrmuL+0IpvMpZ4O
+        8+CpXEzVNoyNkhquyRqD8CtVWDmgCgYIKoZIzj0DAQehRANCAARyucecj8E9YvcA
+        ZHEYgElcLjwLMWmMvQ2BDZPVL4pLG1oBZer1mPEEQV7LzwGYvTzV/eb9GlXPwj/4
+        la/bpVp1
+        -----END PRIVATE KEY-----          
+        """.trimIndent().trim()
 
     @Test
     fun testEC256KeyConversionKeypassXCIn() {
@@ -51,15 +51,15 @@ class SignatureTest {
 
         assert(keyTypeId == Signature.ES256_ALGORITHM)
         assert(privateKeyPem.contains("-----BEGIN PRIVATE KEY-----", true))
-        assert( privateKeyPem.contains("-----BEGIN EC PRIVATE KEY-----", true).not())
-
+        assert(privateKeyPem.contains("-----BEGIN EC PRIVATE KEY-----", true).not())
     }
 
     // endregion
 
     // region RSA
 
-    private val rsa256PemIn = """
+    private val rsa256PemIn =
+        """
         -----BEGIN PRIVATE KEY-----
         MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCaunVJEhLHl7/f
         NZufOmj4MY/1J/YHgMAZYFBORQVm58psUjCU7jIww+BK5aRGShdumRzbxr1Yqyh6
@@ -88,7 +88,7 @@ class SignatureTest {
         ueHJgOLTbDdlQCUacSipHGmWMN9E+EjgBRiqmPZzV6dq/kGc2FUSGB22wY8gckEX
         AmqgkPgYHZ/VzFPTrp97IQ==
         -----END PRIVATE KEY-----
-    """.trimIndent().trim()
+        """.trimIndent().trim()
 
     @Test
     fun testRS256KeyConversion() {
@@ -110,24 +110,27 @@ class SignatureTest {
 
     // region ED25519
 
-    private val ed25519PemInShort = """
+    private val ed25519PemInShort =
+        """
         -----BEGIN PRIVATE KEY-----
         MC4CAQAwBQYDK2VwBCIEILBoCo4+IXxIuwN36/oaEsPgbe6WYJcV9YW+xnprDF4H
         -----END PRIVATE KEY-----
-    """.trimIndent()
+        """.trimIndent()
 
-    private val ed25519PemInLong =  """
+    private val ed25519PemInLong =
+        """
         -----BEGIN PRIVATE KEY-----
         MFECAQEwBQYDK2VwBCIEIESP8edVGbqoR/pKNmy7j7FV8Y68zrIi/5VEuAJ281K6
         gSEAyJU1wQNaJUeyxPcWjN7xZKZUhCRoIFS/MQvbdd4QE7Q=
         -----END PRIVATE KEY-----
-    """.trimIndent()
+        """.trimIndent()
 
-    private val ed25519PemOut = """
+    private val ed25519PemOut =
+        """
         -----BEGIN PRIVATE KEY-----
         MC4CAQAwBQYDK2VwBCIEIESP8edVGbqoR/pKNmy7j7FV8Y68zrIi/5VEuAJ281K6
         -----END PRIVATE KEY-----
-    """.trimIndent()
+        """.trimIndent()
 
     @Test
     fun testEd25519KeyConverionShortIn() {

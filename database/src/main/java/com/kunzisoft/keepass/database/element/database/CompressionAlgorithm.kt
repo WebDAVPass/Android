@@ -29,23 +29,21 @@ import com.kunzisoft.keepass.utils.writeEnum
 //       reach negative ids).
 enum class CompressionAlgorithm : Parcelable {
     NONE,
-    GZIP;
+    GZIP,
+    ;
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         dest.writeEnum(this)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     companion object CREATOR : Parcelable.Creator<CompressionAlgorithm> {
-        override fun createFromParcel(parcel: Parcel): CompressionAlgorithm {
-            return parcel.readEnum<CompressionAlgorithm>() ?: NONE
-        }
+        override fun createFromParcel(parcel: Parcel): CompressionAlgorithm = parcel.readEnum<CompressionAlgorithm>() ?: NONE
 
-        override fun newArray(size: Int): Array<CompressionAlgorithm?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<CompressionAlgorithm?> = arrayOfNulls(size)
     }
 }

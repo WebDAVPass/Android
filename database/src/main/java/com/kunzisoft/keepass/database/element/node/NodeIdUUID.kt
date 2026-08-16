@@ -27,7 +27,6 @@ import com.kunzisoft.keepass.utils.readParcelableCompat
 import java.util.UUID
 
 class NodeIdUUID : NodeId<UUID> {
-
     override var id: UUID = UUID.randomUUID()
         private set
 
@@ -41,44 +40,40 @@ class NodeIdUUID : NodeId<UUID> {
         id = parcel.readParcelableCompat<ParcelUuid>()?.uuid ?: id
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(dest, flags)
         dest.writeParcelable(ParcelUuid(id), flags)
     }
 
     override fun equals(other: Any?): Boolean {
-        if (this === other)
+        if (this === other) {
             return true
-        if (other == null)
+        }
+        if (other == null) {
             return false
+        }
         if (other !is NodeIdUUID) {
             return false
         }
         return this.id == other.id
     }
 
-    override fun hashCode(): Int {
-        return id.hashCode()
-    }
+    override fun hashCode(): Int = id.hashCode()
 
-    override fun toString(): String {
-        return id.asHexString() ?: id.toString()
-    }
+    override fun toString(): String = id.asHexString() ?: id.toString()
 
-    override fun toVisualString(): String {
-        return toString()
-    }
+    override fun toVisualString(): String = toString()
 
     companion object {
         @JvmField
-        val CREATOR: Parcelable.Creator<NodeIdUUID> = object : Parcelable.Creator<NodeIdUUID> {
-            override fun createFromParcel(parcel: Parcel): NodeIdUUID {
-                return NodeIdUUID(parcel)
-            }
+        val CREATOR: Parcelable.Creator<NodeIdUUID> =
+            object : Parcelable.Creator<NodeIdUUID> {
+                override fun createFromParcel(parcel: Parcel): NodeIdUUID = NodeIdUUID(parcel)
 
-            override fun newArray(size: Int): Array<NodeIdUUID?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<NodeIdUUID?> = arrayOfNulls(size)
             }
-        }
     }
 }

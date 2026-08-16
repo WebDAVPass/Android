@@ -27,11 +27,10 @@ import com.kunzisoft.keepass.database.element.security.ProtectedString
 import com.kunzisoft.keepass.utils.UUIDUtils.asHexString
 import com.kunzisoft.keepass.utils.UUIDUtils.asUUID
 
-class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database) {
-
-    override fun getVersion(): Int {
-        return 1
-    }
+class TemplateEngineCompatible(
+    database: DatabaseKDBX,
+) : TemplateEngine(database) {
+    override fun getVersion(): Int = 1
 
     override fun getTemplate(entryKDBX: EntryKDBX): Template? {
         entryKDBX.getCustomFieldValue(TEMPLATE_ENTRY_UUID).asUUID()?.let { templateUUID ->
@@ -41,28 +40,36 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
     }
 
     override fun removeMetaTemplateRecognitionFromEntry(entry: EntryKDBX): EntryKDBX {
-        val entryCopy = EntryKDBX().apply {
-            updateWith(entry)
-        }
+        val entryCopy =
+            EntryKDBX().apply {
+                updateWith(entry)
+            }
         entryCopy.removeField(TEMPLATE_ENTRY_UUID)
         return entryCopy
     }
 
     private fun getTemplateUUIDField(template: Template): Field? {
         template.uuid.asHexString()?.let { uuidString ->
-            return Field(TEMPLATE_ENTRY_UUID,
-                ProtectedString(false, uuidString))
+            return Field(
+                TEMPLATE_ENTRY_UUID,
+                ProtectedString(false, uuidString),
+            )
         }
         return null
     }
 
-    override fun addMetaTemplateRecognitionToEntry(template: Template, entry: EntryKDBX): EntryKDBX {
-        val entryCopy = EntryKDBX().apply {
-            updateWith(entry)
-        }
+    override fun addMetaTemplateRecognitionToEntry(
+        template: Template,
+        entry: EntryKDBX,
+    ): EntryKDBX {
+        val entryCopy =
+            EntryKDBX().apply {
+                updateWith(entry)
+            }
         // Add template field
-        if (template != Template.STANDARD
-            && template != CREATION) {
+        if (template != Template.STANDARD &&
+            template != CREATION
+        ) {
             getTemplateUUIDField(template)?.let { templateField ->
                 entryCopy.putField(templateField)
             }
@@ -72,33 +79,40 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
         return entryCopy
     }
 
-    private fun getOrRetrieveAttributeFromName(attributes: HashMap<String, TemplateAttributePosition>, name: String): TemplateAttributePosition {
-        return if (attributes.containsKey(name)) {
+    private fun getOrRetrieveAttributeFromName(
+        attributes: HashMap<String, TemplateAttributePosition>,
+        name: String,
+    ): TemplateAttributePosition =
+        if (attributes.containsKey(name)) {
             attributes[name]!!
         } else {
-            val newAttribute = TemplateAttributePosition(
-                -1,
-                TemplateAttribute(name, TemplateAttributeType.TEXT)
-            )
+            val newAttribute =
+                TemplateAttributePosition(
+                    -1,
+                    TemplateAttribute(name, TemplateAttributeType.TEXT),
+                )
             attributes[name] = newAttribute
             newAttribute
         }
-    }
 
     override fun buildTemplateEntryField(attribute: TemplateAttribute): Field {
-        val typeAndOptions = attribute.type.typeString +
+        val typeAndOptions =
+            attribute.type.typeString +
                 TemplateAttributeOption.getStringFromOptions(attribute.options)
         // PREFIX_DECODED_TEMPLATE to fix same label as standard fields
-        return Field(addTemplateDecorator(decodeTemplateAttribute(attribute.label)),
-            ProtectedString(attribute.protected, typeAndOptions))
+        return Field(
+            addTemplateDecorator(decodeTemplateAttribute(attribute.label)),
+            ProtectedString(attribute.protected, typeAndOptions),
+        )
     }
 
     override fun decodeTemplateEntry(templateEntry: EntryKDBX): EntryKDBX {
         val attributes = HashMap<String, TemplateAttributePosition>()
         val defaultValues = HashMap<String, String>()
-        val entryCopy = EntryKDBX().apply {
-            updateWith(templateEntry)
-        }
+        val entryCopy =
+            EntryKDBX().apply {
+                updateWith(templateEntry)
+            }
         // Remove template version
         entryCopy.getFieldValue(TEMPLATE_LABEL_VERSION)
         try {
@@ -150,7 +164,7 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
                                 attribute.attribute.options.setLink(true)
                             }
                             value.contains(TEMPLATE_ATTRIBUTE_TYPE_INLINE, true) ||
-                                    value.contains(TEMPLATE_ATTRIBUTE_TYPE_POPOUT, true) -> {
+                                value.contains(TEMPLATE_ATTRIBUTE_TYPE_POPOUT, true) -> {
                                 attribute.attribute.type = TemplateAttributeType.TEXT
                             }
                             value.contains(TEMPLATE_ATTRIBUTE_TYPE_MULTILINE, true) -> {
@@ -209,7 +223,6 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
 
         val newFields = arrayOfNulls<Field>(attributes.size)
         attributes.values.forEach {
-
             val attribute = it.attribute
 
             // Add password generator
@@ -289,9 +302,10 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
     }
 
     override fun encodeTemplateEntry(templateEntry: EntryKDBX): EntryKDBX {
-        val entryCopy = EntryKDBX().apply {
-            updateWith(templateEntry)
-        }
+        val entryCopy =
+            EntryKDBX().apply {
+                updateWith(templateEntry)
+            }
         // Add template version
         entryCopy.putField(TEMPLATE_LABEL_VERSION, ProtectedString(false, "1"))
         // Dynamic attributes
@@ -310,45 +324,45 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
                     // Add Position attribute
                     entryCopy.putField(
                         TEMPLATE_ATTRIBUTE_POSITION_PREFIX + label,
-                        ProtectedString(false, index.toString())
+                        ProtectedString(false, index.toString()),
                     )
                     // Add Title attribute (or alias if defined)
                     val title = options.alias ?: label
                     entryCopy.putField(
                         TEMPLATE_ATTRIBUTE_TITLE_PREFIX + label,
-                        ProtectedString(false, title)
+                        ProtectedString(false, title),
                     )
                     // Add Type attribute
-                    var typeString: String = when {
-                        value.stringValue.contains(TemplateAttributeType.TEXT.typeString, true) -> {
-                            when (options.getNumberLines()) {
-                                1 -> TEMPLATE_ATTRIBUTE_TYPE_INLINE
-                                else -> TEMPLATE_ATTRIBUTE_TYPE_MULTILINE
+                    var typeString: String =
+                        when {
+                            value.stringValue.contains(TemplateAttributeType.TEXT.typeString, true) -> {
+                                when (options.getNumberLines()) {
+                                    1 -> TEMPLATE_ATTRIBUTE_TYPE_INLINE
+                                    else -> TEMPLATE_ATTRIBUTE_TYPE_MULTILINE
+                                }
                             }
-                        }
-                        value.stringValue.contains(TemplateAttributeType.LIST.typeString, true) -> {
-                            TEMPLATE_ATTRIBUTE_TYPE_LISTBOX
-
-                        }
-                        value.stringValue.contains(TemplateAttributeType.DATETIME.typeString, true) -> {
-                            when (options.getDateFormat()) {
-                                DateInstant.Type.DATE -> TEMPLATE_ATTRIBUTE_TYPE_DATE
-                                DateInstant.Type.TIME -> TEMPLATE_ATTRIBUTE_TYPE_TIME
-                                else -> TEMPLATE_ATTRIBUTE_TYPE_DATE_TIME
+                            value.stringValue.contains(TemplateAttributeType.LIST.typeString, true) -> {
+                                TEMPLATE_ATTRIBUTE_TYPE_LISTBOX
                             }
+                            value.stringValue.contains(TemplateAttributeType.DATETIME.typeString, true) -> {
+                                when (options.getDateFormat()) {
+                                    DateInstant.Type.DATE -> TEMPLATE_ATTRIBUTE_TYPE_DATE
+                                    DateInstant.Type.TIME -> TEMPLATE_ATTRIBUTE_TYPE_TIME
+                                    else -> TEMPLATE_ATTRIBUTE_TYPE_DATE_TIME
+                                }
+                            }
+                            value.stringValue.contains(TemplateAttributeType.DIVIDER.typeString, true) -> {
+                                TEMPLATE_ATTRIBUTE_TYPE_DIVIDER
+                            }
+                            else -> TEMPLATE_ATTRIBUTE_TYPE_INLINE
                         }
-                        value.stringValue.contains(TemplateAttributeType.DIVIDER.typeString, true) -> {
-                            TEMPLATE_ATTRIBUTE_TYPE_DIVIDER
-                        }
-                        else -> TEMPLATE_ATTRIBUTE_TYPE_INLINE
-                    }
                     // Add protected string if needed
                     if (value.isProtected) {
                         typeString = "$TEMPLATE_ATTRIBUTE_TYPE_PROTECTED $typeString"
                     }
                     entryCopy.putField(
                         TEMPLATE_ATTRIBUTE_TYPE_PREFIX + label,
-                        ProtectedString(false, typeString)
+                        ProtectedString(false, typeString),
                     )
                     // Add Options attribute
                     // Here only number of chars, lines and list items are supported
@@ -373,13 +387,13 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
                     }
                     entryCopy.putField(
                         TEMPLATE_ATTRIBUTE_OPTIONS_PREFIX + label,
-                        ProtectedString(false, defaultOption)
+                        ProtectedString(false, defaultOption),
                     )
                     // Add default elements
                     if (options.default.isNotEmpty()) {
                         entryCopy.putField(
                             label,
-                            ProtectedString(value.isProtected, options.default)
+                            ProtectedString(value.isProtected, options.default),
                         )
                     }
                     index++
@@ -392,10 +406,12 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
         return entryCopy
     }
 
-    private data class TemplateAttributePosition(var position: Int, var attribute: TemplateAttribute)
+    private data class TemplateAttributePosition(
+        var position: Int,
+        var attribute: TemplateAttribute,
+    )
 
     companion object {
-
         private val TAG = TemplateEngineCompatible::class.java.name
 
         // Custom template ref
@@ -426,8 +442,8 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
         private const val TEMPLATE_ATTRIBUTE_TYPE_POPOUT = "Popout"
         private const val TEMPLATE_ATTRIBUTE_TYPE_RICH_TEXTBOX = "Rich Textbox"
 
-        private fun decodeTemplateAttribute(name: String): String {
-            return when {
+        private fun decodeTemplateAttribute(name: String): String =
+            when {
                 TEMPLATE_LABEL_VERSION.equals(name, true) -> TemplateField.LABEL_VERSION
                 TEMPLATE_ATTRIBUTE_TITLE.equals(name, true) -> TemplateField.LABEL_TITLE
                 TEMPLATE_ATTRIBUTE_USERNAME.equals(name, true) -> TemplateField.LABEL_USERNAME
@@ -438,10 +454,9 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
                 TEMPLATE_ATTRIBUTE_NOTES.equals(name, true) -> TemplateField.LABEL_NOTES
                 else -> name
             }
-        }
 
-        private fun encodeTemplateAttribute(name: String): String {
-            return when {
+        private fun encodeTemplateAttribute(name: String): String =
+            when {
                 TemplateField.LABEL_VERSION.equals(name, true) -> TEMPLATE_LABEL_VERSION
                 TemplateField.LABEL_TITLE.equals(name, true) -> TEMPLATE_ATTRIBUTE_TITLE
                 TemplateField.LABEL_USERNAME.equals(name, true) -> TEMPLATE_ATTRIBUTE_USERNAME
@@ -451,6 +466,5 @@ class TemplateEngineCompatible(database: DatabaseKDBX): TemplateEngine(database)
                 TemplateField.LABEL_NOTES.equals(name, true) -> TEMPLATE_ATTRIBUTE_NOTES
                 else -> name
             }
-        }
     }
 }

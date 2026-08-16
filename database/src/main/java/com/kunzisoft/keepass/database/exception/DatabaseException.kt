@@ -19,7 +19,6 @@
  */
 package com.kunzisoft.keepass.database.exception
 
-import android.content.res.Resources
 import com.kunzisoft.keepass.database.element.node.NodeId
 import com.kunzisoft.keepass.database.element.node.Type
 import java.io.PrintStream
@@ -33,7 +32,6 @@ abstract class LocalizedException : Exception {
 }
 
 abstract class DatabaseException : LocalizedException {
-
     var innerMessage: String? = null
     var parameters = mutableListOf<String>()
     var mThrowable: Throwable? = null
@@ -42,13 +40,15 @@ abstract class DatabaseException : LocalizedException {
     constructor(message: String) : super(message)
     constructor(message: String, throwable: Throwable) {
         mThrowable = throwable
-        innerMessage = StringBuilder().apply {
-            append(message)
-            if (throwable.localizedMessage != null) {
-                append(" ")
-                append(throwable.localizedMessage)
-            }
-        }.toString()
+        innerMessage =
+            StringBuilder()
+                .apply {
+                    append(message)
+                    if (throwable.localizedMessage != null) {
+                        append(" ")
+                        append(throwable.localizedMessage)
+                    }
+                }.toString()
     }
 
     constructor(throwable: Throwable) {
@@ -98,11 +98,18 @@ class InvalidCredentialsDatabaseException : DatabaseInputException {
     constructor(string: String) : super(string)
 }
 
-class KDFMemoryDatabaseException(exception: Throwable) : DatabaseInputException(exception)
+class KDFMemoryDatabaseException(
+    exception: Throwable,
+) : DatabaseInputException(exception)
 
-class NoMemoryDatabaseException(exception: Throwable) : DatabaseInputException(exception)
+class NoMemoryDatabaseException(
+    exception: Throwable,
+) : DatabaseInputException(exception)
 
-class DuplicateUuidDatabaseException(type: Type, uuid: NodeId<*>) : DatabaseInputException() {
+class DuplicateUuidDatabaseException(
+    type: Type,
+    uuid: NodeId<*>,
+) : DatabaseInputException() {
     init {
         parameters.apply {
             add(type.name)

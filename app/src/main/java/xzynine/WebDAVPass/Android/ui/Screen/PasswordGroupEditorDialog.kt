@@ -28,12 +28,12 @@ fun PasswordGroupEditorDialog(
     onGroupTitleChange: (String) -> Unit,
     onGroupNotesChange: (String) -> Unit,
     onDismiss: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
 ) {
     WindowDialog(
         title = title,
         show = show.value,
-        onDismissRequest = onDismiss
+        onDismissRequest = onDismiss,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             TextField(
@@ -41,36 +41,36 @@ fun PasswordGroupEditorDialog(
                 onValueChange = onGroupTitleChange,
                 label = "分组标题",
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
             TextField(
                 value = groupNotes,
                 onValueChange = onGroupNotesChange,
                 label = "备注",
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 IconButton(
                     onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Close,
-                        contentDescription = "取消"
+                        contentDescription = "取消",
                     )
                 }
                 Button(
                     onClick = onConfirm,
                     enabled = groupTitle.isNotBlank(),
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Ok,
-                        contentDescription = "保存"
+                        contentDescription = "保存",
                     )
                 }
             }

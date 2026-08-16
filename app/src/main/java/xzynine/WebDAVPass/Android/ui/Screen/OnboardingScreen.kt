@@ -60,16 +60,16 @@ internal const val SETTING_KEY_ONBOARDING_COMPLETED = "onboarding_completed"
  * 异步读取 app_settings（数据量小，毫秒级），供启动时一次性判断是否展示引导页；
  * 由调用方在协程/IO 上下文中调用，避免阻塞主线程。
  */
-internal suspend fun isOnboardingCompleted(context: Context): Boolean {
-    return withContext(Dispatchers.IO) {
+internal suspend fun isOnboardingCompleted(context: Context): Boolean =
+    withContext(Dispatchers.IO) {
         runCatching {
-            AppDatabaseHolder.getInstance(context)
+            AppDatabaseHolder
+                .getInstance(context)
                 .appSettingsDao()
                 .getValue(SETTING_KEY_ONBOARDING_COMPLETED)
                 ?.value == "true"
         }.getOrDefault(false)
     }
-}
 
 /**
  * 引导页数据
@@ -80,31 +80,32 @@ private data class OnboardingPage(
     val title: String,
     val subtitle: String,
     val icon: ImageVector? = null,
-    val useAppIcon: Boolean = false
+    val useAppIcon: Boolean = false,
 )
 
-private val onboardingPages = listOf(
-    OnboardingPage(
-        title = "欢迎使用 WebDAVPass",
-        subtitle = "本地加密存储的密码与 2FA 动态令牌管理器，数据只属于你自己。",
-        useAppIcon = true
-    ),
-    OnboardingPage(
-        title = "密码与令牌管理",
-        subtitle = "以 KeePass 数据库组织密码、账号与动态令牌（OTP），支持二维码扫码添加，条目自动归类。",
-        icon = MiuixIcons.File
-    ),
-    OnboardingPage(
-        title = "WebDAV 云同步",
-        subtitle = "通过 WebDAV 在多设备间同步数据库，同步冲突自动合并，随时备份与恢复。",
-        icon = MiuixIcons.CloudFill
-    ),
-    OnboardingPage(
-        title = "安全防护",
-        subtitle = "主密码本地加密，支持超时自动锁定与生物识别解锁；应用内防截屏，守护隐私。",
-        icon = MiuixIcons.Lock
+private val onboardingPages =
+    listOf(
+        OnboardingPage(
+            title = "欢迎使用 WebDAVPass",
+            subtitle = "本地加密存储的密码与 2FA 动态令牌管理器，数据只属于你自己。",
+            useAppIcon = true,
+        ),
+        OnboardingPage(
+            title = "密码与令牌管理",
+            subtitle = "以 KeePass 数据库组织密码、账号与动态令牌（OTP），支持二维码扫码添加，条目自动归类。",
+            icon = MiuixIcons.File,
+        ),
+        OnboardingPage(
+            title = "WebDAV 云同步",
+            subtitle = "通过 WebDAV 在多设备间同步数据库，同步冲突自动合并，随时备份与恢复。",
+            icon = MiuixIcons.CloudFill,
+        ),
+        OnboardingPage(
+            title = "安全防护",
+            subtitle = "主密码本地加密，支持超时自动锁定与生物识别解锁；应用内防截屏，守护隐私。",
+            icon = MiuixIcons.Lock,
+        ),
     )
-)
 
 /**
  * 初始引导页（首次启动展示）。
@@ -116,7 +117,7 @@ private val onboardingPages = listOf(
  */
 @Composable
 fun OnboardingScreen(
-    onFinish: () -> Unit
+    onFinish: () -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -131,15 +132,16 @@ fun OnboardingScreen(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(horizontal = 32.dp)
-            .padding(bottom = 24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp)
+                .padding(bottom = 24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         HorizontalPager(
             state = pagerState,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         ) { page ->
             OnboardingPageContent(onboardingPages[page])
         }
@@ -149,13 +151,17 @@ fun OnboardingScreen(
             onboardingPages.indices.forEach { index ->
                 val selected = index == pagerState.currentPage
                 Box(
-                    modifier = Modifier
-                        .size(if (selected) 10.dp else 8.dp)
-                        .clip(CircleShape)
-                        .background(
-                            if (selected) MiuixTheme.colorScheme.primary
-                            else MiuixTheme.colorScheme.outline
-                        )
+                    modifier =
+                        Modifier
+                            .size(if (selected) 10.dp else 8.dp)
+                            .clip(CircleShape)
+                            .background(
+                                if (selected) {
+                                    MiuixTheme.colorScheme.primary
+                                } else {
+                                    MiuixTheme.colorScheme.outline
+                                },
+                            ),
                 )
             }
         }
@@ -171,7 +177,8 @@ fun OnboardingScreen(
                     coroutineScope.launch {
                         withContext(Dispatchers.IO) {
                             runCatching {
-                                AppDatabaseHolder.getInstance(context)
+                                AppDatabaseHolder
+                                    .getInstance(context)
                                     .appSettingsDao()
                                     .put(AppSetting(SETTING_KEY_ONBOARDING_COMPLETED, "true"))
                             }
@@ -184,7 +191,7 @@ fun OnboardingScreen(
                     }
                 }
             },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text(text = if (isLastPage) "开始使用" else "下一步")
         }
@@ -194,11 +201,12 @@ fun OnboardingScreen(
 @Composable
 private fun OnboardingPageContent(page: OnboardingPage) {
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(bottom = 32.dp),
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(bottom = 32.dp),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         if (page.useAppIcon) {
             OnboardingAppLogo(modifier = Modifier.size(96.dp))
@@ -207,7 +215,7 @@ private fun OnboardingPageContent(page: OnboardingPage) {
                 imageVector = page.icon,
                 contentDescription = null,
                 modifier = Modifier.size(72.dp),
-                tint = MiuixTheme.colorScheme.primary
+                tint = MiuixTheme.colorScheme.primary,
             )
         }
 
@@ -216,7 +224,7 @@ private fun OnboardingPageContent(page: OnboardingPage) {
         Text(
             text = page.title,
             fontSize = 24.sp,
-            textAlign = TextAlign.Center
+            textAlign = TextAlign.Center,
         )
 
         Spacer(modifier = Modifier.height(12.dp))
@@ -226,7 +234,7 @@ private fun OnboardingPageContent(page: OnboardingPage) {
             fontSize = 15.sp,
             color = MiuixTheme.colorScheme.onSurfaceSecondary,
             textAlign = TextAlign.Center,
-            lineHeight = 22.sp
+            lineHeight = 22.sp,
         )
     }
 }
@@ -242,28 +250,29 @@ private fun OnboardingAppLogo(modifier: Modifier = Modifier) {
     val context = LocalContext.current
     val shape = RoundedCornerShape(24.dp)
 
-    val appIcon = remember(context) {
-        runCatching {
-            val drawable = context.packageManager.getApplicationIcon(context.packageName)
-            if (drawable is BitmapDrawable) {
-                drawable.bitmap.asImageBitmap()
-            } else {
-                val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
-                val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
-                val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
-                val canvas = Canvas(bitmap)
-                drawable.setBounds(0, 0, width, height)
-                drawable.draw(canvas)
-                bitmap.asImageBitmap()
-            }
-        }.getOrNull()
-    }
+    val appIcon =
+        remember(context) {
+            runCatching {
+                val drawable = context.packageManager.getApplicationIcon(context.packageName)
+                if (drawable is BitmapDrawable) {
+                    drawable.bitmap.asImageBitmap()
+                } else {
+                    val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: 96
+                    val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: 96
+                    val bitmap = createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                    val canvas = Canvas(bitmap)
+                    drawable.setBounds(0, 0, width, height)
+                    drawable.draw(canvas)
+                    bitmap.asImageBitmap()
+                }
+            }.getOrNull()
+        }
 
     if (appIcon != null) {
         Image(
             bitmap = appIcon,
             contentDescription = "应用图标",
-            modifier = modifier.clip(shape)
+            modifier = modifier.clip(shape),
         )
     } else {
         // 兜底：读取失败时使用可被 painterResource 支持的矢量图层拼出图标
@@ -272,13 +281,13 @@ private fun OnboardingAppLogo(modifier: Modifier = Modifier) {
                 painter = painterResource(R.drawable.ic_launcher_background),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.FillBounds
+                contentScale = ContentScale.FillBounds,
             )
             Image(
                 painter = painterResource(R.drawable.ic_launcher_foreground),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Fit
+                contentScale = ContentScale.Fit,
             )
         }
     }

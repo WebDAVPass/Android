@@ -22,7 +22,6 @@ package com.kunzisoft.keepass.database.element.node
 import com.kunzisoft.keepass.database.element.DateInstant
 
 interface NodeTimeInterface {
-
     var creationTime: DateInstant
 
     var lastModificationTime: DateInstant

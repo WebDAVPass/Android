@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -31,15 +31,16 @@ import com.kunzisoft.keepass.database.element.node.NodeId
 import com.kunzisoft.keepass.database.element.node.NodeIdUUID
 import com.kunzisoft.keepass.database.element.node.NodeKDBXInterface
 import com.kunzisoft.keepass.database.element.node.Type
-import com.kunzisoft.keepass.utils.readParcelableCompat
-import com.kunzisoft.keepass.utils.readSerializableCompat
 import com.kunzisoft.keepass.utils.UnsignedLong
 import com.kunzisoft.keepass.utils.readBooleanCompat
+import com.kunzisoft.keepass.utils.readParcelableCompat
+import com.kunzisoft.keepass.utils.readSerializableCompat
 import com.kunzisoft.keepass.utils.writeBooleanCompat
 import java.util.*
 
-class GroupKDBX : GroupVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInterface {
-
+class GroupKDBX :
+    GroupVersioned<UUID, UUID, GroupKDBX, EntryKDBX>,
+    NodeKDBXInterface {
     override var usageCount = UnsignedLong(0)
     override var locationChanged = DateInstant()
     override var customData = CustomData()
@@ -57,13 +58,9 @@ class GroupKDBX : GroupVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
     override val type: Type
         get() = Type.GROUP
 
-    override fun initNodeId(): NodeId<UUID> {
-        return NodeIdUUID()
-    }
+    override fun initNodeId(): NodeId<UUID> = NodeIdUUID()
 
-    override fun copyNodeId(nodeId: NodeId<UUID>): NodeId<UUID> {
-        return NodeIdUUID(nodeId.id)
-    }
+    override fun copyNodeId(nodeId: NodeId<UUID>): NodeId<UUID> = NodeIdUUID(nodeId.id)
 
     constructor() : super()
 
@@ -83,31 +80,54 @@ class GroupKDBX : GroupVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
         previousParentGroup = parcel.readParcelableCompat<ParcelUuid>()?.uuid ?: DatabaseVersioned.UUID_ZERO
     }
 
-    override fun readParentParcelable(parcel: Parcel): GroupKDBX? {
-        return parcel.readParcelableCompat()
-    }
+    override fun readParentParcelable(parcel: Parcel): GroupKDBX? = parcel.readParcelableCompat()
 
-    override fun writeParentParcelable(parent: GroupKDBX?, parcel: Parcel, flags: Int) {
+    override fun writeParentParcelable(
+        parent: GroupKDBX?,
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(parent, flags)
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(dest, flags)
         dest.writeLong(usageCount.toKotlinLong())
         dest.writeParcelable(locationChanged, flags)
         dest.writeParcelable(customData, flags)
         dest.writeString(notes)
         dest.writeBooleanCompat(isExpanded)
-        dest.writeInt(if (enableSearching == null) -1 else if (enableSearching!!) 1 else 0)
-        dest.writeInt(if (enableAutoType == null) -1 else if (enableAutoType!!) 1 else 0)
+        dest.writeInt(
+            if (enableSearching == null) {
+                -1
+            } else if (enableSearching!!) {
+                1
+            } else {
+                0
+            },
+        )
+        dest.writeInt(
+            if (enableAutoType == null) {
+                -1
+            } else if (enableAutoType!!) {
+                1
+            } else {
+                0
+            },
+        )
         dest.writeString(defaultAutoTypeSequence)
         dest.writeSerializable(lastTopVisibleEntry)
         dest.writeParcelable(tags, flags)
         dest.writeParcelable(ParcelUuid(previousParentGroup), flags)
     }
 
-    fun updateWith(source: GroupKDBX,
-                   updateParents: Boolean = true) {
+    fun updateWith(
+        source: GroupKDBX,
+        updateParents: Boolean = true,
+    ) {
         super.updateWith(source, updateParents)
         usageCount = source.usageCount
         locationChanged = DateInstant(source.locationChanged)
@@ -128,16 +148,12 @@ class GroupKDBX : GroupVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
     }
 
     companion object {
-
         @JvmField
-        val CREATOR: Parcelable.Creator<GroupKDBX> = object : Parcelable.Creator<GroupKDBX> {
-            override fun createFromParcel(parcel: Parcel): GroupKDBX {
-                return GroupKDBX(parcel)
-            }
+        val CREATOR: Parcelable.Creator<GroupKDBX> =
+            object : Parcelable.Creator<GroupKDBX> {
+                override fun createFromParcel(parcel: Parcel): GroupKDBX = GroupKDBX(parcel)
 
-            override fun newArray(size: Int): Array<GroupKDBX?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<GroupKDBX?> = arrayOfNulls(size)
             }
-        }
     }
 }

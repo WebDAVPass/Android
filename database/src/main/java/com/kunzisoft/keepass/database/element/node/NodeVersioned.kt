@@ -33,9 +33,10 @@ import com.kunzisoft.keepass.utils.writeBooleanCompat
 /**
  * Abstract class who manage Groups and Entries
  */
-abstract class NodeVersioned<IdType, Parent : GroupVersionedInterface<Parent, Entry>, Entry : EntryVersionedInterface<Parent>>
-    : NodeVersionedInterface<Parent>, NodeTimeInterface, Parcelable {
-
+abstract class NodeVersioned<IdType, Parent : GroupVersionedInterface<Parent, Entry>, Entry : EntryVersionedInterface<Parent>> :
+    NodeVersionedInterface<Parent>,
+    NodeTimeInterface,
+    Parcelable {
     var nodeId: NodeId<IdType> = this.initNodeId()
 
     val id: IdType
@@ -56,7 +57,10 @@ abstract class NodeVersioned<IdType, Parent : GroupVersionedInterface<Parent, En
         this.expires = parcel.readBooleanCompat()
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         dest.writeParcelable(nodeId, flags)
         writeParentParcelable(parent, dest, flags)
         dest.writeParcelable(icon, flags)
@@ -67,12 +71,12 @@ abstract class NodeVersioned<IdType, Parent : GroupVersionedInterface<Parent, En
         dest.writeBooleanCompat(expires)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    protected fun updateWith(source: NodeVersioned<IdType, Parent, Entry>,
-                             updateParents: Boolean = true) {
+    protected fun updateWith(
+        source: NodeVersioned<IdType, Parent, Entry>,
+        updateParents: Boolean = true,
+    ) {
         this.nodeId = copyNodeId(source.nodeId)
         if (updateParents) {
             this.parent = source.parent
@@ -86,9 +90,16 @@ abstract class NodeVersioned<IdType, Parent : GroupVersionedInterface<Parent, En
     }
 
     protected abstract fun initNodeId(): NodeId<IdType>
+
     protected abstract fun copyNodeId(nodeId: NodeId<IdType>): NodeId<IdType>
+
     protected abstract fun readParentParcelable(parcel: Parcel): Parent?
-    protected abstract fun writeParentParcelable(parent: Parent?, parcel: Parcel, flags: Int)
+
+    protected abstract fun writeParentParcelable(
+        parent: Parent?,
+        parcel: Parcel,
+        flags: Int,
+    )
 
     final override var parent: Parent? = null
 
@@ -108,15 +119,14 @@ abstract class NodeVersioned<IdType, Parent : GroupVersionedInterface<Parent, En
     /**
      * @return true if parent is present (false if not present, can be a root or a detach element)
      */
-    override fun containsParent(): Boolean {
-        return parent != null
-    }
+    override fun containsParent(): Boolean = parent != null
 
     override fun afterAssignNewParent() {}
 
     override fun isContainedIn(container: Parent): Boolean {
-        if (this == container)
+        if (this == container) {
             return true
+        }
         var cur = this.parent
         while (cur != null) {
             if (cur == container) {
@@ -127,7 +137,10 @@ abstract class NodeVersioned<IdType, Parent : GroupVersionedInterface<Parent, En
         return false
     }
 
-    override fun touch(modified: Boolean, touchParents: Boolean) {
+    override fun touch(
+        modified: Boolean,
+        touchParents: Boolean,
+    ) {
         val now = DateInstant()
         lastAccessTime = now
 
@@ -141,21 +154,19 @@ abstract class NodeVersioned<IdType, Parent : GroupVersionedInterface<Parent, En
     }
 
     override fun equals(other: Any?): Boolean {
-        if (this === other)
+        if (this === other) {
             return true
-        if (other == null)
+        }
+        if (other == null) {
             return false
+        }
         if (other !is NodeVersioned<*, *, *>) {
             return false
         }
         return type == other.type && nodeId == other.nodeId
     }
 
-    override fun hashCode(): Int {
-        return nodeId.hashCode()
-    }
+    override fun hashCode(): Int = nodeId.hashCode()
 
-    override fun toString(): String {
-        return "$title ($nodeId)"
-    }
+    override fun toString(): String = "$title ($nodeId)"
 }

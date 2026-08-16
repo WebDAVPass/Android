@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Brian Pellin, Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ import android.os.Parcel
 import android.os.Parcelable
 
 class IconImageStandard : IconImageDraw {
-
     val id: Int
 
     constructor() {
@@ -31,21 +30,23 @@ class IconImageStandard : IconImageDraw {
     }
 
     constructor(iconId: Int) {
-        if (!isCorrectIconId(iconId))
+        if (!isCorrectIconId(iconId)) {
             this.id = KEY_ID
-        else
+        } else {
             this.id = iconId
+        }
     }
 
     constructor(parcel: Parcel) {
         id = parcel.readInt()
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         dest.writeInt(id)
     }
 
@@ -56,15 +57,15 @@ class IconImageStandard : IconImageDraw {
         return result
     }
 
-    override fun getIconImageToDraw(): IconImage {
-        return IconImage(this)
-    }
+    override fun getIconImageToDraw(): IconImage = IconImage(this)
 
     override fun equals(other: Any?): Boolean {
-        if (this === other)
+        if (this === other) {
             return true
-        if (other == null)
+        }
+        if (other == null) {
             return false
+        }
         if (other !is IconImageStandard) {
             return false
         }
@@ -72,7 +73,6 @@ class IconImageStandard : IconImageDraw {
     }
 
     companion object {
-
         const val NUMBER_STANDARD_ICONS = 69
 
         const val KEY_ID = 0
@@ -88,19 +88,14 @@ class IconImageStandard : IconImageDraw {
         const val STAR_ID = 61
         const val DOLLAR_ID = 66
 
-        fun isCorrectIconId(iconId: Int): Boolean {
-            return iconId in 0 until NUMBER_STANDARD_ICONS
-        }
+        fun isCorrectIconId(iconId: Int): Boolean = iconId in 0 until NUMBER_STANDARD_ICONS
 
         @JvmField
-        val CREATOR: Parcelable.Creator<IconImageStandard> = object : Parcelable.Creator<IconImageStandard> {
-            override fun createFromParcel(parcel: Parcel): IconImageStandard {
-                return IconImageStandard(parcel)
-            }
+        val CREATOR: Parcelable.Creator<IconImageStandard> =
+            object : Parcelable.Creator<IconImageStandard> {
+                override fun createFromParcel(parcel: Parcel): IconImageStandard = IconImageStandard(parcel)
 
-            override fun newArray(size: Int): Array<IconImageStandard?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<IconImageStandard?> = arrayOfNulls(size)
             }
-        }
     }
 }

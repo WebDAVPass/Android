@@ -38,8 +38,9 @@ import com.kunzisoft.keepass.utils.readParcelableCompat
 import com.kunzisoft.keepass.utils.writeBooleanCompat
 import java.util.UUID
 
-class Group : Node, GroupVersionedInterface<Group, Entry> {
-
+class Group :
+    Node,
+    GroupVersionedInterface<Group, Entry> {
     var groupKDB: GroupKDB? = null
         private set
     var groupKDBX: GroupKDBX? = null
@@ -59,12 +60,14 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
      */
     constructor(group: Group) {
         if (group.groupKDB != null) {
-            if (this.groupKDB == null)
+            if (this.groupKDB == null) {
                 this.groupKDB = GroupKDB()
+            }
         }
         if (group.groupKDBX != null) {
-            if (this.groupKDBX == null)
+            if (this.groupKDBX == null) {
                 this.groupKDBX = GroupKDBX()
+            }
         }
         group.groupKDB?.let {
             this.groupKDB?.updateWith(it)
@@ -91,20 +94,17 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
     }
 
     companion object CREATOR : Parcelable.Creator<Group> {
-        override fun createFromParcel(parcel: Parcel): Group {
-            return Group(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): Group = Group(parcel)
 
-        override fun newArray(size: Int): Array<Group?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<Group?> = arrayOfNulls(size)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         dest.writeParcelable(groupKDB, flags)
         dest.writeParcelable(groupKDBX, flags)
         dest.writeBooleanCompat(isVirtual)
@@ -159,9 +159,7 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
             groupKDBX?.parent = value?.groupKDBX
         }
 
-    override fun containsParent(): Boolean {
-        return groupKDB?.containsParent() ?: groupKDBX?.containsParent() ?: false
-    }
+    override fun containsParent(): Boolean = groupKDB?.containsParent() ?: groupKDBX?.containsParent() ?: false
 
     override fun afterAssignNewParent() {
         groupKDB?.afterAssignNewParent()
@@ -188,7 +186,10 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
         }
     }
 
-    override fun touch(modified: Boolean, touchParents: Boolean) {
+    override fun touch(
+        modified: Boolean,
+        touchParents: Boolean,
+    ) {
         groupKDB?.touch(modified, touchParents)
         groupKDBX?.touch(modified, touchParents)
     }
@@ -204,11 +205,10 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
         return contained ?: false
     }
 
-    override fun nodeIndexInParentForNaturalOrder(): Int {
-        return groupKDB?.nodeIndexInParentForNaturalOrder()
-                ?: groupKDBX?.nodeIndexInParentForNaturalOrder()
-                ?: -1
-    }
+    override fun nodeIndexInParentForNaturalOrder(): Int =
+        groupKDB?.nodeIndexInParentForNaturalOrder()
+            ?: groupKDBX?.nodeIndexInParentForNaturalOrder()
+            ?: -1
 
     override var creationTime: DateInstant
         get() = groupKDB?.creationTime ?: groupKDBX?.creationTime ?: DateInstant()
@@ -262,25 +262,23 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
             groupKDBX?.customData = value
         }
 
-    override fun getChildGroups(): List<Group> {
-        return groupKDB?.getChildGroups()?.map {
+    override fun getChildGroups(): List<Group> =
+        groupKDB?.getChildGroups()?.map {
             Group(it)
-        } ?:
-        groupKDBX?.getChildGroups()?.map {
-            Group(it)
-        } ?:
-        ArrayList()
-    }
+        }
+            ?: groupKDBX?.getChildGroups()?.map {
+                Group(it)
+            }
+            ?: ArrayList()
 
-    override fun getChildEntries(): List<Entry> {
-        return groupKDB?.getChildEntries()?.map {
+    override fun getChildEntries(): List<Entry> =
+        groupKDB?.getChildEntries()?.map {
             Entry(it)
-        } ?:
-        groupKDBX?.getChildEntries()?.map {
-            Entry(it)
-        } ?:
-        ArrayList()
-    }
+        }
+            ?: groupKDBX?.getChildEntries()?.map {
+                Entry(it)
+            }
+            ?: ArrayList()
 
     fun getChildEntriesInfo(database: Database): List<EntryInfo> {
         val entriesInfo = ArrayList<EntryInfo>()
@@ -303,7 +301,7 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
 
     fun getNumberOfChildEntries(
         recursive: Boolean = false,
-        filter: (Node) -> Boolean = { true }
+        filter: (Node) -> Boolean = { true },
     ): Int {
         numberOfChildEntries = getChildEntries().filter(filter).size
         recursiveNumberOfChildEntries = getNumberOfChildEntriesInGroups(filter)
@@ -314,9 +312,7 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
      * Filter entries and return children
      * @return List of direct children (one level below) as NodeVersioned
      */
-    fun getChildren(filter: ((Node) -> Boolean) = { true }): List<Node> {
-        return getChildGroups().filter(filter) + getChildEntries().filter(filter)
-    }
+    fun getChildren(filter: ((Node) -> Boolean) = { true }): List<Node> = getChildGroups().filter(filter) + getChildEntries().filter(filter)
 
     override fun addChildGroup(group: Group) {
         group.groupKDB?.let {
@@ -391,7 +387,9 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
 
     var nodeIdKDB: NodeId<Int>
         get() = groupKDB?.nodeId ?: NodeIdInt()
-        set(value) { groupKDB?.nodeId = value }
+        set(value) {
+            groupKDB?.nodeId = value
+        }
 
     fun setNodeId(id: NodeIdInt) {
         groupKDB?.nodeId = id
@@ -405,7 +403,9 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
 
     var nodeIdKDBX: NodeId<UUID>
         get() = groupKDBX?.nodeId ?: NodeIdUUID()
-        set(value) { groupKDBX?.nodeId = value }
+        set(value) {
+            groupKDBX?.nodeId = value
+        }
 
     fun setNodeId(id: NodeIdUUID) {
         groupKDBX?.nodeId = id
@@ -417,9 +417,7 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
             groupKDBX?.enableSearching = value
         }
 
-    fun isSearchable(): Boolean {
-        return searchable ?: (parent?.isSearchable() ?: true)
-    }
+    fun isSearchable(): Boolean = searchable ?: (parent?.isSearchable() ?: true)
 
     var enableAutoType: Boolean?
         get() = groupKDBX?.enableAutoType
@@ -495,9 +493,5 @@ class Group : Node, GroupVersionedInterface<Group, Entry> {
         return result
     }
 
-    override fun toString(): String {
-        return groupKDB?.toString() ?: groupKDBX?.toString() ?: "Undefined"
-    }
-
-
+    override fun toString(): String = groupKDB?.toString() ?: groupKDBX?.toString() ?: "Undefined"
 }

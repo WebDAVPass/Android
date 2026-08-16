@@ -13,7 +13,6 @@ import java.io.InputStream
 import kotlin.random.Random
 
 class BinaryDataTest {
-
     private val context: Context by lazy {
         InstrumentationRegistry.getInstrumentation().context
     }
@@ -25,7 +24,10 @@ class BinaryDataTest {
 
     private val binaryCache = BinaryCache()
 
-    private fun saveBinary(asset: String, binaryData: BinaryFile) {
+    private fun saveBinary(
+        asset: String,
+        binaryData: BinaryFile,
+    ) {
         context.assets.open(asset).use { assetInputStream ->
             binaryData.getOutputDataStream(binaryCache).use { binaryOutputStream ->
                 assetInputStream.readAllBytes(DEFAULT_BUFFER_SIZE) { buffer ->
@@ -129,20 +131,30 @@ class BinaryDataTest {
     fun testReadText() {
         val binaryA = BinaryFile(fileA)
         saveBinary(TEST_TEXT_ASSET, binaryA)
-        assert(streamAreEquals(context.assets.open(TEST_TEXT_ASSET),
-                binaryA.getInputDataStream(binaryCache)))
+        assert(
+            streamAreEquals(
+                context.assets.open(TEST_TEXT_ASSET),
+                binaryA.getInputDataStream(binaryCache),
+            ),
+        )
     }
 
     @Test
     fun testReadImage() {
         val binaryA = BinaryFile(fileA)
         saveBinary(TEST_IMAGE_ASSET, binaryA)
-        assert(streamAreEquals(context.assets.open(TEST_IMAGE_ASSET),
-                binaryA.getInputDataStream(binaryCache)))
+        assert(
+            streamAreEquals(
+                context.assets.open(TEST_IMAGE_ASSET),
+                binaryA.getInputDataStream(binaryCache),
+            ),
+        )
     }
 
-    private fun streamAreEquals(inputStreamA: InputStream,
-                                inputStreamB: InputStream): Boolean {
+    private fun streamAreEquals(
+        inputStreamA: InputStream,
+        inputStreamB: InputStream,
+    ): Boolean {
         val bufferA = ByteArray(DEFAULT_BUFFER_SIZE)
         val bufferB = ByteArray(DEFAULT_BUFFER_SIZE)
         val dataInputStreamB = DataInputStream(inputStreamB)
@@ -151,15 +163,15 @@ class BinaryDataTest {
             while (inputStreamA.read(bufferA).also { len = it } > 0) {
                 dataInputStreamB.readFully(bufferB, 0, len)
                 for (i in 0 until len) {
-                    if (bufferA[i] != bufferB[i])
+                    if (bufferA[i] != bufferB[i]) {
                         return false
+                    }
                 }
             }
             return inputStreamB.read() < 0 // is the end of the second file also.
         } catch (e: Exception) {
             return false
-        }
-        finally {
+        } finally {
             inputStreamA.close()
             inputStreamB.close()
         }

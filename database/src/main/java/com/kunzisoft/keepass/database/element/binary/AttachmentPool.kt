@@ -1,6 +1,6 @@
 /*
  * Copyright 2021 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -20,14 +20,14 @@
 package com.kunzisoft.keepass.database.element.binary
 
 class AttachmentPool : BinaryPool<Int>() {
-
     /**
      * Utility method to find an unused key in the pool
      */
     override fun findUnusedKey(): Int {
         var unusedKey = 0
-        while (pool[unusedKey] != null)
+        while (pool[unusedKey] != null) {
             unusedKey++
+        }
         return unusedKey
     }
 
@@ -36,9 +36,10 @@ class AttachmentPool : BinaryPool<Int>() {
      */
     fun getBinaryIndexFromKey(key: Int): Int? {
         val index = orderedBinariesWithoutDuplication().indexOfFirst { it.keys.contains(key) }
-        return if (index < 0)
+        return if (index < 0) {
             null
-        else
+        } else {
             index
+        }
     }
 }

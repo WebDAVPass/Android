@@ -2,8 +2,8 @@ package xzynine.WebDAVPass.Android.util
 
 import java.time.Instant
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter as JavaDateTimeFormatter
 import java.util.Locale
+import java.time.format.DateTimeFormatter as JavaDateTimeFormatter
 
 /**
  * 时间戳格式化工具
@@ -13,7 +13,6 @@ import java.util.Locale
  */
 @Suppress("unused", "MemberVisibilityCanBePrivate")
 object LocalTimeFormatter {
-
     /** 默认本地时间格式：年-月-日 时:分:秒 */
     private const val PATTERN_DATETIME = "yyyy-MM-dd HH:mm:ss"
 
@@ -24,11 +23,15 @@ object LocalTimeFormatter {
      * @param pattern 目标格式，默认 "yyyy-MM-dd HH:mm:ss"
      * @return 格式化后的本地时间字符串；时间戳非法或格式化失败时返回空串
      */
-    fun formatLocalDateTime(epochMillis: Long?, pattern: String = PATTERN_DATETIME): String {
+    fun formatLocalDateTime(
+        epochMillis: Long?,
+        pattern: String = PATTERN_DATETIME,
+    ): String {
         if (epochMillis == null || epochMillis <= 0L) return ""
         return runCatching {
             // 显式指定设备默认时区，确保 UTC 时间戳按实际时区转换为本地时间
-            JavaDateTimeFormatter.ofPattern(pattern, Locale.getDefault())
+            JavaDateTimeFormatter
+                .ofPattern(pattern, Locale.getDefault())
                 .withZone(ZoneId.systemDefault())
                 .format(Instant.ofEpochMilli(epochMillis))
         }.getOrDefault("")

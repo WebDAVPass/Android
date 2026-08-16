@@ -1,6 +1,6 @@
 /*
  * Copyright 2017 Brian Pellin, Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -18,7 +18,6 @@
  *
  */
 package com.kunzisoft.keepass.database.element.node
-
 
 /** "Delegate" class for operating on each group when traversing all of
  * them

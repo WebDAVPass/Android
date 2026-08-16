@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -19,15 +19,13 @@
  */
 package com.kunzisoft.keepass.database.file.output
 
-import com.kunzisoft.keepass.database.file.DatabaseHeader
 import com.kunzisoft.keepass.database.exception.DatabaseOutputException
-
+import com.kunzisoft.keepass.database.file.DatabaseHeader
 import java.io.OutputStream
 import java.security.NoSuchAlgorithmException
 import java.security.SecureRandom
 
 abstract class DatabaseOutput<Header : DatabaseHeader> {
-
     @Throws(DatabaseOutputException::class)
     protected open fun setIVs(header: Header): SecureRandom {
         val random: SecureRandom
@@ -44,7 +42,8 @@ abstract class DatabaseOutput<Header : DatabaseHeader> {
     }
 
     @Throws(DatabaseOutputException::class)
-    abstract fun writeDatabase(outputStream: OutputStream,
-                               assignMasterKey: () -> Unit)
-
+    abstract fun writeDatabase(
+        outputStream: OutputStream,
+        assignMasterKey: () -> Unit,
+    )
 }

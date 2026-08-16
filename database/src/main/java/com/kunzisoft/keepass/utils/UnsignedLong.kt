@@ -19,16 +19,15 @@
  */
 package com.kunzisoft.keepass.utils
 
-class UnsignedLong(value: Long) {
-
+class UnsignedLong(
+    value: Long,
+) {
     private var unsignedValue: Long = value
 
     /**
      * Convert an unsigned Long to Kotlin Long
      */
-    fun toKotlinLong(): Long {
-        return unsignedValue
-    }
+    fun toKotlinLong(): Long = unsignedValue
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -39,15 +38,14 @@ class UnsignedLong(value: Long) {
         return unsignedValue == other.unsignedValue
     }
 
-    override fun hashCode(): Int {
-        return unsignedValue.hashCode()
-    }
+    override fun hashCode(): Int = unsignedValue.hashCode()
 
     fun plusOne() {
-        if (unsignedValue >= 0L)
+        if (unsignedValue >= 0L) {
             unsignedValue++
-        else
+        } else {
             unsignedValue--
+        }
     }
 
     companion object {

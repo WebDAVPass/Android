@@ -13,7 +13,7 @@ import top.yukonga.miuix.kmp.icon.extended.Back
 @Composable
 fun SettingsTopAppBar(
     title: String,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
 ) {
     SmallTopAppBar(
         title = title,
@@ -21,10 +21,10 @@ fun SettingsTopAppBar(
             IconButton(onClick = onNavigateBack) {
                 Icon(
                     imageVector = MiuixIcons.Back,
-                    contentDescription = "返回"
+                    contentDescription = "返回",
                 )
             }
         },
-        defaultWindowInsetsPadding = true
+        defaultWindowInsetsPadding = true,
     )
 }

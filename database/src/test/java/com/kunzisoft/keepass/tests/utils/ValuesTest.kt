@@ -29,7 +29,6 @@ import java.io.ByteArrayOutputStream
 import java.util.*
 
 class ValuesTest : TestCase() {
-
     fun testReadWriteLongZero() {
         testReadWriteLong(0.toByte())
     }
@@ -84,7 +83,11 @@ class ValuesTest : TestCase() {
         assertArrayEquals(orig, dest)
     }
 
-    private fun setArray(buf: ByteArray, value: Byte, size: Int) {
+    private fun setArray(
+        buf: ByteArray,
+        value: Byte,
+        size: Int,
+    ) {
         for (i in 0 until size) {
             buf[i] = value
         }
@@ -138,16 +141,19 @@ class ValuesTest : TestCase() {
     }
 
     fun testDate() {
-        val expected = DateInstant(
-            Instant.ofEpochMilli(
-                DateTime(
-                    2008,
-                    1,
-                    2,
-                    3,
-                    4,
-                    5
-        ).millis))
+        val expected =
+            DateInstant(
+                Instant.ofEpochMilli(
+                    DateTime(
+                        2008,
+                        1,
+                        2,
+                        3,
+                        4,
+                        5,
+                    ).millis,
+                ),
+            )
 
         val actual = DateInstant(bytes5ToDate(dateTo5Bytes(expected)))
 
@@ -166,18 +172,21 @@ class ValuesTest : TestCase() {
     }
 
     fun testDateCompare() {
-        val dateInstantA = DateInstant().apply {
-            setDate(2024, 12, 2)
-            setTime(5, 13)
-        }
-        val dateInstantB = DateInstant().apply {
-            setDate(2024, 12, 2)
-            setTime(5, 10)
-        }
-        val dateInstantC = DateInstant().apply {
-            setDate(2024, 12, 2)
-            setTime(5, 10)
-        }
+        val dateInstantA =
+            DateInstant().apply {
+                setDate(2024, 12, 2)
+                setTime(5, 13)
+            }
+        val dateInstantB =
+            DateInstant().apply {
+                setDate(2024, 12, 2)
+                setTime(5, 10)
+            }
+        val dateInstantC =
+            DateInstant().apply {
+                setDate(2024, 12, 2)
+                setTime(5, 10)
+            }
         assertTrue(dateInstantA.compareTo(dateInstantB) > 0)
         assertTrue(dateInstantB.compareTo(dateInstantA) < 0)
         assertTrue(dateInstantB.compareTo(dateInstantC) == 0)

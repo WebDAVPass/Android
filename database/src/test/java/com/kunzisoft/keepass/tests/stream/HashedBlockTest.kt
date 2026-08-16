@@ -19,8 +19,10 @@
  */
 package com.kunzisoft.keepass.tests.stream
 
+import com.kunzisoft.keepass.stream.HashedBlockInputStream
+import com.kunzisoft.keepass.stream.HashedBlockOutputStream
+import junit.framework.TestCase
 import org.junit.Assert.assertArrayEquals
-
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -28,13 +30,7 @@ import java.util.Random
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
-import junit.framework.TestCase
-
-import com.kunzisoft.keepass.stream.HashedBlockInputStream
-import com.kunzisoft.keepass.stream.HashedBlockOutputStream
-
 class HashedBlockTest : TestCase() {
-
     @Throws(IOException::class)
     fun testBlockAligned() {
         testSize(1024, 1024)
@@ -46,7 +42,10 @@ class HashedBlockTest : TestCase() {
     }
 
     @Throws(IOException::class)
-    private fun testSize(blockSize: Int, bufferSize: Int) {
+    private fun testSize(
+        blockSize: Int,
+        bufferSize: Int,
+    ) {
         val orig = ByteArray(blockSize)
 
         rand.nextBytes(orig)
@@ -75,7 +74,6 @@ class HashedBlockTest : TestCase() {
         val out = decoded.toByteArray()
 
         assertArrayEquals(orig, out)
-
     }
 
     @Throws(IOException::class)
@@ -102,16 +100,12 @@ class HashedBlockTest : TestCase() {
         var read = 0
         while (read != -1 && testLength - read > 0) {
             read += zis.read(uncompressed, read, testLength - read)
-
         }
 
         assertArrayEquals("Output not equal to input", orig, uncompressed)
-
-
     }
 
     companion object {
-
         private val rand = Random()
     }
 }

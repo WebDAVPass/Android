@@ -20,15 +20,14 @@
 package com.kunzisoft.keepass.database.crypto.kdf
 
 import com.kunzisoft.encrypt.HashManager
-import com.kunzisoft.keepass.utils.UnsignedLong
 import com.kunzisoft.encrypt.aes.AESTransformer
+import com.kunzisoft.keepass.utils.UnsignedLong
 import com.kunzisoft.keepass.utils.bytes16ToUuid
 import java.io.IOException
 import java.security.SecureRandom
 import java.util.*
 
 class AesKdf : KdfEngine() {
-
     init {
         uuid = CIPHER_UUID
     }
@@ -44,8 +43,10 @@ class AesKdf : KdfEngine() {
     override val defaultKeyRounds = 500000L
 
     @Throws(IOException::class)
-    override fun transform(masterKey: ByteArray, kdfParameters: KdfParameters): ByteArray {
-
+    override fun transform(
+        masterKey: ByteArray,
+        kdfParameters: KdfParameters,
+    ): ByteArray {
         var seed = kdfParameters.getByteArray(PARAM_SEED)
         if (seed != null && seed.size != 32) {
             seed = HashManager.hashSha256(seed)
@@ -70,37 +71,39 @@ class AesKdf : KdfEngine() {
         kdfParameters.setByteArray(PARAM_SEED, seed)
     }
 
-    override fun getKeyRounds(kdfParameters: KdfParameters): Long {
-        return kdfParameters.getUInt64(PARAM_ROUNDS)?.toKotlinLong() ?: defaultKeyRounds
-    }
+    override fun getKeyRounds(kdfParameters: KdfParameters): Long = kdfParameters.getUInt64(PARAM_ROUNDS)?.toKotlinLong() ?: defaultKeyRounds
 
-    override fun setKeyRounds(kdfParameters: KdfParameters, keyRounds: Long) {
+    override fun setKeyRounds(
+        kdfParameters: KdfParameters,
+        keyRounds: Long,
+    ) {
         kdfParameters.setUInt64(PARAM_ROUNDS, UnsignedLong(keyRounds))
     }
 
-    override fun toString(): String {
-        return "AES"
-    }
+    override fun toString(): String = "AES"
 
     companion object {
-
-        val CIPHER_UUID: UUID = bytes16ToUuid(
-                byteArrayOf(0xC9.toByte(),
-                        0xD9.toByte(),
-                        0xF3.toByte(),
-                        0x9A.toByte(),
-                        0x62.toByte(),
-                        0x8A.toByte(),
-                        0x44.toByte(),
-                        0x60.toByte(),
-                        0xBF.toByte(),
-                        0x74.toByte(),
-                        0x0D.toByte(),
-                        0x08.toByte(),
-                        0xC1.toByte(),
-                        0x8A.toByte(),
-                        0x4F.toByte(),
-                        0xEA.toByte()))
+        val CIPHER_UUID: UUID =
+            bytes16ToUuid(
+                byteArrayOf(
+                    0xC9.toByte(),
+                    0xD9.toByte(),
+                    0xF3.toByte(),
+                    0x9A.toByte(),
+                    0x62.toByte(),
+                    0x8A.toByte(),
+                    0x44.toByte(),
+                    0x60.toByte(),
+                    0xBF.toByte(),
+                    0x74.toByte(),
+                    0x0D.toByte(),
+                    0x08.toByte(),
+                    0xC1.toByte(),
+                    0x8A.toByte(),
+                    0x4F.toByte(),
+                    0xEA.toByte(),
+                ),
+            )
 
         const val PARAM_ROUNDS = "R" // UInt64
         const val PARAM_SEED = "S" // Byte array

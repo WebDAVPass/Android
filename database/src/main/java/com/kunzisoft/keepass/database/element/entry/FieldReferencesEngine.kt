@@ -26,8 +26,9 @@ import com.kunzisoft.keepass.utils.UUIDUtils.asHexString
 import com.kunzisoft.keepass.utils.UUIDUtils.asUUID
 import java.util.concurrent.ConcurrentHashMap
 
-class FieldReferencesEngine(private val mDatabase: DatabaseKDBX) {
-
+class FieldReferencesEngine(
+    private val mDatabase: DatabaseKDBX,
+) {
     // Key : <WantedField>@<SearchIn>:<Text>
     // Value : content
     private var refsCache = ConcurrentHashMap<String, String?>()
@@ -36,13 +37,16 @@ class FieldReferencesEngine(private val mDatabase: DatabaseKDBX) {
         refsCache.clear()
     }
 
-    fun compile(entry: EntryKDBX, textReference: String, recursionLevel: Int): String {
-        return if (recursionLevel >= MAX_RECURSION_DEPTH) {
+    fun compile(
+        entry: EntryKDBX,
+        textReference: String,
+        recursionLevel: Int,
+    ): String =
+        if (recursionLevel >= MAX_RECURSION_DEPTH) {
             ""
         } else {
             fillReferencesPlaceholders(entry, textReference, recursionLevel)
         }
-    }
 
     /**
      * Manage placeholders with {REF:<WantedField>@<SearchIn>:<Text>}
@@ -50,14 +54,14 @@ class FieldReferencesEngine(private val mDatabase: DatabaseKDBX) {
     private fun fillReferencesPlaceholders(
         currentEntry: EntryKDBX,
         textReference: String,
-        recursionLevel: Int
+        recursionLevel: Int,
     ): String {
         var textValue = textReference
 
         var offset = 0
         var numberInlineRef = 0
-        while ((textValue.contains(STR_SELF_REF_START) || textValue.contains(STR_REF_START))
-            && numberInlineRef <= MAX_INLINE_REF
+        while ((textValue.contains(STR_SELF_REF_START) || textValue.contains(STR_REF_START)) &&
+            numberInlineRef <= MAX_INLINE_REF
         ) {
             val selfReference = textValue.contains(STR_SELF_REF_START)
             numberInlineRef++
@@ -78,29 +82,35 @@ class FieldReferencesEngine(private val mDatabase: DatabaseKDBX) {
                 }
 
                 val reference = textValue.substring(start + startingDelimiter.length, end)
-                val fullReference = "$startingDelimiter$reference$endingDelimiter".let {
-                    if (selfReference) it + "@I:${currentEntry.id}"
-                    else it
-                }
+                val fullReference =
+                    "$startingDelimiter$reference$endingDelimiter".let {
+                        if (selfReference) {
+                            it + "@I:${currentEntry.id}"
+                        } else {
+                            it
+                        }
+                    }
 
                 if (!refsCache.containsKey(fullReference)) {
                     val newRecursionLevel = recursionLevel + 1
-                    val data: String? = if (selfReference) {
-                        reference.split(":")
-                            .let { currentEntry.getCustomFieldValue(it.last(), newRecursionLevel) }
-                    } else {
-                        with(findReferenceTarget(reference, newRecursionLevel)) {
-                            when (wanted) {
-                                'T' -> entry?.decodeTitleKey(newRecursionLevel)
-                                'U' -> entry?.decodeUsernameKey(newRecursionLevel)
-                                'A' -> entry?.decodeUrlKey(newRecursionLevel)
-                                'P' -> entry?.decodePasswordKey(newRecursionLevel)
-                                'N' -> entry?.decodeNotesKey(newRecursionLevel)
-                                'I' -> entry?.nodeId?.id?.asHexString()
-                                else -> null
+                    val data: String? =
+                        if (selfReference) {
+                            reference
+                                .split(":")
+                                .let { currentEntry.getCustomFieldValue(it.last(), newRecursionLevel) }
+                        } else {
+                            with(findReferenceTarget(reference, newRecursionLevel)) {
+                                when (wanted) {
+                                    'T' -> entry?.decodeTitleKey(newRecursionLevel)
+                                    'U' -> entry?.decodeUsernameKey(newRecursionLevel)
+                                    'A' -> entry?.decodeUrlKey(newRecursionLevel)
+                                    'P' -> entry?.decodePasswordKey(newRecursionLevel)
+                                    'N' -> entry?.decodeNotesKey(newRecursionLevel)
+                                    'I' -> entry?.nodeId?.id?.asHexString()
+                                    else -> null
+                                }
                             }
                         }
-                    }
                     refsCache[fullReference] = data
                     textValue = fillReferencesUsingCache(currentEntry, textValue)
                 }
@@ -113,22 +123,31 @@ class FieldReferencesEngine(private val mDatabase: DatabaseKDBX) {
         return textValue
     }
 
-    private fun fillReferencesUsingCache(entry: EntryKDBX, text: String): String =
+    private fun fillReferencesUsingCache(
+        entry: EntryKDBX,
+        text: String,
+    ): String =
         refsCache.keys.fold(text) { expandedText, key ->
             // Since the cache is global, self-references are adjusted to include the id of the entry
             // as well, using the format <placeholder>@<entry-id>.
             // This removes the ID part, leaving only the expected placeholder and ensures that
             // the cached value matches the provided entry.
-            val placeholder = key.takeIf { it.startsWith(STR_SELF_REF_START, true) }
-                ?.split("@")?.takeIf { it.last() == "I:${entry.id}" }?.first()
-                ?: key
+            val placeholder =
+                key
+                    .takeIf { it.startsWith(STR_SELF_REF_START, true) }
+                    ?.split("@")
+                    ?.takeIf { it.last() == "I:${entry.id}" }
+                    ?.first()
+                    ?: key
 
             // Replace by original placeholder if value not found or entry id doesn't match
             expandedText.replace(placeholder, refsCache[key] ?: placeholder, true)
         }
 
-    private fun findReferenceTarget(reference: String, recursionLevel: Int): TargetResult {
-
+    private fun findReferenceTarget(
+        reference: String,
+        recursionLevel: Int,
+    ): TargetResult {
         val targetResult = TargetResult(null, 'J')
 
         if (reference.length <= 4) {
@@ -144,24 +163,28 @@ class FieldReferencesEngine(private val mDatabase: DatabaseKDBX) {
         targetResult.wanted = Character.toUpperCase(reference[0])
         val searchIn = Character.toUpperCase(reference[2])
         val searchQuery = reference.substring(4)
-        targetResult.entry = when (searchIn) {
-            'T' -> mDatabase.getEntryByTitle(searchQuery, recursionLevel)
-            'U' -> mDatabase.getEntryByUsername(searchQuery, recursionLevel)
-            'A' -> mDatabase.getEntryByURL(searchQuery, recursionLevel)
-            'P' -> mDatabase.getEntryByPassword(searchQuery, recursionLevel)
-            'N' -> mDatabase.getEntryByNotes(searchQuery, recursionLevel)
-            'I' -> {
-                searchQuery.asUUID()?.let { uuid ->
-                    mDatabase.getEntryById(NodeIdUUID(uuid))
+        targetResult.entry =
+            when (searchIn) {
+                'T' -> mDatabase.getEntryByTitle(searchQuery, recursionLevel)
+                'U' -> mDatabase.getEntryByUsername(searchQuery, recursionLevel)
+                'A' -> mDatabase.getEntryByURL(searchQuery, recursionLevel)
+                'P' -> mDatabase.getEntryByPassword(searchQuery, recursionLevel)
+                'N' -> mDatabase.getEntryByNotes(searchQuery, recursionLevel)
+                'I' -> {
+                    searchQuery.asUUID()?.let { uuid ->
+                        mDatabase.getEntryById(NodeIdUUID(uuid))
+                    }
                 }
+                'O' -> mDatabase.getEntryByCustomData(searchQuery)
+                else -> null
             }
-            'O' -> mDatabase.getEntryByCustomData(searchQuery)
-            else -> null
-        }
         return targetResult
     }
 
-    private data class TargetResult(var entry: EntryKDBX?, var wanted: Char)
+    private data class TargetResult(
+        var entry: EntryKDBX?,
+        var wanted: Char,
+    )
 
     companion object {
         private const val MAX_RECURSION_DEPTH = 10

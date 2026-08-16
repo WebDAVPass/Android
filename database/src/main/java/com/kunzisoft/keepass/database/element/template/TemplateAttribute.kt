@@ -20,24 +20,29 @@ package com.kunzisoft.keepass.database.element.template
 
 import android.os.Parcel
 import android.os.Parcelable
-import com.kunzisoft.keepass.utils.readParcelableCompat
 import com.kunzisoft.keepass.utils.readEnum
+import com.kunzisoft.keepass.utils.readParcelableCompat
 import com.kunzisoft.keepass.utils.writeEnum
 
-data class TemplateAttribute(var label: String,
-                             var type: TemplateAttributeType,
-                             var protected: Boolean = false,
-                             var options: TemplateAttributeOption = TemplateAttributeOption(),
-                             var action: TemplateAttributeAction = TemplateAttributeAction.NONE): Parcelable {
-
+data class TemplateAttribute(
+    var label: String,
+    var type: TemplateAttributeType,
+    var protected: Boolean = false,
+    var options: TemplateAttributeOption = TemplateAttributeOption(),
+    var action: TemplateAttributeAction = TemplateAttributeAction.NONE,
+) : Parcelable {
     constructor(parcel: Parcel) : this(
-            parcel.readString() ?: "",
-            parcel.readEnum<TemplateAttributeType>() ?: TemplateAttributeType.TEXT,
+        parcel.readString() ?: "",
+        parcel.readEnum<TemplateAttributeType>() ?: TemplateAttributeType.TEXT,
         parcel.readByte() != 0.toByte(),
         parcel.readParcelableCompat() ?: TemplateAttributeOption(),
-        parcel.readEnum<TemplateAttributeAction>() ?: TemplateAttributeAction.NONE)
+        parcel.readEnum<TemplateAttributeAction>() ?: TemplateAttributeAction.NONE,
+    )
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeString(label)
         parcel.writeEnum(type)
         parcel.writeByte(if (protected) 1 else 0)
@@ -45,9 +50,7 @@ data class TemplateAttribute(var label: String,
         parcel.writeEnum(action)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     var alias: String?
         get() {
@@ -66,12 +69,8 @@ data class TemplateAttribute(var label: String,
         }
 
     companion object CREATOR : Parcelable.Creator<TemplateAttribute> {
-        override fun createFromParcel(parcel: Parcel): TemplateAttribute {
-            return TemplateAttribute(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): TemplateAttribute = TemplateAttribute(parcel)
 
-        override fun newArray(size: Int): Array<TemplateAttribute?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<TemplateAttribute?> = arrayOfNulls(size)
     }
 }

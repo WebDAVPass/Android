@@ -28,7 +28,6 @@ import java.security.MessageDigest
 import java.security.NoSuchAlgorithmException
 
 object HashManager {
-
     fun getHash256(): MessageDigest {
         val messageDigest: MessageDigest
         try {
@@ -42,8 +41,9 @@ object HashManager {
     fun hashSha256(vararg data: ByteArray?): ByteArray {
         val hash: MessageDigest = getHash256()
         for (byteArray in data) {
-            if (byteArray != null)
+            if (byteArray != null) {
                 hash.update(byteArray)
+            }
         }
         return hash.digest()
     }
@@ -61,13 +61,15 @@ object HashManager {
     private fun hashSha512(vararg data: ByteArray?): ByteArray {
         val hash: MessageDigest = getHash512()
         for (byteArray in data) {
-            if (byteArray != null)
+            if (byteArray != null) {
                 hash.update(byteArray)
+            }
         }
         return hash.digest()
     }
 
-    private val SALSA_IV = byteArrayOf(
+    private val SALSA_IV =
+        byteArrayOf(
             0xE8.toByte(),
             0x30,
             0x09,
@@ -75,7 +77,8 @@ object HashManager {
             0x97.toByte(),
             0x20,
             0x5D,
-            0x2A)
+            0x2A,
+        )
 
     fun getSalsa20(key: ByteArray): StreamCipher {
         // Build stream cipher key

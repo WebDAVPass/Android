@@ -22,17 +22,16 @@ package com.kunzisoft.keepass.model
 import android.net.Uri
 import android.os.Parcel
 import android.os.Parcelable
-import com.kunzisoft.keepass.utils.readParcelableCompat
 import com.kunzisoft.keepass.utils.readEnum
+import com.kunzisoft.keepass.utils.readParcelableCompat
 import com.kunzisoft.keepass.utils.writeEnum
 
-class CipherDecryptDatabase(): Parcelable {
-
+class CipherDecryptDatabase() : Parcelable {
     var databaseUri: Uri? = null
     var credentialStorage: CredentialStorage = CredentialStorage.DEFAULT
     var decryptedValue: ByteArray = byteArrayOf()
 
-    constructor(parcel: Parcel): this() {
+    constructor(parcel: Parcel) : this() {
         databaseUri = parcel.readParcelableCompat()
         credentialStorage = parcel.readEnum<CredentialStorage>() ?: credentialStorage
         decryptedValue = ByteArray(parcel.readInt())
@@ -43,25 +42,22 @@ class CipherDecryptDatabase(): Parcelable {
         this.decryptedValue = copy.decryptedValue
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(databaseUri, flags)
         parcel.writeEnum(credentialStorage)
         parcel.writeInt(decryptedValue.size)
         parcel.writeByteArray(decryptedValue)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     companion object CREATOR : Parcelable.Creator<CipherDecryptDatabase> {
-        override fun createFromParcel(parcel: Parcel): CipherDecryptDatabase {
-            return CipherDecryptDatabase(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): CipherDecryptDatabase = CipherDecryptDatabase(parcel)
 
-        override fun newArray(size: Int): Array<CipherDecryptDatabase?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<CipherDecryptDatabase?> = arrayOfNulls(size)
     }
 
     override fun equals(other: Any?): Boolean {
@@ -73,7 +69,5 @@ class CipherDecryptDatabase(): Parcelable {
         return databaseUri == other.databaseUri
     }
 
-    override fun hashCode(): Int {
-        return databaseUri.hashCode()
-    }
+    override fun hashCode(): Int = databaseUri.hashCode()
 }

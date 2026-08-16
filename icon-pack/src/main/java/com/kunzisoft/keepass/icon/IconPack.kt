@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -43,8 +43,11 @@ import java.util.Locale
  * @param resourceId String Id of the pack (ex : com.kunzisoft.keepass.icon.classic.R.string.resource_id)
  */
 @SuppressLint("DiscouragedApi")
-class IconPack(packageName: String, resources: Resources, resourceId: Int) {
-
+class IconPack(
+    packageName: String,
+    resources: Resources,
+    resourceId: Int,
+) {
     private val icons: SparseIntArray = SparseIntArray()
 
     /**
@@ -77,29 +80,33 @@ class IconPack(packageName: String, resources: Resources, resourceId: Int) {
         var num = 0
         while (num < NB_DEFAULT_ICONS) {
             // To construct the id with name_ic_XX_32dp (ex : classic_ic_08_32dp )
-            val resId = resources.getIdentifier(
+            val resId =
+                resources.getIdentifier(
                     id + "_" + String.format(Locale.ENGLISH, "%02d", num) + "_32dp",
                     "drawable",
-                    packageName)
+                    packageName,
+                )
             icons.put(num, resId)
             num++
         }
         // Get visual name
-        name = resources.getString(
+        name =
+            resources.getString(
                 resources.getIdentifier(
-                        id + "_" + "name",
-                        "string",
-                        packageName
-                )
-        )
+                    id + "_" + "name",
+                    "string",
+                    packageName,
+                ),
+            )
         // If icons are tintable
-        tintable = resources.getBoolean(
+        tintable =
+            resources.getBoolean(
                 resources.getIdentifier(
-                        id + "_" + "tintable",
-                        "bool",
-                        packageName
-                )
-        )
+                    id + "_" + "tintable",
+                    "bool",
+                    packageName,
+                ),
+            )
     }
 
     /**
@@ -107,18 +114,14 @@ class IconPack(packageName: String, resources: Resources, resourceId: Int) {
      *
      * @return true if icons are tintable
      */
-    fun tintable(): Boolean {
-        return tintable
-    }
+    fun tintable(): Boolean = tintable
 
     /**
      * Get the number of icons in this pack
      *
      * @return int Number of database icons
      */
-    fun numberOfIcons(): Int {
-        return icons.size()
-    }
+    fun numberOfIcons(): Int = icons.size()
 
     /**
      * Icon as a resourceId
@@ -126,15 +129,11 @@ class IconPack(packageName: String, resources: Resources, resourceId: Int) {
      * @param iconId Icon database Id of the icon to retrieve
      * @return int resourceId
      */
-    fun iconToResId(iconId: Int): Int {
-        return icons.get(iconId, R.drawable.ic_blank_32dp)
-    }
+    fun iconToResId(iconId: Int): Int = icons.get(iconId, R.drawable.ic_blank_32dp)
 
     companion object {
         private const val NB_DEFAULT_ICONS = 69
 
-        fun defaultIconSize(context: Context): Int {
-            return context.resources.getDimension(R.dimen.icon_size).toInt()
-        }
+        fun defaultIconSize(context: Context): Int = context.resources.getDimension(R.dimen.icon_size).toInt()
     }
 }

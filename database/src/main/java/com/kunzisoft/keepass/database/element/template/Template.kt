@@ -29,7 +29,6 @@ import java.util.*
 import kotlin.collections.ArrayList
 
 class Template : Parcelable {
-
     var version = 1
     var uuid: UUID = DatabaseVersioned.UUID_ZERO
     var title = ""
@@ -39,29 +38,41 @@ class Template : Parcelable {
     var sections: MutableList<TemplateSection> = ArrayList()
         private set
 
-    constructor(uuid: UUID,
-                title: String,
-                icon: IconImage,
-                section: TemplateSection,
-                version: Int = 1)
-            : this(uuid, title, icon, ArrayList<TemplateSection>().apply {
-        add(section)
-    }, version)
+    constructor(
+        uuid: UUID,
+        title: String,
+        icon: IconImage,
+        section: TemplateSection,
+        version: Int = 1,
+    ) :
+        this(
+            uuid,
+            title,
+            icon,
+            ArrayList<TemplateSection>().apply {
+                add(section)
+            },
+            version,
+        )
 
-    constructor(uuid: UUID,
-                title: String,
-                icon: IconImage,
-                sections: List<TemplateSection>,
-                version: Int = 1)
-            : this(uuid, title, icon, null, null, sections, version)
+    constructor(
+        uuid: UUID,
+        title: String,
+        icon: IconImage,
+        sections: List<TemplateSection>,
+        version: Int = 1,
+    ) :
+        this(uuid, title, icon, null, null, sections, version)
 
-    constructor(uuid: UUID,
-                title: String,
-                icon: IconImage,
-                backgroundColor: Int?,
-                foregroundColor: Int?,
-                sections: List<TemplateSection>,
-                version: Int = 1) {
+    constructor(
+        uuid: UUID,
+        title: String,
+        icon: IconImage,
+        backgroundColor: Int?,
+        foregroundColor: Int?,
+        sections: List<TemplateSection>,
+        version: Int = 1,
+    ) {
         this.version = version
         this.uuid = uuid
         this.title = title
@@ -93,7 +104,10 @@ class Template : Parcelable {
         parcel.readListCompat(sections)
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeInt(version)
         parcel.writeParcelable(ParcelUuid(uuid), flags)
         parcel.writeString(title)
@@ -103,9 +117,7 @@ class Template : Parcelable {
         parcel.writeList(sections)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -116,72 +128,81 @@ class Template : Parcelable {
         return true
     }
 
-    override fun hashCode(): Int {
-        return uuid.hashCode()
-    }
+    override fun hashCode(): Int = uuid.hashCode()
 
     companion object CREATOR : Parcelable.Creator<Template> {
-        override fun createFromParcel(parcel: Parcel): Template {
-            return Template(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): Template = Template(parcel)
 
-        override fun newArray(size: Int): Array<Template?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<Template?> = arrayOfNulls(size)
 
-        val TITLE_ATTRIBUTE = TemplateAttribute(
-            TemplateField.LABEL_TITLE,
-            TemplateAttributeType.TEXT)
-        val USERNAME_ATTRIBUTE = TemplateAttribute(
-            TemplateField.LABEL_USERNAME,
-            TemplateAttributeType.TEXT)
-        val PASSWORD_ATTRIBUTE = TemplateAttribute(
-            TemplateField.LABEL_PASSWORD,
-            TemplateAttributeType.TEXT,
-            true,
-            TemplateAttributeOption().apply {
-                setNumberLines(3)
-                associatePasswordGenerator()
-            }
-        )
-        val URL_ATTRIBUTE = TemplateAttribute(
-            TemplateField.LABEL_URL,
-            TemplateAttributeType.TEXT,
-            false,
-            TemplateAttributeOption().apply {
-                setLink(true)
-            })
-        val EXPIRATION_ATTRIBUTE = TemplateAttribute(
-            TemplateField.LABEL_EXPIRATION,
-            TemplateAttributeType.DATETIME,
-            false,
-            TemplateAttributeOption().apply {
-                setExpirable(true)
-            })
-        val NOTES_ATTRIBUTE = TemplateAttribute(
-            TemplateField.LABEL_NOTES,
-            TemplateAttributeType.TEXT,
-            false,
-            TemplateAttributeOption().apply {
-                setNumberLinesToMany()
-            })
+        val TITLE_ATTRIBUTE =
+            TemplateAttribute(
+                TemplateField.LABEL_TITLE,
+                TemplateAttributeType.TEXT,
+            )
+        val USERNAME_ATTRIBUTE =
+            TemplateAttribute(
+                TemplateField.LABEL_USERNAME,
+                TemplateAttributeType.TEXT,
+            )
+        val PASSWORD_ATTRIBUTE =
+            TemplateAttribute(
+                TemplateField.LABEL_PASSWORD,
+                TemplateAttributeType.TEXT,
+                true,
+                TemplateAttributeOption().apply {
+                    setNumberLines(3)
+                    associatePasswordGenerator()
+                },
+            )
+        val URL_ATTRIBUTE =
+            TemplateAttribute(
+                TemplateField.LABEL_URL,
+                TemplateAttributeType.TEXT,
+                false,
+                TemplateAttributeOption().apply {
+                    setLink(true)
+                },
+            )
+        val EXPIRATION_ATTRIBUTE =
+            TemplateAttribute(
+                TemplateField.LABEL_EXPIRATION,
+                TemplateAttributeType.DATETIME,
+                false,
+                TemplateAttributeOption().apply {
+                    setExpirable(true)
+                },
+            )
+        val NOTES_ATTRIBUTE =
+            TemplateAttribute(
+                TemplateField.LABEL_NOTES,
+                TemplateAttributeType.TEXT,
+                false,
+                TemplateAttributeOption().apply {
+                    setNumberLinesToMany()
+                },
+            )
 
         val STANDARD: Template
             get() {
                 val sections = mutableListOf<TemplateSection>()
-                val mainSection = TemplateSection(mutableListOf<TemplateAttribute>().apply {
-                    add(USERNAME_ATTRIBUTE)
-                    add(PASSWORD_ATTRIBUTE)
-                    add(URL_ATTRIBUTE)
-                    add(EXPIRATION_ATTRIBUTE)
-                    add(NOTES_ATTRIBUTE)
-                })
+                val mainSection =
+                    TemplateSection(
+                        mutableListOf<TemplateAttribute>().apply {
+                            add(USERNAME_ATTRIBUTE)
+                            add(PASSWORD_ATTRIBUTE)
+                            add(URL_ATTRIBUTE)
+                            add(EXPIRATION_ATTRIBUTE)
+                            add(NOTES_ATTRIBUTE)
+                        },
+                    )
                 sections.add(mainSection)
                 return Template(
                     DatabaseVersioned.UUID_ZERO,
                     TemplateField.LABEL_STANDARD,
                     IconImage(),
-                    sections)
+                    sections,
+                )
             }
     }
 }

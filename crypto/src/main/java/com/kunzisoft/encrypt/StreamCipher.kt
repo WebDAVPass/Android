@@ -6,7 +6,9 @@ import org.bouncycastle.crypto.DataLengthException
 /**
  * Stream cipher to process data
  */
-class StreamCipher(private val streamCipher: org.bouncycastle.crypto.StreamCipher) {
+class StreamCipher(
+    private val streamCipher: org.bouncycastle.crypto.StreamCipher,
+) {
     /**
      * Initialise the cipher.
      *
@@ -17,7 +19,10 @@ class StreamCipher(private val streamCipher: org.bouncycastle.crypto.StreamCiphe
      * inappropriate.
      */
     @Throws(IllegalArgumentException::class)
-    fun init(forEncryption: Boolean, params: CipherParameters?) {
+    fun init(
+        forEncryption: Boolean,
+        params: CipherParameters?,
+    ) {
         streamCipher.init(forEncryption, params)
     }
 

@@ -23,28 +23,32 @@ private const val BRAND_ICON_SIZE_PX = 96
 fun buildBrandIconBytes(
     context: Context,
     primary: String?,
-    secondary: String?
+    secondary: String?,
 ): ByteArray? {
-    val tokenImage = TokenImage.values().firstOrNull { it.matchToken(primary, secondary) }
-        ?: return null
-    val drawable = runCatching {
-        ContextCompat.getDrawable(context, tokenImage.resource)
-    }.getOrNull() ?: return null
+    val tokenImage =
+        TokenImage.values().firstOrNull { it.matchToken(primary, secondary) }
+            ?: return null
+    val drawable =
+        runCatching {
+            ContextCompat.getDrawable(context, tokenImage.resource)
+        }.getOrNull() ?: return null
     val intrinsicWidth = drawable.intrinsicWidth
     val intrinsicHeight = drawable.intrinsicHeight
-    val bounds: android.graphics.Rect = if (intrinsicWidth > 0 && intrinsicHeight > 0) {
-        val scale = min(
-            BRAND_ICON_SIZE_PX.toFloat() / intrinsicWidth,
-            BRAND_ICON_SIZE_PX.toFloat() / intrinsicHeight
-        )
-        val drawWidth = (intrinsicWidth * scale).roundToInt()
-        val drawHeight = (intrinsicHeight * scale).roundToInt()
-        val left = (BRAND_ICON_SIZE_PX - drawWidth) / 2
-        val top = (BRAND_ICON_SIZE_PX - drawHeight) / 2
-        android.graphics.Rect(left, top, left + drawWidth, top + drawHeight)
-    } else {
-        android.graphics.Rect(0, 0, BRAND_ICON_SIZE_PX, BRAND_ICON_SIZE_PX)
-    }
+    val bounds: android.graphics.Rect =
+        if (intrinsicWidth > 0 && intrinsicHeight > 0) {
+            val scale =
+                min(
+                    BRAND_ICON_SIZE_PX.toFloat() / intrinsicWidth,
+                    BRAND_ICON_SIZE_PX.toFloat() / intrinsicHeight,
+                )
+            val drawWidth = (intrinsicWidth * scale).roundToInt()
+            val drawHeight = (intrinsicHeight * scale).roundToInt()
+            val left = (BRAND_ICON_SIZE_PX - drawWidth) / 2
+            val top = (BRAND_ICON_SIZE_PX - drawHeight) / 2
+            android.graphics.Rect(left, top, left + drawWidth, top + drawHeight)
+        } else {
+            android.graphics.Rect(0, 0, BRAND_ICON_SIZE_PX, BRAND_ICON_SIZE_PX)
+        }
     val bitmap = Bitmap.createBitmap(BRAND_ICON_SIZE_PX, BRAND_ICON_SIZE_PX, Bitmap.Config.ARGB_8888)
     val canvas = Canvas(bitmap)
     drawable.bounds = bounds

@@ -1,6 +1,6 @@
 /*
 ` * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -39,9 +39,9 @@ import java.security.*
 import javax.crypto.Cipher
 import javax.crypto.CipherOutputStream
 
-class DatabaseOutputKDB(private val mDatabaseKDB: DatabaseKDB)
-    : DatabaseOutput<DatabaseHeaderKDB>() {
-
+class DatabaseOutputKDB(
+    private val mDatabaseKDB: DatabaseKDB,
+) : DatabaseOutput<DatabaseHeaderKDB>() {
     private var headerHashBlock: ByteArray? = null
 
     private var mGroupList = mutableListOf<GroupKDB>()
@@ -59,8 +59,10 @@ class DatabaseOutputKDB(private val mDatabaseKDB: DatabaseKDB)
     }
 
     @Throws(DatabaseOutputException::class)
-    override fun writeDatabase(outputStream: OutputStream,
-                               assignMasterKey: () -> Unit) {
+    override fun writeDatabase(
+        outputStream: OutputStream,
+        assignMasterKey: () -> Unit,
+    ) {
         // Before we output the header, we should sort our list of groups
         // and remove any orphaned nodes that are no longer part of the tree hierarchy
         // also remove the virtual root not present in kdb
@@ -70,14 +72,18 @@ class DatabaseOutputKDB(private val mDatabaseKDB: DatabaseKDB)
         val header = outputHeader(outputStream, assignMasterKey)
         val finalKey = getFinalKey(header)
 
-        val cipher: Cipher = try {
-            mDatabaseKDB.encryptionAlgorithm
-                    .cipherEngine.getCipher(Cipher.ENCRYPT_MODE,
-                            finalKey ?: ByteArray(0),
-                            header.encryptionIV)
-        } catch (e: Exception) {
-            throw IOException("Algorithm not supported.", e)
-        }
+        val cipher: Cipher =
+            try {
+                mDatabaseKDB.encryptionAlgorithm
+                    .cipherEngine
+                    .getCipher(
+                        Cipher.ENCRYPT_MODE,
+                        finalKey ?: ByteArray(0),
+                        header.encryptionIV,
+                    )
+            } catch (e: Exception) {
+                throw IOException("Algorithm not supported.", e)
+            }
 
         try {
             val cos = CipherOutputStream(outputStream, cipher)
@@ -106,8 +112,10 @@ class DatabaseOutputKDB(private val mDatabaseKDB: DatabaseKDB)
     }
 
     @Throws(DatabaseOutputException::class)
-    private fun outputHeader(outputStream: OutputStream,
-                             assignMasterKey: () -> Unit): DatabaseHeaderKDB {
+    private fun outputHeader(
+        outputStream: OutputStream,
+        assignMasterKey: () -> Unit,
+    ): DatabaseHeaderKDB {
         // Build header
         val header = DatabaseHeaderKDB()
         header.signature1 = DatabaseHeaderKDB.DBSIG_1
@@ -190,7 +198,6 @@ class DatabaseOutputKDB(private val mDatabaseKDB: DatabaseKDB)
 
     @Throws(DatabaseOutputException::class)
     fun outputPlanGroupAndEntries(outputStream: OutputStream) {
-
         // useHeaderHash
         if (headerHashBlock != null) {
             try {
@@ -235,26 +242,29 @@ class DatabaseOutputKDB(private val mDatabaseKDB: DatabaseKDB)
         mGroupList.add(group)
 
         for (childEntry in group.getChildEntries()) {
-            if (!childEntry.isMetaStreamDefaultUsername()
-                && !childEntry.isMetaStreamDatabaseColor()) {
+            if (!childEntry.isMetaStreamDefaultUsername() &&
+                !childEntry.isMetaStreamDatabaseColor()
+            ) {
                 mEntryList.add(childEntry)
             }
         }
 
         // Add MetaStream
         if (mDatabaseKDB.defaultUserName.isNotEmpty()) {
-            val metaEntry = EntryKDB().apply {
-                setMetaStreamDefaultUsername()
-                setDefaultUsername(this)
-            }
+            val metaEntry =
+                EntryKDB().apply {
+                    setMetaStreamDefaultUsername()
+                    setDefaultUsername(this)
+                }
             mDatabaseKDB.addEntryTo(metaEntry, group)
             mEntryList.add(metaEntry)
         }
         if (mDatabaseKDB.color != null) {
-            val metaEntry = EntryKDB().apply {
-                setMetaStreamDatabaseColor()
-                setDatabaseColor(this)
-            }
+            val metaEntry =
+                EntryKDB().apply {
+                    setMetaStreamDatabaseColor()
+                    setDatabaseColor(this)
+                }
             mDatabaseKDB.addEntryTo(metaEntry, group)
             mEntryList.add(metaEntry)
         }
@@ -279,18 +289,19 @@ class DatabaseOutputKDB(private val mDatabaseKDB: DatabaseKDB)
         BufferedOutputStream(binaryData.getOutputDataStream(mDatabaseKDB.binaryCache)).use { outputStream ->
             var reversColor = Color.BLACK
             mDatabaseKDB.color?.let {
-                reversColor = Color.rgb(
-                    Color.blue(it),
-                    Color.green(it),
-                    Color.red(it)
-                )
+                reversColor =
+                    Color.rgb(
+                        Color.blue(it),
+                        Color.green(it),
+                        Color.red(it),
+                    )
             }
             outputStream.write4BytesUInt(UnsignedInt(reversColor))
         }
     }
 
-    private fun getHeaderHashBuffer(headerDigest: ByteArray): ByteArray? {
-        return try {
+    private fun getHeaderHashBuffer(headerDigest: ByteArray): ByteArray? =
+        try {
             val byteArrayOutputStream = ByteArrayOutputStream()
             writeExtData(headerDigest, byteArrayOutputStream)
             byteArrayOutputStream.toByteArray()
@@ -298,21 +309,26 @@ class DatabaseOutputKDB(private val mDatabaseKDB: DatabaseKDB)
             null
         }
 
-    }
-
     @Throws(IOException::class)
-    private fun writeExtData(headerDigest: ByteArray, outputStream: OutputStream) {
+    private fun writeExtData(
+        headerDigest: ByteArray,
+        outputStream: OutputStream,
+    ) {
         writeExtDataField(outputStream, 0x0001, headerDigest, headerDigest.size)
         val headerRandom = ByteArray(32)
         val rand = SecureRandom()
         rand.nextBytes(headerRandom)
         writeExtDataField(outputStream, 0x0002, headerRandom, headerRandom.size)
         writeExtDataField(outputStream, 0xFFFF, null, 0)
-
     }
 
     @Throws(IOException::class)
-    private fun writeExtDataField(outputStream: OutputStream, fieldType: Int, data: ByteArray?, fieldSize: Int) {
+    private fun writeExtDataField(
+        outputStream: OutputStream,
+        fieldType: Int,
+        data: ByteArray?,
+        fieldSize: Int,
+    ) {
         outputStream.write2BytesUShort(fieldType)
         outputStream.write4BytesUInt(UnsignedInt(fieldSize))
         if (data != null) {

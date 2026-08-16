@@ -1,14 +1,8 @@
 package xzynine.WebDAVPass.Android.ui.ViewModel
 
 import android.content.Context
-import xzylib.base.util.Logger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import xzynine.WebDAVPass.Android.data.LibraryContext
-import xzynine.WebDAVPass.Android.data.LibraryContextStore
-import xzynine.WebDAVPass.Android.data.LibrarySourceType
-import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
-import xzynine.WebDAVPass.Android.data.DatabaseManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.ensureActive
@@ -17,6 +11,12 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import xzylib.base.util.Logger
+import xzynine.WebDAVPass.Android.data.DatabaseManager
+import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
+import xzynine.WebDAVPass.Android.data.LibraryContext
+import xzynine.WebDAVPass.Android.data.LibraryContextStore
+import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -24,8 +24,9 @@ import java.util.concurrent.atomic.AtomicReference
  *
  * 负责管理库上下文的加载、选择、切换和历史记录。
  */
-class LibraryViewModel(private val context: Context) : ViewModel() {
-
+class LibraryViewModel(
+    private val context: Context,
+) : ViewModel() {
     companion object {
         private const val SYNC_STATUS_IDLE = "idle"
         private const val SYNC_STATUS_SYNCING = "syncing"
@@ -78,11 +79,12 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
         _libraryHistory.value = sortedHistory
 
         val currentId = libraryContextStore.getCurrentLibraryId()
-        _currentLibrary.value = if (currentId != null) {
-            sortedHistory.firstOrNull { it.id == currentId }
-        } else {
-            null
-        }
+        _currentLibrary.value =
+            if (currentId != null) {
+                sortedHistory.firstOrNull { it.id == currentId }
+            } else {
+                null
+            }
     }
 
     /**
@@ -91,16 +93,15 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
      * 用于 MainActivity 确定初始路由：此时 currentLibrary 流可能尚未预热完成，
      * 直接读取内存缓存避免首帧路由闪烁。
      */
-    fun getCurrentLibrarySync(): LibraryContext? {
-        return libraryContextStore.getCurrentLibrary()
-    }
+    fun getCurrentLibrarySync(): LibraryContext? = libraryContextStore.getCurrentLibrary()
 
     /**
      * 持久化当前库元数据，不重置已解锁状态。
      */
     private fun persistCurrentLibraryMetadata(updated: LibraryContext) {
-        val persisted = libraryContextStore.updateHistoryItem(updated)
-            ?: libraryContextStore.upsertAndSelect(updated)
+        val persisted =
+            libraryContextStore.updateHistoryItem(updated)
+                ?: libraryContextStore.upsertAndSelect(updated)
         _currentLibrary.value = persisted
         _libraryHistory.value = libraryContextStore.getHistory().sortedByDescending { it.lastUsedAt }
     }
@@ -160,16 +161,17 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
         val username = boundContext.username?.takeIf { it.isNotBlank() } ?: return false
         val password = boundContext.password?.takeIf { it.isNotBlank() } ?: return false
 
-        val updated = current.copy(
-            sourceType = LibrarySourceType.CLOUD,
-            remoteBaseUrl = remoteBaseUrl,
-            remoteFilePath = remoteFilePath,
-            username = username,
-            password = password,
-            autoSyncEnabled = true,
-            lastSyncStatus = current.lastSyncStatus ?: SYNC_STATUS_IDLE,
-            lastSyncError = null
-        )
+        val updated =
+            current.copy(
+                sourceType = LibrarySourceType.CLOUD,
+                remoteBaseUrl = remoteBaseUrl,
+                remoteFilePath = remoteFilePath,
+                username = username,
+                password = password,
+                autoSyncEnabled = true,
+                lastSyncStatus = current.lastSyncStatus ?: SYNC_STATUS_IDLE,
+                lastSyncError = null,
+            )
         persistCurrentLibraryMetadata(updated)
         return true
     }
@@ -184,14 +186,15 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     /**
      * 按ID移除单个历史库。
      */
-    fun removeLibraryHistoryById(libraryId: String): Boolean {
-        return removeLibraryHistoryByIds(listOf(libraryId)) > 0
-    }
+    fun removeLibraryHistoryById(libraryId: String): Boolean = removeLibraryHistoryByIds(listOf(libraryId)) > 0
 
     /**
      * 批量移除历史库。
      */
-    fun removeLibraryHistoryByIds(libraryIds: Collection<String>, onDeleteKey: (String) -> Unit = {}): Int {
+    fun removeLibraryHistoryByIds(
+        libraryIds: Collection<String>,
+        onDeleteKey: (String) -> Unit = {},
+    ): Int {
         val targetIds = libraryIds.filter { it.isNotBlank() }.toSet()
         if (targetIds.isEmpty()) {
             return 0
@@ -222,12 +225,13 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
         repository: KdbxTokenRepository,
         masterPassword: String,
         isManualUnlock: Boolean = true,
-        keyFileData: ByteArray? = null
+        keyFileData: ByteArray? = null,
     ): Boolean {
         val localPath = _currentLibrary.value?.localPath ?: return false
-        val ok = withContext(Dispatchers.IO) {
-            repository.validatePassword(localPath, masterPassword, keyFileData)
-        }
+        val ok =
+            withContext(Dispatchers.IO) {
+                repository.validatePassword(localPath, masterPassword, keyFileData)
+            }
         if (!ok) {
             lastUnlockErrorMessage = resolveUnlockFailureMessage(localPath, repository)
             _isLibraryUnlocked.value = false
@@ -251,7 +255,7 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
             val current = _currentLibrary.value
             if (current != null) {
                 persistCurrentLibraryMetadata(
-                    current.copy(lastManualMasterUnlockAt = System.currentTimeMillis())
+                    current.copy(lastManualMasterUnlockAt = System.currentTimeMillis()),
                 )
             }
         }
@@ -267,12 +271,13 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
         repository: KdbxTokenRepository,
         masterPassword: String,
         updateManualTimestamp: Boolean = false,
-        keyFileData: ByteArray? = null
+        keyFileData: ByteArray? = null,
     ): Boolean {
         val localPath = _currentLibrary.value?.localPath ?: return false
-        val ok = withContext(Dispatchers.IO) {
-            repository.validatePassword(localPath, masterPassword, keyFileData)
-        }
+        val ok =
+            withContext(Dispatchers.IO) {
+                repository.validatePassword(localPath, masterPassword, keyFileData)
+            }
         if (!ok) {
             lastUnlockErrorMessage = resolveUnlockFailureMessage(localPath, repository)
             return false
@@ -283,7 +288,7 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
             val current = _currentLibrary.value
             if (current != null) {
                 persistCurrentLibraryMetadata(
-                    current.copy(lastManualMasterUnlockAt = System.currentTimeMillis())
+                    current.copy(lastManualMasterUnlockAt = System.currentTimeMillis()),
                 )
             }
         }
@@ -306,11 +311,10 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     /**
      * 获取当前库的主密码
      */
-    fun getCurrentLibraryMasterPassword(): String? {
-        return currentLibraryMasterPassword.takeIf {
+    fun getCurrentLibraryMasterPassword(): String? =
+        currentLibraryMasterPassword.takeIf {
             it.isNotBlank() && isCurrentLibraryMasterPasswordManualVerified
         }
-    }
 
     /**
      * 获取主密码（内部使用）
@@ -323,9 +327,7 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
      * 打开磁盘文件 → 操作 → 关闭，功能正确；若写入成功会自动推进写入代次，
      * tryGet() 能识别尚未完成的「过期重建缓存」并丢弃。
      */
-    internal fun getMasterPasswordInternal(): String {
-        return currentLibraryMasterPassword
-    }
+    internal fun getMasterPasswordInternal(): String = currentLibraryMasterPassword
 
     /**
      * 当缓存已失效但凭据仍在时，在后台 IO 协程中重建缓存。
@@ -350,77 +352,79 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
         // lateinit：launch 返回前赋值尚未完成，lambda 体调度执行时赋值早已结束，安全读取。
         // 用 selfJob 而非 coroutineContext[Job] 规避 import/挂起上下文限制。
         lateinit var selfJob: Job
-        val newJob = viewModelScope.launch(Dispatchers.IO) {
-            // 快照重建开始时的写入代次：若代次不同说明 KDF 期间有并发写入。
-            val startGeneration = DatabaseManager.currentSaveGeneration()
-            try {
-                // 已被取消（锁定/切库）则立即退出，避免无谓跑一遍 KDF
-                ensureActive()
-                val rebuilt = runCatching {
-                    // validatePassword 内部会打开数据库并存入 DatabaseManager 缓存，
-                    // store() 时会再快照一次 currentSaveGeneration 作为 storeGeneration。
-                    KdbxTokenRepository(context).validatePassword(
-                        localPath = localPath,
-                        masterPassword = currentLibraryMasterPassword,
-                        keyFileData = null  // 已由 invalidateCacheKeepKeyFile 保留在 DatabaseManager 中
-                    )
-                }.getOrDefault(false)
+        val newJob =
+            viewModelScope.launch(Dispatchers.IO) {
+                // 快照重建开始时的写入代次：若代次不同说明 KDF 期间有并发写入。
+                val startGeneration = DatabaseManager.currentSaveGeneration()
+                try {
+                    // 已被取消（锁定/切库）则立即退出，避免无谓跑一遍 KDF
+                    ensureActive()
+                    val rebuilt =
+                        runCatching {
+                            // validatePassword 内部会打开数据库并存入 DatabaseManager 缓存，
+                            // store() 时会再快照一次 currentSaveGeneration 作为 storeGeneration。
+                            KdbxTokenRepository(context).validatePassword(
+                                localPath = localPath,
+                                masterPassword = currentLibraryMasterPassword,
+                                keyFileData = null, // 已由 invalidateCacheKeepKeyFile 保留在 DatabaseManager 中
+                            )
+                        }.getOrDefault(false)
 
-                // 重建期间 UI 已被锁定：validatePassword 是阻塞代码，cancel 无法中断它，
-                // 其内部 store() 会把解密数据重新塞回 DatabaseManager——这里必须立即丢弃，
-                // 否则锁定态下任何 tryGet 命中缓存都能无密码读取全量数据（安全性页泄漏）。
-                // 同时避免把用户刚完成的手动解锁状态覆盖掉。
-                if (!_isLibraryUnlocked.value) {
-                    DatabaseManager.close()
-                    Logger.w(
-                        UNLOCK_STATE_LOG_TAG,
-                        "缓存重建期间 UI 已锁定，丢弃重建缓存: path=$localPath"
-                    )
-                    return@launch
-                }
-
-                if (!rebuilt) {
-                    // 重建失败（凭据失配/文件损坏/权限失效等）：切回锁定态。
-                    // 此时已确认 UI 仍处于解锁态（上面早退过），回落不会覆盖手动解锁状态。
-                    withContext(Dispatchers.Main.immediate) {
+                    // 重建期间 UI 已被锁定：validatePassword 是阻塞代码，cancel 无法中断它，
+                    // 其内部 store() 会把解密数据重新塞回 DatabaseManager——这里必须立即丢弃，
+                    // 否则锁定态下任何 tryGet 命中缓存都能无密码读取全量数据（安全性页泄漏）。
+                    // 同时避免把用户刚完成的手动解锁状态覆盖掉。
+                    if (!_isLibraryUnlocked.value) {
+                        DatabaseManager.close()
                         Logger.w(
                             UNLOCK_STATE_LOG_TAG,
-                            "数据库缓存丢失且后台重建失败，回落至锁定态: path=$localPath"
+                            "缓存重建期间 UI 已锁定，丢弃重建缓存: path=$localPath",
                         )
-                        resetUnlockStateKeepKeyFile()
+                        return@launch
                     }
-                    return@launch
-                }
 
-                // 重建成功后的代次一致性校验：
-                // 阻塞型 KDF 期间（Argon2/AES 1-3s）若有另一个 withDatabase 非缓存路径
-                // 成功写入磁盘，saveDatabase 会把代次推进；当前缓存是基于 KDF 之前的
-                // 磁盘快照（S0），磁盘已是 S1 → 缓存已过期，必须丢弃避免后续 tryGet
-                // 读到 S0，写操作时静默回滚掉并发修改。
-                val currentAfterRebuild = DatabaseManager.currentSaveGeneration()
-                if (currentAfterRebuild != startGeneration) {
-                    Logger.w(
-                        UNLOCK_STATE_LOG_TAG,
-                        "重建期间检测到并发写入（start=$startGeneration, current=$currentAfterRebuild），" +
-                            "丢弃过期重建缓存: path=$localPath"
-                    )
-                    // 丢弃旧缓存但保留密钥文件凭据——代次推进意味着已有新数据落盘，
-                    // 不能让旧缓存污染后续读写。下次触发失效事件时会再次调度重建。
-                    DatabaseManager.invalidateCacheKeepKeyFile()
-                } else {
-                    Logger.d(
-                        UNLOCK_STATE_LOG_TAG,
-                        "数据库缓存后台重建完成（代次一致 start=$startGeneration）: path=$localPath"
-                    )
+                    if (!rebuilt) {
+                        // 重建失败（凭据失配/文件损坏/权限失效等）：切回锁定态。
+                        // 此时已确认 UI 仍处于解锁态（上面早退过），回落不会覆盖手动解锁状态。
+                        withContext(Dispatchers.Main.immediate) {
+                            Logger.w(
+                                UNLOCK_STATE_LOG_TAG,
+                                "数据库缓存丢失且后台重建失败，回落至锁定态: path=$localPath",
+                            )
+                            resetUnlockStateKeepKeyFile()
+                        }
+                        return@launch
+                    }
+
+                    // 重建成功后的代次一致性校验：
+                    // 阻塞型 KDF 期间（Argon2/AES 1-3s）若有另一个 withDatabase 非缓存路径
+                    // 成功写入磁盘，saveDatabase 会把代次推进；当前缓存是基于 KDF 之前的
+                    // 磁盘快照（S0），磁盘已是 S1 → 缓存已过期，必须丢弃避免后续 tryGet
+                    // 读到 S0，写操作时静默回滚掉并发修改。
+                    val currentAfterRebuild = DatabaseManager.currentSaveGeneration()
+                    if (currentAfterRebuild != startGeneration) {
+                        Logger.w(
+                            UNLOCK_STATE_LOG_TAG,
+                            "重建期间检测到并发写入（start=$startGeneration, current=$currentAfterRebuild），" +
+                                "丢弃过期重建缓存: path=$localPath",
+                        )
+                        // 丢弃旧缓存但保留密钥文件凭据——代次推进意味着已有新数据落盘，
+                        // 不能让旧缓存污染后续读写。下次触发失效事件时会再次调度重建。
+                        DatabaseManager.invalidateCacheKeepKeyFile()
+                    } else {
+                        Logger.d(
+                            UNLOCK_STATE_LOG_TAG,
+                            "数据库缓存后台重建完成（代次一致 start=$startGeneration）: path=$localPath",
+                        )
+                    }
+                } finally {
+                    // 只在当前引用仍指向「本协程自己的 Job」时清空。
+                    // 之前写法 compareAndSet(cacheRebuildJobRef.get(), null)：
+                    // 本任务被切库 cancel、期间又调度了新任务时，会把新任务的引用误清空，
+                    // 下一次触发调度时将并发启动第二个 KDF。修复为与自身 Job 比较。
+                    cacheRebuildJobRef.compareAndSet(selfJob, null)
                 }
-            } finally {
-                // 只在当前引用仍指向「本协程自己的 Job」时清空。
-                // 之前写法 compareAndSet(cacheRebuildJobRef.get(), null)：
-                // 本任务被切库 cancel、期间又调度了新任务时，会把新任务的引用误清空，
-                // 下一次触发调度时将并发启动第二个 KDF。修复为与自身 Job 比较。
-                cacheRebuildJobRef.compareAndSet(selfJob, null)
             }
-        }
         selfJob = newJob
         if (!cacheRebuildJobRef.compareAndSet(existing, newJob)) {
             // CAS 失败：另一线程刚完成 compareAndSet，取消我们刚创建的 Job
@@ -485,32 +489,31 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
         status: String,
         errorMessage: String? = null,
         remoteModifiedAt: Long? = null,
-        syncAt: Long? = null
+        syncAt: Long? = null,
     ) {
         val current = getCurrentCloudLibrary() ?: return
         Logger.d(
             SYNC_LOG_TAG,
-            "更新同步状态: 状态=$status, 远端修改时间=$remoteModifiedAt, 同步时间=$syncAt, 错误=${errorMessage.orEmpty()}"
+            "更新同步状态: 状态=$status, 远端修改时间=$remoteModifiedAt, 同步时间=$syncAt, 错误=${errorMessage.orEmpty()}",
         )
         persistCurrentLibraryMetadata(
             current.copy(
                 lastSyncStatus = status,
                 lastSyncError = errorMessage,
                 lastRemoteModifiedAt = remoteModifiedAt ?: current.lastRemoteModifiedAt,
-                lastSyncAt = syncAt ?: when (status) {
-                    SYNC_STATUS_SUCCESS, SYNC_STATUS_MERGED -> System.currentTimeMillis()
-                    else -> current.lastSyncAt
-                }
-            )
+                lastSyncAt =
+                    syncAt ?: when (status) {
+                        SYNC_STATUS_SUCCESS, SYNC_STATUS_MERGED -> System.currentTimeMillis()
+                        else -> current.lastSyncAt
+                    },
+            ),
         )
     }
 
     /**
      * 获取最近一次云端同步错误文案。
      */
-    fun currentCloudSyncError(): String {
-        return _currentLibrary.value?.lastSyncError?.takeIf { it.isNotBlank() } ?: "请检查网络、权限与文件状态"
-    }
+    fun currentCloudSyncError(): String = _currentLibrary.value?.lastSyncError?.takeIf { it.isNotBlank() } ?: "请检查网络、权限与文件状态"
 
     /**
      * 按库ID获取最新快照
@@ -533,25 +536,30 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     /**
      * 获取解锁错误信息
      */
-    fun getLastUnlockErrorMessage(): String? {
-        return lastUnlockErrorMessage
-    }
+    fun getLastUnlockErrorMessage(): String? = lastUnlockErrorMessage
 
     /**
      * 归一化解锁失败文案。
      */
-    private fun resolveUnlockFailureMessage(localPath: String, repository: KdbxTokenRepository): String {
+    private fun resolveUnlockFailureMessage(
+        localPath: String,
+        repository: KdbxTokenRepository,
+    ): String {
         val raw = repository.getLastUnlockErrorMessage().orEmpty()
-        val isUriPath = runCatching { android.net.Uri.parse(localPath) }
-            .getOrNull()
-            ?.scheme?.equals("content", ignoreCase = true) == true
+        val isUriPath =
+            runCatching { android.net.Uri.parse(localPath) }
+                .getOrNull()
+                ?.scheme
+                ?.equals("content", ignoreCase = true) == true
 
-        if (isUriPath && (
-            raw.contains("SecurityException", ignoreCase = true) ||
-            raw.contains("permission", ignoreCase = true) ||
-            raw.contains("denied", ignoreCase = true) ||
-            raw.contains("ACTION_OPEN_DOCUMENT", ignoreCase = true)
-        )) {
+        if (isUriPath &&
+            (
+                raw.contains("SecurityException", ignoreCase = true) ||
+                    raw.contains("permission", ignoreCase = true) ||
+                    raw.contains("denied", ignoreCase = true) ||
+                    raw.contains("ACTION_OPEN_DOCUMENT", ignoreCase = true)
+            )
+        ) {
             return "解锁失败：文件访问权限已失效，请重新选择数据库文件"
         }
 
@@ -567,9 +575,7 @@ class LibraryViewModel(private val context: Context) : ViewModel() {
     /**
      * 判断当前 ViewModel 协程作用域是否仍处于活跃状态。
      */
-    fun isScopeActive(): Boolean {
-        return viewModelScope.coroutineContext[Job]?.isActive == true
-    }
+    fun isScopeActive(): Boolean = viewModelScope.coroutineContext[Job]?.isActive == true
 
     /**
      * 设置加载状态

@@ -5,14 +5,15 @@ import com.kunzisoft.keepass.database.element.icon.IconImageCustom
 import java.util.*
 
 class CustomIconPool : BinaryPool<UUID>() {
-
     private val customIcons = HashMap<UUID, IconImageCustom>()
 
-    fun put(key: UUID? = null,
-            name: String,
-            lastModificationTime: DateInstant?,
-            builder: (uniqueBinaryId: String) -> BinaryData,
-            result: (IconImageCustom, BinaryData?) -> Unit) {
+    fun put(
+        key: UUID? = null,
+        name: String,
+        lastModificationTime: DateInstant?,
+        builder: (uniqueBinaryId: String) -> BinaryData,
+        result: (IconImageCustom, BinaryData?) -> Unit,
+    ) {
         val keyBinary = super.put(key, builder)
         val uuid = keyBinary.keys.first()
         val customIcon = IconImageCustom(uuid, name, lastModificationTime)
@@ -28,13 +29,9 @@ class CustomIconPool : BinaryPool<UUID>() {
         return newUUID
     }
 
-    fun getCustomIcon(key: UUID): IconImageCustom? {
-        return customIcons[key]
-    }
+    fun getCustomIcon(key: UUID): IconImageCustom? = customIcons[key]
 
-    fun any(predicate: (IconImageCustom)-> Boolean): Boolean {
-        return customIcons.any { predicate(it.value) }
-    }
+    fun any(predicate: (IconImageCustom) -> Boolean): Boolean = customIcons.any { predicate(it.value) }
 
     fun doForEachCustomIcon(action: (customIcon: IconImageCustom, binary: BinaryData) -> Unit) {
         doForEachBinary { key, binary ->

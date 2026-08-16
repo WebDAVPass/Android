@@ -4,5 +4,5 @@ enum class SpecialMode {
     DEFAULT,
     SEARCH,
     SELECTION,
-    REGISTRATION;
+    REGISTRATION,
 }

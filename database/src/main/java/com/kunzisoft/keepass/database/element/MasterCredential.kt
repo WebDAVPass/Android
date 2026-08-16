@@ -45,28 +45,26 @@ import javax.xml.parsers.ParserConfigurationException
 data class MasterCredential(
     var password: String? = null,
     var keyFileData: ByteArray? = null,
-    var hardwareKey: HardwareKey? = null
-): Parcelable {
-
+    var hardwareKey: HardwareKey? = null,
+) : Parcelable {
     constructor(parcel: Parcel) : this() {
         password = parcel.readString()
         keyFileData = parcel.readByteArrayCompat()
         hardwareKey = parcel.readEnum<HardwareKey>()
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeString(password)
         parcel.writeByteArrayCompat(keyFileData)
         parcel.writeEnum(hardwareKey)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    fun getCheckKey(): ByteArray {
-        return getCheckKey(password)
-    }
+    fun getCheckKey(): ByteArray = getCheckKey(password)
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -89,49 +87,49 @@ data class MasterCredential(
     }
 
     companion object CREATOR : Parcelable.Creator<MasterCredential> {
-        override fun createFromParcel(parcel: Parcel): MasterCredential {
-            return MasterCredential(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): MasterCredential = MasterCredential(parcel)
 
-        override fun newArray(size: Int): Array<MasterCredential?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<MasterCredential?> = arrayOfNulls(size)
 
         private val TAG = MasterCredential::class.java.simpleName
 
-        fun getCheckKey(password: String?): ByteArray {
-            return retrievePasswordKey(
+        fun getCheckKey(password: String?): ByteArray =
+            retrievePasswordKey(
                 try {
                     password?.substring(0, CHECK_KEY_PASSWORD_LENGTH) ?: ""
-                } catch (_: Exception) { "" },
-                Charsets.UTF_8
+                } catch (_: Exception) {
+                    ""
+                },
+                Charsets.UTF_8,
             )
-        }
 
         @Throws(IOException::class)
         fun retrievePasswordKey(
             key: String,
-            encoding: Charset
+            encoding: Charset,
         ): ByteArray {
-            val bKey: ByteArray = try {
-                key.toByteArray(encoding)
-            } catch (_: UnsupportedEncodingException) {
-                key.toByteArray()
-            }
+            val bKey: ByteArray =
+                try {
+                    key.toByteArray(encoding)
+                } catch (_: UnsupportedEncodingException) {
+                    key.toByteArray()
+                }
             return HashManager.hashSha256(bKey)
         }
 
         @Throws(IOException::class)
         fun retrieveKeyFileDecodedKey(
             keyFileData: ByteArray,
-            allowXML: Boolean
+            allowXML: Boolean,
         ): ByteArray {
             try {
                 // Check XML key file
-                val xmlKeyByteArray = if (allowXML)
-                    loadXmlKeyFile(ByteArrayInputStream(keyFileData))
-                else
-                    null
+                val xmlKeyByteArray =
+                    if (allowXML) {
+                        loadXmlKeyFile(ByteArrayInputStream(keyFileData))
+                    } else {
+                        null
+                    }
                 if (xmlKeyByteArray != null) {
                     return xmlKeyByteArray
                 }
@@ -139,11 +137,12 @@ data class MasterCredential(
                 // Check 32 bytes key file
                 when (keyFileData.size) {
                     32 -> return keyFileData
-                    64 -> try {
-                        return Hex.decodeHex(String(keyFileData).toCharArray())
-                    } catch (_: Exception) {
-                        // Key is not base 64, treat it as binary data
-                    }
+                    64 ->
+                        try {
+                            return Hex.decodeHex(String(keyFileData).toCharArray())
+                        } catch (_: Exception) {
+                            // Key is not base 64, treat it as binary data
+                        }
                 }
                 // Hash file as binary data
                 return HashManager.hashSha256(keyFileData)
@@ -153,9 +152,7 @@ data class MasterCredential(
         }
 
         @Throws(IOException::class)
-        fun retrieveHardwareKey(keyData: ByteArray): ByteArray {
-            return HashManager.hashSha256(keyData)
-        }
+        fun retrieveHardwareKey(keyData: ByteArray): ByteArray = HashManager.hashSha256(keyData)
 
         private fun loadXmlKeyFile(keyInputStream: InputStream): ByteArray? {
             try {
@@ -164,7 +161,7 @@ data class MasterCredential(
                 // Disable certain unsecure XML-Parsing DocumentBuilderFactory features
                 try {
                     documentBuilderFactory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-                } catch (_ : ParserConfigurationException) {
+                } catch (_: ParserConfigurationException) {
                     Log.w(TAG, "Unable to add FEATURE_SECURE_PROCESSING to prevent XML eXternal Entity injection (XXE)")
                 }
 
@@ -176,12 +173,14 @@ data class MasterCredential(
                 val docElement = doc.documentElement
                 val keyFileChildNodes = docElement.childNodes
                 // <KeyFile> Root node
-                if (docElement == null
-                    || !docElement.nodeName.equals(XML_NODE_ROOT_NAME, ignoreCase = true)) {
+                if (docElement == null ||
+                    !docElement.nodeName.equals(XML_NODE_ROOT_NAME, ignoreCase = true)
+                ) {
                     return null
                 }
-                if (keyFileChildNodes.length < 2)
+                if (keyFileChildNodes.length < 2) {
                     return null
+                }
                 for (keyFileChildPosition in 0 until keyFileChildNodes.length) {
                     val keyFileChildNode = keyFileChildNodes.item(keyFileChildPosition)
                     // <Meta>
@@ -214,11 +213,13 @@ data class MasterCredential(
                             val keyChildNode = keyChildNodes.item(keyChildPosition)
                             // <Data>
                             if (keyChildNode.nodeName.equals(XML_NODE_DATA_NAME, ignoreCase = true)) {
-                                var hashString : String? = null
+                                var hashString: String? = null
                                 if (keyChildNode.hasAttributes()) {
                                     val dataNodeAttributes = keyChildNode.attributes
-                                    hashString = dataNodeAttributes
-                                        .getNamedItem(XML_ATTRIBUTE_DATA_HASH).nodeValue
+                                    hashString =
+                                        dataNodeAttributes
+                                            .getNamedItem(XML_ATTRIBUTE_DATA_HASH)
+                                            .nodeValue
                                 }
                                 val dataChildNodes = keyChildNode.childNodes
                                 for (dataChildPosition in 0 until dataChildNodes.length) {
@@ -231,8 +232,8 @@ data class MasterCredential(
                                                 return Base64.decode(dataString, BASE64_FLAG)
                                             }
                                             2F -> {
-                                                return if (hashString != null
-                                                    && checkKeyFileHash(dataString, hashString)
+                                                return if (hashString != null &&
+                                                    checkKeyFileHash(dataString, hashString)
                                                 ) {
                                                     Log.i(TAG, "Successful key file hash check.")
                                                     Hex.decodeHex(dataString.toCharArray())
@@ -254,12 +255,18 @@ data class MasterCredential(
             return null
         }
 
-        private fun checkKeyFileHash(data: String, hash: String): Boolean {
+        private fun checkKeyFileHash(
+            data: String,
+            hash: String,
+        ): Boolean {
             var success = false
             try {
                 // hexadecimal encoding of the first 4 bytes of the SHA-256 hash of the key.
-                val dataDigest = HashManager.hashSha256(Hex.decodeHex(data.toCharArray()))
-                    .copyOfRange(0, 4).toHexString()
+                val dataDigest =
+                    HashManager
+                        .hashSha256(Hex.decodeHex(data.toCharArray()))
+                        .copyOfRange(0, 4)
+                        .toHexString()
                 success = dataDigest == hash
             } catch (e: Exception) {
                 e.printStackTrace()

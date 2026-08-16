@@ -49,19 +49,25 @@ fun Uri.toRequestBody(contentType: MediaType? = null): RequestBody {
  */
 fun Uri.resolveDisplayName(
     context: Context,
-    fallbackIfEmpty: String = "未命名"
+    fallbackIfEmpty: String = "未命名",
 ): String {
-    val queried = runCatching {
-        context.contentResolver.query(this, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
-            ?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-                    if (index >= 0 && !cursor.isNull(index)) {
-                        cursor.getString(index)?.takeIf { it.isNotBlank() }
-                    } else null
-                } else null
-            }
-    }.getOrNull()
+    val queried =
+        runCatching {
+            context.contentResolver
+                .query(this, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)
+                ?.use { cursor ->
+                    if (cursor.moveToFirst()) {
+                        val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                        if (index >= 0 && !cursor.isNull(index)) {
+                            cursor.getString(index)?.takeIf { it.isNotBlank() }
+                        } else {
+                            null
+                        }
+                    } else {
+                        null
+                    }
+                }
+        }.getOrNull()
     return queried
         // 部分 SAF provider 的 lastPathSegment 是 docid 内嵌路径 (primary:Documents/foo.key)，
         // 取最后一段斜杠后的文件名，避免把完整 docid 当显示名。

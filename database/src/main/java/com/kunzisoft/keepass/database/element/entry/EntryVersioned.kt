@@ -23,20 +23,22 @@ import android.os.Parcel
 import com.kunzisoft.keepass.database.element.group.GroupVersioned
 import com.kunzisoft.keepass.database.element.node.NodeVersioned
 
-abstract class EntryVersioned
-        <
-        GroupId,
-        EntryId,
-        ParentGroup: GroupVersioned<GroupId, EntryId, ParentGroup, Entry>,
-        Entry: EntryVersioned<GroupId, EntryId, ParentGroup, Entry>
-        >
-    : NodeVersioned<EntryId, ParentGroup, Entry>, EntryVersionedInterface<ParentGroup> {
-
+abstract class EntryVersioned<
+    GroupId,
+    EntryId,
+    ParentGroup : GroupVersioned<GroupId, EntryId, ParentGroup, Entry>,
+    Entry : EntryVersioned<GroupId, EntryId, ParentGroup, Entry>,
+> :
+    NodeVersioned<EntryId, ParentGroup, Entry>,
+    EntryVersionedInterface<ParentGroup> {
     constructor() : super()
 
     constructor(parcel: Parcel) : super(parcel)
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(dest, flags)
     }
 
@@ -44,10 +46,10 @@ abstract class EntryVersioned
         if (nodeIndexInParentForNaturalOrder == -1) {
             val numberOfGroups = parent?.getChildGroups()?.size
             val indexInEntries = parent?.getChildEntries()?.indexOf(this)
-            if (numberOfGroups != null && indexInEntries != null)
+            if (numberOfGroups != null && indexInEntries != null) {
                 return numberOfGroups + indexInEntries
+            }
         }
         return nodeIndexInParentForNaturalOrder
     }
-
 }

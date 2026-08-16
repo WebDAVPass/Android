@@ -19,34 +19,36 @@
  */
 package com.kunzisoft.keepass.utils
 
-open class SingletonHolderParameter<out T, in A>(private val constructor: (A) -> T) {
-
+open class SingletonHolderParameter<out T, in A>(
+    private val constructor: (A) -> T,
+) {
     @Volatile
     private var instance: T? = null
 
-    fun getInstance(arg: A): T {
-        return when {
+    fun getInstance(arg: A): T =
+        when {
             instance != null -> instance!!
-            else -> synchronized(this) {
-                if (instance == null) instance = constructor(arg)
-                instance!!
-            }
+            else ->
+                synchronized(this) {
+                    if (instance == null) instance = constructor(arg)
+                    instance!!
+                }
         }
-    }
 }
 
-open class SingletonHolder<out T>(private val constructor: () -> T) {
-
+open class SingletonHolder<out T>(
+    private val constructor: () -> T,
+) {
     @Volatile
     private var instance: T? = null
 
-    fun getInstance(): T {
-        return when {
+    fun getInstance(): T =
+        when {
             instance != null -> instance!!
-            else -> synchronized(this) {
-                if (instance == null) instance = constructor()
-                instance!!
-            }
+            else ->
+                synchronized(this) {
+                    if (instance == null) instance = constructor()
+                    instance!!
+                }
         }
-    }
 }

@@ -26,8 +26,7 @@ import com.kunzisoft.keepass.database.exception.DatabaseException
 /**
  * Callback after a task is completed.
  */
-abstract class ActionRunnable: Runnable {
-
+abstract class ActionRunnable : Runnable {
     var result: Result = Result()
 
     override fun run() {
@@ -78,10 +77,12 @@ abstract class ActionRunnable: Runnable {
     /**
      * Class to manage result from ActionRunnable
      */
-    data class Result(var isSuccess: Boolean = true,
-                      var message: String? = null,
-                      var exception: DatabaseException? = null,
-                      var data: Bundle? = null)
+    data class Result(
+        var isSuccess: Boolean = true,
+        var message: String? = null,
+        var exception: DatabaseException? = null,
+        var data: Bundle? = null,
+    )
 
     companion object {
         private const val TAG = "ActionRunnable"

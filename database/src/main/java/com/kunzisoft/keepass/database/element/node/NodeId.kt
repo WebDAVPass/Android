@@ -23,14 +23,14 @@ import android.os.Parcel
 import android.os.Parcelable
 
 abstract class NodeId<Id> : Parcelable {
-
     abstract val id: Id
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {}
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {}
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -41,9 +41,7 @@ abstract class NodeId<Id> : Parcelable {
         return true
     }
 
-    override fun hashCode(): Int {
-        return id?.hashCode() ?: 0
-    }
+    override fun hashCode(): Int = id?.hashCode() ?: 0
 
     abstract fun toVisualString(): String?
 }

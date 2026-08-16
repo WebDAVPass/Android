@@ -5,7 +5,6 @@ import android.os.Parcelable
 import com.kunzisoft.keepass.utils.readParcelableCompat
 
 class CustomDataItem : Parcelable {
-
     val key: String
     var value: String
     var lastModificationTime: DateInstant? = null
@@ -22,27 +21,22 @@ class CustomDataItem : Parcelable {
         this.lastModificationTime = lastModificationTime
     }
 
-    override fun toString(): String {
-        return value
-    }
+    override fun toString(): String = value
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeString(key)
         parcel.writeString(value)
         parcel.writeParcelable(lastModificationTime, flags)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     companion object CREATOR : Parcelable.Creator<CustomDataItem> {
-        override fun createFromParcel(parcel: Parcel): CustomDataItem {
-            return CustomDataItem(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): CustomDataItem = CustomDataItem(parcel)
 
-        override fun newArray(size: Int): Array<CustomDataItem?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<CustomDataItem?> = arrayOfNulls(size)
     }
 }

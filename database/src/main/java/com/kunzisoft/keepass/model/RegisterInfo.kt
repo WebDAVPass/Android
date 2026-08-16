@@ -14,9 +14,9 @@ data class RegisterInfo(
     val expiration: DateInstant? = null,
     val creditCard: CreditCard? = null,
     val passkey: Passkey? = null,
-    val appOrigin: AppOrigin? = null
-) : ObjectNameResource, Parcelable {
-
+    val appOrigin: AppOrigin? = null,
+) : ObjectNameResource,
+    Parcelable {
     constructor(parcel: Parcel) : this(
         searchInfo = parcel.readParcelableCompat() ?: SearchInfo(),
         username = parcel.readString(),
@@ -24,10 +24,13 @@ data class RegisterInfo(
         expiration = parcel.readParcelableCompat(),
         creditCard = parcel.readParcelableCompat(),
         passkey = parcel.readParcelableCompat(),
-        appOrigin = parcel.readParcelableCompat()
+        appOrigin = parcel.readParcelableCompat(),
     )
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(searchInfo, flags)
         parcel.writeString(username)
         parcel.writeString(password)
@@ -37,33 +40,29 @@ data class RegisterInfo(
         parcel.writeParcelable(appOrigin, flags)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     override fun getName(resources: Resources): String {
-        if (username != null)
+        if (username != null) {
             return "$username (${searchInfo.getName(resources)})"
+        }
         return passkey?.relyingParty
             ?: appOrigin?.toName()
             ?: searchInfo.getName(resources)
     }
 
     override fun toString(): String {
-        if (username != null)
+        if (username != null) {
             return "$username ($searchInfo)"
+        }
         return passkey?.relyingParty
             ?: appOrigin?.toName()
             ?: searchInfo.toString()
     }
 
     companion object CREATOR : Parcelable.Creator<RegisterInfo> {
-        override fun createFromParcel(parcel: Parcel): RegisterInfo {
-            return RegisterInfo(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): RegisterInfo = RegisterInfo(parcel)
 
-        override fun newArray(size: Int): Array<RegisterInfo?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<RegisterInfo?> = arrayOfNulls(size)
     }
 }

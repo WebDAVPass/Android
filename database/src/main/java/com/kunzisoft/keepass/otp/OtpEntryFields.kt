@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- * 
+ *
  * This file is part of KeePassDX.
  *
  * KeePassDX is free software: you can redistribute it and/or modify it under the terms of the GNU
@@ -35,7 +35,6 @@ import java.util.Locale
 import java.util.regex.Pattern
 
 object OtpEntryFields {
-
     private val TAG = OtpEntryFields::class.java.name
 
     // Field from KeePassXC
@@ -56,7 +55,8 @@ object OtpEntryFields {
     private const val COUNTER_URL_PARAM = "counter"
 
     // OTPauth URI
-    private const val REGEX_OTP_AUTH = "^otpauth://(" +
+    private const val REGEX_OTP_AUTH =
+        "^otpauth://(" +
             "$TOTP_AUTHORITY|$STEAM_AUTHORITY|$HOTP_AUTHORITY" +
             ")/?(?:([^:?#]*): *)?([^:?#]*)\\?([^#]+)$"
 
@@ -103,37 +103,41 @@ object OtpEntryFields {
     fun parseFields(getField: (id: String) -> String?): OtpElement? {
         val otpElement = OtpElement()
         // OTP (HOTP/TOTP) from URL and field from KeePassXC
-        if (parseOTPUri(getField, otpElement))
+        if (parseOTPUri(getField, otpElement)) {
             return otpElement
+        }
         // TOTP from KeePass 2.47
-        if (parseTOTPFromOfficialField(getField, otpElement))
+        if (parseTOTPFromOfficialField(getField, otpElement)) {
             return otpElement
+        }
         // TOTP from key values (maybe plugin or old KeePassXC)
-        if (parseTOTPKeyValues(getField, otpElement))
+        if (parseTOTPKeyValues(getField, otpElement)) {
             return otpElement
+        }
         // TOTP from custom field
-        if (parseTOTPFromPluginField(getField, otpElement))
+        if (parseTOTPFromPluginField(getField, otpElement)) {
             return otpElement
+        }
         // HOTP fields from KeePass 2
-        if (parseHOTPFromOfficialField(getField, otpElement))
+        if (parseHOTPFromOfficialField(getField, otpElement)) {
             return otpElement
+        }
         return null
     }
 
     /**
      * Tell if [otpUri] is a valid Otp URI
      */
-    fun isOTPUri(otpUri: String): Boolean {
-        return Pattern.matches(REGEX_OTP_AUTH, otpUri)
-    }
+    fun isOTPUri(otpUri: String): Boolean = Pattern.matches(REGEX_OTP_AUTH, otpUri)
 
     /**
      * Get OtpElement from [otpUri]
      */
     fun parseOTPUri(otpUri: String): OtpElement? {
         val otpElement = OtpElement()
-        if (parseOTPUri({ key -> if (key == OTP_FIELD) otpUri else null }, otpElement))
+        if (parseOTPUri({ key -> if (key == OTP_FIELD) otpUri else null }, otpElement)) {
             return otpElement
+        }
         return null
     }
 
@@ -144,7 +148,10 @@ object OtpEntryFields {
      * otpauth://steam/user@example.com?secret=FFF...
      * otpauth://hotp/user@example.com?secret=FFF...&counter=123
      */
-    private fun parseOTPUri(getField: (id: String) -> String?, otpElement: OtpElement): Boolean {
+    private fun parseOTPUri(
+        getField: (id: String) -> String?,
+        otpElement: OtpElement,
+    ): Boolean {
         val otpPlainText = getField(OTP_FIELD)
         if (!otpPlainText.isNullOrEmpty() && isOTPUri(otpPlainText)) {
             val uri = Uri.parse(otpPlainText.removeSpaceChars())
@@ -157,7 +164,6 @@ object OtpEntryFields {
             val authority = uri.authority
             if (TOTP_AUTHORITY == authority || STEAM_AUTHORITY == authority) {
                 otpElement.type = OtpType.TOTP
-
             } else if (HOTP_AUTHORITY == authority) {
                 otpElement.type = OtpType.HOTP
 
@@ -170,7 +176,6 @@ object OtpEntryFields {
                         return false
                     }
                 }
-
             } else {
                 Log.e(TAG, "Invalid or missing authority in uri")
                 return false
@@ -188,8 +193,9 @@ object OtpEntryFields {
             }
 
             val issuerParam = uri.getQueryParameter(ISSUER_URL_PARAM)
-            if (!issuerParam.isNullOrEmpty())
+            if (!issuerParam.isNullOrEmpty()) {
                 otpElement.issuer = issuerParam.removeLineChars()
+            }
 
             val secretParam = uri.getQueryParameter(SECRET_URL_PARAM)
             if (!secretParam.isNullOrEmpty()) {
@@ -201,35 +207,39 @@ object OtpEntryFields {
             }
 
             val encoderParam = uri.getQueryParameter(ENCODER_URL_PARAM)
-            if (!encoderParam.isNullOrEmpty())
+            if (!encoderParam.isNullOrEmpty()) {
                 otpElement.tokenType = OtpTokenType.getFromString(encoderParam)
+            }
 
             val digitsParam = uri.getQueryParameter(DIGITS_URL_PARAM)
-            if (!digitsParam.isNullOrEmpty())
+            if (!digitsParam.isNullOrEmpty()) {
                 try {
                     otpElement.digits = digitsParam.toIntOrNull() ?: OTP_DEFAULT_DIGITS
                 } catch (exception: Exception) {
                     Log.e(TAG, "Unable to retrieve OTP digits.", exception)
                     otpElement.digits = OTP_DEFAULT_DIGITS
                 }
+            }
 
             val counterParam = uri.getQueryParameter(COUNTER_URL_PARAM)
-            if (!counterParam.isNullOrEmpty())
+            if (!counterParam.isNullOrEmpty()) {
                 try {
                     otpElement.counter = counterParam.toLongOrNull() ?: HOTP_INITIAL_COUNTER
                 } catch (exception: Exception) {
                     Log.e(TAG, "Unable to retrieve HOTP counter.", exception)
                     otpElement.counter = HOTP_INITIAL_COUNTER
                 }
+            }
 
             val stepParam = uri.getQueryParameter(PERIOD_URL_PARAM)
-            if (!stepParam.isNullOrEmpty())
+            if (!stepParam.isNullOrEmpty()) {
                 try {
                     otpElement.period = stepParam.toIntOrNull() ?: TOTP_DEFAULT_PERIOD
                 } catch (exception: Exception) {
                     Log.e(TAG, "Unable to retrieve TOTP period.", exception)
                     otpElement.period = TOTP_DEFAULT_PERIOD
                 }
+            }
 
             val algorithmParam = uri.getQueryParameter(ALGORITHM_URL_PARAM)
             if (!algorithmParam.isNullOrEmpty()) {
@@ -241,7 +251,11 @@ object OtpEntryFields {
         return false
     }
 
-    private fun buildOtpUri(otpElement: OtpElement, title: String?, username: String?): Uri {
+    private fun buildOtpUri(
+        otpElement: OtpElement,
+        title: String?,
+        username: String?,
+    ): Uri {
         val counterOrPeriodLabel: String
         val counterOrPeriodValue: String
         val otpAuthority: String
@@ -259,21 +273,26 @@ object OtpEntryFields {
             }
         }
         val issuer =
-                if (!title.isNullOrEmpty())
-                    encodeParameter(title)
-                else
-                    encodeParameter(otpElement.issuer)
+            if (!title.isNullOrEmpty()) {
+                encodeParameter(title)
+            } else {
+                encodeParameter(otpElement.issuer)
+            }
         val accountName =
-                if (!username.isNullOrEmpty())
-                    encodeParameter(username)
-                else
-                    encodeParameter(otpElement.name)
+            if (!username.isNullOrEmpty()) {
+                encodeParameter(username)
+            } else {
+                encodeParameter(otpElement.name)
+            }
         val secret = encodeParameter(otpElement.getBase32Secret())
-        val uriString = StringBuilder("otpauth://$otpAuthority/$issuer%3A$accountName" +
-                "?$SECRET_URL_PARAM=${secret}" +
-                "&$counterOrPeriodLabel=$counterOrPeriodValue" +
-                "&$DIGITS_URL_PARAM=${otpElement.digits}" +
-                "&$ISSUER_URL_PARAM=$issuer")
+        val uriString =
+            StringBuilder(
+                "otpauth://$otpAuthority/$issuer%3A$accountName" +
+                    "?$SECRET_URL_PARAM=$secret" +
+                    "&$counterOrPeriodLabel=$counterOrPeriodValue" +
+                    "&$DIGITS_URL_PARAM=${otpElement.digits}" +
+                    "&$ISSUER_URL_PARAM=$issuer",
+            )
         if (otpElement.tokenType == OtpTokenType.STEAM) {
             uriString.append("&$ENCODER_URL_PARAM=${otpElement.tokenType}")
         } else {
@@ -283,11 +302,12 @@ object OtpEntryFields {
         return Uri.parse(uriString.toString())
     }
 
-    private fun encodeParameter(parameter: String): String {
-        return Uri.encode(parameter.removeLineChars())
-    }
+    private fun encodeParameter(parameter: String): String = Uri.encode(parameter.removeLineChars())
 
-    private fun parseTOTPFromOfficialField(getField: (id: String) -> String?, otpElement: OtpElement): Boolean {
+    private fun parseTOTPFromOfficialField(
+        getField: (id: String) -> String?,
+        otpElement: OtpElement,
+    ): Boolean {
         val secretField = getField(TIMEOTP_SECRET_FIELD)
         val secretHexField = getField(TIMEOTP_SECRET_HEX_FIELD)
         val secretBase32Field = getField(TIMEOTP_SECRET_BASE32_FIELD)
@@ -315,12 +335,12 @@ object OtpEntryFields {
             }
             if (algorithmField != null) {
                 otpElement.algorithm =
-                        when (algorithmField.uppercase(Locale.ENGLISH)) {
-                            TIMEOTP_ALGORITHM_SHA1_VALUE -> HashAlgorithm.SHA1
-                            TIMEOTP_ALGORITHM_SHA256_VALUE -> HashAlgorithm.SHA256
-                            TIMEOTP_ALGORITHM_SHA512_VALUE -> HashAlgorithm.SHA512
-                            else -> HashAlgorithm.SHA1
-                        }
+                    when (algorithmField.uppercase(Locale.ENGLISH)) {
+                        TIMEOTP_ALGORITHM_SHA1_VALUE -> HashAlgorithm.SHA1
+                        TIMEOTP_ALGORITHM_SHA256_VALUE -> HashAlgorithm.SHA256
+                        TIMEOTP_ALGORITHM_SHA512_VALUE -> HashAlgorithm.SHA512
+                        else -> HashAlgorithm.SHA1
+                    }
             }
         } catch (exception: Exception) {
             return false
@@ -328,7 +348,10 @@ object OtpEntryFields {
         return true
     }
 
-    private fun parseTOTPKeyValues(getField: (id: String) -> String?, otpElement: OtpElement): Boolean {
+    private fun parseTOTPKeyValues(
+        getField: (id: String) -> String?,
+        otpElement: OtpElement,
+    ): Boolean {
         val plainText = getField(OTP_FIELD)
         if (!plainText.isNullOrEmpty()) {
             if (Pattern.matches(validKeyValueRegex, plainText)) {
@@ -351,7 +374,10 @@ object OtpEntryFields {
         return false
     }
 
-    private fun parseTOTPFromPluginField(getField: (id: String) -> String?, otpElement: OtpElement): Boolean {
+    private fun parseTOTPFromPluginField(
+        getField: (id: String) -> String?,
+        otpElement: OtpElement,
+    ): Boolean {
         val seedField = getField(TOTP_SEED_FIELD) ?: return false
         try {
             otpElement.setBase32Secret(seedField)
@@ -375,7 +401,6 @@ object OtpEntryFields {
                         otpElement.tokenType = OtpTokenType.getFromString(secondMatcher)
                     }
                 }
-
             }
         } catch (exception: Exception) {
             return false
@@ -383,7 +408,10 @@ object OtpEntryFields {
         return true
     }
 
-    private fun parseHOTPFromOfficialField(getField: (id: String) -> String?, otpElement: OtpElement): Boolean {
+    private fun parseHOTPFromOfficialField(
+        getField: (id: String) -> String?,
+        otpElement: OtpElement,
+    ): Boolean {
         val secretField = getField(HMACOTP_SECRET_FIELD)
         val secretHexField = getField(HMACOTP_SECRET_HEX_FIELD)
         val secretBase32Field = getField(HMACOTP_SECRET_BASE32_FIELD)
@@ -431,19 +459,29 @@ object OtpEntryFields {
     /**
      * Build Otp field from an OtpElement
      */
-    fun buildOtpField(otpElement: OtpElement, title: String? = null, username: String? = null): Field {
-        return Field(OTP_FIELD, ProtectedString(true,
-                buildOtpUri(otpElement, title, username).toString()))
-    }
+    fun buildOtpField(
+        otpElement: OtpElement,
+        title: String? = null,
+        username: String? = null,
+    ): Field =
+        Field(
+            OTP_FIELD,
+            ProtectedString(
+                true,
+                buildOtpUri(otpElement, title, username).toString(),
+            ),
+        )
 
     fun EntryInfo.setOtp(otpString: String): Boolean {
         // Replace the OTP field
         parseOTPUri(otpString)?.let { otpElement ->
             tags.put(OTP_TAG)
-            if (title.isEmpty())
+            if (title.isEmpty()) {
                 title = otpElement.issuer
-            if (username.isEmpty())
+            }
+            if (username.isEmpty()) {
                 username = otpElement.name
+            }
             // Add OTP field
             val mutableCustomFields = customFields as ArrayList<Field>
             val otpField = buildOtpField(otpElement, null, null)
@@ -494,26 +532,27 @@ object OtpEntryFields {
         newCustomFields.remove(timeOtpPeriodField)
         newCustomFields.remove(timeOtpAlgorithmField)
         // Empty auto generated OTP Token field
-        if (fieldsToParse.contains(otpField)
-                || fieldsToParse.contains(totpSeedField)
-                || fieldsToParse.contains(hmacOtpSecretField)
-                || fieldsToParse.contains(hmacOtpSecretHexField)
-                || fieldsToParse.contains(hmacOtpSecretBase32Field)
-                || fieldsToParse.contains(hmacOtpSecretBase64Field)
-                || fieldsToParse.contains(timeOtpSecretField)
-                || fieldsToParse.contains(timeOtpSecretHexField)
-                || fieldsToParse.contains(timeOtpSecretBase32Field)
-                || fieldsToParse.contains(timeOtpSecretBase64Field)
-        )
+        if (fieldsToParse.contains(otpField) ||
+            fieldsToParse.contains(totpSeedField) ||
+            fieldsToParse.contains(hmacOtpSecretField) ||
+            fieldsToParse.contains(hmacOtpSecretHexField) ||
+            fieldsToParse.contains(hmacOtpSecretBase32Field) ||
+            fieldsToParse.contains(hmacOtpSecretBase64Field) ||
+            fieldsToParse.contains(timeOtpSecretField) ||
+            fieldsToParse.contains(timeOtpSecretHexField) ||
+            fieldsToParse.contains(timeOtpSecretBase32Field) ||
+            fieldsToParse.contains(timeOtpSecretBase64Field)
+        ) {
             newCustomFields.add(Field(OTP_TOKEN_FIELD))
+        }
         return newCustomFields
     }
 
     /**
      * Detect if the current field is an OTP
      */
-    fun Field.isOTP(): Boolean {
-        return when(name) {
+    fun Field.isOTP(): Boolean =
+        when (name) {
             OTP_FIELD -> true
             TOTP_SEED_FIELD -> true
             TOTP_SETTING_FIELD -> true
@@ -531,12 +570,9 @@ object OtpEntryFields {
             TIMEOTP_ALGORITHM_FIELD -> true
             else -> false
         }
-    }
 
     /**
      * Detect if the current field is an OTP URI
      */
-    fun Field.isOTPURIField(): Boolean {
-        return name == OTP_FIELD
-    }
+    fun Field.isOTPURIField(): Boolean = name == OTP_FIELD
 }

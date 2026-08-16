@@ -10,7 +10,6 @@ import com.kunzisoft.keepass.utils.readParcelableCompat
 import java.util.*
 
 class GroupInfo : NodeInfo {
-
     var id: UUID? = null
     var notes: String? = null
     var searchable: Boolean? = null
@@ -22,9 +21,9 @@ class GroupInfo : NodeInfo {
         icon.standard = IconImageStandard(FOLDER_ID)
     }
 
-    constructor(): super()
+    constructor() : super()
 
-    constructor(parcel: Parcel): super(parcel) {
+    constructor(parcel: Parcel) : super(parcel) {
         id = parcel.readParcelableCompat<ParcelUuid>()?.uuid ?: id
         notes = parcel.readString()
         val isSearchingEnabled = parcel.readInt()
@@ -35,13 +34,32 @@ class GroupInfo : NodeInfo {
         tags = parcel.readParcelableCompat() ?: tags
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(parcel, flags)
         val uuid = if (id != null) ParcelUuid(id) else null
         parcel.writeParcelable(uuid, flags)
         parcel.writeString(notes)
-        parcel.writeInt(if (searchable == null) -1 else if (searchable!!) 1 else 0)
-        parcel.writeInt(if (enableAutoType == null) -1 else if (enableAutoType!!) 1 else 0)
+        parcel.writeInt(
+            if (searchable == null) {
+                -1
+            } else if (searchable!!) {
+                1
+            } else {
+                0
+            },
+        )
+        parcel.writeInt(
+            if (enableAutoType == null) {
+                -1
+            } else if (enableAutoType!!) {
+                1
+            } else {
+                0
+            },
+        )
         parcel.writeString(defaultAutoTypeSequence)
         parcel.writeParcelable(tags, flags)
     }
@@ -73,12 +91,8 @@ class GroupInfo : NodeInfo {
     }
 
     companion object CREATOR : Parcelable.Creator<GroupInfo> {
-        override fun createFromParcel(parcel: Parcel): GroupInfo {
-            return GroupInfo(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): GroupInfo = GroupInfo(parcel)
 
-        override fun newArray(size: Int): Array<GroupInfo?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<GroupInfo?> = arrayOfNulls(size)
     }
 }

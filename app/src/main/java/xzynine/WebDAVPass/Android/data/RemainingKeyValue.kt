@@ -11,7 +11,7 @@ enum class RemainingValueType {
     EMAIL,
     NUMBER,
     BOOLEAN,
-    DATE_TIME
+    DATE_TIME,
 }
 
 /**
@@ -31,7 +31,7 @@ data class RemainingKeyValue(
      * 标准字段由独立编辑器管理，加载为自定义字段草稿时应排除；
      * 而同名但属于额外字段（extra）的项此值为 false，应被保留，避免在保存时被静默删除。
      */
-    val isStandard: Boolean = false
+    val isStandard: Boolean = false,
 )
 
 /**
@@ -42,7 +42,7 @@ data class RemainingKeyValue(
  */
 data class EntryAttachmentInfo(
     val name: String,
-    val size: Long
+    val size: Long,
 )
 
 /**
@@ -67,7 +67,7 @@ data class PasswordEntry(
     val creationTime: Long = 0L,
     val modifiedTime: Long = 0L,
     val isFolderGroup: Boolean = false,
-    val isFolderPlaceholder: Boolean = false
+    val isFolderPlaceholder: Boolean = false,
 ) {
     /**
      * 索引键缓存：IO 线程排序分组与主线程 UI 分组会对同一条目重复执行 ICU 转写
@@ -92,14 +92,14 @@ data class EntryHistoryInfo(
     val url: String,
     val notes: String,
     val customFieldCount: Int,
-    val attachmentCount: Int
+    val attachmentCount: Int,
 )
 
 /**
  * 值类型中文标签
  */
-fun RemainingValueType.toDisplayName(): String {
-    return when (this) {
+fun RemainingValueType.toDisplayName(): String =
+    when (this) {
         RemainingValueType.TEXT -> "文本"
         RemainingValueType.PASSWORD -> "密码"
         RemainingValueType.OTP -> "动态令牌"
@@ -109,4 +109,3 @@ fun RemainingValueType.toDisplayName(): String {
         RemainingValueType.BOOLEAN -> "布尔"
         RemainingValueType.DATE_TIME -> "日期时间"
     }
-}

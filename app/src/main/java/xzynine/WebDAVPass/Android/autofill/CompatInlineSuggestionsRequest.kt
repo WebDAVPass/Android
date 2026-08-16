@@ -26,12 +26,10 @@ import androidx.annotation.RequiresApi
 
 @RequiresApi(Build.VERSION_CODES.R)
 class CompatInlineSuggestionsRequest(
-    val inlineSuggestionsRequest: InlineSuggestionsRequest?
+    val inlineSuggestionsRequest: InlineSuggestionsRequest?,
 ) {
     companion object {
         @RequiresApi(Build.VERSION_CODES.R)
-        fun fromFillRequest(fillRequest: FillRequest): CompatInlineSuggestionsRequest {
-            return CompatInlineSuggestionsRequest(fillRequest.inlineSuggestionsRequest)
-        }
+        fun fromFillRequest(fillRequest: FillRequest): CompatInlineSuggestionsRequest = CompatInlineSuggestionsRequest(fillRequest.inlineSuggestionsRequest)
     }
 }

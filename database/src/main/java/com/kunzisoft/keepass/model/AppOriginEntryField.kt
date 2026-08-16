@@ -24,7 +24,6 @@ import com.kunzisoft.keepass.database.element.security.ProtectedString
 import com.kunzisoft.keepass.model.EntryInfo.Companion.suffixFieldNamePosition
 
 object AppOriginEntryField {
-
     const val WEB_DOMAIN_FIELD_NAME = "URL"
     const val APPLICATION_ID_FIELD_NAME = "AndroidApp"
     const val APPLICATION_SIGNATURE_FIELD_NAME = "AndroidApp Signature"
@@ -49,7 +48,7 @@ object AppOriginEntryField {
             }.takeWhile { it != null }
             .forEach { pair ->
                 appOrigin.addAndroidOrigin(
-                    AndroidOrigin(pair!!.first, pair.second)
+                    AndroidOrigin(pair!!.first, pair.second),
                 )
             }
         // Get Domains
@@ -72,14 +71,19 @@ object AppOriginEntryField {
      * Useful to detect if an other KeePass compatibility app already add a web domain or an app id
      */
     fun EntryInfo.containsDomainOrApplicationId(search: String): Boolean {
-        if (url.contains(search))
+        if (url.contains(search)) {
             return true
+        }
         return customFields.find {
             it.protectedValue.stringValue.contains(search)
         } != null
     }
 
-    fun EntryInfo.setWebDomain(webDomain: String?, scheme: String?, customFieldsAllowed: Boolean) {
+    fun EntryInfo.setWebDomain(
+        webDomain: String?,
+        scheme: String?,
+        customFieldsAllowed: Boolean,
+    ) {
         // If unable to save web domain in custom field or URL not populated, save in URL
         webDomain?.let {
             val webOrigin = WebOrigin.fromDomain(webDomain, scheme).toOriginValue()
@@ -91,9 +95,9 @@ object AppOriginEntryField {
                     addUniqueField(
                         Field(
                             WEB_DOMAIN_FIELD_NAME,
-                            ProtectedString(false, webOrigin)
+                            ProtectedString(false, webOrigin),
                         ),
-                        1 // Start to one because URL is a standard field name
+                        1, // Start to one because URL is a standard field name
                     )
                 }
             }
@@ -103,24 +107,28 @@ object AppOriginEntryField {
     /**
      * Save application id in custom field and the application signature if provided
      */
-    fun EntryInfo.setApplicationId(applicationId: String?, signature: String? = null) {
+    fun EntryInfo.setApplicationId(
+        applicationId: String?,
+        signature: String? = null,
+    ) {
         // Save application id in custom field
         applicationId?.let {
             // Check compatibility with other KeePass client unless a signature need to be saved
             if (!containsDomainOrApplicationId(applicationId) || signature != null) {
-                val position = addUniqueField(
-                    Field(
-                        APPLICATION_ID_FIELD_NAME,
-                        ProtectedString(false, applicationId)
-                    )
-                ).first
+                val position =
+                    addUniqueField(
+                        Field(
+                            APPLICATION_ID_FIELD_NAME,
+                            ProtectedString(false, applicationId),
+                        ),
+                    ).first
                 signature?.let {
                     addOrReplaceFieldWithSuffix(
                         Field(
                             APPLICATION_SIGNATURE_FIELD_NAME,
-                            ProtectedString(true, signature)
+                            ProtectedString(true, signature),
                         ),
-                        position
+                        position,
                     )
                 }
             }
@@ -131,7 +139,10 @@ object AppOriginEntryField {
      * Assign an AppOrigin to an EntryInfo,
      * Only if [customFieldsAllowed] is true
      */
-    fun EntryInfo.setAppOrigin(appOrigin: AppOrigin?, customFieldsAllowed: Boolean) {
+    fun EntryInfo.setAppOrigin(
+        appOrigin: AppOrigin?,
+        customFieldsAllowed: Boolean,
+    ) {
         appOrigin?.androidOrigins?.forEach { appIdentifier ->
             setApplicationId(appIdentifier.packageName, appIdentifier.fingerprint)
         }
@@ -143,23 +154,18 @@ object AppOriginEntryField {
     /**
      * Detect if the current field is an application id
      */
-    fun Field.isAppId(): Boolean {
-        return this.name.startsWith(APPLICATION_ID_FIELD_NAME)
-    }
+    fun Field.isAppId(): Boolean = this.name.startsWith(APPLICATION_ID_FIELD_NAME)
 
     /**
      * Detect if the current field is an application id signature
      */
-    fun Field.isAppIdSignature(): Boolean {
-        return this.name.startsWith(APPLICATION_SIGNATURE_FIELD_NAME)
-    }
+    fun Field.isAppIdSignature(): Boolean = this.name.startsWith(APPLICATION_SIGNATURE_FIELD_NAME)
 
     /**
      * Detect if the current field is a web domain
      */
-    fun Field.isWebDomain(): Boolean {
-        return this.name.startsWith(WEB_DOMAIN_FIELD_NAME)
-                || this.name.contains("_$WEB_DOMAIN_FIELD_NAME")
-                || this.name.contains("${WEB_DOMAIN_FIELD_NAME}_")
-    }
+    fun Field.isWebDomain(): Boolean =
+        this.name.startsWith(WEB_DOMAIN_FIELD_NAME) ||
+            this.name.contains("_$WEB_DOMAIN_FIELD_NAME") ||
+            this.name.contains("${WEB_DOMAIN_FIELD_NAME}_")
 }

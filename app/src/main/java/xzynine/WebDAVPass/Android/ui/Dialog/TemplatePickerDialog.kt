@@ -1,20 +1,16 @@
 package xzynine.WebDAVPass.Android.ui.Dialog
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -24,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kunzisoft.keepass.database.element.template.Template
 import com.kunzisoft.keepass.database.element.template.TemplateBuilder
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.Text
@@ -44,77 +39,81 @@ import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 fun TemplatePickerDialog(
     show: Boolean,
     onDismiss: () -> Unit,
-    onPick: (Template?) -> Unit
+    onPick: (Template?) -> Unit,
 ) {
-    val templates = remember {
-        TemplateBuilder().let { builder ->
-            listOf(
-                builder.email,
-                builder.wifi,
-                builder.notes,
-                builder.idCard,
-                builder.creditCard,
-                builder.bank,
-                builder.cryptocurrency
-            )
+    val templates =
+        remember {
+            TemplateBuilder().let { builder ->
+                listOf(
+                    builder.email,
+                    builder.wifi,
+                    builder.notes,
+                    builder.idCard,
+                    builder.creditCard,
+                    builder.bank,
+                    builder.cryptocurrency,
+                )
+            }
         }
-    }
 
     WindowDialog(
         title = "从模板添加",
         summary = "选择模板将自动生成对应字段",
         show = show,
-        onDismissRequest = onDismiss
+        onDismissRequest = onDismiss,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 360.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 360.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(templates, key = { it.uuid.toString() }) { template ->
-                    val fieldLabels = template.sections
-                        .flatMap { section -> section.attributes.map { localizeTemplateLabel(it.label) } }
-                        .distinct()
-                        .joinToString(" / ")
+                    val fieldLabels =
+                        template.sections
+                            .flatMap { section -> section.attributes.map { localizeTemplateLabel(it.label) } }
+                            .distinct()
+                            .joinToString(" / ")
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
                         cornerRadius = 12.dp,
                         pressFeedbackType = PressFeedbackType.Sink,
                         showIndication = true,
-                        onClick = { onPick(template) }
+                        onClick = { onPick(template) },
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 14.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             EntryIcon(
                                 customIconBytes = null,
                                 standardIconId = template.icon.standard.id,
                                 primary = localizeTemplateLabel(template.title),
                                 secondary = null,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(36.dp),
                             )
-                        Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
-                            Text(
-                                text = localizeTemplateLabel(template.title),
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.Medium,
-                                color = MiuixTheme.colorScheme.onSurface
-                            )
-                            Text(
-                                text = fieldLabels,
-                                fontSize = 12.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceSecondary
-                            )
+                            Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
+                                Text(
+                                    text = localizeTemplateLabel(template.title),
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MiuixTheme.colorScheme.onSurface,
+                                )
+                                Text(
+                                    text = fieldLabels,
+                                    fontSize = 12.sp,
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                )
+                            }
                         }
                     }
                 }
-            }
             }
 
             // 自定义（无模板）
@@ -124,32 +123,33 @@ fun TemplatePickerDialog(
                 cornerRadius = 12.dp,
                 pressFeedbackType = PressFeedbackType.Sink,
                 showIndication = true,
-                onClick = { onPick(null) }
+                onClick = { onPick(null) },
             ) {
                 Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     EntryIcon(
                         customIconBytes = null,
                         standardIconId = 0,
                         primary = "自定义",
                         secondary = null,
-                        modifier = Modifier.size(36.dp)
+                        modifier = Modifier.size(36.dp),
                     )
                     Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
                         Text(
                             text = "自定义",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
-                            color = MiuixTheme.colorScheme.onSurface
+                            color = MiuixTheme.colorScheme.onSurface,
                         )
                         Text(
                             text = "不使用模板，手动添加字段",
                             fontSize = 12.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
                         )
                     }
                 }
@@ -157,12 +157,12 @@ fun TemplatePickerDialog(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 TextButton(
                     text = "取消",
                     onClick = onDismiss,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
                 )
             }
         }
@@ -173,8 +173,8 @@ fun TemplatePickerDialog(
  * 将模板标题与字段标签映射为中文显示文本。
  * 仅影响界面展示，不修改实际写入数据库的字段名。
  */
-private fun localizeTemplateLabel(label: String): String {
-    return when (label) {
+private fun localizeTemplateLabel(label: String): String =
+    when (label) {
         "Email" -> "电子邮件"
         "Email address" -> "邮箱地址"
         "Wi-Fi" -> "无线网络"
@@ -211,4 +211,3 @@ private fun localizeTemplateLabel(label: String): String {
         "Version" -> "版本"
         else -> label
     }
-}

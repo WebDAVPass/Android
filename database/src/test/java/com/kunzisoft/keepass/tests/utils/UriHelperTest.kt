@@ -3,8 +3,7 @@ package com.kunzisoft.keepass.tests.utils
 import com.kunzisoft.keepass.utils.inTheSameDomainAs
 import junit.framework.TestCase
 
-class UriHelperTest: TestCase() {
-
+class UriHelperTest : TestCase() {
     fun testBuildURL() {
         val expected = "domain.org"
 

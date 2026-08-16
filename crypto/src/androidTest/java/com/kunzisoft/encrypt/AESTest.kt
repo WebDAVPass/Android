@@ -30,7 +30,6 @@ import javax.crypto.CipherInputStream
 import javax.crypto.CipherOutputStream
 
 class AESTest {
-
     private val mRand = Random()
 
     @Test

@@ -1,11 +1,11 @@
 package xzynine.WebDAVPass.Android.data
 
-import xzylib.base.util.Logger
 import com.kunzisoft.keepass.database.element.Database
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import xzylib.base.util.Logger
 import java.io.File
 import java.util.concurrent.atomic.AtomicLong
 
@@ -19,7 +19,6 @@ import java.util.concurrent.atomic.AtomicLong
  * 后续所有读写操作优先复用缓存实例，无需重新打开文件。
  */
 object DatabaseManager {
-
     private const val LOG_TAG = "数据库管理"
 
     /**
@@ -70,7 +69,7 @@ object DatabaseManager {
         /** 数据库操作临时缓存目录 */
         val cacheDirectory: File,
         /** 存入缓存时的 [saveGeneration] 快照，用于过期检测 */
-        val storeGeneration: Long
+        val storeGeneration: Long,
     )
 
     @Volatile
@@ -88,10 +87,11 @@ object DatabaseManager {
      * extraBufferCapacity=3 应对极少数短时间连续失效的场景，
      * DROP_OLDEST 保证发射永不阻塞（onFailure 同步回调中 emit，不能挂起）。
      */
-    private val _cacheInvalidatedEvents = MutableSharedFlow<Unit>(
-        extraBufferCapacity = 3,
-        onBufferOverflow = BufferOverflow.DROP_OLDEST
-    )
+    private val _cacheInvalidatedEvents =
+        MutableSharedFlow<Unit>(
+            extraBufferCapacity = 3,
+            onBufferOverflow = BufferOverflow.DROP_OLDEST,
+        )
     val cacheInvalidatedEvents: SharedFlow<Unit> = _cacheInvalidatedEvents.asSharedFlow()
 
     /**
@@ -110,9 +110,7 @@ object DatabaseManager {
      * 返回副本，避免调用方就地修改内部数组影响后续保存使用的凭据。
      */
     @Synchronized
-    fun getKeyFileData(): ByteArray? {
-        return keyFileData?.copyOf()
-    }
+    fun getKeyFileData(): ByteArray? = keyFileData?.copyOf()
 
     /**
      * 存储已打开的数据库实例。
@@ -130,7 +128,7 @@ object DatabaseManager {
         localPath: String,
         masterPassword: String,
         database: Database,
-        cacheDirectory: File
+        cacheDirectory: File,
     ) {
         val old = cached
         // 如果已有不同的数据库实例，先关闭旧实例
@@ -166,7 +164,7 @@ object DatabaseManager {
             Logger.w(
                 LOG_TAG,
                 "缓存代次过期（stored=${c.storeGeneration}, current=$currentGen），" +
-                    "已失效缓存: ${c.localPath}"
+                    "已失效缓存: ${c.localPath}",
             )
             // 过期不发 cacheInvalidatedEvent——我们并不需要再次重建，
             // 发事件会触发无意义的 scheduleCacheRebuildIfNeeded 循环。

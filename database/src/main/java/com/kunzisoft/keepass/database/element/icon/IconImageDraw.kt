@@ -22,8 +22,8 @@ package com.kunzisoft.keepass.database.element.icon
 import android.os.Parcelable
 
 abstract class IconImageDraw : Parcelable {
-
     var selected = false
+
     /**
      * Only to retrieve an icon image to Draw, to not use as object to manipulate
      */

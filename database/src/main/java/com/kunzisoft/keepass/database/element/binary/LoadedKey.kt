@@ -5,7 +5,10 @@ import java.security.Key
 import java.security.SecureRandom
 import javax.crypto.KeyGenerator
 
-class LoadedKey(val key: Key, val iv: ByteArray): Serializable {
+class LoadedKey(
+    val key: Key,
+    val iv: ByteArray,
+) : Serializable {
     companion object {
         const val BINARY_CIPHER = "Blowfish/CBC/PKCS5Padding"
 

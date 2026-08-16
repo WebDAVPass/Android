@@ -19,7 +19,6 @@
 package com.kunzisoft.keepass.database.element.template
 
 object TemplateField {
-
     const val LABEL_STANDARD = "Standard"
     const val LABEL_TEMPLATE = "Template"
     const val LABEL_VERSION = "Version"
@@ -57,14 +56,13 @@ object TemplateField {
     const val LABEL_SECURE_NOTE = "Secure Note"
     const val LABEL_MEMBERSHIP = "Membership"
 
-    fun isStandardFieldName(name: String): Boolean {
-        return arrayOf(
+    fun isStandardFieldName(name: String): Boolean =
+        arrayOf(
             LABEL_TITLE,
             LABEL_USERNAME,
             LABEL_PASSWORD,
             LABEL_URL,
             LABEL_EXPIRATION,
-            LABEL_NOTES
+            LABEL_NOTES,
         ).firstOrNull { it.equals(name, true) } != null
-    }
 }

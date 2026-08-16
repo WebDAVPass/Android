@@ -20,17 +20,19 @@
 package com.kunzisoft.keepass.model
 
 enum class CredentialStorage {
-    PASSWORD, KEY_FILE, HARDWARE_KEY;
+    PASSWORD,
+    KEY_FILE,
+    HARDWARE_KEY,
+    ;
 
     companion object {
-        fun getFromOrdinal(ordinal: Int): CredentialStorage {
-            return when (ordinal) {
+        fun getFromOrdinal(ordinal: Int): CredentialStorage =
+            when (ordinal) {
                 0 -> PASSWORD
                 1 -> KEY_FILE
                 2 -> HARDWARE_KEY
                 else -> DEFAULT
             }
-        }
 
         val DEFAULT: CredentialStorage
             get() = PASSWORD

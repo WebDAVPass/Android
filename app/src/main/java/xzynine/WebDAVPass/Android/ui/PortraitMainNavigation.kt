@@ -31,11 +31,11 @@ import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
 import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
-import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.navigation.Route
 import xzynine.WebDAVPass.Android.ui.navigation.pop
 import xzynine.WebDAVPass.Android.ui.navigation.push
 import xzynine.WebDAVPass.Android.ui.navigation.replaceAll
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 @Composable
 fun PortraitMainNavigation(
@@ -84,7 +84,7 @@ fun PortraitMainNavigation(
                     } else {
                         false
                     }
-                }
+                },
             )
         }
         entry<Route.Locked> {
@@ -102,9 +102,10 @@ fun PortraitMainNavigation(
                     // 用同步快照兜底：currentLibrary 流在冷启动首帧可能尚未预热，
                     // 此时 lib 为 null 但历史库实际存在，不应误弹回欢迎页。
                     // 读库涉及 Room，放 IO 线程执行避免阻塞主线程。
-                    lib == null && withContext(Dispatchers.IO) {
-                        tokenViewModel.libraryViewModel.getCurrentLibrarySync() == null
-                    } -> {
+                    lib == null &&
+                        withContext(Dispatchers.IO) {
+                            tokenViewModel.libraryViewModel.getCurrentLibrarySync() == null
+                        } -> {
                         backStack.replaceAll(listOf(Route.Welcome))
                         showWelcome.value = true
                     }
@@ -120,7 +121,7 @@ fun PortraitMainNavigation(
                 onSwitchLibrary = {
                     backStack.replaceAll(listOf(Route.Welcome))
                     showWelcome.value = true
-                }
+                },
             )
         }
         entry<Route.Home> {
@@ -139,30 +140,31 @@ fun PortraitMainNavigation(
                                 }) {
                                     Icon(
                                         imageVector = MiuixIcons.Settings,
-                                        contentDescription = "设置"
+                                        contentDescription = "设置",
                                     )
                                 }
-                            }
+                            },
                         )
                     },
                     floatingActionButton = {
                         FloatingActionButton(
                             onClick = {
                                 showScanBottomSheet.value = true
-                            }
+                            },
                         ) {
                             Icon(
                                 imageVector = MiuixIcons.Scan,
-                                contentDescription = "扫描二维码"
+                                contentDescription = "扫描二维码",
                             )
                         }
                     },
                     floatingActionButtonPosition = FabPosition.End,
                     content = { paddingValues ->
                         Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .padding(paddingValues)
+                            modifier =
+                                Modifier
+                                    .fillMaxSize()
+                                    .padding(paddingValues),
                         ) {
                             HomeScreen(
                                 tokenViewModel = tokenViewModel,
@@ -174,10 +176,10 @@ fun PortraitMainNavigation(
                                 },
                                 onNavigateToSecurityCheck = {
                                     backStack.push(Route.SecurityCheck)
-                                }
+                                },
                             )
                         }
-                    }
+                    },
                 )
                 MiuixPopupHost()
             }
@@ -214,7 +216,7 @@ fun PortraitMainNavigation(
                     },
                     onNavigateBack = {
                         backStack.pop()
-                    }
+                    },
                 )
                 MiuixPopupHost()
             }
@@ -232,7 +234,7 @@ fun PortraitMainNavigation(
                     },
                     onDeleted = {
                         backStack.pop()
-                    }
+                    },
                 )
                 MiuixPopupHost()
             }

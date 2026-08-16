@@ -29,7 +29,6 @@ import com.kunzisoft.keepass.utils.readEnum
 import com.kunzisoft.keepass.utils.writeEnum
 
 class OtpModel() : Parcelable {
-
     var type: OtpType = OtpType.TOTP // ie : HOTP or TOTP
     var tokenType: OtpTokenType = OtpTokenType.RFC6238
     var name: String = "OTP" // ie : user@email.com
@@ -73,9 +72,7 @@ class OtpModel() : Parcelable {
         return true
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     override fun hashCode(): Int {
         var result = type.hashCode()
@@ -90,7 +87,10 @@ class OtpModel() : Parcelable {
         return result
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeEnum(type)
         parcel.writeEnum(tokenType)
         parcel.writeString(name)
@@ -102,17 +102,11 @@ class OtpModel() : Parcelable {
         parcel.writeEnum(algorithm)
     }
 
-    override fun toString(): String {
-        return "$type ($name)"
-    }
+    override fun toString(): String = "$type ($name)"
 
     companion object CREATOR : Parcelable.Creator<OtpModel> {
-        override fun createFromParcel(parcel: Parcel): OtpModel {
-            return OtpModel(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): OtpModel = OtpModel(parcel)
 
-        override fun newArray(size: Int): Array<OtpModel?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<OtpModel?> = arrayOfNulls(size)
     }
 }

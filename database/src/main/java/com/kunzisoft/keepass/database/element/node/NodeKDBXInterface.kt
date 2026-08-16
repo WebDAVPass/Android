@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -26,7 +26,6 @@ import com.kunzisoft.keepass.utils.UnsignedLong
 import java.util.*
 
 interface NodeKDBXInterface : NodeTimeInterface {
-
     var usageCount: UnsignedLong
     var locationChanged: DateInstant
     var customData: CustomData

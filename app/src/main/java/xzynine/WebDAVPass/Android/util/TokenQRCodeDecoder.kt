@@ -1,7 +1,6 @@
 package xzynine.WebDAVPass.Android.util
 
 import android.graphics.Bitmap
-import xzylib.base.util.Logger
 import androidx.camera.core.ImageProxy
 import com.google.zxing.BinaryBitmap
 import com.google.zxing.ChecksumException
@@ -11,16 +10,17 @@ import com.google.zxing.PlanarYUVLuminanceSource
 import com.google.zxing.RGBLuminanceSource
 import com.google.zxing.common.HybridBinarizer
 import com.google.zxing.qrcode.QRCodeReader
+import xzylib.base.util.Logger
 
 /**
  * 二维码解码器，用于解析相机捕获的图像中的二维码
  */
 class TokenQRCodeDecoder {
-
     // 添加统一的日志前缀，方便查看二维码相关日志
     private val tag: String = "QRCodeScanner"
     private val qrCodeReader = QRCodeReader()
     private lateinit var imageData: ByteArray
+
     // 缓存最近成功解析的URL，用于避免重复日志
     private var lastDecodedUrl: String? = null
 
@@ -30,16 +30,16 @@ class TokenQRCodeDecoder {
     data class ParseResult(
         val success: Boolean,
         val content: String? = null,
-        val errorType: ErrorType? = null
+        val errorType: ErrorType? = null,
     ) {
         /**
          * 二维码解析错误类型
          */
         enum class ErrorType {
-            NOT_FOUND,        // 未找到二维码
-            CHECKSUM_ERROR,   // 校验和错误
-            FORMAT_ERROR,     // 格式错误
-            UNKNOWN_ERROR     // 其他未知错误
+            NOT_FOUND, // 未找到二维码
+            CHECKSUM_ERROR, // 校验和错误
+            FORMAT_ERROR, // 格式错误
+            UNKNOWN_ERROR, // 其他未知错误
         }
     }
 
@@ -55,13 +55,13 @@ class TokenQRCodeDecoder {
             val height = bitmap.height
             val pixels = IntArray(width * height)
             bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
-            
+
             // 创建RGB亮度源
             val ls = RGBLuminanceSource(width, height, pixels)
-            
+
             // 创建二进制位图
             val binaryBitmap = BinaryBitmap(HybridBinarizer(ls))
-            
+
             // 调用通用解析方法
             return decodeBinaryBitmap(binaryBitmap)
         } catch (e: Exception) {
@@ -103,18 +103,21 @@ class TokenQRCodeDecoder {
 
             try {
                 // 创建亮度源，使用实际宽度和高度，而不是行跨度
-                val ls = PlanarYUVLuminanceSource(
-                    imageData, 
-                    rowStride, 
-                    height,
-                    0, 0, 
-                    width, height, 
-                    false
-                )
+                val ls =
+                    PlanarYUVLuminanceSource(
+                        imageData,
+                        rowStride,
+                        height,
+                        0,
+                        0,
+                        width,
+                        height,
+                        false,
+                    )
 
                 // 创建二进制位图
                 val binaryBitmap = BinaryBitmap(HybridBinarizer(ls))
-                
+
                 // 调用通用解析方法
                 return decodeBinaryBitmap(binaryBitmap)
             } catch (e: Exception) {
@@ -138,18 +141,18 @@ class TokenQRCodeDecoder {
         hints[com.google.zxing.DecodeHintType.CHARACTER_SET] = "UTF-8"
         hints[com.google.zxing.DecodeHintType.TRY_HARDER] = true
         hints[com.google.zxing.DecodeHintType.POSSIBLE_FORMATS] = listOf(com.google.zxing.BarcodeFormat.QR_CODE)
-        
+
         // 第一次尝试：带所有参数
         try {
             val result = qrCodeReader.decode(binaryBitmap, hints)
             val resultText = result.text
-            
+
             // 检查是否是重复的URL，避免重复日志
             if (resultText != lastDecodedUrl) {
                 Logger.d(tag, "成功解析二维码: $resultText")
                 lastDecodedUrl = resultText
             }
-            
+
             return ParseResult(success = true, content = resultText)
         } catch (e: NotFoundException) {
             // 未找到二维码，不记录任何日志
@@ -161,16 +164,16 @@ class TokenQRCodeDecoder {
                 val hints2 = hashMapOf<com.google.zxing.DecodeHintType, Any>()
                 hints2[com.google.zxing.DecodeHintType.CHARACTER_SET] = "UTF-8"
                 hints2[com.google.zxing.DecodeHintType.TRY_HARDER] = true
-                
+
                 val result = qrCodeReader.decode(binaryBitmap, hints2)
                 val resultText = result.text
-                
+
                 // 检查是否是重复的URL，避免重复日志
                 if (resultText != lastDecodedUrl) {
                     Logger.d(tag, "成功解析二维码: $resultText")
                     lastDecodedUrl = resultText
                 }
-                
+
                 return ParseResult(success = true, content = resultText)
             } catch (e2: NotFoundException) {
                 // 再次未找到二维码，不记录任何日志
@@ -180,13 +183,13 @@ class TokenQRCodeDecoder {
                 try {
                     val result = qrCodeReader.decode(binaryBitmap)
                     val resultText = result.text
-                    
+
                     // 检查是否是重复的URL，避免重复日志
                     if (resultText != lastDecodedUrl) {
                         Logger.d(tag, "成功解析二维码: $resultText")
                         lastDecodedUrl = resultText
                     }
-                    
+
                     return ParseResult(success = true, content = resultText)
                 } catch (e3: NotFoundException) {
                     // 最终未找到二维码，不记录任何日志

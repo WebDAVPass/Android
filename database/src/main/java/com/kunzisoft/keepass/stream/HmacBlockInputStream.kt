@@ -19,18 +19,21 @@
  */
 package com.kunzisoft.keepass.stream
 
+import com.kunzisoft.keepass.database.crypto.HmacBlock
 import com.kunzisoft.keepass.utils.UnsignedLong
 import com.kunzisoft.keepass.utils.bytes4ToUInt
 import com.kunzisoft.keepass.utils.readBytesLength
 import com.kunzisoft.keepass.utils.uLongTo8Bytes
-import com.kunzisoft.keepass.database.crypto.HmacBlock
 import java.io.IOException
 import java.io.InputStream
 import java.util.*
 import javax.crypto.Mac
 
-class HmacBlockInputStream(private val baseStream: InputStream, private val verify: Boolean, private val key: ByteArray) : InputStream() {
-
+class HmacBlockInputStream(
+    private val baseStream: InputStream,
+    private val verify: Boolean,
+    private val key: ByteArray,
+) : InputStream() {
     private var buffer: ByteArray = ByteArray(0)
     private var bufferPos = 0
     private var blockIndex = UnsignedLong(0L)
@@ -51,7 +54,11 @@ class HmacBlockInputStream(private val baseStream: InputStream, private val veri
     }
 
     @Throws(IOException::class)
-    override fun read(outBuffer: ByteArray, byteOffset: Int, byteCount: Int): Int {
+    override fun read(
+        outBuffer: ByteArray,
+        byteOffset: Int,
+        byteCount: Int,
+    ): Int {
         var offset = byteOffset
         var remaining = byteCount
         while (remaining > 0) {
@@ -78,9 +85,7 @@ class HmacBlockInputStream(private val baseStream: InputStream, private val veri
     }
 
     @Throws(IOException::class)
-    override fun read(outBuffer: ByteArray): Int {
-        return read(outBuffer, 0, outBuffer.size)
-    }
+    override fun read(outBuffer: ByteArray): Int = read(outBuffer, 0, outBuffer.size)
 
     @Throws(IOException::class)
     private fun readSafeBlock(): Boolean {
@@ -118,7 +123,6 @@ class HmacBlockInputStream(private val baseStream: InputStream, private val veri
             if (!cmpHmac.contentEquals(storedHmac)) {
                 throw IOException("Invalid Hmac")
             }
-
         }
 
         blockIndex.plusOne()
@@ -131,9 +135,7 @@ class HmacBlockInputStream(private val baseStream: InputStream, private val veri
         return true
     }
 
-    override fun markSupported(): Boolean {
-        return false
-    }
+    override fun markSupported(): Boolean = false
 
     @Throws(IOException::class)
     override fun close() {
@@ -141,12 +143,8 @@ class HmacBlockInputStream(private val baseStream: InputStream, private val veri
     }
 
     @Throws(IOException::class)
-    override fun skip(byteCount: Long): Long {
-        return 0
-    }
+    override fun skip(byteCount: Long): Long = 0
 
     @Throws(IOException::class)
-    override fun available(): Int {
-        return buffer.size - bufferPos
-    }
+    override fun available(): Int = buffer.size - bufferPos
 }

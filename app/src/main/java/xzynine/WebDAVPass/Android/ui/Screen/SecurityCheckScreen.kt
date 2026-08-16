@@ -48,7 +48,7 @@ import xzynine.WebDAVPass.Android.util.strengthLabel
 fun SecurityCheckScreen(
     tokenViewModel: TokenViewModel,
     onNavigateBack: () -> Unit,
-    onEntryClick: (Long) -> Unit
+    onEntryClick: (Long) -> Unit,
 ) {
     val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState(false)
     var expiredEntries by remember { mutableStateOf<List<SecurityIssueEntry>>(emptyList()) }
@@ -80,28 +80,29 @@ fun SecurityCheckScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = MiuixIcons.Back,
-                            contentDescription = "返回"
+                            contentDescription = "返回",
                         )
                     }
                 },
                 actions = {},
-                defaultWindowInsetsPadding = true
+                defaultWindowInsetsPadding = true,
             )
-        }
+        },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(it)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(it)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             if (!isLibraryUnlocked) {
                 Text(
                     text = "库已锁定，请解锁后再查看",
                     fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
                 )
             } else if (loading) {
                 Text(text = "加载中...", fontSize = 14.sp)
@@ -110,13 +111,13 @@ fun SecurityCheckScreen(
                     text = "已过期条目（${expiredEntries.size}）",
                     modifier = Modifier.padding(top = 4.dp),
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
                 if (expiredEntries.isEmpty()) {
                     Text(
                         text = "暂无过期条目",
                         fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     )
                 } else {
                     Card(
@@ -125,18 +126,18 @@ fun SecurityCheckScreen(
                         cornerRadius = 12.dp,
                         pressFeedbackType = PressFeedbackType.None,
                         showIndication = false,
-                        onClick = {}
+                        onClick = {},
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             expiredEntries.forEachIndexed { index, item ->
                                 SecurityIssueRow(
                                     item = item,
-                                    onClick = { onEntryClick(item.entryId) }
+                                    onClick = { onEntryClick(item.entryId) },
                                 )
                                 if (index < expiredEntries.lastIndex) {
                                     HorizontalDivider(
                                         modifier = Modifier.padding(horizontal = 14.dp),
-                                        thickness = 0.5.dp
+                                        thickness = 0.5.dp,
                                     )
                                 }
                             }
@@ -149,13 +150,13 @@ fun SecurityCheckScreen(
                 Text(
                     text = "弱密码（${weakEntries.size}）",
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Medium
+                    fontWeight = FontWeight.Medium,
                 )
                 if (weakEntries.isEmpty()) {
                     Text(
                         text = "暂无弱密码",
                         fontSize = 13.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     )
                 } else {
                     Card(
@@ -164,18 +165,18 @@ fun SecurityCheckScreen(
                         cornerRadius = 12.dp,
                         pressFeedbackType = PressFeedbackType.None,
                         showIndication = false,
-                        onClick = {}
+                        onClick = {},
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             weakEntries.forEachIndexed { index, item ->
                                 SecurityIssueRow(
                                     item = item,
-                                    onClick = { onEntryClick(item.entryId) }
+                                    onClick = { onEntryClick(item.entryId) },
                                 )
                                 if (index < weakEntries.lastIndex) {
                                     HorizontalDivider(
                                         modifier = Modifier.padding(horizontal = 14.dp),
-                                        thickness = 0.5.dp
+                                        thickness = 0.5.dp,
                                     )
                                 }
                             }
@@ -190,50 +191,54 @@ fun SecurityCheckScreen(
 @Composable
 private fun SecurityIssueRow(
     item: SecurityIssueEntry,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Icon(
-            imageVector = if (item.expiryTime != null && item.expiryTime!! < System.currentTimeMillis()) {
-                MiuixIcons.Delete
-            } else {
-                MiuixIcons.Lock
-            },
+            imageVector =
+                if (item.expiryTime != null && item.expiryTime!! < System.currentTimeMillis()) {
+                    MiuixIcons.Delete
+                } else {
+                    MiuixIcons.Lock
+                },
             contentDescription = null,
-            tint = if (item.expiryTime != null && item.expiryTime!! < System.currentTimeMillis()) {
-                MiuixTheme.colorScheme.error
-            } else {
-                MiuixTheme.colorScheme.onSurfaceSecondary
-            }
+            tint =
+                if (item.expiryTime != null && item.expiryTime!! < System.currentTimeMillis()) {
+                    MiuixTheme.colorScheme.error
+                } else {
+                    MiuixTheme.colorScheme.onSurfaceSecondary
+                },
         )
         Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
             Text(
                 text = item.title,
                 fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurface
+                color = MiuixTheme.colorScheme.onSurface,
             )
             Text(
-                text = buildString {
-                    if (item.account.isNotBlank()) {
-                        append(item.account)
-                    }
-                    if (item.expiryTime != null && item.expiryTime!! > 0L) {
-                        if (isNotEmpty()) append(" · ")
-                        append("过期时间 ${LocalTimeFormatter.formatLocalDateTime(item.expiryTime)}")
-                    }
-                    if (item.passwordStrengthBits > 0.0) {
-                        if (isNotEmpty()) append(" · ")
-                        append("强度 ${strengthLabel(item.passwordStrengthBits)}")
-                    }
-                },
+                text =
+                    buildString {
+                        if (item.account.isNotBlank()) {
+                            append(item.account)
+                        }
+                        if (item.expiryTime != null && item.expiryTime!! > 0L) {
+                            if (isNotEmpty()) append(" · ")
+                            append("过期时间 ${LocalTimeFormatter.formatLocalDateTime(item.expiryTime)}")
+                        }
+                        if (item.passwordStrengthBits > 0.0) {
+                            if (isNotEmpty()) append(" · ")
+                            append("强度 ${strengthLabel(item.passwordStrengthBits)}")
+                        }
+                    },
                 fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurfaceSecondary
+                color = MiuixTheme.colorScheme.onSurfaceSecondary,
             )
         }
     }

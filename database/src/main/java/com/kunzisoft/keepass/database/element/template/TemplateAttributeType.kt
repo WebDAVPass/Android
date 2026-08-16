@@ -18,21 +18,23 @@
  */
 package com.kunzisoft.keepass.database.element.template
 
-enum class TemplateAttributeType(val typeString: String) {
+enum class TemplateAttributeType(
+    val typeString: String,
+) {
     TEXT("text"),
     LIST("list"),
     DATETIME("datetime"),
-    DIVIDER("divider");
+    DIVIDER("divider"),
+    ;
 
     companion object {
-        fun getFromString(label: String): TemplateAttributeType {
-            return when {
+        fun getFromString(label: String): TemplateAttributeType =
+            when {
                 label.contains(TEXT.typeString, true) -> TEXT
                 label.contains(LIST.typeString, true) -> LIST
                 label.contains(DATETIME.typeString, true) -> DATETIME
                 label.contains(DIVIDER.typeString, true) -> DIVIDER
                 else -> TEXT
             }
-        }
     }
 }

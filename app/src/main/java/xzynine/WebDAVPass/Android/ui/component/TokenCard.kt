@@ -66,7 +66,7 @@ private object IconPackHolder {
             instance ?: IconPack(
                 context.applicationContext.packageName,
                 context.applicationContext.resources,
-                com.kunzisoft.keepass.icon.material.R.string.resource_id
+                com.kunzisoft.keepass.icon.material.R.string.resource_id,
             ).also { instance = it }
         }
     }
@@ -83,13 +83,13 @@ private const val ICON_RES_CACHE_MAX_SIZE = 256
 private data class IconResCacheKey(
     val standardIconId: Int?,
     val primary: String?,
-    val secondary: String?
+    val secondary: String?,
 )
 
-private val iconResCache = object : LinkedHashMap<IconResCacheKey, Int?>(16, 0.75f, true) {
-    override fun removeEldestEntry(eldest: MutableMap.MutableEntry<IconResCacheKey, Int?>) =
-        size > ICON_RES_CACHE_MAX_SIZE
-}
+private val iconResCache =
+    object : LinkedHashMap<IconResCacheKey, Int?>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<IconResCacheKey, Int?>) = size > ICON_RES_CACHE_MAX_SIZE
+    }
 
 /**
  * 解析条目图标资源 ID：优先 KeePass 标准图标，其次 Token 品牌图标。
@@ -98,12 +98,13 @@ private fun computeEntryIconRes(
     context: Context,
     standardIconId: Int?,
     primary: String?,
-    secondary: String?
+    secondary: String?,
 ): Int? {
     if (standardIconId != null) {
-        val keepassRes = runCatching {
-            IconPackHolder.get(context).iconToResId(standardIconId)
-        }.getOrNull()?.takeIf { it != com.kunzisoft.keepass.icon.R.drawable.ic_blank_32dp }
+        val keepassRes =
+            runCatching {
+                IconPackHolder.get(context).iconToResId(standardIconId)
+            }.getOrNull()?.takeIf { it != com.kunzisoft.keepass.icon.R.drawable.ic_blank_32dp }
         if (keepassRes != null) {
             return keepassRes
         }
@@ -118,7 +119,7 @@ fun EntryIcon(
     primary: String?,
     secondary: String?,
     modifier: Modifier = Modifier,
-    contentDescription: String = "图标"
+    contentDescription: String = "图标",
 ) {
     val context = LocalContext.current
 
@@ -127,15 +128,16 @@ fun EntryIcon(
      * 在后台线程解码，避免主线程阻塞导致滚动卡顿。
      */
     val customBitmap: Bitmap? by produceState(initialValue = null, key1 = customIconBytes) {
-        value = if (customIconBytes != null) {
-            withContext(Dispatchers.Default) {
-                runCatching {
-                    BitmapFactory.decodeByteArray(customIconBytes, 0, customIconBytes.size)
-                }.getOrNull()
+        value =
+            if (customIconBytes != null) {
+                withContext(Dispatchers.Default) {
+                    runCatching {
+                        BitmapFactory.decodeByteArray(customIconBytes, 0, customIconBytes.size)
+                    }.getOrNull()
+                }
+            } else {
+                null
             }
-        } else {
-            null
-        }
     }
 
     if (customBitmap != null) {
@@ -143,7 +145,7 @@ fun EntryIcon(
             Image(
                 bitmap = customBitmap!!.asImageBitmap(),
                 contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         }
         return
@@ -154,19 +156,20 @@ fun EntryIcon(
      * 仅当数字标准图标未选择（默认 0 或空）时生效；
      * 显式标准图标时直接返回 null，避免每行首次组合都线性扫描 TokenImage 枚举。
      */
-    val tokenImageRes: Int? = remember(standardIconId, primary, secondary) {
-        if (standardIconId != null && standardIconId != 0) {
-            null
-        } else {
-            TokenImage.entries.firstOrNull { it.matchToken(primary, secondary) }?.resource
+    val tokenImageRes: Int? =
+        remember(standardIconId, primary, secondary) {
+            if (standardIconId != null && standardIconId != 0) {
+                null
+            } else {
+                TokenImage.entries.firstOrNull { it.matchToken(primary, secondary) }?.resource
+            }
         }
-    }
     tokenImageRes?.let {
         BrandIconFrame(modifier = modifier) {
             Image(
                 painter = painterResource(id = it),
                 contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         }
         return
@@ -185,7 +188,7 @@ fun EntryIcon(
                     imageVector = vector,
                     contentDescription = contentDescription,
                     modifier = Modifier.fillMaxSize(),
-                    tint = MiuixTheme.colorScheme.primary
+                    tint = MiuixTheme.colorScheme.primary,
                 )
             }
             return
@@ -197,18 +200,19 @@ fun EntryIcon(
      * 结果按 (standardIconId, primary, secondary) 全局 LRU 缓存；
      * IconPack 为进程级单例，避免每行重复 71 次 getIdentifier。
      */
-    val iconRes: Int? = remember(standardIconId, primary, secondary) {
-        iconResCache.getOrPut(IconResCacheKey(standardIconId, primary, secondary)) {
-            computeEntryIconRes(context, standardIconId, primary, secondary)
+    val iconRes: Int? =
+        remember(standardIconId, primary, secondary) {
+            iconResCache.getOrPut(IconResCacheKey(standardIconId, primary, secondary)) {
+                computeEntryIconRes(context, standardIconId, primary, secondary)
+            }
         }
-    }
 
     if (iconRes != null) {
         BrandIconFrame(modifier = modifier) {
             Image(
                 painter = painterResource(id = iconRes),
                 contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
             )
         }
         return
@@ -223,7 +227,7 @@ fun EntryIcon(
             imageVector = standardIconVectorMap[0] ?: Icons.Rounded.VpnKey,
             contentDescription = contentDescription,
             modifier = Modifier.fillMaxSize(),
-            tint = MiuixTheme.colorScheme.primary
+            tint = MiuixTheme.colorScheme.primary,
         )
     }
 }
@@ -238,13 +242,14 @@ fun EntryIcon(
 private fun BrandIconFrame(
     modifier: Modifier,
     background: Color = Color.White,
-    content: @Composable () -> Unit
+    content: @Composable () -> Unit,
 ) {
     Box(
-        modifier = modifier
-            .clip(RoundedCornerShape(10.dp))
-            .background(background),
-        contentAlignment = Alignment.Center
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(10.dp))
+                .background(background),
+        contentAlignment = Alignment.Center,
     ) {
         content()
     }
@@ -259,14 +264,16 @@ fun TokenCard(
     standardIconId: Int? = null,
     onClick: () -> Unit,
     onLongClick: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     Card(
-        modifier = modifier
-            .padding(16.dp),
-        colors = CardDefaults.defaultColors(
-            color = MiuixTheme.colorScheme.surface
-        ),
+        modifier =
+            modifier
+                .padding(16.dp),
+        colors =
+            CardDefaults.defaultColors(
+                color = MiuixTheme.colorScheme.surface,
+            ),
         pressFeedbackType = PressFeedbackType.Sink,
         showIndication = true,
         onClick = {
@@ -274,22 +281,24 @@ fun TokenCard(
                 onClick()
             }
         },
-        onLongPress = { onLongClick?.invoke() }
+        onLongPress = { onLongClick?.invoke() },
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 // 占据剩余宽度并约束文本列，防止账号过长把右侧倒计时挤出/顶歪
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(end = 12.dp)
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp),
             ) {
                 EntryIcon(
                     customIconBytes = customIconBytes,
@@ -297,24 +306,24 @@ fun TokenCard(
                     primary = token.issuer,
                     secondary = token.label,
                     modifier = Modifier.size(32.dp),
-                    contentDescription = "令牌图标"
+                    contentDescription = "令牌图标",
                 )
 
                 Column(
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
                 ) {
                     if (token.issuer != null) {
                         MarqueeText(
                             text = token.issuer,
                             fontSize = 14.sp,
-                            color = MiuixTheme.colorScheme.onSurface
+                            color = MiuixTheme.colorScheme.onSurface,
                         )
                     }
 
                     MarqueeText(
                         text = token.label,
                         fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary
+                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     )
 
                     tokenCode?.let { code ->
@@ -336,7 +345,10 @@ fun TokenCard(
  */
 
 @Composable
-private fun TokenCodeDisplay(code: TokenCode, currentTimeMillis: Long) {
+private fun TokenCodeDisplay(
+    code: TokenCode,
+    currentTimeMillis: Long,
+) {
     val remainingTime = code.getSecondsRemaining(currentTimeMillis)
     val isLast5Seconds = remainingTime <= 5
     val isLast1Second = remainingTime <= 1
@@ -344,29 +356,29 @@ private fun TokenCodeDisplay(code: TokenCode, currentTimeMillis: Long) {
     val nextCodeAlpha by animateFloatAsState(
         targetValue = if (isLast5Seconds && code.next != null) 1f else 0f,
         animationSpec = tween(500),
-        label = "alpha"
+        label = "alpha",
     )
 
     val currentCodeAlpha by animateFloatAsState(
         targetValue = if (isLast1Second) 0.3f else 1f,
         animationSpec = tween(300),
-        label = "currentAlpha"
+        label = "currentAlpha",
     )
 
     val nextCodeOffset by animateFloatAsState(
         targetValue = if (isLast5Seconds && code.next != null) 0f else 20f,
         animationSpec = tween(500),
-        label = "offset"
+        label = "offset",
     )
 
     Row(
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
             text = code.code,
             fontSize = 24.sp,
             color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
-            modifier = Modifier.alpha(currentCodeAlpha)
+            modifier = Modifier.alpha(currentCodeAlpha),
         )
 
         code.next?.let {
@@ -374,41 +386,47 @@ private fun TokenCodeDisplay(code: TokenCode, currentTimeMillis: Long) {
                 text = it.code,
                 fontSize = 14.sp,
                 color = MiuixTheme.colorScheme.primary,
-                modifier = Modifier
-                    .padding(start = 8.dp)
-                    .alpha(nextCodeAlpha * 0.9f)
-                    .offset { IntOffset(nextCodeOffset.toInt(), 0) }
+                modifier =
+                    Modifier
+                        .padding(start = 8.dp)
+                        .alpha(nextCodeAlpha * 0.9f)
+                        .offset { IntOffset(nextCodeOffset.toInt(), 0) },
             )
         }
     }
 }
 
 @Composable
-private fun CountdownDisplay(code: TokenCode, currentTimeMillis: Long) {
+private fun CountdownDisplay(
+    code: TokenCode,
+    currentTimeMillis: Long,
+) {
     val remainingTime = code.getSecondsRemaining(currentTimeMillis)
     val actualPeriod = code.period
     val progress = (remainingTime.toFloat() / actualPeriod.toFloat()).coerceIn(0f, 1f)
 
     Box(
         modifier = Modifier.size(56.dp),
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.Center,
     ) {
         CircularProgressIndicator(
             progress = progress,
-            modifier = Modifier
-                .size(56.dp)
-                .offset(x = 14.dp, y = 14.dp),
+            modifier =
+                Modifier
+                    .size(56.dp)
+                    .offset(x = 14.dp, y = 14.dp),
             strokeWidth = 4.dp,
-            colors = ProgressIndicatorDefaults.progressIndicatorColors(
-                foregroundColor = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
-                backgroundColor = MiuixTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.1f)
-            )
+            colors =
+                ProgressIndicatorDefaults.progressIndicatorColors(
+                    foregroundColor = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
+                    backgroundColor = MiuixTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.1f),
+                ),
         )
 
         Text(
             text = "${remainingTime}s",
             fontSize = 13.sp,
-            color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary
+            color = if (remainingTime <= 5) MiuixTheme.colorScheme.error else MiuixTheme.colorScheme.primary,
         )
     }
 }

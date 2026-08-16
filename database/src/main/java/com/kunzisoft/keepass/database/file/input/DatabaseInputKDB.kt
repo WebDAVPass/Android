@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -23,7 +23,6 @@ package com.kunzisoft.keepass.database.file.input
 import android.graphics.Color
 import com.kunzisoft.encrypt.HashManager
 import com.kunzisoft.keepass.database.crypto.EncryptionAlgorithm
-import com.kunzisoft.keepass.database.element.DateInstant
 import com.kunzisoft.keepass.database.element.database.DatabaseKDB
 import com.kunzisoft.keepass.database.element.entry.EntryKDB
 import com.kunzisoft.keepass.database.element.group.GroupKDB
@@ -40,35 +39,38 @@ import java.util.*
 import javax.crypto.Cipher
 import javax.crypto.CipherInputStream
 
-
 /**
  * Load a KDB database file.
  */
-class DatabaseInputKDB(database: DatabaseKDB)
-    : DatabaseInput<DatabaseKDB>(database) {
-
+class DatabaseInputKDB(
+    database: DatabaseKDB,
+) : DatabaseInput<DatabaseKDB>(database) {
     @Throws(DatabaseInputException::class)
-    override fun openDatabase(databaseInputStream: InputStream,
-                              progressTaskUpdater: ProgressTaskUpdater?,
-                              assignMasterKey: (() -> Unit)): DatabaseKDB {
-
+    override fun openDatabase(
+        databaseInputStream: InputStream,
+        progressTaskUpdater: ProgressTaskUpdater?,
+        assignMasterKey: (() -> Unit),
+    ): DatabaseKDB {
         try {
             startKeyTimer(progressTaskUpdater)
             // Load entire file, most of it's encrypted.
             val fileSize = databaseInputStream.available()
 
             // Parse header (unencrypted)
-            if (fileSize < DatabaseHeaderKDB.BUF_SIZE)
+            if (fileSize < DatabaseHeaderKDB.BUF_SIZE) {
                 throw IOException("File too short for header")
+            }
             val header = DatabaseHeaderKDB()
             header.loadFromFile(databaseInputStream)
 
             val contentSize = databaseInputStream.available()
-            if (fileSize != (contentSize + DatabaseHeaderKDB.BUF_SIZE))
+            if (fileSize != (contentSize + DatabaseHeaderKDB.BUF_SIZE)) {
                 throw IOException("Header corrupted")
+            }
 
-            if (header.signature1 != DatabaseHeaderKDB.DBSIG_1
-                    || header.signature2 != DatabaseHeaderKDB.DBSIG_2) {
+            if (header.signature1 != DatabaseHeaderKDB.DBSIG_1 ||
+                header.signature2 != DatabaseHeaderKDB.DBSIG_2
+            ) {
                 throw SignatureDatabaseException()
             }
 
@@ -94,30 +96,36 @@ class DatabaseInputKDB(database: DatabaseKDB)
 
             // Generate transformedMasterKey from masterKey
             mDatabase.makeFinalKey(
-                    header.masterSeed,
-                    header.transformSeed,
-                    mDatabase.numberKeyEncryptionRounds)
+                header.masterSeed,
+                header.transformSeed,
+                mDatabase.numberKeyEncryptionRounds,
+            )
 
             stopKeyTimer()
             startContentTimer(progressTaskUpdater)
 
-            val cipher: Cipher = try {
-                mDatabase.encryptionAlgorithm
-                        .cipherEngine.getCipher(Cipher.DECRYPT_MODE,
-                                mDatabase.finalKey ?: ByteArray(0),
-                                header.encryptionIV)
-            } catch (e: Exception) {
-                throw IOException("Algorithm not supported.", e)
-            }
+            val cipher: Cipher =
+                try {
+                    mDatabase.encryptionAlgorithm
+                        .cipherEngine
+                        .getCipher(
+                            Cipher.DECRYPT_MODE,
+                            mDatabase.finalKey ?: ByteArray(0),
+                            header.encryptionIV,
+                        )
+                } catch (e: Exception) {
+                    throw IOException("Algorithm not supported.", e)
+                }
 
             // Decrypt content
             val messageDigest: MessageDigest = HashManager.getHash256()
-            val cipherInputStream = BufferedInputStream(
+            val cipherInputStream =
+                BufferedInputStream(
                     DigestInputStream(
-                            CipherInputStream(databaseInputStream, cipher),
-                            messageDigest
-                    )
-            )
+                        CipherInputStream(databaseInputStream, cipher),
+                        messageDigest,
+                    ),
+                )
 
             // Import all nodes
             val groupLevelList = HashMap<GroupKDB, Int>()
@@ -125,9 +133,9 @@ class DatabaseInputKDB(database: DatabaseKDB)
             var newEntry: EntryKDB? = null
             var currentGroupNumber = 0
             var currentEntryNumber = 0
-            while (currentGroupNumber < header.numGroups.toKotlinLong()
-                    || currentEntryNumber < header.numEntries.toKotlinLong()) {
-
+            while (currentGroupNumber < header.numGroups.toKotlinLong() ||
+                currentEntryNumber < header.numEntries.toKotlinLong()
+            ) {
                 val fieldType = cipherInputStream.readBytes2ToUShort()
                 val fieldSize = cipherInputStream.readBytes4ToUInt().toKotlinInt()
 
@@ -139,14 +147,16 @@ class DatabaseInputKDB(database: DatabaseKDB)
                         // Create new node depending on byte number
                         when (fieldSize) {
                             4 -> {
-                                newGroup = mDatabase.createGroup().apply {
-                                    setGroupId(cipherInputStream.readBytes4ToUInt().toKotlinInt())
-                                }
+                                newGroup =
+                                    mDatabase.createGroup().apply {
+                                        setGroupId(cipherInputStream.readBytes4ToUInt().toKotlinInt())
+                                    }
                             }
                             16 -> {
-                                newEntry = mDatabase.createEntry().apply {
-                                    nodeId = NodeIdUUID(cipherInputStream.readBytes16ToUuid())
-                                }
+                                newEntry =
+                                    mDatabase.createEntry().apply {
+                                        nodeId = NodeIdUUID(cipherInputStream.readBytes16ToUuid())
+                                    }
                             }
                             else -> {
                                 throw UnsupportedEncodingException("Field type $fieldType")
@@ -156,73 +166,73 @@ class DatabaseInputKDB(database: DatabaseKDB)
                     0x0002 -> {
                         newGroup?.let { group ->
                             group.title = cipherInputStream.readBytesToString(fieldSize)
-                        } ?:
-                        newEntry?.let { entry ->
-                            val groupKDB = mDatabase.createGroup()
-                            groupKDB.nodeId = NodeIdInt(cipherInputStream.readBytes4ToUInt().toKotlinInt())
-                            entry.parent = groupKDB
                         }
+                            ?: newEntry?.let { entry ->
+                                val groupKDB = mDatabase.createGroup()
+                                groupKDB.nodeId = NodeIdInt(cipherInputStream.readBytes4ToUInt().toKotlinInt())
+                                entry.parent = groupKDB
+                            }
                     }
                     0x0003 -> {
                         newGroup?.let { group ->
                             group.creationTime = cipherInputStream.readBytes5ToDate()
-                        } ?:
-                        newEntry?.let { entry ->
-                            var iconId = cipherInputStream.readBytes4ToUInt().toKotlinInt()
-                            // Clean up after bug that set icon ids to -1
-                            if (iconId == -1) {
-                                iconId = 0
-                            }
-                            entry.icon.standard = mDatabase.getStandardIcon(iconId)
                         }
+                            ?: newEntry?.let { entry ->
+                                var iconId = cipherInputStream.readBytes4ToUInt().toKotlinInt()
+                                // Clean up after bug that set icon ids to -1
+                                if (iconId == -1) {
+                                    iconId = 0
+                                }
+                                entry.icon.standard = mDatabase.getStandardIcon(iconId)
+                            }
                     }
                     0x0004 -> {
                         newGroup?.let { group ->
                             group.lastModificationTime = cipherInputStream.readBytes5ToDate()
-                        } ?:
-                        newEntry?.let { entry ->
-                            entry.title = cipherInputStream.readBytesToString(fieldSize)
                         }
+                            ?: newEntry?.let { entry ->
+                                entry.title = cipherInputStream.readBytesToString(fieldSize)
+                            }
                     }
                     0x0005 -> {
                         newGroup?.let { group ->
                             group.lastAccessTime = cipherInputStream.readBytes5ToDate()
-                        } ?:
-                        newEntry?.let { entry ->
-                            entry.url = cipherInputStream.readBytesToString(fieldSize)
                         }
+                            ?: newEntry?.let { entry ->
+                                entry.url = cipherInputStream.readBytesToString(fieldSize)
+                            }
                     }
                     0x0006 -> {
                         newGroup?.let { group ->
                             group.expiryTime = cipherInputStream.readBytes5ToDate()
-                        } ?:
-                        newEntry?.let { entry ->
-                            entry.username = cipherInputStream.readBytesToString(fieldSize)
                         }
+                            ?: newEntry?.let { entry ->
+                                entry.username = cipherInputStream.readBytesToString(fieldSize)
+                            }
                     }
                     0x0007 -> {
                         newGroup?.let { group ->
                             group.icon.standard = mDatabase.getStandardIcon(cipherInputStream.readBytes4ToUInt().toKotlinInt())
-                        } ?:
-                        newEntry?.let { entry ->
-                            entry.password = cipherInputStream.readBytesToString(fieldSize,false)
                         }
+                            ?: newEntry?.let { entry ->
+                                entry.password = cipherInputStream.readBytesToString(fieldSize, false)
+                            }
                     }
                     0x0008 -> {
                         newGroup?.let { group ->
                             groupLevelList.put(group, cipherInputStream.readBytes2ToUShort())
-                        } ?:
-                        newEntry?.let { entry ->
-                            entry.notes = cipherInputStream.readBytesToString(fieldSize)
                         }
+                            ?: newEntry?.let { entry ->
+                                entry.notes = cipherInputStream.readBytesToString(fieldSize)
+                            }
                     }
                     0x0009 -> {
                         newGroup?.let { group ->
                             group.groupFlags = cipherInputStream.readBytes4ToUInt().toKotlinInt()
-                        } ?:
-                        newEntry?.let { entry ->
-                            entry.creationTime = cipherInputStream.readBytes5ToDate()
                         }
+                            ?: newEntry?.let { entry ->
+                                entry.creationTime = cipherInputStream.readBytes5ToDate()
+                            }
                     }
                     0x000A -> {
                         newEntry?.let { entry ->
@@ -269,22 +279,27 @@ class DatabaseInputKDB(database: DatabaseKDB)
                             when {
                                 entry.isMetaStreamDefaultUsername() -> {
                                     var defaultUser = ""
-                                    entry.getBinary(mDatabase.attachmentPool)
-                                        ?.getInputDataStream(mDatabase.binaryCache)?.use {
+                                    entry
+                                        .getBinary(mDatabase.attachmentPool)
+                                        ?.getInputDataStream(mDatabase.binaryCache)
+                                        ?.use {
                                             defaultUser = String(it.readBytes())
                                         }
                                     mDatabase.defaultUserName = defaultUser
                                 }
                                 entry.isMetaStreamDatabaseColor() -> {
                                     var color: Int? = null
-                                    entry.getBinary(mDatabase.attachmentPool)
-                                        ?.getInputDataStream(mDatabase.binaryCache)?.use {
+                                    entry
+                                        .getBinary(mDatabase.attachmentPool)
+                                        ?.getInputDataStream(mDatabase.binaryCache)
+                                        ?.use {
                                             val reverseColor = UnsignedInt(it.readBytes4ToUInt()).toKotlinInt()
-                                            color = Color.rgb(
-                                                Color.blue(reverseColor),
-                                                Color.green(reverseColor),
-                                                Color.red(reverseColor)
-                                            )
+                                            color =
+                                                Color.rgb(
+                                                    Color.blue(reverseColor),
+                                                    Color.green(reverseColor),
+                                                    Color.red(reverseColor),
+                                                )
                                         }
                                     mDatabase.color = color
                                 }
@@ -310,22 +325,23 @@ class DatabaseInputKDB(database: DatabaseKDB)
             constructTreeFromIndex(groupLevelList)
 
             stopContentTimer()
-
         } catch (e: Error) {
             mDatabase.clearAll()
-            if (e is OutOfMemoryError)
+            if (e is OutOfMemoryError) {
                 throw NoMemoryDatabaseException(e)
+            }
             throw DatabaseInputException(e)
         }
 
         return mDatabase
     }
 
-    private fun buildTreeGroups(groupLevelList: HashMap<GroupKDB, Int>,
-                                previousGroup: GroupKDB,
-                                currentGroup: GroupKDB,
-                                groupIterator: Iterator<GroupKDB>) {
-
+    private fun buildTreeGroups(
+        groupLevelList: HashMap<GroupKDB, Int>,
+        previousGroup: GroupKDB,
+        currentGroup: GroupKDB,
+        groupIterator: Iterator<GroupKDB>,
+    ) {
         val previousGroupLevel = groupLevelList[previousGroup] ?: -1
         val currentGroupLevel = groupLevelList[currentGroup] ?: -1
 
@@ -343,7 +359,7 @@ class DatabaseInputKDB(database: DatabaseKDB)
         }
 
         // Next current group
-        if (groupIterator.hasNext()){
+        if (groupIterator.hasNext()) {
             buildTreeGroups(groupLevelList, currentGroup, groupIterator.next(), groupIterator)
         }
     }
@@ -353,8 +369,9 @@ class DatabaseInputKDB(database: DatabaseKDB)
 
             // add each group
             val groupIterator = mDatabase.getGroupIndexes().iterator()
-            if (groupIterator.hasNext())
+            if (groupIterator.hasNext()) {
                 buildTreeGroups(groupLevelList, root, groupIterator.next(), groupIterator)
+            }
 
             // add each child
             for (currentEntry in mDatabase.getEntryIndexes()) {

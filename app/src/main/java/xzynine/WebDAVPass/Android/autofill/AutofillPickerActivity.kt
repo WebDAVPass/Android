@@ -48,12 +48,11 @@ import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.model.RegisterInfo
 import xzynine.WebDAVPass.Android.model.SearchInfo
+import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
-import xzynine.WebDAVPass.Android.theme.AppTheme
 
 class AutofillPickerActivity : AppCompatActivity() {
-
     companion object {
         private const val TAG = "AutofillPickerActivity"
         private const val KEY_PENDING_INTENT_BUNDLE = "xzynine.WebDAVPass.Android.extra.BUNDLE"
@@ -64,7 +63,7 @@ class AutofillPickerActivity : AppCompatActivity() {
         // 注册界面会展示明文密码，禁止截屏/录屏
         window.setFlags(
             android.view.WindowManager.LayoutParams.FLAG_SECURE,
-            android.view.WindowManager.LayoutParams.FLAG_SECURE
+            android.view.WindowManager.LayoutParams.FLAG_SECURE,
         )
 
         val bundle = intent.getBundleExtra(KEY_PENDING_INTENT_BUNDLE)
@@ -115,38 +114,40 @@ class AutofillPickerActivity : AppCompatActivity() {
     private fun loadEntriesAndRespond(
         searchInfo: SearchInfo?,
         parseResult: StructureParser.Result,
-        autofillComponent: AutofillComponent
+        autofillComponent: AutofillComponent,
     ) {
         lifecycleScope.launch {
             try {
                 val tokenViewModel = TokenViewModel.getSharedInstance(applicationContext)
                 val passwordViewModel = tokenViewModel.passwordViewModel
-                
+
                 val entries = passwordViewModel.passwordEntries.first()
                 Log.d(TAG, "Loaded ${entries.size} entries from database")
-                
+
                 val autofillEntries = convertToAutofillEntries(entries, searchInfo)
                 Log.d(TAG, "Converted to ${autofillEntries.size} autofill entries")
-                
+
                 if (autofillEntries.isEmpty()) {
                     Log.w(TAG, "No matching entries found")
                     cancelAndFinish()
                     return@launch
                 }
-                
-                val response = AutofillHelper.buildFillResponse(
-                    context = this@AutofillPickerActivity,
-                    entries = autofillEntries,
-                    parseResult = parseResult,
-                    autofillComponent = autofillComponent
-                )
-                
+
+                val response =
+                    AutofillHelper.buildFillResponse(
+                        context = this@AutofillPickerActivity,
+                        entries = autofillEntries,
+                        parseResult = parseResult,
+                        autofillComponent = autofillComponent,
+                    )
+
                 if (response != null) {
                     Log.d(TAG, "Successfully built fill response with ${autofillEntries.size} entries")
-                    val replyIntent = Intent().putExtra(
-                        AutofillManager.EXTRA_AUTHENTICATION_RESULT,
-                        response
-                    )
+                    val replyIntent =
+                        Intent().putExtra(
+                            AutofillManager.EXTRA_AUTHENTICATION_RESULT,
+                            response,
+                        )
                     setResult(RESULT_OK, replyIntent)
                 } else {
                     Log.w(TAG, "Failed to build fill response")
@@ -162,39 +163,50 @@ class AutofillPickerActivity : AppCompatActivity() {
 
     private fun convertToAutofillEntries(
         entries: List<PasswordEntry>,
-        searchInfo: SearchInfo?
+        searchInfo: SearchInfo?,
     ): List<AutofillEntryInfo> {
-        val autofillEntries = entries.mapNotNull { entry ->
-            if (entry.isFolderGroup) return@mapNotNull null
-            
-            val username = entry.keyValues.find { 
-                it.valueType == RemainingValueType.TEXT && 
-                (it.fieldName.equals("username", ignoreCase = true) || 
-                 it.fieldName.equals("user", ignoreCase = true) ||
-                 it.fieldName.equals("email", ignoreCase = true))
-            }?.rawValue ?: ""
-            
-            val password = entry.keyValues.find { 
-                it.valueType == RemainingValueType.PASSWORD 
-            }?.rawValue ?: ""
-            
-            val url = entry.keyValues.find { 
-                it.valueType == RemainingValueType.URL 
-            }?.rawValue ?: ""
-            
-            val otpToken = entry.keyValues.find { 
-                it.valueType == RemainingValueType.OTP 
-            }?.rawValue
+        val autofillEntries =
+            entries.mapNotNull { entry ->
+                if (entry.isFolderGroup) return@mapNotNull null
 
-            AutofillEntryInfo(
-                id = entry.entryId,
-                title = entry.title,
-                username = username,
-                password = password,
-                url = url,
-                otpToken = otpToken
-            )
-        }
+                val username =
+                    entry.keyValues
+                        .find {
+                            it.valueType == RemainingValueType.TEXT &&
+                                (
+                                    it.fieldName.equals("username", ignoreCase = true) ||
+                                        it.fieldName.equals("user", ignoreCase = true) ||
+                                        it.fieldName.equals("email", ignoreCase = true)
+                                )
+                        }?.rawValue ?: ""
+
+                val password =
+                    entry.keyValues
+                        .find {
+                            it.valueType == RemainingValueType.PASSWORD
+                        }?.rawValue ?: ""
+
+                val url =
+                    entry.keyValues
+                        .find {
+                            it.valueType == RemainingValueType.URL
+                        }?.rawValue ?: ""
+
+                val otpToken =
+                    entry.keyValues
+                        .find {
+                            it.valueType == RemainingValueType.OTP
+                        }?.rawValue
+
+                AutofillEntryInfo(
+                    id = entry.entryId,
+                    title = entry.title,
+                    username = username,
+                    password = password,
+                    url = url,
+                    otpToken = otpToken,
+                )
+            }
 
         if (searchInfo == null || searchInfo.containsOnlyNullValues()) {
             return autofillEntries
@@ -206,11 +218,11 @@ class AutofillPickerActivity : AppCompatActivity() {
         return autofillEntries.filter { entry ->
             if (!domain.isNullOrEmpty()) {
                 entry.url.contains(domain, ignoreCase = true) ||
-                entry.title.contains(domain, ignoreCase = true) ||
-                entry.username.contains(domain, ignoreCase = true)
+                    entry.title.contains(domain, ignoreCase = true) ||
+                    entry.username.contains(domain, ignoreCase = true)
             } else if (!appId.isNullOrEmpty()) {
                 entry.title.contains(appId, ignoreCase = true) ||
-                entry.url.contains(appId, ignoreCase = true)
+                    entry.url.contains(appId, ignoreCase = true)
             } else {
                 true
             }
@@ -229,7 +241,7 @@ class AutofillPickerActivity : AppCompatActivity() {
 @Composable
 private fun RegistrationContent(
     registerInfo: RegisterInfo,
-    activity: AutofillPickerActivity
+    activity: AutofillPickerActivity,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -248,9 +260,10 @@ private fun RegistrationContent(
     var pickerGroups by remember { mutableStateOf<List<GroupNodeInfo>>(emptyList()) }
     var selectedGroupId by remember { mutableStateOf<Long?>(null) }
 
-    val site = registerInfo.searchInfo.webDomain
-        ?: registerInfo.searchInfo.applicationId
-        ?: "自动填充"
+    val site =
+        registerInfo.searchInfo.webDomain
+            ?: registerInfo.searchInfo.applicationId
+            ?: "自动填充"
 
     fun finishWithResult(ok: Boolean) {
         activity.setResult(if (ok) Activity.RESULT_OK else Activity.RESULT_CANCELED)
@@ -258,45 +271,48 @@ private fun RegistrationContent(
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
             text = "保存表单到密码库",
             fontSize = 18.sp,
             fontWeight = FontWeight.Bold,
-            color = MiuixTheme.colorScheme.onSurface
+            color = MiuixTheme.colorScheme.onSurface,
         )
         Text(
             text = "站点：$site",
             fontSize = 14.sp,
-            color = MiuixTheme.colorScheme.onSurface
+            color = MiuixTheme.colorScheme.onSurface,
         )
         Text(
             text = "账号：${registerInfo.username.orEmpty()}",
             fontSize = 14.sp,
-            color = MiuixTheme.colorScheme.onSurface
+            color = MiuixTheme.colorScheme.onSurface,
         )
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             Text(
-                text = "密码：" + if (showFormPassword) {
-                    registerInfo.password.orEmpty()
-                } else {
-                    "•".repeat(registerInfo.password?.length ?: 0)
-                },
+                text =
+                    "密码：" +
+                        if (showFormPassword) {
+                            registerInfo.password.orEmpty()
+                        } else {
+                            "•".repeat(registerInfo.password?.length ?: 0)
+                        },
                 fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurface
+                color = MiuixTheme.colorScheme.onSurface,
             )
             TextButton(
                 text = if (showFormPassword) "隐藏密码" else "显示密码",
-                onClick = { showFormPassword = !showFormPassword }
+                onClick = { showFormPassword = !showFormPassword },
             )
         }
 
@@ -305,7 +321,7 @@ private fun RegistrationContent(
                 Text(
                     text = "尚未选择数据库文件，请先在应用中打开一个 .kdbx 库",
                     fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.error
+                    color = MiuixTheme.colorScheme.error,
                 )
             }
 
@@ -314,14 +330,15 @@ private fun RegistrationContent(
                     value = masterPassword,
                     onValueChange = { masterPassword = it },
                     label = "主密码",
-                    visualTransformation = if (showPassword) {
-                        VisualTransformation.None
-                    } else {
-                        PasswordVisualTransformation()
-                    },
+                    visualTransformation =
+                        if (showPassword) {
+                            VisualTransformation.None
+                        } else {
+                            PasswordVisualTransformation()
+                        },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
@@ -337,19 +354,19 @@ private fun RegistrationContent(
                                 if (!ok) {
                                     ToastUtils.showShortToast(
                                         context,
-                                        "解锁失败：主密码错误；若该库使用密钥文件，请先在应用内解锁一次后重试"
+                                        "解锁失败：主密码错误；若该库使用密钥文件，请先在应用内解锁一次后重试",
                                     )
                                 }
                             }
                         },
                         enabled = !unlockLoading,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Text(if (unlockLoading) "解锁中..." else "解锁")
                     }
                     TextButton(
                         text = if (showPassword) "隐藏" else "显示",
-                        onClick = { showPassword = !showPassword }
+                        onClick = { showPassword = !showPassword },
                     )
                 }
             }
@@ -358,22 +375,23 @@ private fun RegistrationContent(
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "目标分组",
                             fontSize = 13.sp,
-                            color = MiuixTheme.colorScheme.onSurfaceSecondary
+                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
                         )
                         Text(
-                            text = pickerGroups
-                                .firstOrNull { it.groupId == selectedGroupId }
-                                ?.title
-                                ?.ifBlank { "未命名分组" }
-                                ?: "根目录",
+                            text =
+                                pickerGroups
+                                    .firstOrNull { it.groupId == selectedGroupId }
+                                    ?.title
+                                    ?.ifBlank { "未命名分组" }
+                                    ?: "根目录",
                             fontSize = 14.sp,
-                            color = MiuixTheme.colorScheme.primary
+                            color = MiuixTheme.colorScheme.primary,
                         )
                     }
                     TextButton(
@@ -383,7 +401,7 @@ private fun RegistrationContent(
                                 pickerGroups = tokenViewModel.loadAllPasswordGroups()
                                 showGroupPicker = true
                             }
-                        }
+                        },
                     )
                 }
 
@@ -391,7 +409,7 @@ private fun RegistrationContent(
                     TextButton(
                         text = "不保存",
                         onClick = { finishWithResult(false) },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
                     Button(
                         onClick = {
@@ -399,17 +417,20 @@ private fun RegistrationContent(
                                 saving = true
                                 val username = registerInfo.username.orEmpty()
                                 val password = registerInfo.password.orEmpty()
-                                val entryId = tokenViewModel.createPasswordEntry(
-                                    PasswordEntryEditDraft(
-                                        parentGroupId = selectedGroupId,
-                                        title = site,
-                                        username = username,
-                                        password = password,
-                                        url = registerInfo.searchInfo.webDomain
-                                            ?.let { "https://$it" }.orEmpty(),
-                                        notes = ""
+                                val entryId =
+                                    tokenViewModel.createPasswordEntry(
+                                        PasswordEntryEditDraft(
+                                            parentGroupId = selectedGroupId,
+                                            title = site,
+                                            username = username,
+                                            password = password,
+                                            url =
+                                                registerInfo.searchInfo.webDomain
+                                                    ?.let { "https://$it" }
+                                                    .orEmpty(),
+                                            notes = "",
+                                        ),
                                     )
-                                )
                                 saving = false
                                 if (entryId != null) {
                                     ToastUtils.showShortToast(context, "已保存到密码库")
@@ -421,7 +442,7 @@ private fun RegistrationContent(
                             }
                         },
                         enabled = !saving,
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Text(if (saving) "保存中..." else "保存")
                     }
@@ -440,7 +461,7 @@ private fun RegistrationContent(
                 selectedGroupId = targetGroupId
                 showGroupPicker = false
             },
-            initialSelectedGroupId = selectedGroupId
+            initialSelectedGroupId = selectedGroupId,
         )
     }
 }

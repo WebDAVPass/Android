@@ -24,18 +24,19 @@ import com.kunzisoft.keepass.database.element.entry.EntryVersioned
 import com.kunzisoft.keepass.database.element.node.NodeVersioned
 import java.util.*
 
-abstract class GroupVersioned
-        <
-        GroupId,
-        EntryId,
-        Group: GroupVersioned<GroupId, EntryId, Group, Entry>,
-        Entry: EntryVersioned<GroupId, EntryId, Group, Entry>
-        >
-    : NodeVersioned<GroupId, Group, Entry>, GroupVersionedInterface<Group, Entry> {
-
+abstract class GroupVersioned<
+    GroupId,
+    EntryId,
+    Group : GroupVersioned<GroupId, EntryId, Group, Entry>,
+    Entry : EntryVersioned<GroupId, EntryId, Group, Entry>,
+> :
+    NodeVersioned<GroupId, Group, Entry>,
+    GroupVersionedInterface<Group, Entry> {
     private var titleGroup = ""
+
     @Transient
     private val childGroups = LinkedList<Group>()
+
     @Transient
     private val childEntries = LinkedList<Entry>()
     private var positionIndexChildren = 0
@@ -46,13 +47,18 @@ abstract class GroupVersioned
         titleGroup = parcel.readString() ?: titleGroup
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(dest, flags)
         dest.writeString(titleGroup)
     }
 
-    protected fun updateWith(source: GroupVersioned<GroupId, EntryId, Group, Entry>,
-                             updateParents: Boolean = true) {
+    protected fun updateWith(
+        source: GroupVersioned<GroupId, EntryId, Group, Entry>,
+        updateParents: Boolean = true,
+    ) {
         super.updateWith(source, updateParents)
         titleGroup = source.titleGroup
         if (updateParents) {
@@ -64,7 +70,9 @@ abstract class GroupVersioned
 
     override var title: String
         get() = titleGroup
-        set(value) { titleGroup = value }
+        set(value) {
+            titleGroup = value
+        }
 
     /**
      *  To determine the level from the root group (root group level is -1)
@@ -77,25 +85,23 @@ abstract class GroupVersioned
         return level
     }
 
-    override fun getChildGroups(): List<Group> {
-        return childGroups
-    }
+    override fun getChildGroups(): List<Group> = childGroups
 
-    override fun getChildEntries(): List<Entry> {
-        return childEntries
-    }
+    override fun getChildEntries(): List<Entry> = childEntries
 
     override fun addChildGroup(group: Group) {
-        if (childGroups.contains(group))
+        if (childGroups.contains(group)) {
             removeChildGroup(group)
+        }
         positionIndexChildren++
         group.nodeIndexInParentForNaturalOrder = positionIndexChildren
         this.childGroups.add(group)
     }
 
     override fun addChildEntry(entry: Entry) {
-        if (childEntries.contains(entry))
+        if (childEntries.contains(entry)) {
             removeChildEntry(entry)
+        }
         positionIndexChildren++
         entry.nodeIndexInParentForNaturalOrder = positionIndexChildren
         this.childEntries.add(entry)
@@ -132,10 +138,10 @@ abstract class GroupVersioned
         this.childEntries.clear()
     }
 
-    override fun nodeIndexInParentForNaturalOrder(): Int {
-        return if (nodeIndexInParentForNaturalOrder == -1)
+    override fun nodeIndexInParentForNaturalOrder(): Int =
+        if (nodeIndexInParentForNaturalOrder == -1) {
             childGroups.indexOf(this)
-        else
+        } else {
             nodeIndexInParentForNaturalOrder
-    }
+        }
 }

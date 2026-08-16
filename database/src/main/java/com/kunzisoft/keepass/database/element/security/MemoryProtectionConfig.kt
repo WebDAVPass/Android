@@ -20,7 +20,6 @@
 package com.kunzisoft.keepass.database.element.security
 
 class MemoryProtectionConfig {
-
     var protectTitle = DEFAULT_PROTECT_TITLE
     var protectUserName = DEFAULT_PROTECT_USERNAME
     var protectPassword = DEFAULT_PROTECT_PASSWORD

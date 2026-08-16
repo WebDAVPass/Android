@@ -1,6 +1,6 @@
 /*
  * Copyright 2021 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -27,11 +27,13 @@ import com.kunzisoft.keepass.database.element.binary.CustomIconPool
 import com.kunzisoft.keepass.database.element.icon.IconImageStandard.Companion.KEY_ID
 import java.util.UUID
 
-class IconsManager(numberOfIcons: Int) {
-
-    private val standardCache = List(numberOfIcons) {
-        IconImageStandard(it)
-    }
+class IconsManager(
+    numberOfIcons: Int,
+) {
+    private val standardCache =
+        List(numberOfIcons) {
+            IconImageStandard(it)
+        }
     private val customCache = CustomIconPool()
 
     fun getIcon(iconId: Int): IconImageStandard {
@@ -49,23 +51,24 @@ class IconsManager(numberOfIcons: Int) {
      *  Custom
      */
 
-    fun addCustomIcon(key: UUID? = null,
-                      name: String,
-                      lastModificationTime: DateInstant?,
-                      builder: (uniqueBinaryId: String) -> BinaryData,
-                      result: (IconImageCustom, BinaryData?) -> Unit) {
+    fun addCustomIcon(
+        key: UUID? = null,
+        name: String,
+        lastModificationTime: DateInstant?,
+        builder: (uniqueBinaryId: String) -> BinaryData,
+        result: (IconImageCustom, BinaryData?) -> Unit,
+    ) {
         customCache.put(key, name, lastModificationTime, builder, result)
     }
 
-    fun getIcon(iconUuid: UUID): IconImageCustom? {
-        return customCache.getCustomIcon(iconUuid)
-    }
+    fun getIcon(iconUuid: UUID): IconImageCustom? = customCache.getCustomIcon(iconUuid)
 
-    fun isCustomIconBinaryDuplicate(binaryData: BinaryData): Boolean {
-        return customCache.isBinaryDuplicate(binaryData)
-    }
+    fun isCustomIconBinaryDuplicate(binaryData: BinaryData): Boolean = customCache.isBinaryDuplicate(binaryData)
 
-    fun removeCustomIcon(iconUuid: UUID, binaryCache: BinaryCache) {
+    fun removeCustomIcon(
+        iconUuid: UUID,
+        binaryCache: BinaryCache,
+    ) {
         val binary = customCache[iconUuid]
         customCache.remove(iconUuid)
         try {
@@ -75,19 +78,16 @@ class IconsManager(numberOfIcons: Int) {
         }
     }
 
-    fun getBinaryForCustomIcon(iconUuid: UUID): BinaryData? {
-        return customCache[iconUuid]
-    }
+    fun getBinaryForCustomIcon(iconUuid: UUID): BinaryData? = customCache[iconUuid]
 
     fun doForEachCustomIcon(action: (IconImageCustom, BinaryData) -> Unit) {
         customCache.doForEachCustomIcon(action)
     }
 
-    fun containsCustomIconWithNameOrLastModificationTime(): Boolean {
-        return customCache.any { customIcon ->
+    fun containsCustomIconWithNameOrLastModificationTime(): Boolean =
+        customCache.any { customIcon ->
             customIcon.name.isNotEmpty() || customIcon.lastModificationTime != null
         }
-    }
 
     /**
      * Clear the cache of icons

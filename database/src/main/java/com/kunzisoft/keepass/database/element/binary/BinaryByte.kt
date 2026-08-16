@@ -1,6 +1,6 @@
 /*
  * Copyright 2018 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -29,7 +29,6 @@ import java.io.*
 import java.util.zip.GZIPOutputStream
 
 class BinaryByte : BinaryData {
-
     private var mDataByteId: String
 
     private fun getByteArray(binaryCache: BinaryCache): ByteArray {
@@ -42,9 +41,11 @@ class BinaryByte : BinaryData {
         mDataByteId = UNKNOWN
     }
 
-    constructor(id: String,
-                compressed: Boolean = false,
-                protected: Boolean = false) : super(compressed, protected) {
+    constructor(
+        id: String,
+        compressed: Boolean = false,
+        protected: Boolean = false,
+    ) : super(compressed, protected) {
         mDataByteId = id
     }
 
@@ -52,20 +53,19 @@ class BinaryByte : BinaryData {
         mDataByteId = parcel.readString() ?: UNKNOWN
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(dest, flags)
         dest.writeString(mDataByteId)
     }
 
     @Throws(IOException::class)
-    override fun getInputDataStream(binaryCache: BinaryCache): InputStream {
-        return Base64InputStream(ByteArrayInputStream(getByteArray(binaryCache)), BASE64_FLAG)
-    }
+    override fun getInputDataStream(binaryCache: BinaryCache): InputStream = Base64InputStream(ByteArrayInputStream(getByteArray(binaryCache)), BASE64_FLAG)
 
     @Throws(IOException::class)
-    override fun getOutputDataStream(binaryCache: BinaryCache): OutputStream {
-        return BinaryCountingOutputStream(Base64OutputStream(ByteOutputStream(binaryCache), BASE64_FLAG))
-    }
+    override fun getOutputDataStream(binaryCache: BinaryCache): OutputStream = BinaryCountingOutputStream(Base64OutputStream(ByteOutputStream(binaryCache), BASE64_FLAG))
 
     @Throws(IOException::class)
     override fun compress(binaryCache: BinaryCache) {
@@ -119,7 +119,9 @@ class BinaryByte : BinaryData {
     /**
      * Custom OutputStream to calculate the size and hash of binary file
      */
-    private inner class ByteOutputStream(private val binaryCache: BinaryCache) : ByteArrayOutputStream() {
+    private inner class ByteOutputStream(
+        private val binaryCache: BinaryCache,
+    ) : ByteArrayOutputStream() {
         override fun close() {
             binaryCache.setByteArray(mDataByteId, this.toByteArray())
             super.close()
@@ -130,15 +132,11 @@ class BinaryByte : BinaryData {
         private val TAG = BinaryByte::class.java.name
 
         @JvmField
-        val CREATOR: Parcelable.Creator<BinaryByte> = object : Parcelable.Creator<BinaryByte> {
-            override fun createFromParcel(parcel: Parcel): BinaryByte {
-                return BinaryByte(parcel)
-            }
+        val CREATOR: Parcelable.Creator<BinaryByte> =
+            object : Parcelable.Creator<BinaryByte> {
+                override fun createFromParcel(parcel: Parcel): BinaryByte = BinaryByte(parcel)
 
-            override fun newArray(size: Int): Array<BinaryByte?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<BinaryByte?> = arrayOfNulls(size)
             }
-        }
     }
-
 }

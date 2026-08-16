@@ -22,26 +22,23 @@ package com.kunzisoft.keepass.database.crypto
 import java.security.InvalidAlgorithmParameterException
 import java.security.InvalidKeyException
 import java.security.NoSuchAlgorithmException
-
 import javax.crypto.Cipher
 import javax.crypto.NoSuchPaddingException
 
 abstract class CipherEngine {
+    fun keyLength(): Int = 32
 
-    fun keyLength(): Int {
-        return 32
-    }
-
-    open fun ivLength(): Int {
-        return 16
-    }
+    open fun ivLength(): Int = 16
 
     // Used only with padding workaround
     var forcePaddingCompatibility = false
 
     @Throws(NoSuchAlgorithmException::class, NoSuchPaddingException::class, InvalidKeyException::class, InvalidAlgorithmParameterException::class)
-    abstract fun getCipher(opmode: Int, key: ByteArray, IV: ByteArray): Cipher
+    abstract fun getCipher(
+        opmode: Int,
+        key: ByteArray,
+        IV: ByteArray,
+    ): Cipher
 
     abstract fun getEncryptionAlgorithm(): EncryptionAlgorithm
-
 }

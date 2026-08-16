@@ -6,7 +6,6 @@ import com.kunzisoft.keepass.database.element.Field
 import com.kunzisoft.keepass.utils.readParcelableCompat
 
 class FocusedEditField : Parcelable {
-
     var field: Field? = null
     var cursorSelectionStart: Int = -1
     var cursorSelectionEnd: Int = -1
@@ -23,15 +22,16 @@ class FocusedEditField : Parcelable {
         this.field = null
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(field, flags)
         parcel.writeInt(cursorSelectionStart)
         parcel.writeInt(cursorSelectionEnd)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -42,17 +42,11 @@ class FocusedEditField : Parcelable {
         return true
     }
 
-    override fun hashCode(): Int {
-        return field?.hashCode() ?: 0
-    }
+    override fun hashCode(): Int = field?.hashCode() ?: 0
 
     companion object CREATOR : Parcelable.Creator<FocusedEditField> {
-        override fun createFromParcel(parcel: Parcel): FocusedEditField {
-            return FocusedEditField(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): FocusedEditField = FocusedEditField(parcel)
 
-        override fun newArray(size: Int): Array<FocusedEditField?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<FocusedEditField?> = arrayOfNulls(size)
     }
 }

@@ -19,10 +19,10 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalViewConfiguration
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.withTimeoutOrNull
-import xzynine.WebDAVPass.Android.ui.component.Preference
-import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import top.yukonga.miuix.kmp.preference.CheckboxLocation
 import top.yukonga.miuix.kmp.preference.CheckboxPreference
+import xzynine.WebDAVPass.Android.ui.component.Preference
+import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 
 /**
  * 通用可选条目卡片组件。
@@ -48,7 +48,7 @@ fun SelectableEntryCard(
     iconPrimary: String? = null,
     iconSecondary: String? = null,
     contentDescription: String = "条目图标",
-    startAction: (@Composable () -> Unit)? = null
+    startAction: (@Composable () -> Unit)? = null,
 ) {
     val defaultStartAction: @Composable () -> Unit = {
         EntryIcon(
@@ -57,7 +57,7 @@ fun SelectableEntryCard(
             primary = iconPrimary,
             secondary = iconSecondary,
             modifier = Modifier.size(32.dp),
-            contentDescription = contentDescription
+            contentDescription = contentDescription,
         )
     }
     val startIconAction = startAction ?: defaultStartAction
@@ -65,7 +65,7 @@ fun SelectableEntryCard(
     if (isSelectionMode && onCheckedChange != null) {
         Row(
             modifier = modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             startIconAction()
             CheckboxPreference(
@@ -76,9 +76,10 @@ fun SelectableEntryCard(
                 },
                 summary = summary,
                 checkboxLocation = CheckboxLocation.End,
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(start = 12.dp)
+                modifier =
+                    Modifier
+                        .weight(1f)
+                        .padding(start = 12.dp),
             )
         }
         return
@@ -88,34 +89,36 @@ fun SelectableEntryCard(
     var holdDownState by remember(itemKey) { mutableStateOf(false) }
     var skipNextClick by remember(itemKey) { mutableStateOf(false) }
 
-    val pointerModifier = if (onLongClick == null) {
-        Modifier
-    } else {
-        Modifier.pointerInput(itemKey, isSelectionMode, isSelected) {
-            awaitEachGesture {
-                awaitFirstDown(requireUnconsumed = false)
-                holdDownState = true
+    val pointerModifier =
+        if (onLongClick == null) {
+            Modifier
+        } else {
+            Modifier.pointerInput(itemKey, isSelectionMode, isSelected) {
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    holdDownState = true
 
-                val longPressReached = withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis + 400L) {
-                    waitForUpOrCancellation()
-                    false
-                } ?: true
+                    val longPressReached =
+                        withTimeoutOrNull(viewConfiguration.longPressTimeoutMillis + 400L) {
+                            waitForUpOrCancellation()
+                            false
+                        } ?: true
 
-                if (longPressReached) {
-                    // 仅当达到长按阈值才触发长按，避免滚动取消被误判。
-                    skipNextClick = true
-                    onLongClick.invoke()
-                    waitForUpOrCancellation()
+                    if (longPressReached) {
+                        // 仅当达到长按阈值才触发长按，避免滚动取消被误判。
+                        skipNextClick = true
+                        onLongClick.invoke()
+                        waitForUpOrCancellation()
+                    }
+
+                    holdDownState = false
                 }
-
-                holdDownState = false
             }
         }
-    }
 
     Row(
         modifier = modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(modifier = Modifier.weight(1f)) {
             Preference(
@@ -125,9 +128,10 @@ fun SelectableEntryCard(
                 startAction = {
                     startIconAction()
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .then(pointerModifier),
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .then(pointerModifier),
                 holdDownState = holdDownState,
                 onClick = {
                     if (skipNextClick) {
@@ -135,7 +139,7 @@ fun SelectableEntryCard(
                         return@Preference
                     }
                     onClick()
-                }
+                },
             )
         }
     }

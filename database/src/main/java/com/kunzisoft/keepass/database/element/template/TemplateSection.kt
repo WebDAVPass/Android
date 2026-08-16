@@ -22,8 +22,7 @@ import android.os.Parcel
 import android.os.Parcelable
 import com.kunzisoft.keepass.utils.readListCompat
 
-class TemplateSection: Parcelable {
-
+class TemplateSection : Parcelable {
     var name: String = ""
     var attributes: MutableList<TemplateAttribute> = mutableListOf()
         private set
@@ -38,22 +37,19 @@ class TemplateSection: Parcelable {
         parcel.readListCompat(this.attributes)
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeString(this.name)
         parcel.writeList(this.attributes)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     companion object CREATOR : Parcelable.Creator<TemplateSection> {
-        override fun createFromParcel(parcel: Parcel): TemplateSection {
-            return TemplateSection(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): TemplateSection = TemplateSection(parcel)
 
-        override fun newArray(size: Int): Array<TemplateSection?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<TemplateSection?> = arrayOfNulls(size)
     }
 }

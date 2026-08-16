@@ -26,7 +26,6 @@ import com.kunzisoft.keepass.utils.readBooleanCompat
 import com.kunzisoft.keepass.utils.writeBooleanCompat
 
 class AutoType : Parcelable {
-
     var enabled = true
     var obfuscationOptions = OBF_OPT_NONE
     var defaultSequence = ""
@@ -49,18 +48,22 @@ class AutoType : Parcelable {
         parcel.readTypedList(this.windowSeqPairs, AutoTypeItem.CREATOR)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         dest.writeBooleanCompat(enabled)
         dest.writeInt(obfuscationOptions.toKotlinInt())
         dest.writeString(defaultSequence)
         dest.writeTypedList(windowSeqPairs)
     }
 
-    fun add(key: String, value: String) {
+    fun add(
+        key: String,
+        value: String,
+    ) {
         windowSeqPairs.add(AutoTypeItem(key, value))
     }
 
@@ -70,28 +73,29 @@ class AutoType : Parcelable {
         }
     }
 
-    private data class AutoTypeItem(var key: String, var value: String): Parcelable {
+    private data class AutoTypeItem(
+        var key: String,
+        var value: String,
+    ) : Parcelable {
         constructor(parcel: Parcel) : this(
-                parcel.readString() ?: "",
-                parcel.readString() ?: "")
+            parcel.readString() ?: "",
+            parcel.readString() ?: "",
+        )
 
-        override fun writeToParcel(parcel: Parcel, flags: Int) {
+        override fun writeToParcel(
+            parcel: Parcel,
+            flags: Int,
+        ) {
             parcel.writeString(key)
             parcel.writeString(value)
         }
 
-        override fun describeContents(): Int {
-            return 0
-        }
+        override fun describeContents(): Int = 0
 
         companion object CREATOR : Parcelable.Creator<AutoTypeItem> {
-            override fun createFromParcel(parcel: Parcel): AutoTypeItem {
-                return AutoTypeItem(parcel)
-            }
+            override fun createFromParcel(parcel: Parcel): AutoTypeItem = AutoTypeItem(parcel)
 
-            override fun newArray(size: Int): Array<AutoTypeItem?> {
-                return arrayOfNulls(size)
-            }
+            override fun newArray(size: Int): Array<AutoTypeItem?> = arrayOfNulls(size)
         }
     }
 
@@ -99,14 +103,11 @@ class AutoType : Parcelable {
         private val OBF_OPT_NONE = UnsignedInt(0)
 
         @JvmField
-        val CREATOR: Parcelable.Creator<AutoType> = object : Parcelable.Creator<AutoType> {
-            override fun createFromParcel(parcel: Parcel): AutoType {
-                return AutoType(parcel)
-            }
+        val CREATOR: Parcelable.Creator<AutoType> =
+            object : Parcelable.Creator<AutoType> {
+                override fun createFromParcel(parcel: Parcel): AutoType = AutoType(parcel)
 
-            override fun newArray(size: Int): Array<AutoType?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<AutoType?> = arrayOfNulls(size)
             }
-        }
     }
 }

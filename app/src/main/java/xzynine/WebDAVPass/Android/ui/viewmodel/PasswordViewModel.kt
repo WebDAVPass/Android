@@ -3,18 +3,18 @@ package xzynine.WebDAVPass.Android.ui.ViewModel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
-import xzynine.WebDAVPass.Android.data.GroupNodeInfo
-import xzynine.WebDAVPass.Android.data.DuplicateEntryInfo
-import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
-import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
-import xzynine.WebDAVPass.Android.data.PasswordEntry
-import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
-import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import xzynine.WebDAVPass.Android.data.DuplicateEntryInfo
+import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
+import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
+import xzynine.WebDAVPass.Android.data.GroupNodeInfo
+import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
+import xzynine.WebDAVPass.Android.data.PasswordEntry
+import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
+import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordDataAccess
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordPagingSubViewModel
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
@@ -24,8 +24,9 @@ import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
  *
  * 负责管理密码条目的加载、创建、更新和删除操作。
  */
-class PasswordViewModel(private val context: Context) : ViewModel() {
-
+class PasswordViewModel(
+    private val context: Context,
+) : ViewModel() {
     companion object {
         private const val SYNC_LOG_TAG = "同步"
     }
@@ -36,7 +37,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         PasswordListModeSubViewModel(
             repository = kdbxTokenRepository,
             scope = viewModelScope,
-            accessProvider = { PasswordDataAccess(false, null, "") }
+            accessProvider = { PasswordDataAccess(false, null, "") },
         )
     }
 
@@ -45,7 +46,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
             repository = kdbxTokenRepository,
             scope = viewModelScope,
             accessProvider = { PasswordDataAccess(false, null, "") },
-            listModeProvider = { passwordListModeSubViewModel.passwordListMode.value }
+            listModeProvider = { passwordListModeSubViewModel.passwordListMode.value },
         )
     }
 
@@ -76,7 +77,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
     fun updateAccessProvider(
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ) {
         passwordListModeSubViewModel.updateAccessProvider {
             PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
@@ -96,7 +97,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         caseSensitive: Boolean? = null,
         sortMode: PasswordSortMode? = null,
         ascending: Boolean? = null,
-        hideExpired: Boolean? = null
+        hideExpired: Boolean? = null,
     ) {
         passwordSubViewModel.refreshPasswordEntries(searchQuery, caseSensitive, sortMode, ascending, hideExpired)
     }
@@ -107,7 +108,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
     fun setPasswordListMode(
         mode: PasswordListMode,
         refreshNow: Boolean = true,
-        searchQuery: String = ""
+        searchQuery: String = "",
     ) {
         passwordListModeSubViewModel.setPasswordListMode(mode)
         passwordSubViewModel.resetPasswordGroupStackOnly()
@@ -133,21 +134,20 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
     /**
      * 为索引跳转预加载到目标分组。
      */
-    suspend fun ensurePasswordIndexLoaded(indexKey: String): Boolean {
-        return passwordSubViewModel.ensureSectionLoaded(indexKey)
-    }
+    suspend fun ensurePasswordIndexLoaded(indexKey: String): Boolean = passwordSubViewModel.ensureSectionLoaded(indexKey)
 
     /**
      * 获取指定索引分组在 LazyColumn 中对应的标题项下标。
      */
-    suspend fun getPasswordHeaderScrollIndex(indexKey: String): Int? {
-        return passwordSubViewModel.getHeaderScrollIndex(indexKey)
-    }
+    suspend fun getPasswordHeaderScrollIndex(indexKey: String): Int? = passwordSubViewModel.getHeaderScrollIndex(indexKey)
 
     /**
      * 进入密码分组。
      */
-    fun openPasswordGroup(groupStableId: Long, searchQuery: String = "") {
+    fun openPasswordGroup(
+        groupStableId: Long,
+        searchQuery: String = "",
+    ) {
         passwordSubViewModel.openPasswordGroup(groupStableId, searchQuery)
     }
 
@@ -214,7 +214,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         localPath: String?,
         masterPassword: String,
         fallback: T,
-        crossinline block: (String, String) -> T
+        crossinline block: (String, String) -> T,
     ): T {
         val access = PasswordDataAccess(isLibraryUnlocked, localPath, masterPassword)
         val path = access.localPath?.takeIf { access.isReady() } ?: return fallback
@@ -228,7 +228,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         entryId: Long,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): PasswordEntry? {
         if (entryId < 0) {
             return null
@@ -245,7 +245,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         entryId: Long,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): PasswordEntryEditDraft? {
         if (entryId < 0) {
             return null
@@ -262,7 +262,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         entryId: Long,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): List<EntryHistoryInfo> {
         if (entryId < 0) {
             return emptyList()
@@ -280,7 +280,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         historyIndex: Int,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): Boolean {
         if (entryId < 0) {
             return false
@@ -297,7 +297,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         groupId: Long,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): PasswordGroupEditDraft? {
         if (groupId >= 0) {
             return null
@@ -314,12 +314,11 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         draft: PasswordEntryEditDraft,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
-    ): Long? {
-        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
+        masterPassword: String,
+    ): Long? =
+        withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
             kdbxTokenRepository.createPasswordEntry(path, pwd, draft)
         }
-    }
 
     /**
      * 更新密码条目。
@@ -328,12 +327,11 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         draft: PasswordEntryEditDraft,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
-    ): Boolean {
-        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
+        masterPassword: String,
+    ): Boolean =
+        withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
             kdbxTokenRepository.updatePasswordEntry(path, pwd, draft)
         }
-    }
 
     /**
      * 删除密码条目（进入回收站）。
@@ -342,7 +340,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         entryId: Long,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): Boolean {
         if (entryId < 0) {
             return false
@@ -359,7 +357,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         iconUpdates: Map<Long, ByteArray>,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): Int {
         if (iconUpdates.isEmpty()) {
             return 0
@@ -376,7 +374,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         entryIds: List<Long>,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): List<DuplicateEntryInfo> {
         if (entryIds.isEmpty()) {
             return emptyList()
@@ -393,7 +391,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         entryIds: List<Long>,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): List<DuplicateGroupInfo> {
         if (entryIds.isEmpty()) {
             return emptyList()
@@ -412,7 +410,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         fieldSelections: Map<String, Long>,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): Int {
         if (sourceEntryIds.isEmpty()) {
             return 0
@@ -429,12 +427,11 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         draft: PasswordGroupEditDraft,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
-    ): Long? {
-        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
+        masterPassword: String,
+    ): Long? =
+        withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
             kdbxTokenRepository.createPasswordGroup(path, pwd, draft)
         }
-    }
 
     /**
      * 更新密码分组。
@@ -443,12 +440,11 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         draft: PasswordGroupEditDraft,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
-    ): Boolean {
-        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
+        masterPassword: String,
+    ): Boolean =
+        withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
             kdbxTokenRepository.updatePasswordGroup(path, pwd, draft)
         }
-    }
 
     /**
      * 删除密码分组（进入回收站）。
@@ -457,7 +453,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         groupId: Long,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): Boolean {
         if (groupId >= 0) {
             return false
@@ -474,7 +470,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         entryIds: List<Long>,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): Int {
         if (entryIds.isEmpty()) {
             return 0
@@ -491,7 +487,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         entryIds: List<Long>,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): Int {
         if (entryIds.isEmpty()) {
             return 0
@@ -507,12 +503,11 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
     suspend fun loadAllPasswordGroups(
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
-    ): List<GroupNodeInfo> {
-        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = emptyList()) { path, pwd ->
+        masterPassword: String,
+    ): List<GroupNodeInfo> =
+        withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = emptyList()) { path, pwd ->
             kdbxTokenRepository.loadAllPasswordGroups(path, pwd)
         }
-    }
 
     /**
      * 批量移动条目/分组到目标分组。
@@ -523,7 +518,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         targetGroupId: Long?,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): Int {
         if (entryIds.isEmpty() && groupIds.isEmpty()) {
             return 0
@@ -542,7 +537,7 @@ class PasswordViewModel(private val context: Context) : ViewModel() {
         targetGroupId: Long?,
         isLibraryUnlocked: Boolean,
         localPath: String?,
-        masterPassword: String
+        masterPassword: String,
     ): Int {
         if (entryIds.isEmpty() && groupIds.isEmpty()) {
             return 0

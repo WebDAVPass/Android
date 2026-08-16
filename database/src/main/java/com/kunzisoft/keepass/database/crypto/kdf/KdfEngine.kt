@@ -26,13 +26,15 @@ import java.util.*
 
 // TODO Parcelable
 abstract class KdfEngine : Serializable {
-
     var uuid: UUID? = null
 
     abstract val defaultParameters: KdfParameters
 
     @Throws(IOException::class)
-    abstract fun transform(masterKey: ByteArray, kdfParameters: KdfParameters): ByteArray
+    abstract fun transform(
+        masterKey: ByteArray,
+        kdfParameters: KdfParameters,
+    ): ByteArray
 
     abstract fun randomize(kdfParameters: KdfParameters)
 
@@ -42,7 +44,10 @@ abstract class KdfEngine : Serializable {
 
     abstract fun getKeyRounds(kdfParameters: KdfParameters): Long
 
-    abstract fun setKeyRounds(kdfParameters: KdfParameters, keyRounds: Long)
+    abstract fun setKeyRounds(
+        kdfParameters: KdfParameters,
+        keyRounds: Long,
+    )
 
     abstract val defaultKeyRounds: Long
 
@@ -56,11 +61,12 @@ abstract class KdfEngine : Serializable {
      * MEMORY
      */
 
-    open fun getMemoryUsage(kdfParameters: KdfParameters): Long {
-        return UNKNOWN_VALUE
-    }
+    open fun getMemoryUsage(kdfParameters: KdfParameters): Long = UNKNOWN_VALUE
 
-    open fun setMemoryUsage(kdfParameters: KdfParameters, memory: Long) {
+    open fun setMemoryUsage(
+        kdfParameters: KdfParameters,
+        memory: Long,
+    ) {
         // Do nothing by default
     }
 
@@ -77,11 +83,12 @@ abstract class KdfEngine : Serializable {
      * PARALLELISM
      */
 
-    open fun getParallelism(kdfParameters: KdfParameters): Long {
-        return UNKNOWN_VALUE
-    }
+    open fun getParallelism(kdfParameters: KdfParameters): Long = UNKNOWN_VALUE
 
-    open fun setParallelism(kdfParameters: KdfParameters, parallelism: Long) {
+    open fun setParallelism(
+        kdfParameters: KdfParameters,
+        parallelism: Long,
+    ) {
         // Do nothing by default
     }
 

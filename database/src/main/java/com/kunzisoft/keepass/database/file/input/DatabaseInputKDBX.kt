@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -63,9 +63,9 @@ import javax.crypto.CipherInputStream
 import javax.crypto.Mac
 import kotlin.math.min
 
-class DatabaseInputKDBX(database: DatabaseKDBX)
-    : DatabaseInput<DatabaseKDBX>(database) {
-
+class DatabaseInputKDBX(
+    database: DatabaseKDBX,
+) : DatabaseInput<DatabaseKDBX>(database) {
     private var randomStream: StreamCipher? = null
 
     private var hashOfHeader: ByteArray? = null
@@ -95,16 +95,18 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
     private var entryCustomDataKey: String? = null
     private var entryCustomDataValue: String? = null
 
-    private var isRAMSufficient: (memoryWanted: Long) -> Boolean = {true}
+    private var isRAMSufficient: (memoryWanted: Long) -> Boolean = { true }
 
     fun setMethodToCheckIfRAMIsSufficient(method: (memoryWanted: Long) -> Boolean) {
         this.isRAMSufficient = method
     }
 
     @Throws(DatabaseInputException::class)
-    override fun openDatabase(databaseInputStream: InputStream,
-                              progressTaskUpdater: ProgressTaskUpdater?,
-                              assignMasterKey: (() -> Unit)): DatabaseKDBX {
+    override fun openDatabase(
+        databaseInputStream: InputStream,
+        progressTaskUpdater: ProgressTaskUpdater?,
+        assignMasterKey: (() -> Unit),
+    ): DatabaseKDBX {
         try {
             startKeyTimer(progressTaskUpdater)
 
@@ -136,7 +138,6 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
 
             val plainInputStream: InputStream
             if (mDatabase.kdbxVersion.isBefore(FILE_VERSION_40)) {
-
                 val dataDecrypted = CipherInputStream(databaseInputStream, cipher)
                 val storedStartBytes: ByteArray?
                 try {
@@ -179,10 +180,11 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
                 plainInputStream = CipherInputStream(hmIs, cipher)
             }
 
-            val inputStreamXml: InputStream = when (mDatabase.compressionAlgorithm) {
-                CompressionAlgorithm.GZIP -> GZIPInputStream(plainInputStream)
-                else -> plainInputStream
-            }
+            val inputStreamXml: InputStream =
+                when (mDatabase.compressionAlgorithm) {
+                    CompressionAlgorithm.GZIP -> GZIPInputStream(plainInputStream)
+                    else -> plainInputStream
+                }
 
             if (!mDatabase.kdbxVersion.isBefore(FILE_VERSION_40)) {
                 readInnerHeader(inputStreamXml, header)
@@ -194,21 +196,24 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
                 throw DatabaseInputException(e)
             }
 
-            val xmlPullParserFactory = XmlPullParserFactory.newInstance().apply {
-                isNamespaceAware = false
-            }
-            val xmlPullParser = xmlPullParserFactory.newPullParser().apply {
-                setInput(inputStreamXml, null)
-            }
+            val xmlPullParserFactory =
+                XmlPullParserFactory.newInstance().apply {
+                    isNamespaceAware = false
+                }
+            val xmlPullParser =
+                xmlPullParserFactory.newPullParser().apply {
+                    setInput(inputStreamXml, null)
+                }
             readDocumentStreamed(xmlPullParser)
 
             stopContentTimer()
-
         } catch (e: Error) {
-            if (e is OutOfMemoryError)
+            if (e is OutOfMemoryError) {
                 throw NoMemoryDatabaseException(e)
-            if (e.message?.contains("Hash failed with code") == true)
+            }
+            if (e.message?.contains("Hash failed with code") == true) {
                 throw KDFMemoryDatabaseException(e)
+            }
             throw DatabaseInputException(e)
         }
 
@@ -216,9 +221,10 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
     }
 
     @Throws(IOException::class)
-    private fun readInnerHeader(dataInputStream: InputStream,
-                                header: DatabaseHeaderKDBX) {
-
+    private fun readInnerHeader(
+        dataInputStream: InputStream,
+        header: DatabaseHeaderKDBX,
+    ) {
         var readStream = true
         while (readStream) {
             val fieldId = dataInputStream.read().toByte()
@@ -254,8 +260,12 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
                     val protectedFlag = dataInputStream.read().toByte() == DatabaseHeaderKDBX.KdbxBinaryFlags.Protected
                     val byteLength = size - 1
                     // No compression at this level
-                    val protectedBinary = mDatabase.buildNewBinaryAttachment(
-                            isRAMSufficient.invoke(byteLength.toLong()), false, protectedFlag)
+                    val protectedBinary =
+                        mDatabase.buildNewBinaryAttachment(
+                            isRAMSufficient.invoke(byteLength.toLong()),
+                            false,
+                            protectedFlag,
+                        )
                     protectedBinary.getOutputDataStream(mDatabase.binaryCache).use { outputStream ->
                         dataInputStream.readBytes(byteLength) { buffer ->
                             outputStream.write(buffer)
@@ -291,12 +301,11 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
         EntryHistory,
         EntryCustomData,
         EntryCustomDataItem,
-        Binaries
+        Binaries,
     }
 
     @Throws(XmlPullParserException::class, IOException::class, DatabaseInputException::class)
     private fun readDocumentStreamed(xpp: XmlPullParser) {
-
         ctxGroups.clear()
 
         var ctx = KdbContext.Null
@@ -326,283 +335,303 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
     }
 
     @Throws(XmlPullParserException::class, IOException::class, DatabaseInputException::class)
-    private fun readXmlElement(ctx: KdbContext, xpp: XmlPullParser): KdbContext {
+    private fun readXmlElement(
+        ctx: KdbContext,
+        xpp: XmlPullParser,
+    ): KdbContext {
         val name = xpp.name
         when (ctx) {
-            KdbContext.Null -> if (name.equals(DatabaseKDBXXML.ElemDocNode, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.KeePassFile, xpp)
-            } else
-                readUnknown(xpp)
-
-            KdbContext.KeePassFile -> if (name.equals(DatabaseKDBXXML.ElemMeta, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.Meta, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemRoot, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.Root, xpp)
-            } else {
-                readUnknown(xpp)
-            }
-
-            KdbContext.Meta -> if (name.equals(DatabaseKDBXXML.ElemGenerator, ignoreCase = true)) {
-                readString(xpp) // Ignore
-            } else if (name.equals(DatabaseKDBXXML.ElemHeaderHash, ignoreCase = true)) {
-                val encodedHash = readString(xpp)
-                if (encodedHash.isNotEmpty() && hashOfHeader != null) {
-                    val hash = Base64.decode(encodedHash, BASE64_FLAG)
-                    if (!Arrays.equals(hash, hashOfHeader)) {
-                        throw DatabaseInputException()
-                    }
-                }
-            } else if (name.equals(DatabaseKDBXXML.ElemSettingsChanged, ignoreCase = true)) {
-                mDatabase.settingsChanged = readDateInstant(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbName, ignoreCase = true)) {
-                mDatabase.name = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbNameChanged, ignoreCase = true)) {
-                mDatabase.nameChanged = readDateInstant(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbDesc, ignoreCase = true)) {
-                mDatabase.description = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbDescChanged, ignoreCase = true)) {
-                mDatabase.descriptionChanged = readDateInstant(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbDefaultUser, ignoreCase = true)) {
-                mDatabase.defaultUserName = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbDefaultUserChanged, ignoreCase = true)) {
-                mDatabase.defaultUserNameChanged = readDateInstant(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbColor, ignoreCase = true)) {
-                mDatabase.color = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbMntncHistoryDays, ignoreCase = true)) {
-                mDatabase.maintenanceHistoryDays = readUInt(xpp, DEFAULT_HISTORY_DAYS)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbKeyChanged, ignoreCase = true)) {
-                mDatabase.keyLastChanged = readDateInstant(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbKeyChangeRec, ignoreCase = true)) {
-                mDatabase.keyChangeRecDays = readLong(xpp, -1)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbKeyChangeForce, ignoreCase = true)) {
-                mDatabase.keyChangeForceDays = readLong(xpp, -1)
-            } else if (name.equals(DatabaseKDBXXML.ElemDbKeyChangeForceOnce, ignoreCase = true)) {
-                mDatabase.isKeyChangeForceOnce = readBool(xpp, false)
-            } else if (name.equals(DatabaseKDBXXML.ElemMemoryProt, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.MemoryProtection, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemCustomIcons, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.CustomIcons, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemRecycleBinEnabled, ignoreCase = true)) {
-                mDatabase.isRecycleBinEnabled = readBool(xpp, true)
-            } else if (name.equals(DatabaseKDBXXML.ElemRecycleBinUuid, ignoreCase = true)) {
-                mDatabase.recycleBinUUID = readUuid(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemRecycleBinChanged, ignoreCase = true)) {
-                mDatabase.recycleBinChanged = readDateInstant(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemEntryTemplatesGroup, ignoreCase = true)) {
-                mDatabase.entryTemplatesGroup = readUuid(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemEntryTemplatesGroupChanged, ignoreCase = true)) {
-                mDatabase.entryTemplatesGroupChanged = readDateInstant(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemHistoryMaxItems, ignoreCase = true)) {
-                mDatabase.historyMaxItems = readInt(xpp, -1)
-            } else if (name.equals(DatabaseKDBXXML.ElemHistoryMaxSize, ignoreCase = true)) {
-                mDatabase.historyMaxSize = readLong(xpp, -1)
-            } else if (name.equals(DatabaseKDBXXML.ElemLastSelectedGroup, ignoreCase = true)) {
-                mDatabase.lastSelectedGroupUUID = readUuid(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemLastTopVisibleGroup, ignoreCase = true)) {
-                mDatabase.lastTopVisibleGroupUUID = readUuid(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemBinaries, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.Binaries, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemCustomData, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.CustomData, xpp)
-            }
-
-            KdbContext.MemoryProtection -> if (name.equals(DatabaseKDBXXML.ElemProtTitle, ignoreCase = true)) {
-                mDatabase.memoryProtection.protectTitle = readBool(xpp, MemoryProtectionConfig.DEFAULT_PROTECT_TITLE)
-            } else if (name.equals(DatabaseKDBXXML.ElemProtUserName, ignoreCase = true)) {
-                mDatabase.memoryProtection.protectUserName = readBool(xpp, MemoryProtectionConfig.DEFAULT_PROTECT_USERNAME)
-            } else if (name.equals(DatabaseKDBXXML.ElemProtPassword, ignoreCase = true)) {
-                mDatabase.memoryProtection.protectPassword = readBool(xpp, MemoryProtectionConfig.DEFAULT_PROTECT_PASSWORD)
-            } else if (name.equals(DatabaseKDBXXML.ElemProtURL, ignoreCase = true)) {
-                mDatabase.memoryProtection.protectUrl = readBool(xpp, MemoryProtectionConfig.DEFAULT_PROTECT_URL)
-            } else if (name.equals(DatabaseKDBXXML.ElemProtNotes, ignoreCase = true)) {
-                mDatabase.memoryProtection.protectNotes = readBool(xpp, MemoryProtectionConfig.DEFAULT_PROTECT_NOTES)
-            } else if (name.equals(DatabaseKDBXXML.ElemProtAutoHide, ignoreCase = true)) {
-                mDatabase.memoryProtection.autoEnableVisualHiding = readBool(xpp, MemoryProtectionConfig.DEFAULT_AUTO_ENABLE_VISUAL_HIDING)
-            } else {
-                readUnknown(xpp)
-            }
-
-            KdbContext.CustomIcons -> if (name.equals(DatabaseKDBXXML.ElemCustomIconItem, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.CustomIcon, xpp)
-            } else {
-                readUnknown(xpp)
-            }
-
-            KdbContext.CustomIcon -> if (name.equals(DatabaseKDBXXML.ElemCustomIconItemID, ignoreCase = true)) {
-                customIconID = readUuid(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemCustomIconItemData, ignoreCase = true)) {
-                val strData = readString(xpp)
-                if (strData.isNotEmpty()) {
-                    customIconData = Base64.decode(strData, BASE64_FLAG)
-                }
-            } else if (name.equals(DatabaseKDBXXML.ElemName, ignoreCase = true)) {
-                customIconName = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemLastModTime, ignoreCase = true)) {
-                customIconLastModificationTime = readDateInstant(xpp)
-            } else {
-                readUnknown(xpp)
-            }
-
-            KdbContext.Binaries -> if (name.equals(DatabaseKDBXXML.ElemBinary, ignoreCase = true)) {
-                readBinary(xpp)
-            } else {
-                readUnknown(xpp)
-            }
-
-            KdbContext.CustomData -> if (name.equals(DatabaseKDBXXML.ElemStringDictExItem, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.CustomDataItem, xpp)
-            } else {
-                readUnknown(xpp)
-            }
-
-            KdbContext.CustomDataItem -> if (name.equals(DatabaseKDBXXML.ElemKey, ignoreCase = true)) {
-                customDataKey = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemValue, ignoreCase = true)) {
-                customDataValue = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemLastModTime, ignoreCase = true)) {
-                customDataLastModificationTime = readDateInstant(xpp)
-            } else {
-                readUnknown(xpp)
-            }
-
-            KdbContext.Root -> if (name.equals(DatabaseKDBXXML.ElemGroup, ignoreCase = true)) {
-                if (ctxGroups.size != 0)
-                    throw IOException("Group list should be empty.")
-
-                mDatabase.rootGroup = mDatabase.createGroup()
-                ctxGroups.push(mDatabase.rootGroup)
-                ctxGroup = ctxGroups.peek()
-
-                return switchContext(ctx, KdbContext.Group, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDeletedObjects, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.RootDeletedObjects, xpp)
-            } else {
-                readUnknown(xpp)
-            }
-
-            KdbContext.Group -> if (name.equals(DatabaseKDBXXML.ElemUuid, ignoreCase = true)) {
-                ctxGroup?.nodeId = NodeIdUUID(readUuid(xpp))
-                ctxGroup?.let { mDatabase.addGroupIndex(it) }
-            } else if (name.equals(DatabaseKDBXXML.ElemName, ignoreCase = true)) {
-                ctxGroup?.title = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemNotes, ignoreCase = true)) {
-                ctxGroup?.notes = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemIcon, ignoreCase = true)) {
-                ctxGroup?.icon?.standard = mDatabase.getStandardIcon(readUInt(xpp, UnsignedInt(0)).toKotlinInt())
-            } else if (name.equals(DatabaseKDBXXML.ElemCustomIconID, ignoreCase = true)) {
-                val iconUUID = readUuid(xpp)
-                ctxGroup?.icon?.custom = mDatabase.getCustomIcon(iconUUID) ?: IconImageCustom(iconUUID)
-            } else if (name.equals(DatabaseKDBXXML.ElemTags, ignoreCase = true)) {
-                ctxGroup?.tags = readTags(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemPreviousParentGroup, ignoreCase = true)) {
-                ctxGroup?.previousParentGroup = readUuid(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemTimes, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.GroupTimes, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemIsExpanded, ignoreCase = true)) {
-                ctxGroup?.isExpanded = readBool(xpp, true)
-            } else if (name.equals(DatabaseKDBXXML.ElemGroupDefaultAutoTypeSeq, ignoreCase = true)) {
-                ctxGroup?.defaultAutoTypeSequence = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemEnableAutoType, ignoreCase = true)) {
-                ctxGroup?.enableAutoType = readOptionalBool(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemEnableSearching, ignoreCase = true)) {
-                ctxGroup?.enableSearching = readOptionalBool(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemLastTopVisibleEntry, ignoreCase = true)) {
-                ctxGroup?.lastTopVisibleEntry = readUuid(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemCustomData, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.GroupCustomData, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemGroup, ignoreCase = true)) {
-                ctxGroup = mDatabase.createGroup()
-                val groupPeek = ctxGroups.peek()
-                ctxGroup?.let {
-                    groupPeek.addChildGroup(it)
-                    it.parent = groupPeek
-                    ctxGroups.push(it)
-                }
-
-                return switchContext(ctx, KdbContext.Group, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemEntry, ignoreCase = true)) {
-                ctxEntry = mDatabase.createEntry()
-                ctxEntry?.let {
-                    ctxGroup?.addChildEntry(it)
-                    it.parent = ctxGroup
-                }
-
-                entryInHistory = false
-                return switchContext(ctx, KdbContext.Entry, xpp)
-            } else {
-                readUnknown(xpp)
-            }
-            KdbContext.GroupCustomData -> if (name.equals(DatabaseKDBXXML.ElemStringDictExItem, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.GroupCustomDataItem, xpp)
-            } else {
-                readUnknown(xpp)
-            }
-            KdbContext.GroupCustomDataItem -> when {
-                name.equals(DatabaseKDBXXML.ElemKey, ignoreCase = true) -> groupCustomDataKey = readString(xpp)
-                name.equals(DatabaseKDBXXML.ElemValue, ignoreCase = true) -> groupCustomDataValue = readString(xpp)
-                name.equals(DatabaseKDBXXML.ElemLastModTime, ignoreCase = true) -> readDateInstant(xpp) // Ignore
-                else -> readUnknown(xpp)
-            }
-
-
-            KdbContext.Entry -> if (name.equals(DatabaseKDBXXML.ElemUuid, ignoreCase = true)) {
-                ctxEntry?.nodeId = NodeIdUUID(readUuid(xpp))
-            } else if (name.equals(DatabaseKDBXXML.ElemIcon, ignoreCase = true)) {
-                ctxEntry?.icon?.standard = mDatabase.getStandardIcon(readUInt(xpp, UnsignedInt(0)).toKotlinInt())
-            } else if (name.equals(DatabaseKDBXXML.ElemCustomIconID, ignoreCase = true)) {
-                val iconUUID = readUuid(xpp)
-                ctxEntry?.icon?.custom = mDatabase.getCustomIcon(iconUUID) ?: IconImageCustom(iconUUID)
-            } else if (name.equals(DatabaseKDBXXML.ElemFgColor, ignoreCase = true)) {
-                ctxEntry?.foregroundColor = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemBgColor, ignoreCase = true)) {
-                ctxEntry?.backgroundColor = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemOverrideUrl, ignoreCase = true)) {
-                ctxEntry?.overrideURL = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemQualityCheck, ignoreCase = true)) {
-                ctxEntry?.qualityCheck = readBool(xpp, true)
-            } else if (name.equals(DatabaseKDBXXML.ElemTags, ignoreCase = true)) {
-                ctxEntry?.tags = readTags(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemPreviousParentGroup, ignoreCase = true)) {
-                ctxEntry?.previousParentGroup = readUuid(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemTimes, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.EntryTimes, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemString, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.EntryString, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemBinary, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.EntryBinary, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemAutoType, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.EntryAutoType, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemCustomData, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.EntryCustomData, xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemHistory, ignoreCase = true)) {
-                if (!entryInHistory) {
-                    ctxHistoryBase = ctxEntry
-                    return switchContext(ctx, KdbContext.EntryHistory, xpp)
+            KdbContext.Null ->
+                if (name.equals(DatabaseKDBXXML.ElemDocNode, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.KeePassFile, xpp)
                 } else {
                     readUnknown(xpp)
                 }
-            } else {
-                readUnknown(xpp)
-            }
-            KdbContext.EntryCustomData -> if (name.equals(DatabaseKDBXXML.ElemStringDictExItem, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.EntryCustomDataItem, xpp)
-            } else {
-                readUnknown(xpp)
-            }
-            KdbContext.EntryCustomDataItem -> when {
-                name.equals(DatabaseKDBXXML.ElemKey, ignoreCase = true) -> entryCustomDataKey = readString(xpp)
-                name.equals(DatabaseKDBXXML.ElemValue, ignoreCase = true) -> entryCustomDataValue = readString(xpp)
-                name.equals(DatabaseKDBXXML.ElemLastModTime, ignoreCase = true) -> readDateInstant(xpp) // Ignore
-                else -> readUnknown(xpp)
-            }
+
+            KdbContext.KeePassFile ->
+                if (name.equals(DatabaseKDBXXML.ElemMeta, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.Meta, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemRoot, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.Root, xpp)
+                } else {
+                    readUnknown(xpp)
+                }
+
+            KdbContext.Meta ->
+                if (name.equals(DatabaseKDBXXML.ElemGenerator, ignoreCase = true)) {
+                    readString(xpp) // Ignore
+                } else if (name.equals(DatabaseKDBXXML.ElemHeaderHash, ignoreCase = true)) {
+                    val encodedHash = readString(xpp)
+                    if (encodedHash.isNotEmpty() && hashOfHeader != null) {
+                        val hash = Base64.decode(encodedHash, BASE64_FLAG)
+                        if (!Arrays.equals(hash, hashOfHeader)) {
+                            throw DatabaseInputException()
+                        }
+                    }
+                } else if (name.equals(DatabaseKDBXXML.ElemSettingsChanged, ignoreCase = true)) {
+                    mDatabase.settingsChanged = readDateInstant(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbName, ignoreCase = true)) {
+                    mDatabase.name = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbNameChanged, ignoreCase = true)) {
+                    mDatabase.nameChanged = readDateInstant(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbDesc, ignoreCase = true)) {
+                    mDatabase.description = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbDescChanged, ignoreCase = true)) {
+                    mDatabase.descriptionChanged = readDateInstant(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbDefaultUser, ignoreCase = true)) {
+                    mDatabase.defaultUserName = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbDefaultUserChanged, ignoreCase = true)) {
+                    mDatabase.defaultUserNameChanged = readDateInstant(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbColor, ignoreCase = true)) {
+                    mDatabase.color = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbMntncHistoryDays, ignoreCase = true)) {
+                    mDatabase.maintenanceHistoryDays = readUInt(xpp, DEFAULT_HISTORY_DAYS)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbKeyChanged, ignoreCase = true)) {
+                    mDatabase.keyLastChanged = readDateInstant(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbKeyChangeRec, ignoreCase = true)) {
+                    mDatabase.keyChangeRecDays = readLong(xpp, -1)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbKeyChangeForce, ignoreCase = true)) {
+                    mDatabase.keyChangeForceDays = readLong(xpp, -1)
+                } else if (name.equals(DatabaseKDBXXML.ElemDbKeyChangeForceOnce, ignoreCase = true)) {
+                    mDatabase.isKeyChangeForceOnce = readBool(xpp, false)
+                } else if (name.equals(DatabaseKDBXXML.ElemMemoryProt, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.MemoryProtection, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemCustomIcons, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.CustomIcons, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemRecycleBinEnabled, ignoreCase = true)) {
+                    mDatabase.isRecycleBinEnabled = readBool(xpp, true)
+                } else if (name.equals(DatabaseKDBXXML.ElemRecycleBinUuid, ignoreCase = true)) {
+                    mDatabase.recycleBinUUID = readUuid(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemRecycleBinChanged, ignoreCase = true)) {
+                    mDatabase.recycleBinChanged = readDateInstant(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemEntryTemplatesGroup, ignoreCase = true)) {
+                    mDatabase.entryTemplatesGroup = readUuid(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemEntryTemplatesGroupChanged, ignoreCase = true)) {
+                    mDatabase.entryTemplatesGroupChanged = readDateInstant(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemHistoryMaxItems, ignoreCase = true)) {
+                    mDatabase.historyMaxItems = readInt(xpp, -1)
+                } else if (name.equals(DatabaseKDBXXML.ElemHistoryMaxSize, ignoreCase = true)) {
+                    mDatabase.historyMaxSize = readLong(xpp, -1)
+                } else if (name.equals(DatabaseKDBXXML.ElemLastSelectedGroup, ignoreCase = true)) {
+                    mDatabase.lastSelectedGroupUUID = readUuid(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemLastTopVisibleGroup, ignoreCase = true)) {
+                    mDatabase.lastTopVisibleGroupUUID = readUuid(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemBinaries, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.Binaries, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemCustomData, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.CustomData, xpp)
+                }
+
+            KdbContext.MemoryProtection ->
+                if (name.equals(DatabaseKDBXXML.ElemProtTitle, ignoreCase = true)) {
+                    mDatabase.memoryProtection.protectTitle = readBool(xpp, MemoryProtectionConfig.DEFAULT_PROTECT_TITLE)
+                } else if (name.equals(DatabaseKDBXXML.ElemProtUserName, ignoreCase = true)) {
+                    mDatabase.memoryProtection.protectUserName = readBool(xpp, MemoryProtectionConfig.DEFAULT_PROTECT_USERNAME)
+                } else if (name.equals(DatabaseKDBXXML.ElemProtPassword, ignoreCase = true)) {
+                    mDatabase.memoryProtection.protectPassword = readBool(xpp, MemoryProtectionConfig.DEFAULT_PROTECT_PASSWORD)
+                } else if (name.equals(DatabaseKDBXXML.ElemProtURL, ignoreCase = true)) {
+                    mDatabase.memoryProtection.protectUrl = readBool(xpp, MemoryProtectionConfig.DEFAULT_PROTECT_URL)
+                } else if (name.equals(DatabaseKDBXXML.ElemProtNotes, ignoreCase = true)) {
+                    mDatabase.memoryProtection.protectNotes = readBool(xpp, MemoryProtectionConfig.DEFAULT_PROTECT_NOTES)
+                } else if (name.equals(DatabaseKDBXXML.ElemProtAutoHide, ignoreCase = true)) {
+                    mDatabase.memoryProtection.autoEnableVisualHiding = readBool(xpp, MemoryProtectionConfig.DEFAULT_AUTO_ENABLE_VISUAL_HIDING)
+                } else {
+                    readUnknown(xpp)
+                }
+
+            KdbContext.CustomIcons ->
+                if (name.equals(DatabaseKDBXXML.ElemCustomIconItem, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.CustomIcon, xpp)
+                } else {
+                    readUnknown(xpp)
+                }
+
+            KdbContext.CustomIcon ->
+                if (name.equals(DatabaseKDBXXML.ElemCustomIconItemID, ignoreCase = true)) {
+                    customIconID = readUuid(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemCustomIconItemData, ignoreCase = true)) {
+                    val strData = readString(xpp)
+                    if (strData.isNotEmpty()) {
+                        customIconData = Base64.decode(strData, BASE64_FLAG)
+                    }
+                } else if (name.equals(DatabaseKDBXXML.ElemName, ignoreCase = true)) {
+                    customIconName = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemLastModTime, ignoreCase = true)) {
+                    customIconLastModificationTime = readDateInstant(xpp)
+                } else {
+                    readUnknown(xpp)
+                }
+
+            KdbContext.Binaries ->
+                if (name.equals(DatabaseKDBXXML.ElemBinary, ignoreCase = true)) {
+                    readBinary(xpp)
+                } else {
+                    readUnknown(xpp)
+                }
+
+            KdbContext.CustomData ->
+                if (name.equals(DatabaseKDBXXML.ElemStringDictExItem, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.CustomDataItem, xpp)
+                } else {
+                    readUnknown(xpp)
+                }
+
+            KdbContext.CustomDataItem ->
+                if (name.equals(DatabaseKDBXXML.ElemKey, ignoreCase = true)) {
+                    customDataKey = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemValue, ignoreCase = true)) {
+                    customDataValue = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemLastModTime, ignoreCase = true)) {
+                    customDataLastModificationTime = readDateInstant(xpp)
+                } else {
+                    readUnknown(xpp)
+                }
+
+            KdbContext.Root ->
+                if (name.equals(DatabaseKDBXXML.ElemGroup, ignoreCase = true)) {
+                    if (ctxGroups.size != 0) {
+                        throw IOException("Group list should be empty.")
+                    }
+
+                    mDatabase.rootGroup = mDatabase.createGroup()
+                    ctxGroups.push(mDatabase.rootGroup)
+                    ctxGroup = ctxGroups.peek()
+
+                    return switchContext(ctx, KdbContext.Group, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDeletedObjects, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.RootDeletedObjects, xpp)
+                } else {
+                    readUnknown(xpp)
+                }
+
+            KdbContext.Group ->
+                if (name.equals(DatabaseKDBXXML.ElemUuid, ignoreCase = true)) {
+                    ctxGroup?.nodeId = NodeIdUUID(readUuid(xpp))
+                    ctxGroup?.let { mDatabase.addGroupIndex(it) }
+                } else if (name.equals(DatabaseKDBXXML.ElemName, ignoreCase = true)) {
+                    ctxGroup?.title = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemNotes, ignoreCase = true)) {
+                    ctxGroup?.notes = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemIcon, ignoreCase = true)) {
+                    ctxGroup?.icon?.standard = mDatabase.getStandardIcon(readUInt(xpp, UnsignedInt(0)).toKotlinInt())
+                } else if (name.equals(DatabaseKDBXXML.ElemCustomIconID, ignoreCase = true)) {
+                    val iconUUID = readUuid(xpp)
+                    ctxGroup?.icon?.custom = mDatabase.getCustomIcon(iconUUID) ?: IconImageCustom(iconUUID)
+                } else if (name.equals(DatabaseKDBXXML.ElemTags, ignoreCase = true)) {
+                    ctxGroup?.tags = readTags(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemPreviousParentGroup, ignoreCase = true)) {
+                    ctxGroup?.previousParentGroup = readUuid(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemTimes, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.GroupTimes, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemIsExpanded, ignoreCase = true)) {
+                    ctxGroup?.isExpanded = readBool(xpp, true)
+                } else if (name.equals(DatabaseKDBXXML.ElemGroupDefaultAutoTypeSeq, ignoreCase = true)) {
+                    ctxGroup?.defaultAutoTypeSequence = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemEnableAutoType, ignoreCase = true)) {
+                    ctxGroup?.enableAutoType = readOptionalBool(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemEnableSearching, ignoreCase = true)) {
+                    ctxGroup?.enableSearching = readOptionalBool(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemLastTopVisibleEntry, ignoreCase = true)) {
+                    ctxGroup?.lastTopVisibleEntry = readUuid(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemCustomData, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.GroupCustomData, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemGroup, ignoreCase = true)) {
+                    ctxGroup = mDatabase.createGroup()
+                    val groupPeek = ctxGroups.peek()
+                    ctxGroup?.let {
+                        groupPeek.addChildGroup(it)
+                        it.parent = groupPeek
+                        ctxGroups.push(it)
+                    }
+
+                    return switchContext(ctx, KdbContext.Group, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemEntry, ignoreCase = true)) {
+                    ctxEntry = mDatabase.createEntry()
+                    ctxEntry?.let {
+                        ctxGroup?.addChildEntry(it)
+                        it.parent = ctxGroup
+                    }
+
+                    entryInHistory = false
+                    return switchContext(ctx, KdbContext.Entry, xpp)
+                } else {
+                    readUnknown(xpp)
+                }
+            KdbContext.GroupCustomData ->
+                if (name.equals(DatabaseKDBXXML.ElemStringDictExItem, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.GroupCustomDataItem, xpp)
+                } else {
+                    readUnknown(xpp)
+                }
+            KdbContext.GroupCustomDataItem ->
+                when {
+                    name.equals(DatabaseKDBXXML.ElemKey, ignoreCase = true) -> groupCustomDataKey = readString(xpp)
+                    name.equals(DatabaseKDBXXML.ElemValue, ignoreCase = true) -> groupCustomDataValue = readString(xpp)
+                    name.equals(DatabaseKDBXXML.ElemLastModTime, ignoreCase = true) -> readDateInstant(xpp) // Ignore
+                    else -> readUnknown(xpp)
+                }
+
+            KdbContext.Entry ->
+                if (name.equals(DatabaseKDBXXML.ElemUuid, ignoreCase = true)) {
+                    ctxEntry?.nodeId = NodeIdUUID(readUuid(xpp))
+                } else if (name.equals(DatabaseKDBXXML.ElemIcon, ignoreCase = true)) {
+                    ctxEntry?.icon?.standard = mDatabase.getStandardIcon(readUInt(xpp, UnsignedInt(0)).toKotlinInt())
+                } else if (name.equals(DatabaseKDBXXML.ElemCustomIconID, ignoreCase = true)) {
+                    val iconUUID = readUuid(xpp)
+                    ctxEntry?.icon?.custom = mDatabase.getCustomIcon(iconUUID) ?: IconImageCustom(iconUUID)
+                } else if (name.equals(DatabaseKDBXXML.ElemFgColor, ignoreCase = true)) {
+                    ctxEntry?.foregroundColor = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemBgColor, ignoreCase = true)) {
+                    ctxEntry?.backgroundColor = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemOverrideUrl, ignoreCase = true)) {
+                    ctxEntry?.overrideURL = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemQualityCheck, ignoreCase = true)) {
+                    ctxEntry?.qualityCheck = readBool(xpp, true)
+                } else if (name.equals(DatabaseKDBXXML.ElemTags, ignoreCase = true)) {
+                    ctxEntry?.tags = readTags(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemPreviousParentGroup, ignoreCase = true)) {
+                    ctxEntry?.previousParentGroup = readUuid(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemTimes, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.EntryTimes, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemString, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.EntryString, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemBinary, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.EntryBinary, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemAutoType, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.EntryAutoType, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemCustomData, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.EntryCustomData, xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemHistory, ignoreCase = true)) {
+                    if (!entryInHistory) {
+                        ctxHistoryBase = ctxEntry
+                        return switchContext(ctx, KdbContext.EntryHistory, xpp)
+                    } else {
+                        readUnknown(xpp)
+                    }
+                } else {
+                    readUnknown(xpp)
+                }
+            KdbContext.EntryCustomData ->
+                if (name.equals(DatabaseKDBXXML.ElemStringDictExItem, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.EntryCustomDataItem, xpp)
+                } else {
+                    readUnknown(xpp)
+                }
+            KdbContext.EntryCustomDataItem ->
+                when {
+                    name.equals(DatabaseKDBXXML.ElemKey, ignoreCase = true) -> entryCustomDataKey = readString(xpp)
+                    name.equals(DatabaseKDBXXML.ElemValue, ignoreCase = true) -> entryCustomDataValue = readString(xpp)
+                    name.equals(DatabaseKDBXXML.ElemLastModTime, ignoreCase = true) -> readDateInstant(xpp) // Ignore
+                    else -> readUnknown(xpp)
+                }
 
             KdbContext.GroupTimes, KdbContext.EntryTimes -> {
                 val tl: NodeKDBXInterface? =
-                        if (ctx == KdbContext.GroupTimes) {
-                            ctxGroup
-                        } else {
-                            ctxEntry
-                        }
+                    if (ctx == KdbContext.GroupTimes) {
+                        ctxGroup
+                    } else {
+                        ctxEntry
+                    }
 
                 when {
                     name.equals(DatabaseKDBXXML.ElemLastModTime, ignoreCase = true) -> tl?.lastModificationTime = readDateInstant(xpp)
@@ -616,73 +645,83 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
                 }
             }
 
-            KdbContext.EntryString -> if (name.equals(DatabaseKDBXXML.ElemKey, ignoreCase = true)) {
-                ctxStringName = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemValue, ignoreCase = true)) {
-                ctxStringValue = readProtectedString(xpp)
-            } else {
-                readUnknown(xpp)
-            }
+            KdbContext.EntryString ->
+                if (name.equals(DatabaseKDBXXML.ElemKey, ignoreCase = true)) {
+                    ctxStringName = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemValue, ignoreCase = true)) {
+                    ctxStringValue = readProtectedString(xpp)
+                } else {
+                    readUnknown(xpp)
+                }
 
-            KdbContext.EntryBinary -> if (name.equals(DatabaseKDBXXML.ElemKey, ignoreCase = true)) {
-                ctxBinaryName = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemValue, ignoreCase = true)) {
-                ctxBinaryValue = readBinary(xpp)
-            }
+            KdbContext.EntryBinary ->
+                if (name.equals(DatabaseKDBXXML.ElemKey, ignoreCase = true)) {
+                    ctxBinaryName = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemValue, ignoreCase = true)) {
+                    ctxBinaryValue = readBinary(xpp)
+                }
 
-            KdbContext.EntryAutoType -> if (name.equals(DatabaseKDBXXML.ElemAutoTypeEnabled, ignoreCase = true)) {
-                ctxEntry?.autoType?.enabled = readBool(xpp, true)
-            } else if (name.equals(DatabaseKDBXXML.ElemAutoTypeObfuscation, ignoreCase = true)) {
-                ctxEntry?.autoType?.obfuscationOptions = readUInt(xpp, UnsignedInt(0))
-            } else if (name.equals(DatabaseKDBXXML.ElemAutoTypeDefaultSeq, ignoreCase = true)) {
-                ctxEntry?.autoType?.defaultSequence = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemAutoTypeItem, ignoreCase = true)) {
-                return switchContext(ctx, KdbContext.EntryAutoTypeItem, xpp)
-            } else {
-                readUnknown(xpp)
-            }
+            KdbContext.EntryAutoType ->
+                if (name.equals(DatabaseKDBXXML.ElemAutoTypeEnabled, ignoreCase = true)) {
+                    ctxEntry?.autoType?.enabled = readBool(xpp, true)
+                } else if (name.equals(DatabaseKDBXXML.ElemAutoTypeObfuscation, ignoreCase = true)) {
+                    ctxEntry?.autoType?.obfuscationOptions = readUInt(xpp, UnsignedInt(0))
+                } else if (name.equals(DatabaseKDBXXML.ElemAutoTypeDefaultSeq, ignoreCase = true)) {
+                    ctxEntry?.autoType?.defaultSequence = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemAutoTypeItem, ignoreCase = true)) {
+                    return switchContext(ctx, KdbContext.EntryAutoTypeItem, xpp)
+                } else {
+                    readUnknown(xpp)
+                }
 
-            KdbContext.EntryAutoTypeItem -> if (name.equals(DatabaseKDBXXML.ElemWindow, ignoreCase = true)) {
-                ctxATName = readString(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemKeystrokeSequence, ignoreCase = true)) {
-                ctxATSeq = readString(xpp)
-            } else {
-                readUnknown(xpp)
-            }
+            KdbContext.EntryAutoTypeItem ->
+                if (name.equals(DatabaseKDBXXML.ElemWindow, ignoreCase = true)) {
+                    ctxATName = readString(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemKeystrokeSequence, ignoreCase = true)) {
+                    ctxATSeq = readString(xpp)
+                } else {
+                    readUnknown(xpp)
+                }
 
-            KdbContext.EntryHistory -> if (name.equals(DatabaseKDBXXML.ElemEntry, ignoreCase = true)) {
-                ctxEntry = EntryKDBX()
-                ctxEntry?.let { ctxHistoryBase?.addEntryToHistory(it) }
+            KdbContext.EntryHistory ->
+                if (name.equals(DatabaseKDBXXML.ElemEntry, ignoreCase = true)) {
+                    ctxEntry = EntryKDBX()
+                    ctxEntry?.let { ctxHistoryBase?.addEntryToHistory(it) }
 
-                entryInHistory = true
-                return switchContext(ctx, KdbContext.Entry, xpp)
-            } else {
-                readUnknown(xpp)
-            }
+                    entryInHistory = true
+                    return switchContext(ctx, KdbContext.Entry, xpp)
+                } else {
+                    readUnknown(xpp)
+                }
 
-            KdbContext.RootDeletedObjects -> if (name.equals(DatabaseKDBXXML.ElemDeletedObject, ignoreCase = true)) {
-                ctxDeletedObject = DeletedObject()
-                ctxDeletedObject?.let { mDatabase.addDeletedObject(it) }
+            KdbContext.RootDeletedObjects ->
+                if (name.equals(DatabaseKDBXXML.ElemDeletedObject, ignoreCase = true)) {
+                    ctxDeletedObject = DeletedObject()
+                    ctxDeletedObject?.let { mDatabase.addDeletedObject(it) }
 
-                return switchContext(ctx, KdbContext.DeletedObject, xpp)
-            } else {
-                readUnknown(xpp)
-            }
+                    return switchContext(ctx, KdbContext.DeletedObject, xpp)
+                } else {
+                    readUnknown(xpp)
+                }
 
-            KdbContext.DeletedObject -> if (name.equals(DatabaseKDBXXML.ElemUuid, ignoreCase = true)) {
-                ctxDeletedObject?.uuid = readUuid(xpp)
-            } else if (name.equals(DatabaseKDBXXML.ElemDeletionTime, ignoreCase = true)) {
-                ctxDeletedObject?.deletionTime = readDateInstant(xpp)
-            } else {
-                readUnknown(xpp)
-            }
+            KdbContext.DeletedObject ->
+                if (name.equals(DatabaseKDBXXML.ElemUuid, ignoreCase = true)) {
+                    ctxDeletedObject?.uuid = readUuid(xpp)
+                } else if (name.equals(DatabaseKDBXXML.ElemDeletionTime, ignoreCase = true)) {
+                    ctxDeletedObject?.deletionTime = readDateInstant(xpp)
+                } else {
+                    readUnknown(xpp)
+                }
         }
 
         return ctx
     }
 
     @Throws(XmlPullParserException::class)
-    private fun endXmlElement(ctx: KdbContext?, xpp: XmlPullParser): KdbContext {
+    private fun endXmlElement(
+        ctx: KdbContext?,
+        xpp: XmlPullParser,
+    ): KdbContext {
         // (xpp.getEventType() == XmlPullParser.END_TAG);
 
         val name = xpp.name
@@ -699,10 +738,12 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
         } else if (ctx == KdbContext.CustomIcon && name.equals(DatabaseKDBXXML.ElemCustomIconItem, ignoreCase = true)) {
             val iconData = customIconData
             if (customIconID != DatabaseVersioned.UUID_ZERO && iconData != null) {
-                mDatabase.addCustomIcon(customIconID,
-                        customIconName,
-                        customIconLastModificationTime,
-                        isRAMSufficient.invoke(iconData.size.toLong())) { _, binary ->
+                mDatabase.addCustomIcon(
+                    customIconID,
+                    customIconName,
+                    customIconLastModificationTime,
+                    isRAMSufficient.invoke(iconData.size.toLong()),
+                ) { _, binary ->
                     binary?.getOutputDataStream(mDatabase.binaryCache)?.use { outputStream ->
                         outputStream.write(iconData)
                     }
@@ -720,8 +761,13 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
         } else if (ctx == KdbContext.CustomDataItem && name.equals(DatabaseKDBXXML.ElemStringDictExItem, ignoreCase = true)) {
             customDataKey?.let { dataKey ->
                 customDataValue?.let { dataValue ->
-                    mDatabase.customData.put(CustomDataItem(dataKey,
-                            dataValue, customDataLastModificationTime))
+                    mDatabase.customData.put(
+                        CustomDataItem(
+                            dataKey,
+                            dataValue,
+                            customDataLastModificationTime,
+                        ),
+                    )
                 }
             }
             customDataKey = null
@@ -756,11 +802,10 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
             groupCustomDataKey = null
             groupCustomDataValue = null
             return KdbContext.GroupCustomData
-
         } else if (ctx == KdbContext.Entry && name.equals(DatabaseKDBXXML.ElemEntry, ignoreCase = true)) {
-
-            if (ctxEntry?.id == DatabaseVersioned.UUID_ZERO)
+            if (ctxEntry?.id == DatabaseVersioned.UUID_ZERO) {
                 ctxEntry?.nodeId = mDatabase.newEntryId()
+            }
 
             if (entryInHistory) {
                 ctxEntry = ctxHistoryBase
@@ -774,8 +819,9 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
         } else if (ctx == KdbContext.EntryTimes && name.equals(DatabaseKDBXXML.ElemTimes, ignoreCase = true)) {
             return KdbContext.Entry
         } else if (ctx == KdbContext.EntryString && name.equals(DatabaseKDBXXML.ElemString, ignoreCase = true)) {
-            if (ctxStringName != null && ctxStringValue != null)
+            if (ctxStringName != null && ctxStringValue != null) {
                 ctxEntry?.putField(ctxStringName!!, ctxStringValue!!)
+            }
             ctxStringName = null
             ctxStringValue = null
 
@@ -791,8 +837,9 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
         } else if (ctx == KdbContext.EntryAutoType && name.equals(DatabaseKDBXXML.ElemAutoType, ignoreCase = true)) {
             return KdbContext.Entry
         } else if (ctx == KdbContext.EntryAutoTypeItem && name.equals(DatabaseKDBXXML.ElemAutoTypeItem, ignoreCase = true)) {
-            if (ctxATName != null && ctxATSeq != null)
+            if (ctxATName != null && ctxATSeq != null) {
                 ctxEntry?.autoType?.add(ctxATName!!, ctxATSeq!!)
+            }
             ctxATName = null
             ctxATSeq = null
 
@@ -869,7 +916,10 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
     }
 
     @Throws(IOException::class, XmlPullParserException::class)
-    private fun readBool(xpp: XmlPullParser, bDefault: Boolean): Boolean {
+    private fun readBool(
+        xpp: XmlPullParser,
+        bDefault: Boolean,
+    ): Boolean {
         val str = readString(xpp)
 
         return when {
@@ -880,7 +930,10 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
     }
 
     @Throws(IOException::class, XmlPullParserException::class)
-    private fun readOptionalBool(xpp: XmlPullParser, bDefault: Boolean? = null): Boolean? {
+    private fun readOptionalBool(
+        xpp: XmlPullParser,
+        bDefault: Boolean? = null,
+    ): Boolean? {
         val str = readString(xpp)
 
         return when {
@@ -909,40 +962,48 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
     }
 
     @Throws(IOException::class, XmlPullParserException::class)
-    private fun readInt(xpp: XmlPullParser, default: Int): Int {
-        return try {
+    private fun readInt(
+        xpp: XmlPullParser,
+        default: Int,
+    ): Int =
+        try {
             readString(xpp).toInt()
         } catch (e: Exception) {
             default
         }
-    }
 
     @Throws(IOException::class, XmlPullParserException::class)
-    private fun readUInt(xpp: XmlPullParser, default: UnsignedInt): UnsignedInt {
-        return try {
+    private fun readUInt(
+        xpp: XmlPullParser,
+        default: UnsignedInt,
+    ): UnsignedInt =
+        try {
             UnsignedInt(readString(xpp).toInt())
         } catch (e: Exception) {
             default
         }
-    }
 
     @Throws(IOException::class, XmlPullParserException::class)
-    private fun readLong(xpp: XmlPullParser, default: Long): Long {
-        return try {
+    private fun readLong(
+        xpp: XmlPullParser,
+        default: Long,
+    ): Long =
+        try {
             readString(xpp).toLong()
         } catch (e: Exception) {
             default
         }
-    }
 
     @Throws(IOException::class, XmlPullParserException::class)
-    private fun readULong(xpp: XmlPullParser, default: UnsignedLong): UnsignedLong {
-        return try {
+    private fun readULong(
+        xpp: XmlPullParser,
+        default: UnsignedLong,
+    ): UnsignedLong =
+        try {
             UnsignedLong(readString(xpp).toLong())
         } catch (e: Exception) {
             default
         }
-    }
 
     @Throws(XmlPullParserException::class, IOException::class)
     private fun readProtectedString(xpp: XmlPullParser): ProtectedString {
@@ -962,7 +1023,6 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
 
     @Throws(XmlPullParserException::class, IOException::class)
     private fun readBinary(xpp: XmlPullParser): BinaryData? {
-
         // Reference Id to a binary already present in binary pool
         val ref = xpp.getAttributeValue(null, DatabaseKDBXXML.AttrRef)
         // New id to a binary
@@ -976,11 +1036,13 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
                 var binaryRetrieve = mDatabase.attachmentPool[id]
                 // Create empty binary if not retrieved in pool
                 if (binaryRetrieve == null) {
-                    binaryRetrieve = mDatabase.buildNewBinaryAttachment(
+                    binaryRetrieve =
+                        mDatabase.buildNewBinaryAttachment(
                             smallSize = false,
                             compression = false,
                             protection = false,
-                            binaryPoolId = id)
+                            binaryPoolId = id,
+                        )
                 }
                 return binaryRetrieve
             }
@@ -995,7 +1057,10 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
     }
 
     @Throws(IOException::class, XmlPullParserException::class)
-    private fun createBinary(binaryId: Int?, xpp: XmlPullParser): BinaryData? {
+    private fun createBinary(
+        binaryId: Int?,
+        xpp: XmlPullParser,
+    ): BinaryData? {
         var compressed = false
         var protected = true
 
@@ -1012,12 +1077,18 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
         }
 
         val base64 = readString(xpp)
-        if (base64.isEmpty())
+        if (base64.isEmpty()) {
             return null
+        }
 
         // Build the new binary and compress
-        val binaryAttachment = mDatabase.buildNewBinaryAttachment(
-                isRAMSufficient.invoke(base64.length.toLong()), compressed, protected, binaryId)
+        val binaryAttachment =
+            mDatabase.buildNewBinaryAttachment(
+                isRAMSufficient.invoke(base64.length.toLong()),
+                compressed,
+                protected,
+                binaryId,
+            )
         try {
             binaryAttachment.getOutputDataStream(mDatabase.binaryCache).use { outputStream ->
                 outputStream.write(Base64.decode(base64, BASE64_FLAG))
@@ -1047,7 +1118,6 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
         return xpp.safeNextText()
     }
 
-
     @Throws(XmlPullParserException::class, IOException::class)
     private fun readProtectedBase64String(xpp: XmlPullParser): ByteArray? {
         if (xpp.attributeCount > 0) {
@@ -1063,23 +1133,23 @@ class DatabaseInputKDBX(database: DatabaseKDBX)
     }
 
     @Throws(XmlPullParserException::class, IOException::class)
-    private fun switchContext(ctxCurrent: KdbContext, ctxNew: KdbContext,
-                              xpp: XmlPullParser): KdbContext {
-
+    private fun switchContext(
+        ctxCurrent: KdbContext,
+        ctxNew: KdbContext,
+        xpp: XmlPullParser,
+    ): KdbContext {
         if (xpp.isEmptyElementTag) {
-            xpp.next()  // Consume the end tag
+            xpp.next() // Consume the end tag
             return ctxCurrent
         }
         return ctxNew
     }
 
     companion object {
-
         private val TAG = DatabaseInputKDBX::class.java.name
 
         private val DEFAULT_HISTORY_DAYS = UnsignedInt(365)
     }
-
 }
 
 @Throws(IOException::class, XmlPullParserException::class)

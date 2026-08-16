@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -31,18 +31,16 @@ import com.kunzisoft.keepass.database.element.icon.IconsManager
 import com.kunzisoft.keepass.database.element.node.NodeId
 import com.kunzisoft.keepass.database.element.node.Type
 import com.kunzisoft.keepass.database.exception.DuplicateUuidDatabaseException
-import java.io.InputStream
 import java.io.UnsupportedEncodingException
 import java.nio.charset.Charset
 import java.util.UUID
 
 abstract class DatabaseVersioned<
-        GroupId,
-        EntryId,
-        Group : GroupVersioned<GroupId, EntryId, Group, Entry>,
-        Entry : EntryVersioned<GroupId, EntryId, Group, Entry>
-        > {
-
+    GroupId,
+    EntryId,
+    Group : GroupVersioned<GroupId, EntryId, Group, Entry>,
+    Entry : EntryVersioned<GroupId, EntryId, Group, Entry>,
+> {
     // Algorithm used to encrypt the database
     abstract var encryptionAlgorithm: EncryptionAlgorithm
     abstract val availableEncryptionAlgorithms: List<EncryptionAlgorithm>
@@ -69,6 +67,7 @@ abstract class DatabaseVersioned<
      * Can be used to temporarily store database elements
      */
     var binaryCache = BinaryCache()
+
     // For now, same number of icons for each database version
     var iconsManager = IconsManager(IconImageStandard.NUMBER_STANDARD_ICONS)
     var attachmentPool = AttachmentPool()
@@ -87,16 +86,19 @@ abstract class DatabaseVersioned<
             }
         }
 
-    fun getAllGroupsWithoutRoot(): List<Group> {
-        return getGroupIndexes().filter { it != rootGroup }
-    }
+    fun getAllGroupsWithoutRoot(): List<Group> = getGroupIndexes().filter { it != rootGroup }
 
-    open fun isValidCredential(password: String?, containsKeyFile: Boolean): Boolean {
-        if (password == null && !containsKeyFile)
+    open fun isValidCredential(
+        password: String?,
+        containsKeyFile: Boolean,
+    ): Boolean {
+        if (password == null && !containsKeyFile) {
             return false
+        }
 
-        if (password == null)
+        if (password == null) {
             return true
+        }
 
         val encoding = passwordEncoding
 
@@ -149,17 +151,11 @@ abstract class DatabaseVersioned<
      * ID number to check for
      * @return True if the ID is used, false otherwise
      */
-    fun isGroupIdUsed(id: NodeId<GroupId>): Boolean {
-        return groupIndexes.containsKey(id)
-    }
+    fun isGroupIdUsed(id: NodeId<GroupId>): Boolean = groupIndexes.containsKey(id)
 
-    fun getGroupIndexes(): Collection<Group> {
-        return groupIndexes.values
-    }
+    fun getGroupIndexes(): Collection<Group> = groupIndexes.values
 
-    open fun getGroupById(id: NodeId<GroupId>): Group? {
-        return this.groupIndexes[id]
-    }
+    open fun getGroupById(id: NodeId<GroupId>): Group? = this.groupIndexes[id]
 
     fun addGroupIndex(group: Group) {
         val groupId = group.nodeId
@@ -181,21 +177,13 @@ abstract class DatabaseVersioned<
         this.groupIndexes.remove(group.nodeId)
     }
 
-    fun isEntryIdUsed(id: NodeId<EntryId>): Boolean {
-        return entryIndexes.containsKey(id)
-    }
+    fun isEntryIdUsed(id: NodeId<EntryId>): Boolean = entryIndexes.containsKey(id)
 
-    fun getEntryIndexes(): Collection<Entry> {
-        return entryIndexes.values
-    }
+    fun getEntryIndexes(): Collection<Entry> = entryIndexes.values
 
-    fun getEntryById(id: NodeId<EntryId>): Entry? {
-        return this.entryIndexes[id]
-    }
+    fun getEntryById(id: NodeId<EntryId>): Entry? = this.entryIndexes[id]
 
-    fun findEntry(predicate: (Entry) -> Boolean): Entry? {
-        return this.entryIndexes.values.find(predicate)
-    }
+    fun findEntry(predicate: (Entry) -> Boolean): Entry? = this.entryIndexes.values.find(predicate)
 
     fun addEntryIndex(entry: Entry) {
         val entryId = entry.nodeId
@@ -232,7 +220,10 @@ abstract class DatabaseVersioned<
 
     abstract fun getStandardIcon(iconId: Int): IconImageStandard
 
-    fun addGroupTo(newGroup: Group, parent: Group?) {
+    fun addGroupTo(
+        newGroup: Group,
+        parent: Group?,
+    ) {
         // Add tree to parent tree
         parent?.addChildGroup(newGroup)
         newGroup.parent = parent
@@ -247,13 +238,19 @@ abstract class DatabaseVersioned<
         }
     }
 
-    open fun removeGroupFrom(groupToRemove: Group, parent: Group?) {
+    open fun removeGroupFrom(
+        groupToRemove: Group,
+        parent: Group?,
+    ) {
         // Remove tree from parent tree
         parent?.removeChildGroup(groupToRemove)
         removeGroupIndex(groupToRemove)
     }
 
-    open fun addEntryTo(newEntry: Entry, parent: Group?) {
+    open fun addEntryTo(
+        newEntry: Entry,
+        parent: Group?,
+    ) {
         // Add entry to parent
         parent?.addChildEntry(newEntry)
         newEntry.parent = parent
@@ -268,7 +265,10 @@ abstract class DatabaseVersioned<
         }
     }
 
-    open fun removeEntryFrom(entryToRemove: Entry, parent: Group?) {
+    open fun removeEntryFrom(
+        entryToRemove: Entry,
+        parent: Group?,
+    ) {
         // Remove entry from parent
         parent?.removeChildEntry(entryToRemove)
         removeEntryIndex(entryToRemove)
@@ -310,7 +310,6 @@ abstract class DatabaseVersioned<
     }
 
     companion object {
-
         private const val TAG = "DatabaseVersioned"
 
         val UUID_ZERO = UUID(0, 0)

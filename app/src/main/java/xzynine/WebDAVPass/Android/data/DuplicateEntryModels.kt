@@ -35,11 +35,11 @@ data class DuplicateEntryInfo(
     val hasPassword: Boolean,
     val modifiedTime: Long,
     val fieldValues: Map<String, String> = emptyMap(),
-    val attachmentNames: List<String> = emptyList()
+    val attachmentNames: List<String> = emptyList(),
 ) {
     /** 字段显示标签。 */
-    fun fieldDisplayName(key: String): String {
-        return when (key) {
+    fun fieldDisplayName(key: String): String =
+        when (key) {
             MergeFieldKeys.TITLE -> "标题"
             MergeFieldKeys.ACCOUNT -> "账号"
             MergeFieldKeys.PASSWORD -> "密码"
@@ -48,12 +48,9 @@ data class DuplicateEntryInfo(
             MergeFieldKeys.TAGS -> "标签"
             else -> key
         }
-    }
 
     /** 某字段的值（用于展示，密码等敏感字段由调用方决定是否脱敏）。 */
-    fun fieldValue(key: String): String {
-        return fieldValues[key] ?: ""
-    }
+    fun fieldValue(key: String): String = fieldValues[key] ?: ""
 }
 
 /**
@@ -65,5 +62,5 @@ data class DuplicateEntryInfo(
 data class DuplicateGroupInfo(
     val groupId: Int,
     val entries: List<DuplicateEntryInfo>,
-    val isConflict: Boolean
+    val isConflict: Boolean,
 )

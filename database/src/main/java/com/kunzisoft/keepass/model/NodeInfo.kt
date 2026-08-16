@@ -10,7 +10,6 @@ import com.kunzisoft.keepass.utils.readParcelableCompat
 import com.kunzisoft.keepass.utils.writeBooleanCompat
 
 open class NodeInfo() : Parcelable {
-
     var title: String = ""
     var icon: IconImage = IconImage()
     var creationTime: DateInstant = DateInstant()
@@ -29,7 +28,10 @@ open class NodeInfo() : Parcelable {
         customData = parcel.readParcelableCompat() ?: customData
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeString(title)
         parcel.writeParcelable(icon, flags)
         parcel.writeParcelable(creationTime, flags)
@@ -39,9 +41,7 @@ open class NodeInfo() : Parcelable {
         parcel.writeParcelable(customData, flags)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -70,12 +70,8 @@ open class NodeInfo() : Parcelable {
     }
 
     companion object CREATOR : Parcelable.Creator<NodeInfo> {
-        override fun createFromParcel(parcel: Parcel): NodeInfo {
-            return NodeInfo(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): NodeInfo = NodeInfo(parcel)
 
-        override fun newArray(size: Int): Array<NodeInfo?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<NodeInfo?> = arrayOfNulls(size)
     }
 }

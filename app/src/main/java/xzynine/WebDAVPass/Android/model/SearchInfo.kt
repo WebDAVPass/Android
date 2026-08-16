@@ -9,20 +9,22 @@ class SearchInfo : Parcelable {
     var tag: String? = null
     var applicationId: String? = null
         set(value) {
-            field = when {
-                value == null -> null
-                Regex(APPLICATION_ID_REGEX).matches(value) -> value
-                else -> null
-            }
+            field =
+                when {
+                    value == null -> null
+                    Regex(APPLICATION_ID_REGEX).matches(value) -> value
+                    else -> null
+                }
         }
     var webDomain: String? = null
         set(value) {
-            field = when {
-                value == null -> null
-                Regex(WEB_DOMAIN_REGEX).matches(value) -> value
-                Regex(WEB_IP_REGEX).matches(value) -> value
-                else -> null
-            }
+            field =
+                when {
+                    value == null -> null
+                    Regex(WEB_DOMAIN_REGEX).matches(value) -> value
+                    Regex(WEB_IP_REGEX).matches(value) -> value
+                    else -> null
+                }
         }
     var webScheme: String? = null
         get() {
@@ -55,11 +57,12 @@ class SearchInfo : Parcelable {
         otpString = if (readOtp.isNullOrEmpty()) null else readOtp
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeByte(if (manualSelection) 1 else 0)
         parcel.writeString(tag ?: "")
         parcel.writeString(applicationId ?: "")
@@ -75,13 +78,12 @@ class SearchInfo : Parcelable {
         return toString()
     }
 
-    fun containsOnlyNullValues(): Boolean {
-        return tag == null
-                && applicationId == null
-                && webDomain == null
-                && webScheme == null
-                && otpString == null
-    }
+    fun containsOnlyNullValues(): Boolean =
+        tag == null &&
+            applicationId == null &&
+            webDomain == null &&
+            webScheme == null &&
+            otpString == null
 
     val isTagSearch: Boolean
         get() = tag != null
@@ -119,13 +121,9 @@ class SearchInfo : Parcelable {
         return result
     }
 
-    override fun toString(): String {
-        return otpString ?: webDomain ?: applicationId ?: tag ?: ""
-    }
+    override fun toString(): String = otpString ?: webDomain ?: applicationId ?: tag ?: ""
 
-    fun toRegisterInfo(): RegisterInfo {
-        return RegisterInfo(this)
-    }
+    fun toRegisterInfo(): RegisterInfo = RegisterInfo(this)
 
     companion object {
         const val APPLICATION_ID_REGEX = "^(?:[a-zA-Z]+(?:\\d*[a-zA-Z_]*)*)(?:\\.[a-zA-Z]+(?:\\d*[a-zA-Z_]*)*)+\$"
@@ -133,14 +131,11 @@ class SearchInfo : Parcelable {
         const val WEB_IP_REGEX = "^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\$"
 
         @JvmField
-        val CREATOR: Parcelable.Creator<SearchInfo> = object : Parcelable.Creator<SearchInfo> {
-            override fun createFromParcel(parcel: Parcel): SearchInfo {
-                return SearchInfo(parcel)
-            }
+        val CREATOR: Parcelable.Creator<SearchInfo> =
+            object : Parcelable.Creator<SearchInfo> {
+                override fun createFromParcel(parcel: Parcel): SearchInfo = SearchInfo(parcel)
 
-            override fun newArray(size: Int): Array<SearchInfo?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<SearchInfo?> = arrayOfNulls(size)
             }
-        }
     }
 }

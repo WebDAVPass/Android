@@ -45,12 +45,12 @@ import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.icon.extended.UploadCloud
-import xzynine.WebDAVPass.Android.ui.component.Preference
-import xzynine.WebDAVPass.Android.ui.component.PreferenceType
-import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.ui.Dialog.PasswordInputDialog
+import xzynine.WebDAVPass.Android.ui.component.Preference
+import xzynine.WebDAVPass.Android.ui.component.PreferenceType
+import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.PasswordStrength
 import xzynine.WebDAVPass.Android.util.strengthLabel
@@ -64,7 +64,7 @@ import xzynine.WebDAVPass.Android.util.strengthLabel
 @Composable
 fun DatabaseSettingsScreen(
     viewModel: TokenViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -90,32 +90,34 @@ fun DatabaseSettingsScreen(
     var pendingMergeUri by remember { mutableStateOf<Uri?>(null) }
     var mergeLoading by remember { mutableStateOf(false) }
 
-    val exportLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
-        onResult = { uri ->
-            if (uri == null) {
-                return@rememberLauncherForActivityResult
-            }
-            coroutineScope.launch {
-                val ok = viewModel.exportCurrentDatabase(uri)
-                if (ok) {
-                    ToastUtils.showShortToast(context, "数据库已导出")
-                } else {
-                    ToastUtils.showShortToast(context, "导出失败")
+    val exportLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.CreateDocument("application/octet-stream"),
+            onResult = { uri ->
+                if (uri == null) {
+                    return@rememberLauncherForActivityResult
                 }
-            }
-        }
-    )
+                coroutineScope.launch {
+                    val ok = viewModel.exportCurrentDatabase(uri)
+                    if (ok) {
+                        ToastUtils.showShortToast(context, "数据库已导出")
+                    } else {
+                        ToastUtils.showShortToast(context, "导出失败")
+                    }
+                }
+            },
+        )
 
-    val mergeLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument(),
-        onResult = { uri ->
-            if (uri == null) {
-                return@rememberLauncherForActivityResult
-            }
-            pendingMergeUri = uri
-        }
-    )
+    val mergeLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+            onResult = { uri ->
+                if (uri == null) {
+                    return@rememberLauncherForActivityResult
+                }
+                pendingMergeUri = uri
+            },
+        )
 
     val newPasswordStrengthBits = remember(newPassword) { PasswordStrength.estimateBits(newPassword) }
     val newPasswordIsWeak = newPassword.isNotEmpty() && PasswordStrength.isWeak(newPassword)
@@ -126,21 +128,24 @@ fun DatabaseSettingsScreen(
     var kdfEngineName by remember { mutableStateOf("未知") }
 
     // Argon2 引擎默认参数（用于切换 KDF 时预填；memoryUsage 单位为字节）
-    val argon2Defaults = remember {
-        val engine = com.kunzisoft.keepass.database.crypto.kdf.KdfFactory.argon2dKdf
-        Triple(
-            (engine.defaultMemoryUsage / 1024 / 1024).coerceAtLeast(1), // 字节 → MiB
-            engine.defaultParallelism.coerceAtLeast(1),
-            engine.defaultKeyRounds.coerceAtLeast(1)
-        )
-    }
+    val argon2Defaults =
+        remember {
+            val engine = com.kunzisoft.keepass.database.crypto.kdf.KdfFactory.argon2dKdf
+            Triple(
+                (engine.defaultMemoryUsage / 1024 / 1024).coerceAtLeast(1), // 字节 → MiB
+                engine.defaultParallelism.coerceAtLeast(1),
+                engine.defaultKeyRounds.coerceAtLeast(1),
+            )
+        }
 
     fun switchKdf(index: Int) {
         kdfSelectedIndex = index
         kdfEngineName = kdfOptions[index]
         if (kdfEngineName == "AES") {
             // 预填 AES 默认轮数
-            keyRounds = com.kunzisoft.keepass.database.crypto.kdf.KdfFactory.aesKdf.defaultKeyRounds.toString()
+            keyRounds =
+                com.kunzisoft.keepass.database.crypto.kdf.KdfFactory.aesKdf.defaultKeyRounds
+                    .toString()
         } else {
             // 切换为 Argon2 时预填引擎默认参数，避免沿用 AES 的无效值
             memoryUsageMb = argon2Defaults.first.toString()
@@ -153,7 +158,8 @@ fun DatabaseSettingsScreen(
         val info = viewModel.loadDatabaseSettingsInfo()
         if (info != null) {
             kdfEngineName = info.kdfEngineName
-            kdfSelectedIndex = kdfOptions.indexOfFirst { it == info.kdfEngineName }
+            kdfSelectedIndex = kdfOptions
+                .indexOfFirst { it == info.kdfEngineName }
                 .takeIf { it >= 0 } ?: -1
             keyRounds = info.keyRounds.toString()
             // memoryUsage 单位为字节：换算为 MiB 展示
@@ -164,50 +170,53 @@ fun DatabaseSettingsScreen(
         loading = false
     }
 
-    val keyFilePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        uri ?: return@rememberLauncherForActivityResult
-        runCatching {
-            context.contentResolver.openInputStream(uri)?.use { input ->
-                val buffer = java.io.ByteArrayOutputStream(8 * 1024)
-                val chunk = ByteArray(8 * 1024)
-                var total = 0
-                while (true) {
-                    val read = input.read(chunk)
-                    if (read < 0) break
-                    total += read
-                    if (total > 1024 * 1024) {
-                        throw IllegalStateException("密钥文件过大")
+    val keyFilePicker =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            uri ?: return@rememberLauncherForActivityResult
+            runCatching {
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    val buffer = java.io.ByteArrayOutputStream(8 * 1024)
+                    val chunk = ByteArray(8 * 1024)
+                    var total = 0
+                    while (true) {
+                        val read = input.read(chunk)
+                        if (read < 0) break
+                        total += read
+                        if (total > 1024 * 1024) {
+                            throw IllegalStateException("密钥文件过大")
+                        }
+                        buffer.write(chunk, 0, read)
                     }
-                    buffer.write(chunk, 0, read)
+                    val bytes = buffer.toByteArray()
+                    if (bytes.isNotEmpty()) {
+                        keyFileName = uri.lastPathSegment
+                            ?.substringAfterLast('/')
+                            ?.takeIf { it.isNotBlank() } ?: "keyfile"
+                        keyFileData = bytes
+                    }
                 }
-                val bytes = buffer.toByteArray()
-                if (bytes.isNotEmpty()) {
-                    keyFileName = uri.lastPathSegment?.substringAfterLast('/')
-                        ?.takeIf { it.isNotBlank() } ?: "keyfile"
-                    keyFileData = bytes
-                }
+            }.onFailure {
+                ToastUtils.showShortToast(context, "密钥文件读取失败：${it.message ?: "未知错误"}")
             }
-        }.onFailure {
-            ToastUtils.showShortToast(context, "密钥文件读取失败：${it.message ?: "未知错误"}")
         }
-    }
 
     fun save() {
         // 仅对用户实际选中的 KDF 校验参数；未知 KDF（-1）时不修改 KDF，跳过参数校验
         val selectedKdf = kdfOptions.getOrNull(kdfSelectedIndex)
         val kdfIsSelected = kdfSelectedIndex >= 0
-        val error = when {
-            oldPassword.isBlank() -> "请输入当前主密码"
-            newPassword.isBlank() -> "请输入新主密码"
-            newPassword != confirmPassword -> "两次新主密码不一致"
-            selectedKdf == "AES" && keyRounds.toLongOrNull()?.let { it > 0 } != true -> "轮数必须为正数"
-            selectedKdf != null && selectedKdf != "AES" && memoryUsageMb.toLongOrNull()?.let { it > 0 } != true -> "内存占用必须为正数"
-            selectedKdf != null && selectedKdf != "AES" && parallelism.toLongOrNull()?.let { it > 0 } != true -> "并行度必须为正数"
-            selectedKdf != null && selectedKdf != "AES" && keyRounds.toLongOrNull()?.let { it > 0 } != true -> "迭代次数必须为正数"
-            else -> ""
-        }
+        val error =
+            when {
+                oldPassword.isBlank() -> "请输入当前主密码"
+                newPassword.isBlank() -> "请输入新主密码"
+                newPassword != confirmPassword -> "两次新主密码不一致"
+                selectedKdf == "AES" && keyRounds.toLongOrNull()?.let { it > 0 } != true -> "轮数必须为正数"
+                selectedKdf != null && selectedKdf != "AES" && memoryUsageMb.toLongOrNull()?.let { it > 0 } != true -> "内存占用必须为正数"
+                selectedKdf != null && selectedKdf != "AES" && parallelism.toLongOrNull()?.let { it > 0 } != true -> "并行度必须为正数"
+                selectedKdf != null && selectedKdf != "AES" && keyRounds.toLongOrNull()?.let { it > 0 } != true -> "迭代次数必须为正数"
+                else -> ""
+            }
         status = error
         if (error.isNotBlank()) {
             return
@@ -218,9 +227,10 @@ fun DatabaseSettingsScreen(
             status = "新主密码强度较低（${newPasswordStrengthBits.toInt()} bits），建议增加长度或组合大小写/数字/符号；再次点击「保存设置」可强制使用。"
             return
         }
-            coroutineScope.launch {
-                saving = true
-                val ok = viewModel.changeDatabaseSettings(
+        coroutineScope.launch {
+            saving = true
+            val ok =
+                viewModel.changeDatabaseSettings(
                     oldPassword = oldPassword,
                     newMasterPassword = newPassword,
                     newKeyFileData = keyFileData,
@@ -229,16 +239,16 @@ fun DatabaseSettingsScreen(
                     keyRounds = if (kdfIsSelected) keyRounds.toLongOrNull() else null,
                     memoryUsage = if (kdfIsSelected) memoryUsageMb.toLongOrNull()?.times(1024 * 1024) else null,
                     parallelism = if (kdfIsSelected) parallelism.toLongOrNull() else null,
-                    isCompressionEnabled = isCompressionEnabled
+                    isCompressionEnabled = isCompressionEnabled,
                 )
-                saving = false
-                if (ok) {
-                    ToastUtils.showShortToast(context, "数据库设置已保存")
-                    onNavigateBack()
-                } else {
-                    status = "保存失败：当前主密码错误或 KDF 参数无效（Argon2 内存/并行度/迭代次数需为正数）"
-                }
+            saving = false
+            if (ok) {
+                ToastUtils.showShortToast(context, "数据库设置已保存")
+                onNavigateBack()
+            } else {
+                status = "保存失败：当前主密码错误或 KDF 参数无效（Argon2 内存/并行度/迭代次数需为正数）"
             }
+        }
     }
 
     Scaffold(
@@ -246,26 +256,28 @@ fun DatabaseSettingsScreen(
         topBar = {
             SettingsTopAppBar(
                 title = "数据库设置",
-                onNavigateBack = onNavigateBack
+                onNavigateBack = onNavigateBack,
             )
-        }
+        },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(it)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(it)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     if (loading) {
                         Text(text = "加载中...", fontSize = 14.sp)
@@ -273,12 +285,15 @@ fun DatabaseSettingsScreen(
                         Text(text = "修改主密码", modifier = Modifier.padding(top = 4.dp))
                         TextField(
                             value = oldPassword,
-                            onValueChange = { oldPassword = it; status = "" },
+                            onValueChange = {
+                                oldPassword = it
+                                status = ""
+                            },
                             label = "当前主密码",
                             visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         )
                         TextField(
                             value = newPassword,
@@ -291,52 +306,63 @@ fun DatabaseSettingsScreen(
                             visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         )
                         if (newPassword.isNotEmpty()) {
                             Text(
                                 text = "强度：${strengthLabel(newPasswordStrengthBits)}（${newPasswordStrengthBits.toInt()} bits）",
                                 fontSize = 12.sp,
-                                color = if (newPasswordStrengthBits < PasswordStrength.WEAK_PASSWORD_THRESHOLD_BITS)
-                                    MiuixTheme.colorScheme.error
-                                else MiuixTheme.colorScheme.primary
+                                color =
+                                    if (newPasswordStrengthBits < PasswordStrength.WEAK_PASSWORD_THRESHOLD_BITS) {
+                                        MiuixTheme.colorScheme.error
+                                    } else {
+                                        MiuixTheme.colorScheme.primary
+                                    },
                             )
                         }
                         TextField(
                             value = confirmPassword,
-                            onValueChange = { confirmPassword = it; status = "" },
+                            onValueChange = {
+                                confirmPassword = it
+                                status = ""
+                            },
                             label = "确认新主密码",
                             visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
                             singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                            modifier = Modifier.fillMaxWidth(),
                         )
                         Button(onClick = { showPassword = !showPassword }) {
                             Text(if (showPassword) "隐藏密码" else "显示密码")
                         }
 
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { keyFilePicker.launch(arrayOf("application/octet-stream", "*/*")) },
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { keyFilePicker.launch(arrayOf("application/octet-stream", "*/*")) },
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
                                 imageVector = MiuixIcons.Lock,
                                 contentDescription = "密钥文件",
-                                tint = MiuixTheme.colorScheme.primary
+                                tint = MiuixTheme.colorScheme.primary,
                             )
                             Column(modifier = Modifier.weight(1f).padding(start = 8.dp)) {
                                 Text(
                                     text = "新密钥文件（可选）",
                                     fontSize = 13.sp,
-                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
                                 )
                                 Text(
                                     text = keyFileName.ifBlank { "点击选择密钥文件，不选则沿用当前" },
                                     fontSize = 14.sp,
-                                    color = if (keyFileName.isBlank()) MiuixTheme.colorScheme.primary
-                                    else MiuixTheme.colorScheme.onSurface
+                                    color =
+                                        if (keyFileName.isBlank()) {
+                                            MiuixTheme.colorScheme.primary
+                                        } else {
+                                            MiuixTheme.colorScheme.onSurface
+                                        },
                                 )
                             }
                             if (keyFileName.isNotBlank()) {
@@ -347,7 +373,7 @@ fun DatabaseSettingsScreen(
                                     Icon(
                                         imageVector = MiuixIcons.Delete,
                                         contentDescription = "清除密钥文件",
-                                        tint = MiuixTheme.colorScheme.onSurfaceSecondary
+                                        tint = MiuixTheme.colorScheme.onSurfaceSecondary,
                                     )
                                 }
                             }
@@ -359,10 +385,11 @@ fun DatabaseSettingsScreen(
 
                         Button(
                             onClick = { save() },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp),
-                            enabled = !saving
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 8.dp),
+                            enabled = !saving,
                         ) {
                             Text(if (saving) "保存中..." else "保存设置")
                         }
@@ -372,13 +399,14 @@ fun DatabaseSettingsScreen(
 
             if (!loading) {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
                         Text(text = "加密与压缩")
                         Preference(
@@ -392,12 +420,12 @@ fun DatabaseSettingsScreen(
                                 Icon(
                                     modifier = Modifier.padding(end = 16.dp),
                                     imageVector = MiuixIcons.Settings,
-                                    contentDescription = "KDF 算法"
+                                    contentDescription = "KDF 算法",
                                 )
                             },
                             onSelectedIndexChange = { index ->
                                 switchKdf(index)
-                            }
+                            },
                         )
                         // 按选中索引决定参数输入框：未知 KDF 隐藏全部参数；AES 仅显示轮数；Argon2 显示全部参数
                         when {
@@ -406,7 +434,7 @@ fun DatabaseSettingsScreen(
                                 Text(
                                     text = "当前 KDF 不在可选范围内，保存时将保留原算法与参数",
                                     fontSize = 13.sp,
-                                    color = MiuixTheme.colorScheme.onSurfaceSecondary
+                                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
                                 )
                             }
                             kdfEngineName == "AES" -> {
@@ -416,7 +444,7 @@ fun DatabaseSettingsScreen(
                                     label = "加密轮数（AES-KDF）",
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                             else -> {
@@ -426,7 +454,7 @@ fun DatabaseSettingsScreen(
                                     label = "内存占用（MB，Argon2）",
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                                 TextField(
                                     value = parallelism,
@@ -434,7 +462,7 @@ fun DatabaseSettingsScreen(
                                     label = "并行度（Argon2）",
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                                 TextField(
                                     value = keyRounds,
@@ -442,7 +470,7 @@ fun DatabaseSettingsScreen(
                                     label = "迭代次数（Argon2）",
                                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                     singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier.fillMaxWidth(),
                                 )
                             }
                         }
@@ -451,7 +479,7 @@ fun DatabaseSettingsScreen(
                             title = "启用压缩",
                             summary = "保存时使用 GZIP 压缩数据库内容",
                             checked = isCompressionEnabled,
-                            onCheckedChange = { isCompressionEnabled = it }
+                            onCheckedChange = { isCompressionEnabled = it },
                         )
                     }
                 }
@@ -459,7 +487,7 @@ fun DatabaseSettingsScreen(
 
             if (!loading) {
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Preference(
                         type = PreferenceType.Arrow,
@@ -481,7 +509,7 @@ fun DatabaseSettingsScreen(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Preference(
                         type = PreferenceType.Arrow,
@@ -527,7 +555,7 @@ fun DatabaseSettingsScreen(
                                     pendingMergeUri = null
                                 }
                             }
-                        }
+                        },
                     )
                 }
             }

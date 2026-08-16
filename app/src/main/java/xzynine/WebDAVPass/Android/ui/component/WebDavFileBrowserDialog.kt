@@ -57,9 +57,6 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
-import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
-import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.File
@@ -69,6 +66,9 @@ import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Music
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Tune
+import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import xzynine.WebDAVPass.Android.BuildConfig
 import java.net.URLEncoder
 import java.text.Collator
@@ -77,7 +77,6 @@ import java.text.Collator
  * 文件浏览选择模式
  */
 enum class WebDavBrowseMode {
-
     /**
      * 选择文件
      */
@@ -86,14 +85,13 @@ enum class WebDavBrowseMode {
     /**
      * 选择当前目录
      */
-    PICK_DIRECTORY
+    PICK_DIRECTORY,
 }
 
 /**
  * 列表排序字段
  */
 private enum class BrowserSortField {
-
     /**
      * 按名称
      */
@@ -112,7 +110,7 @@ private enum class BrowserSortField {
     /**
      * 按类型
      */
-    EXTENSION
+    EXTENSION,
 }
 
 private const val LOG_TAG = "tag:WebDAV-UI"
@@ -160,7 +158,7 @@ fun WebDavFileBrowserDialog(
     title: String = "浏览 WebDAV 文件",
     fileExtensionFilter: String? = null,
     onDismiss: () -> Unit,
-    onSelected: (baseUrl: String, relativePath: String) -> Unit
+    onSelected: (baseUrl: String, relativePath: String) -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -191,33 +189,31 @@ fun WebDavFileBrowserDialog(
     /**
      * 保证服务器根地址以 "/" 结尾
      */
-    fun normalizeServerRootUrl(raw: String): String {
-        return if (raw.endsWith('/')) raw else "$raw/"
-    }
+    fun normalizeServerRootUrl(raw: String): String = if (raw.endsWith('/')) raw else "$raw/"
 
     /**
      * 规范化相对路径：去除首尾斜杠并合并重复斜杠
      */
-    fun normalizeRelativePath(path: String): String {
-        return path.trim().trim('/').replace("//", "/")
-    }
+    fun normalizeRelativePath(path: String): String = path.trim().trim('/').replace("//", "/")
 
     /**
      * 对相对路径逐段 URL 编码
      */
-    fun encodeRelativePath(path: String): String {
-        return normalizeRelativePath(path)
+    fun encodeRelativePath(path: String): String =
+        normalizeRelativePath(path)
             .split('/')
             .filter { it.isNotBlank() }
             .joinToString("/") {
                 URLEncoder.encode(it, Charsets.UTF_8.name()).replace("+", "%20")
             }
-    }
 
     /**
      * 拼接文件完整地址（不带尾部斜杠）
      */
-    fun buildFileUrl(baseUrl: String, relativePath: String): String {
+    fun buildFileUrl(
+        baseUrl: String,
+        relativePath: String,
+    ): String {
         val root = normalizeServerRootUrl(baseUrl)
         val rel = encodeRelativePath(relativePath)
         return if (rel.isBlank()) root else "$root$rel"
@@ -226,7 +222,10 @@ fun WebDavFileBrowserDialog(
     /**
      * 拼接目录完整地址（带尾部斜杠）
      */
-    fun buildDirectoryUrl(baseUrl: String, relativeDirectory: String): String {
+    fun buildDirectoryUrl(
+        baseUrl: String,
+        relativeDirectory: String,
+    ): String {
         val root = normalizeServerRootUrl(baseUrl)
         val rel = encodeRelativePath(relativeDirectory)
         return if (rel.isBlank()) root else "$root$rel/"
@@ -235,37 +234,38 @@ fun WebDavFileBrowserDialog(
     /**
      * 判断文件是否满足扩展名过滤
      */
-    fun matchesFilter(entry: WebDavFileEntry): Boolean {
-        return fileExtensionFilter.isNullOrBlank() ||
+    fun matchesFilter(entry: WebDavFileEntry): Boolean =
+        fileExtensionFilter.isNullOrBlank() ||
             entry.name.endsWith(fileExtensionFilter, ignoreCase = true)
-    }
 
     /**
      * 对条目排序：目录始终在前，字段排序方向可切换（仅内存态，不持久化）
      */
     fun sortEntries(raw: List<WebDavFileEntry>): List<WebDavFileEntry> {
         val collator = Collator.getInstance()
-        val fieldCmp = Comparator<WebDavFileEntry> { a, b ->
-            when (sortField) {
-                BrowserSortField.NAME -> collator.compare(a.name, b.name)
-                BrowserSortField.SIZE -> a.sizeBytes.compareTo(b.sizeBytes)
-                BrowserSortField.TIME -> a.modifiedAt.compareTo(b.modifiedAt)
-                BrowserSortField.EXTENSION ->
-                    collator.compare(a.name.substringAfterLast('.'), b.name.substringAfterLast('.'))
+        val fieldCmp =
+            Comparator<WebDavFileEntry> { a, b ->
+                when (sortField) {
+                    BrowserSortField.NAME -> collator.compare(a.name, b.name)
+                    BrowserSortField.SIZE -> a.sizeBytes.compareTo(b.sizeBytes)
+                    BrowserSortField.TIME -> a.modifiedAt.compareTo(b.modifiedAt)
+                    BrowserSortField.EXTENSION ->
+                        collator.compare(a.name.substringAfterLast('.'), b.name.substringAfterLast('.'))
+                }
             }
-        }
         val dirCmp = compareByDescending<WebDavFileEntry> { it.isDirectory }
         return raw.sortedWith(
-            if (sortDescending) dirCmp.then(fieldCmp.reversed()) else dirCmp.then(fieldCmp)
+            if (sortDescending) dirCmp.then(fieldCmp.reversed()) else dirCmp.then(fieldCmp),
         )
     }
 
     /**
      * 展示列表（排序后的条目）
      */
-    val displayedEntries = remember(entries, sortField, sortDescending) {
-        sortEntries(entries)
-    }
+    val displayedEntries =
+        remember(entries, sortField, sortDescending) {
+            sortEntries(entries)
+        }
 
     /**
      * 加载指定相对目录的列表
@@ -279,10 +279,12 @@ fun WebDavFileBrowserDialog(
                 val baseUrl = normalizeServerRootUrl(serverUrl)
                 val dirUrl = buildDirectoryUrl(baseUrl, relativeDirectory)
                 logDebug("loadDirectory start, dir=$relativeDirectory")
-                val raw = WebDav(dirUrl, Authorization(username, password)).listFiles()
-                    .map { WebDavFileEntry.fromWebDavFile(it, normalizeRelativePath(relativeDirectory)) }
-                    .filter { it.isDirectory || matchesFilter(it) }
-                    .distinctBy { it.relativePath }
+                val raw =
+                    WebDav(dirUrl, Authorization(username, password))
+                        .listFiles()
+                        .map { WebDavFileEntry.fromWebDavFile(it, normalizeRelativePath(relativeDirectory)) }
+                        .filter { it.isDirectory || matchesFilter(it) }
+                        .distinctBy { it.relativePath }
                 logDebug("loadDirectory done, size=${raw.size}, dir=$relativeDirectory")
                 raw
             }.let { raw ->
@@ -305,16 +307,20 @@ fun WebDavFileBrowserDialog(
         working = true
         message = null
         try {
-            val fileName = withContext(Dispatchers.IO) {
-                androidx.documentfile.provider.DocumentFile.fromSingleUri(context, uri)?.name
-                    ?: uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null }
-                    ?: "未命名文件"
-            }
+            val fileName =
+                withContext(Dispatchers.IO) {
+                    androidx.documentfile.provider.DocumentFile
+                        .fromSingleUri(context, uri)
+                        ?.name
+                        ?: uri.lastPathSegment?.substringAfterLast('/')?.ifBlank { null }
+                        ?: "未命名文件"
+                }
             val dirPrefix = normalizeRelativePath(currentDirectory)
-            val url = buildFileUrl(
-                serverUrl,
-                if (dirPrefix.isBlank()) fileName else "$dirPrefix/$fileName"
-            )
+            val url =
+                buildFileUrl(
+                    serverUrl,
+                    if (dirPrefix.isBlank()) fileName else "$dirPrefix/$fileName",
+                )
             withContext(Dispatchers.IO) {
                 // 流式上传：Uri 先落临时文件再走 File 上传，避免大文件 readBytes() 全量进内存
                 val tempFile = java.io.File.createTempFile("upload", null, context.cacheDir)
@@ -393,13 +399,14 @@ fun WebDavFileBrowserDialog(
     }
 
     // 上传文件选择器
-    val uploadLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            coroutineScope.launch { uploadFrom(uri) }
+    val uploadLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.OpenDocument(),
+        ) { uri ->
+            if (uri != null) {
+                coroutineScope.launch { uploadFrom(uri) }
+            }
         }
-    }
 
     // 打开即自动连接并加载初始目录，失败时由浏览视图展示错误提示
     LaunchedEffect(Unit) {
@@ -410,137 +417,144 @@ fun WebDavFileBrowserDialog(
         show = true,
         title = title,
         onDismissRequest = onDismiss,
-        defaultWindowInsetsPadding = true
+        defaultWindowInsetsPadding = true,
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(500.dp)
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(500.dp)
+                    .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             when {
-                showDeleteConfirm && detailEntry != null -> DeleteConfirmView(
-                    entry = detailEntry!!,
-                    working = working,
-                    onCancel = { showDeleteConfirm = false },
-                    onConfirm = {
-                        showDeleteConfirm = false
-                        detailEntry?.let { target ->
-                            coroutineScope.launch { deleteEntry(target) }
-                        }
-                    }
-                )
-
-                detailEntry != null -> DetailView(
-                    entry = detailEntry!!,
-                    working = working,
-                    message = message,
-                    onBack = {
-                        detailEntry = null
-                        message = null
-                    },
-                    onDownload = {
-                        detailEntry?.let { target ->
-                            coroutineScope.launch { downloadEntry(target) }
-                        }
-                    },
-                    onDelete = { showDeleteConfirm = true }
-                )
-
-                showPathDialog -> PathJumpView(
-                    pathInput = pathInput,
-                    onPathInputChange = { pathInput = it },
-                    onCancel = { showPathDialog = false },
-                    onConfirm = {
-                        showPathDialog = false
-                        coroutineScope.launch { loadDirectory(pathInput) }
-                    }
-                )
-
-                showCreateFolderDialog -> CreateFolderView(
-                    newFolderName = newFolderName,
-                    onNewFolderNameChange = { newFolderName = it },
-                    working = working,
-                    onCancel = { showCreateFolderDialog = false },
-                    onConfirm = {
-                        showCreateFolderDialog = false
-                        coroutineScope.launch {
-                            working = true
-                            message = null
-                            try {
-                                val dirPrefix = normalizeRelativePath(currentDirectory)
-                                val url = buildDirectoryUrl(
-                                    serverUrl,
-                                    if (dirPrefix.isBlank()) {
-                                        newFolderName.trim()
-                                    } else {
-                                        "$dirPrefix/${newFolderName.trim()}"
-                                    }
-                                )
-                                withContext(Dispatchers.IO) {
-                                    WebDav(url, Authorization(username, password)).makeAsDir()
-                                }
-                                logDebug("create folder done, name=${newFolderName.trim()}")
-                                message = "创建成功：${newFolderName.trim()}"
-                                loadDirectory(currentDirectory)
-                            } catch (e: Exception) {
-                                val msg = e.message.orEmpty()
-                                Log.e(LOG_TAG, "create folder failed, message=$msg")
-                                message = "创建失败：${msg.ifBlank { "未知错误" }}"
-                            } finally {
-                                working = false
+                showDeleteConfirm && detailEntry != null ->
+                    DeleteConfirmView(
+                        entry = detailEntry!!,
+                        working = working,
+                        onCancel = { showDeleteConfirm = false },
+                        onConfirm = {
+                            showDeleteConfirm = false
+                            detailEntry?.let { target ->
+                                coroutineScope.launch { deleteEntry(target) }
                             }
-                        }
-                    }
-                )
+                        },
+                    )
 
-                else -> BrowseView(
-                    mode = mode,
-                    currentDirectory = currentDirectory,
-                    displayedEntries = displayedEntries,
-                    loading = loading,
-                    errorText = errorText,
-                    message = message,
-                    working = working,
-                    sortField = sortField,
-                    sortDescending = sortDescending,
-                    onSortFieldChange = { sortField = it },
-                    onSortDescendingChange = { sortDescending = it },
-                    onJumpTo = { target ->
-                        coroutineScope.launch { loadDirectory(target) }
-                    },
-                    onOpenEntry = { entry ->
-                        if (entry.isDirectory) {
-                            coroutineScope.launch { loadDirectory(entry.relativePath) }
-                        } else if (mode == WebDavBrowseMode.PICK_FILE && matchesFilter(entry)) {
-                            onSelected(normalizeServerRootUrl(serverUrl), entry.relativePath)
-                        } else {
+                detailEntry != null ->
+                    DetailView(
+                        entry = detailEntry!!,
+                        working = working,
+                        message = message,
+                        onBack = {
+                            detailEntry = null
+                            message = null
+                        },
+                        onDownload = {
+                            detailEntry?.let { target ->
+                                coroutineScope.launch { downloadEntry(target) }
+                            }
+                        },
+                        onDelete = { showDeleteConfirm = true },
+                    )
+
+                showPathDialog ->
+                    PathJumpView(
+                        pathInput = pathInput,
+                        onPathInputChange = { pathInput = it },
+                        onCancel = { showPathDialog = false },
+                        onConfirm = {
+                            showPathDialog = false
+                            coroutineScope.launch { loadDirectory(pathInput) }
+                        },
+                    )
+
+                showCreateFolderDialog ->
+                    CreateFolderView(
+                        newFolderName = newFolderName,
+                        onNewFolderNameChange = { newFolderName = it },
+                        working = working,
+                        onCancel = { showCreateFolderDialog = false },
+                        onConfirm = {
+                            showCreateFolderDialog = false
+                            coroutineScope.launch {
+                                working = true
+                                message = null
+                                try {
+                                    val dirPrefix = normalizeRelativePath(currentDirectory)
+                                    val url =
+                                        buildDirectoryUrl(
+                                            serverUrl,
+                                            if (dirPrefix.isBlank()) {
+                                                newFolderName.trim()
+                                            } else {
+                                                "$dirPrefix/${newFolderName.trim()}"
+                                            },
+                                        )
+                                    withContext(Dispatchers.IO) {
+                                        WebDav(url, Authorization(username, password)).makeAsDir()
+                                    }
+                                    logDebug("create folder done, name=${newFolderName.trim()}")
+                                    message = "创建成功：${newFolderName.trim()}"
+                                    loadDirectory(currentDirectory)
+                                } catch (e: Exception) {
+                                    val msg = e.message.orEmpty()
+                                    Log.e(LOG_TAG, "create folder failed, message=$msg")
+                                    message = "创建失败：${msg.ifBlank { "未知错误" }}"
+                                } finally {
+                                    working = false
+                                }
+                            }
+                        },
+                    )
+
+                else ->
+                    BrowseView(
+                        mode = mode,
+                        currentDirectory = currentDirectory,
+                        displayedEntries = displayedEntries,
+                        loading = loading,
+                        errorText = errorText,
+                        message = message,
+                        working = working,
+                        sortField = sortField,
+                        sortDescending = sortDescending,
+                        onSortFieldChange = { sortField = it },
+                        onSortDescendingChange = { sortDescending = it },
+                        onJumpTo = { target ->
+                            coroutineScope.launch { loadDirectory(target) }
+                        },
+                        onOpenEntry = { entry ->
+                            if (entry.isDirectory) {
+                                coroutineScope.launch { loadDirectory(entry.relativePath) }
+                            } else if (mode == WebDavBrowseMode.PICK_FILE && matchesFilter(entry)) {
+                                onSelected(normalizeServerRootUrl(serverUrl), entry.relativePath)
+                            } else {
+                                detailEntry = entry
+                            }
+                        },
+                        onShowEntryDetails = { entry ->
                             detailEntry = entry
-                        }
-                    },
-                    onShowEntryDetails = { entry ->
-                        detailEntry = entry
-                        message = null
-                    },
-                    onPathDialog = {
-                        pathInput = currentDirectory
-                        showPathDialog = true
-                    },
-                    onCreateFolderDialog = {
-                        newFolderName = ""
-                        showCreateFolderDialog = true
-                    },
-                    onUpload = {
-                        uploadLauncher.launch(arrayOf("*/*"))
-                    },
-                    onSelectCurrentDirectory = {
-                        onSelected(
-                            normalizeServerRootUrl(serverUrl),
-                            normalizeRelativePath(currentDirectory)
-                        )
-                    }
-                )
+                            message = null
+                        },
+                        onPathDialog = {
+                            pathInput = currentDirectory
+                            showPathDialog = true
+                        },
+                        onCreateFolderDialog = {
+                            newFolderName = ""
+                            showCreateFolderDialog = true
+                        },
+                        onUpload = {
+                            uploadLauncher.launch(arrayOf("*/*"))
+                        },
+                        onSelectCurrentDirectory = {
+                            onSelected(
+                                normalizeServerRootUrl(serverUrl),
+                                normalizeRelativePath(currentDirectory),
+                            )
+                        },
+                    )
             }
         }
     }
@@ -556,12 +570,12 @@ private fun DetailView(
     message: String?,
     onBack: () -> Unit,
     onDownload: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         IconButton(onClick = onBack) {
             Icon(imageVector = MiuixIcons.Back, contentDescription = "返回")
@@ -581,19 +595,19 @@ private fun DetailView(
 
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Button(
             onClick = onDownload,
             enabled = !entry.isDirectory && !working,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         ) {
             Text("下载")
         }
         Button(
             onClick = onDelete,
             enabled = !working,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         ) {
             Text("删除")
         }
@@ -606,17 +620,20 @@ private fun DetailView(
  * 详情信息行
  */
 @Composable
-private fun InfoRow(label: String, value: String) {
+private fun InfoRow(
+    label: String,
+    value: String,
+) {
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = label,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            modifier = Modifier.width(72.dp)
+            modifier = Modifier.width(72.dp),
         )
         Text(
             text = value,
             maxLines = 1,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
@@ -629,7 +646,7 @@ private fun PathJumpView(
     pathInput: String,
     onPathInputChange: (String) -> Unit,
     onCancel: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
 ) {
     Text("跳转路径（相对根目录，如 WebDavPass/备份）")
     TextField(
@@ -637,22 +654,22 @@ private fun PathJumpView(
         onValueChange = onPathInputChange,
         label = "路径",
         useLabelAsPlaceholder = true,
-        singleLine = true
+        singleLine = true,
     )
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TextButton(
             text = "取消",
             onClick = onCancel,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         TextButton(
             text = "跳转",
             onClick = onConfirm,
             modifier = Modifier.weight(1f),
-            colors = ButtonDefaults.textButtonColorsPrimary()
+            colors = ButtonDefaults.textButtonColorsPrimary(),
         )
     }
 }
@@ -666,7 +683,7 @@ private fun CreateFolderView(
     onNewFolderNameChange: (String) -> Unit,
     working: Boolean,
     onCancel: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
 ) {
     Text("新建文件夹（在当前目录下）")
     TextField(
@@ -674,23 +691,23 @@ private fun CreateFolderView(
         onValueChange = onNewFolderNameChange,
         label = "文件夹名称",
         useLabelAsPlaceholder = true,
-        singleLine = true
+        singleLine = true,
     )
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TextButton(
             text = "取消",
             onClick = onCancel,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         TextButton(
             text = "创建",
             onClick = onConfirm,
             enabled = newFolderName.isNotBlank() && !working,
             modifier = Modifier.weight(1f),
-            colors = ButtonDefaults.textButtonColorsPrimary()
+            colors = ButtonDefaults.textButtonColorsPrimary(),
         )
     }
 }
@@ -703,24 +720,24 @@ private fun DeleteConfirmView(
     entry: WebDavFileEntry,
     working: Boolean,
     onCancel: () -> Unit,
-    onConfirm: () -> Unit
+    onConfirm: () -> Unit,
 ) {
     Text("确定删除「${entry.name}」？此操作不可恢复。")
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         TextButton(
             text = "取消",
             onClick = onCancel,
             enabled = !working,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
         TextButton(
             text = "删除",
             onClick = onConfirm,
             enabled = !working,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier.weight(1f),
         )
     }
 }
@@ -747,35 +764,37 @@ private fun BrowseView(
     onPathDialog: () -> Unit,
     onCreateFolderDialog: () -> Unit,
     onUpload: () -> Unit,
-    onSelectCurrentDirectory: () -> Unit
+    onSelectCurrentDirectory: () -> Unit,
 ) {
     // 面包屑层级
-    val segments = remember(currentDirectory) {
-        currentDirectory.split('/').filter { it.isNotBlank() }
-    }
+    val segments =
+        remember(currentDirectory) {
+            currentDirectory.split('/').filter { it.isNotBlank() }
+        }
 
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         BreadcrumbText(
             text = "/",
             active = segments.isEmpty(),
-            onClick = { onJumpTo("") }
+            onClick = { onJumpTo("") },
         )
         segments.forEachIndexed { index, segment ->
             Text(
                 text = "›",
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
             val target = segments.take(index + 1).joinToString("/")
             BreadcrumbText(
                 text = segment,
                 active = index == segments.lastIndex,
-                onClick = { onJumpTo(target) }
+                onClick = { onJumpTo(target) },
             )
         }
     }
@@ -784,68 +803,74 @@ private fun BrowseView(
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.End,
-        verticalAlignment = Alignment.CenterVertically
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         val sortOptions = listOf("按名称", "按大小", "按时间", "按类型")
-        val sortFieldIdx = when (sortField) {
-            BrowserSortField.NAME -> 0
-            BrowserSortField.SIZE -> 1
-            BrowserSortField.TIME -> 2
-            BrowserSortField.EXTENSION -> 3
-        }
+        val sortFieldIdx =
+            when (sortField) {
+                BrowserSortField.NAME -> 0
+                BrowserSortField.SIZE -> 1
+                BrowserSortField.TIME -> 2
+                BrowserSortField.EXTENSION -> 3
+            }
         val dirOptions = listOf("升序", "降序")
         val dirIdx = if (sortDescending) 1 else 0
         WindowIconDropdownMenu(
-            entries = listOf(
-                DropdownEntry(
-                    items = sortOptions.mapIndexed { index, option ->
-                        DropdownItem(
-                            text = option,
-                            selected = index == sortFieldIdx,
-                            onClick = {
-                                onSortFieldChange(
-                                    when (index) {
-                                        1 -> BrowserSortField.SIZE
-                                        2 -> BrowserSortField.TIME
-                                        3 -> BrowserSortField.EXTENSION
-                                        else -> BrowserSortField.NAME
-                                    }
+            entries =
+                listOf(
+                    DropdownEntry(
+                        items =
+                            sortOptions.mapIndexed { index, option ->
+                                DropdownItem(
+                                    text = option,
+                                    selected = index == sortFieldIdx,
+                                    onClick = {
+                                        onSortFieldChange(
+                                            when (index) {
+                                                1 -> BrowserSortField.SIZE
+                                                2 -> BrowserSortField.TIME
+                                                3 -> BrowserSortField.EXTENSION
+                                                else -> BrowserSortField.NAME
+                                            },
+                                        )
+                                    },
                                 )
-                            }
-                        )
-                    }
+                            },
+                    ),
+                    DropdownEntry(
+                        items =
+                            dirOptions.mapIndexed { index, option ->
+                                DropdownItem(
+                                    text = option,
+                                    selected = index == dirIdx,
+                                    onClick = { onSortDescendingChange(index == 1) },
+                                )
+                            },
+                    ),
                 ),
-                DropdownEntry(
-                    items = dirOptions.mapIndexed { index, option ->
-                        DropdownItem(
-                            text = option,
-                            selected = index == dirIdx,
-                            onClick = { onSortDescendingChange(index == 1) }
-                        )
-                    }
-                )
-            )
         ) {
             Icon(imageVector = MiuixIcons.Tune, contentDescription = "排序")
         }
 
         WindowIconDropdownMenu(
-            entry = DropdownEntry(
-                items = listOf(
-                    DropdownItem(
-                        text = "跳转路径",
-                        onClick = onPathDialog
-                    ),
-                    DropdownItem(
-                        text = "新建文件夹",
-                        onClick = onCreateFolderDialog
-                    ),
-                    DropdownItem(
-                        text = "上传文件",
-                        onClick = onUpload
-                    )
-                )
-            )
+            entry =
+                DropdownEntry(
+                    items =
+                        listOf(
+                            DropdownItem(
+                                text = "跳转路径",
+                                onClick = onPathDialog,
+                            ),
+                            DropdownItem(
+                                text = "新建文件夹",
+                                onClick = onCreateFolderDialog,
+                            ),
+                            DropdownItem(
+                                text = "上传文件",
+                                onClick = onUpload,
+                            ),
+                        ),
+                ),
         ) {
             Icon(imageVector = MiuixIcons.More, contentDescription = "更多")
         }
@@ -864,17 +889,18 @@ private fun BrowseView(
     if (!loading && errorText == null && displayedEntries.isNotEmpty()) {
         LazyVerticalGrid(
             columns = GridCells.Adaptive(minSize = 200.dp),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(320.dp),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .height(320.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(displayedEntries, key = { it.relativePath }) { entry ->
                 FileEntryCard(
                     entry = entry,
                     onClick = { onOpenEntry(entry) },
-                    onLongClick = { onShowEntryDetails(entry) }
+                    onLongClick = { onShowEntryDetails(entry) },
                 )
             }
         }
@@ -885,7 +911,7 @@ private fun BrowseView(
         Button(
             onClick = onSelectCurrentDirectory,
             enabled = !working,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
         ) {
             Text("选择当前目录")
         }
@@ -901,20 +927,22 @@ private fun BrowseView(
 private fun BreadcrumbText(
     text: String,
     active: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
 ) {
     Text(
         text = text,
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(horizontal = 6.dp, vertical = 4.dp),
-        color = if (active) {
-            MiuixTheme.colorScheme.primary
-        } else {
-            MiuixTheme.colorScheme.onSurfaceVariantSummary
-        },
+        modifier =
+            Modifier
+                .clickable(onClick = onClick)
+                .padding(horizontal = 6.dp, vertical = 4.dp),
+        color =
+            if (active) {
+                MiuixTheme.colorScheme.primary
+            } else {
+                MiuixTheme.colorScheme.onSurfaceVariantSummary
+            },
         maxLines = 1,
-        overflow = TextOverflow.Ellipsis
+        overflow = TextOverflow.Ellipsis,
     )
 }
 
@@ -926,10 +954,11 @@ private fun StatusCard(message: String) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = message,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            color = MiuixTheme.colorScheme.onSurfaceVariantSummary
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
         )
     }
 }
@@ -941,41 +970,44 @@ private fun StatusCard(message: String) {
 private fun FileEntryCard(
     entry: WebDavFileEntry,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
 ) {
     Card(
-        modifier = Modifier.combinedClickable(
-            onClick = onClick,
-            onLongClick = onLongClick
-        )
+        modifier =
+            Modifier.combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+            ),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Icon(
                 imageVector = iconForEntry(entry),
                 contentDescription = entry.name,
-                tint = MiuixTheme.colorScheme.primary
+                tint = MiuixTheme.colorScheme.primary,
             )
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = 10.dp)
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(start = 10.dp),
             ) {
                 Text(
                     text = entry.name,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     text = WebDavFileFormat.formatSummary(entry),
                     fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
         }
@@ -985,48 +1017,57 @@ private fun FileEntryCard(
 /**
  * 根据文件类型选择图标
  */
-private fun iconForEntry(entry: WebDavFileEntry): ImageVector = when (entry.kind) {
-    WebDavFileKind.DIRECTORY -> MiuixIcons.Folder
-    WebDavFileKind.IMAGE -> MiuixIcons.Image
-    WebDavFileKind.VIDEO -> Icons.Rounded.VideoFile
-    WebDavFileKind.AUDIO -> MiuixIcons.Music
-    WebDavFileKind.ARCHIVE -> Icons.Rounded.Archive
-    WebDavFileKind.TEXT -> MiuixIcons.Notes
-    WebDavFileKind.OTHER -> MiuixIcons.File
-}
+private fun iconForEntry(entry: WebDavFileEntry): ImageVector =
+    when (entry.kind) {
+        WebDavFileKind.DIRECTORY -> MiuixIcons.Folder
+        WebDavFileKind.IMAGE -> MiuixIcons.Image
+        WebDavFileKind.VIDEO -> Icons.Rounded.VideoFile
+        WebDavFileKind.AUDIO -> MiuixIcons.Music
+        WebDavFileKind.ARCHIVE -> Icons.Rounded.Archive
+        WebDavFileKind.TEXT -> MiuixIcons.Notes
+        WebDavFileKind.OTHER -> MiuixIcons.File
+    }
 
 /**
  * 文件类型中文标签
  */
-private fun kindLabel(entry: WebDavFileEntry): String = when (entry.kind) {
-    WebDavFileKind.DIRECTORY -> "目录"
-    WebDavFileKind.IMAGE -> "图片"
-    WebDavFileKind.VIDEO -> "视频"
-    WebDavFileKind.AUDIO -> "音频"
-    WebDavFileKind.ARCHIVE -> "压缩包"
-    WebDavFileKind.TEXT -> "文本"
-    WebDavFileKind.OTHER -> "文件"
-}
+private fun kindLabel(entry: WebDavFileEntry): String =
+    when (entry.kind) {
+        WebDavFileKind.DIRECTORY -> "目录"
+        WebDavFileKind.IMAGE -> "图片"
+        WebDavFileKind.VIDEO -> "视频"
+        WebDavFileKind.AUDIO -> "音频"
+        WebDavFileKind.ARCHIVE -> "压缩包"
+        WebDavFileKind.TEXT -> "文本"
+        WebDavFileKind.OTHER -> "文件"
+    }
 
 /**
  * 流式保存到系统下载目录（Android 10+ MediaStore，无需存储权限）。
  *
  * @return 保存成功返回 true，失败返回 false
  */
-private fun saveToDownloads(context: Context, fileName: String, input: java.io.InputStream): Boolean {
-    val values = ContentValues().apply {
-        put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-        put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
-        put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
-    }
-    val uri = context.contentResolver.insert(
-        MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
-        values
-    ) ?: return false
-    val ok = context.contentResolver.openOutputStream(uri)?.use { output ->
-        input.copyTo(output)
-        true
-    } ?: false
+private fun saveToDownloads(
+    context: Context,
+    fileName: String,
+    input: java.io.InputStream,
+): Boolean {
+    val values =
+        ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+        }
+    val uri =
+        context.contentResolver.insert(
+            MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
+            values,
+        ) ?: return false
+    val ok =
+        context.contentResolver.openOutputStream(uri)?.use { output ->
+            input.copyTo(output)
+            true
+        } ?: false
     if (!ok) {
         context.contentResolver.delete(uri, null, null)
     }

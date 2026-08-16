@@ -23,9 +23,7 @@ object NativeLib {
     private var isLoaded = false
     private var loadSuccess = false
 
-    fun loaded(): Boolean {
-        return init()
-    }
+    fun loaded(): Boolean = init()
 
     fun init(): Boolean {
         if (!isLoaded) {

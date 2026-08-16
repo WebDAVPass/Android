@@ -4,7 +4,6 @@ import java.io.File
 import java.util.*
 
 class BinaryCache {
-
     /**
      * Cipher key generated when the database is loaded, and destroyed when the database is closed
      * Can be used to temporarily store database elements
@@ -15,10 +14,12 @@ class BinaryCache {
 
     private val voidBinary = KeyByteArray(UNKNOWN, ByteArray(0))
 
-    fun getBinaryData(binaryId: String,
-                      smallSize: Boolean = false,
-                      compression: Boolean = false,
-                      protection: Boolean = false): BinaryData {
+    fun getBinaryData(
+        binaryId: String,
+        smallSize: Boolean = false,
+        compression: Boolean = false,
+        protection: Boolean = false,
+    ): BinaryData {
         val cacheDir = cacheDirectory
         return if (smallSize || cacheDir == null) {
             BinaryByte(binaryId, compression, protection)
@@ -43,7 +44,10 @@ class BinaryCache {
         return KeyByteArray(key, byteArrayList[key]!!)
     }
 
-    fun setByteArray(key: String, data: ByteArray): KeyByteArray {
+    fun setByteArray(
+        key: String,
+        data: ByteArray,
+    ): KeyByteArray {
         if (key == UNKNOWN) {
             return voidBinary
         }
@@ -65,7 +69,10 @@ class BinaryCache {
         const val UNKNOWN = "UNKNOWN"
     }
 
-    data class KeyByteArray(val key: String, val data: ByteArray) {
+    data class KeyByteArray(
+        val key: String,
+        val data: ByteArray,
+    ) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
             if (other !is KeyByteArray) return false
@@ -75,8 +82,6 @@ class BinaryCache {
             return true
         }
 
-        override fun hashCode(): Int {
-            return key.hashCode()
-        }
+        override fun hashCode(): Int = key.hashCode()
     }
 }

@@ -27,7 +27,6 @@ import javax.crypto.Mac
 import javax.crypto.spec.SecretKeySpec
 
 object HmacBlock {
-
     fun getHmacSha256(blockKey: ByteArray): Mac {
         val hmac: Mac
         try {
@@ -42,7 +41,10 @@ object HmacBlock {
         return hmac
     }
 
-    fun getHmacKey64(key: ByteArray, blockIndex: ByteArray): ByteArray {
+    fun getHmacKey64(
+        key: ByteArray,
+        blockIndex: ByteArray,
+    ): ByteArray {
         val hash: MessageDigest
         try {
             hash = MessageDigest.getInstance("SHA-512")

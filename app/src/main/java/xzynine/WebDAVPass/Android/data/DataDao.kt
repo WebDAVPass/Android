@@ -54,19 +54,19 @@ interface WebDavConfigDao {
     suspend fun update(config: WebDavConfig)
 
 /**
- * 删除WebDAV配置
- * @param config WebDAV配置对象
- */
-@Query("DELETE FROM webdav_configs WHERE id = :id")
-suspend fun deleteById(id: Long)
+     * 删除WebDAV配置
+     * @param config WebDAV配置对象
+     */
+    @Query("DELETE FROM webdav_configs WHERE id = :id")
+    suspend fun deleteById(id: Long)
 
 /**
- * 删除WebDAV配置
- * @param config WebDAV配置对象
- */
-suspend fun delete(config: WebDavConfig) {
-    deleteById(config.id)
-}
+     * 删除WebDAV配置
+     * @param config WebDAV配置对象
+     */
+    suspend fun delete(config: WebDavConfig) {
+        deleteById(config.id)
+    }
 }
 
 /**
@@ -74,7 +74,6 @@ suspend fun delete(config: WebDavConfig) {
  */
 @Dao
 interface AppSettingsDao {
-
     /**
      * 根据 key 获取设置
      * @param key 设置键

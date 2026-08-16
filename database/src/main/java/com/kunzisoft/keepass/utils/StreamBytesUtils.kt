@@ -32,19 +32,22 @@ import java.util.*
  * Read all data of stream and invoke [readBytes] each time the buffer is full or no more data to read.
  */
 @Throws(IOException::class)
-fun InputStream.readAllBytes(bufferSize: Int = DEFAULT_BUFFER_SIZE,
-                             cancelCondition: ()-> Boolean = { false },
-                             readBytes: (bytesRead: ByteArray) -> Unit) {
+fun InputStream.readAllBytes(
+    bufferSize: Int = DEFAULT_BUFFER_SIZE,
+    cancelCondition: () -> Boolean = { false },
+    readBytes: (bytesRead: ByteArray) -> Unit,
+) {
     val buffer = ByteArray(bufferSize)
     var read = 0
     while (read != -1 && !cancelCondition()) {
         read = this.read(buffer, 0, buffer.size)
         if (read != -1) {
-            val optimizedBuffer: ByteArray = if (buffer.size == read) {
-                buffer
-            } else {
-                buffer.copyOf(read)
-            }
+            val optimizedBuffer: ByteArray =
+                if (buffer.size == read) {
+                    buffer
+                } else {
+                    buffer.copyOf(read)
+                }
             readBytes.invoke(optimizedBuffer)
         }
     }
@@ -54,15 +57,17 @@ fun InputStream.readAllBytes(bufferSize: Int = DEFAULT_BUFFER_SIZE,
  * Read number of bytes defined by [length] and invoke [readBytes] each time the buffer is full or no more data to read.
  */
 @Throws(IOException::class)
-fun InputStream.readBytes(length: Int, bufferSize: Int = DEFAULT_BUFFER_SIZE,
-                          readBytes: (bytesRead: ByteArray) -> Unit) {
+fun InputStream.readBytes(
+    length: Int,
+    bufferSize: Int = DEFAULT_BUFFER_SIZE,
+    readBytes: (bytesRead: ByteArray) -> Unit,
+) {
     var bufferLength = bufferSize
     var buffer = ByteArray(bufferLength)
 
     var offset = 0
     var read = 0
     while (offset < length && read != -1) {
-
         // To reduce the buffer for the last bytes reads
         if (length - offset < bufferLength) {
             bufferLength = length - offset
@@ -71,11 +76,12 @@ fun InputStream.readBytes(length: Int, bufferSize: Int = DEFAULT_BUFFER_SIZE,
         read = this.read(buffer, 0, bufferLength)
 
         // To get only the bytes read
-        val optimizedBuffer: ByteArray = if (read >= 0 && buffer.size > read) {
-            buffer.copyOf(read)
-        } else {
-            buffer
-        }
+        val optimizedBuffer: ByteArray =
+            if (read >= 0 && buffer.size > read) {
+                buffer.copyOf(read)
+            } else {
+                buffer
+            }
         readBytes.invoke(optimizedBuffer)
         offset += read
     }
@@ -86,29 +92,22 @@ fun InputStream.readBytes(length: Int, bufferSize: Int = DEFAULT_BUFFER_SIZE,
  *  be interpreted as an unsigned integer.
  */
 @Throws(IOException::class)
-fun InputStream.readBytes4ToUInt(): UnsignedInt {
-    return bytes4ToUInt(readBytesLength(4))
-}
+fun InputStream.readBytes4ToUInt(): UnsignedInt = bytes4ToUInt(readBytesLength(4))
 
 @Throws(IOException::class)
-fun InputStream.readBytes2ToUShort(): Int {
-    return bytes2ToUShort(readBytesLength(2))
-}
+fun InputStream.readBytes2ToUShort(): Int = bytes2ToUShort(readBytesLength(2))
 
 @Throws(IOException::class)
-fun InputStream.readBytes5ToDate(): DateInstant {
-    return bytes5ToDate(readBytesLength(5))
-}
+fun InputStream.readBytes5ToDate(): DateInstant = bytes5ToDate(readBytesLength(5))
 
 @Throws(IOException::class)
-fun InputStream.readBytes16ToUuid(): UUID {
-    return bytes16ToUuid(readBytesLength(16))
-}
+fun InputStream.readBytes16ToUuid(): UUID = bytes16ToUuid(readBytesLength(16))
 
 @Throws(IOException::class)
-fun InputStream.readBytesToString(length: Int, replaceCRLF: Boolean = true): String {
-    return bytesToString(this.readBytesLength(length), replaceCRLF)
-}
+fun InputStream.readBytesToString(
+    length: Int,
+    replaceCRLF: Boolean = true,
+): String = bytesToString(this.readBytesLength(length), replaceCRLF)
 
 @Throws(IOException::class)
 fun InputStream.readBytesLength(length: Int): ByteArray {
@@ -153,48 +152,52 @@ fun OutputStream.write2BytesUShort(value: Int) {
 /**
  * Read an unsigned 16-bit value.
  */
-fun bytes2ToUShort(buf: ByteArray): Int {
-    return ((buf[0].toInt() and 0xFF)
-            + (buf[1].toInt() and 0xFF shl 8))
-}
+fun bytes2ToUShort(buf: ByteArray): Int =
+    (
+        (buf[0].toInt() and 0xFF) +
+            (buf[1].toInt() and 0xFF shl 8)
+    )
 
 /**
  * Read a 64 bit to unsigned long
  */
-fun bytes64ToULong(buf: ByteArray): UnsignedLong {
-    return UnsignedLong((buf[0].toLong() and 0xFF)
-            + (buf[1].toLong() and 0xFF shl 8)
-            + (buf[2].toLong() and 0xFF shl 16)
-            + (buf[3].toLong() and 0xFF shl 24)
-            + (buf[4].toLong() and 0xFF shl 32)
-            + (buf[5].toLong() and 0xFF shl 40)
-            + (buf[6].toLong() and 0xFF shl 48)
-            + (buf[7].toLong() and 0xFF shl 56))
-}
+fun bytes64ToULong(buf: ByteArray): UnsignedLong =
+    UnsignedLong(
+        (buf[0].toLong() and 0xFF) +
+            (buf[1].toLong() and 0xFF shl 8) +
+            (buf[2].toLong() and 0xFF shl 16) +
+            (buf[3].toLong() and 0xFF shl 24) +
+            (buf[4].toLong() and 0xFF shl 32) +
+            (buf[5].toLong() and 0xFF shl 40) +
+            (buf[6].toLong() and 0xFF shl 48) +
+            (buf[7].toLong() and 0xFF shl 56),
+    )
 
 /**
  * Read a 64 bit long
  */
-fun bytes64ToLong(buf: ByteArray): Long {
-    return ((buf[0].toLong() and 0xFF)
-            + (buf[1].toLong() and 0xFF shl 8)
-            + (buf[2].toLong() and 0xFF shl 16)
-            + (buf[3].toLong() and 0xFF shl 24)
-            + (buf[4].toLong() and 0xFF shl 32)
-            + (buf[5].toLong() and 0xFF shl 40)
-            + (buf[6].toLong() and 0xFF shl 48)
-            + (buf[7].toLong() and 0xFF shl 56))
-}
+fun bytes64ToLong(buf: ByteArray): Long =
+    (
+        (buf[0].toLong() and 0xFF) +
+            (buf[1].toLong() and 0xFF shl 8) +
+            (buf[2].toLong() and 0xFF shl 16) +
+            (buf[3].toLong() and 0xFF shl 24) +
+            (buf[4].toLong() and 0xFF shl 32) +
+            (buf[5].toLong() and 0xFF shl 40) +
+            (buf[6].toLong() and 0xFF shl 48) +
+            (buf[7].toLong() and 0xFF shl 56)
+    )
 
 /**
  * Read a 32-bit value.
  */
-fun bytes4ToUInt(buf: ByteArray): UnsignedInt {
-    return UnsignedInt((buf[0].toInt() and 0xFF)
-            + (buf[1].toInt() and 0xFF shl 8)
-            + (buf[2].toInt() and 0xFF shl 16)
-            + (buf[3].toInt() and 0xFF shl 24))
-}
+fun bytes4ToUInt(buf: ByteArray): UnsignedInt =
+    UnsignedInt(
+        (buf[0].toInt() and 0xFF) +
+            (buf[1].toInt() and 0xFF shl 8) +
+            (buf[2].toInt() and 0xFF shl 16) +
+            (buf[3].toInt() and 0xFF shl 24),
+    )
 
 fun bytes16ToUuid(buf: ByteArray): UUID {
     var lsb: Long = 0
@@ -235,16 +238,19 @@ fun bytes5ToDate(buf: ByteArray): DateInstant {
     val minute = dw4 and 0x0000000F shl 2 or (dw5 shr 6)
     val second = dw5 and 0x0000003F
 
-    return DateInstant(Instant.ofEpochMilli(DateTime(
-        year,
-        month,
-        day,
-        hour,
-        minute,
-        second
-    ).millis))
+    return DateInstant(
+        Instant.ofEpochMilli(
+            DateTime(
+                year,
+                month,
+                day,
+                hour,
+                minute,
+                second,
+            ).millis,
+        ),
+    )
 }
-
 
 /**
  * Write an unsigned 16-bit value
@@ -267,9 +273,7 @@ fun uIntTo4Bytes(value: UnsignedInt): ByteArray {
     return buf
 }
 
-fun uLongTo8Bytes(value: UnsignedLong): ByteArray {
-    return longTo8Bytes(value.toKotlinLong())
-}
+fun uLongTo8Bytes(value: UnsignedLong): ByteArray = longTo8Bytes(value.toKotlinLong())
 
 fun longTo8Bytes(value: Long): ByteArray {
     val buf = ByteArray(8)
@@ -301,8 +305,11 @@ fun dateTo5Bytes(dateInstant: DateInstant): ByteArray {
     val buf = ByteArray(5)
     buf[0] = UnsignedInt(year shr 6 and 0x0000003F).toKotlinByte()
     buf[1] = UnsignedInt(year and 0x0000003F shl 2 or (month shr 2 and 0x00000003)).toKotlinByte()
-    buf[2] = (month and 0x00000003 shl 6
-            or (day and 0x0000001F shl 1) or (hour shr 4 and 0x00000001)).toByte()
+    buf[2] =
+        (
+            month and 0x00000003 shl 6
+                or (day and 0x0000001F shl 1) or (hour shr 4 and 0x00000001)
+        ).toByte()
     buf[3] = (hour and 0x0000000F shl 4 or (minute shr 2 and 0x0000000F)).toByte()
     buf[4] = (minute and 0x00000003 shl 6 or (second and 0x0000003F)).toByte()
 
@@ -316,7 +323,10 @@ private val CRLF = String(CRLFbuf)
 private val SEP = System.getProperty("line.separator")
 private val REPLACE = SEP != CRLF
 
-fun bytesToString(buf: ByteArray, replaceCRLF: Boolean = true): String {
+fun bytesToString(
+    buf: ByteArray,
+    replaceCRLF: Boolean = true,
+): String {
     // length of null-terminated string (i.e. distance to null) within a byte buffer.
     var len = 0
     while (buf[len].toInt() != 0) {
@@ -331,7 +341,10 @@ fun bytesToString(buf: ByteArray, replaceCRLF: Boolean = true): String {
 }
 
 @Throws(IOException::class)
-fun writeStringToStream(outputStream: OutputStream, string: String?): Int {
+fun writeStringToStream(
+    outputStream: OutputStream,
+    string: String?,
+): Int {
     var str = string
     if (str == null) {
         // Write out a null character

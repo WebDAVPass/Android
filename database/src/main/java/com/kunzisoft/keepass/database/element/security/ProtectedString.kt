@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -25,7 +25,6 @@ import com.kunzisoft.keepass.utils.readBooleanCompat
 import com.kunzisoft.keepass.utils.writeBooleanCompat
 
 class ProtectedString : Parcelable {
-
     var isProtected: Boolean = false
         private set
     var stringValue: String = ""
@@ -45,46 +44,36 @@ class ProtectedString : Parcelable {
         stringValue = parcel.readString() ?: stringValue
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         dest.writeBooleanCompat(isProtected)
         dest.writeString(stringValue)
     }
 
-    fun length(): Int {
-        return stringValue.length
-    }
+    fun length(): Int = stringValue.length
 
-    override fun toString(): String {
-        return stringValue
-    }
+    override fun toString(): String = stringValue
 
     companion object {
-
         @JvmField
-        val CREATOR: Parcelable.Creator<ProtectedString> = object : Parcelable.Creator<ProtectedString> {
-            override fun createFromParcel(parcel: Parcel): ProtectedString {
-                return ProtectedString(parcel)
+        val CREATOR: Parcelable.Creator<ProtectedString> =
+            object : Parcelable.Creator<ProtectedString> {
+                override fun createFromParcel(parcel: Parcel): ProtectedString = ProtectedString(parcel)
+
+                override fun newArray(size: Int): Array<ProtectedString?> = arrayOfNulls(size)
             }
 
-            override fun newArray(size: Int): Array<ProtectedString?> {
-                return arrayOfNulls(size)
-            }
-        }
-
-        fun String.toBooleanCompat(): Boolean {
-            return if (this.equals("1", ignoreCase = true))
+        fun String.toBooleanCompat(): Boolean =
+            if (this.equals("1", ignoreCase = true)) {
                 true
-            else
+            } else {
                 this.toBoolean()
-        }
+            }
 
-        fun Boolean.toFieldValue(): String {
-            return if (this) "1" else "0"
-        }
+        fun Boolean.toFieldValue(): String = if (this) "1" else "0"
     }
-
 }

@@ -19,17 +19,18 @@
  */
 package com.kunzisoft.keepass.database.crypto.kdf
 
-import com.kunzisoft.keepass.utils.UnsignedInt
-import com.kunzisoft.keepass.utils.UnsignedLong
 import com.kunzisoft.encrypt.argon2.Argon2Transformer
 import com.kunzisoft.encrypt.argon2.Argon2Type
+import com.kunzisoft.keepass.utils.UnsignedInt
+import com.kunzisoft.keepass.utils.UnsignedLong
 import com.kunzisoft.keepass.utils.bytes16ToUuid
 import java.io.IOException
 import java.security.SecureRandom
 import java.util.*
 
-class Argon2Kdf(private val type: Type) : KdfEngine() {
-
+class Argon2Kdf(
+    private val type: Type,
+) : KdfEngine() {
     init {
         uuid = type.CIPHER_UUID
     }
@@ -51,8 +52,10 @@ class Argon2Kdf(private val type: Type) : KdfEngine() {
         get() = DEFAULT_ITERATIONS.toKotlinLong()
 
     @Throws(IOException::class)
-    override fun transform(masterKey: ByteArray, kdfParameters: KdfParameters): ByteArray {
-
+    override fun transform(
+        masterKey: ByteArray,
+        kdfParameters: KdfParameters,
+    ): ByteArray {
         val salt = kdfParameters.getByteArray(PARAM_SALT) ?: ByteArray(0)
         val parallelism = kdfParameters.getUInt32(PARAM_PARALLELISM)?.toKotlinLong() ?: DEFAULT_PARALLELISM.toKotlinLong()
         val memory = kdfParameters.getUInt64(PARAM_MEMORY)?.toKotlinLong()?.div(MEMORY_BLOCK_SIZE) ?: DEFAULT_MEMORY.toKotlinLong()
@@ -66,13 +69,14 @@ class Argon2Kdf(private val type: Type) : KdfEngine() {
         val argonType = if (type == Type.ARGON2_ID) Argon2Type.ARGON2_ID else Argon2Type.ARGON2_D
 
         return Argon2Transformer.transformKey(
-                argonType,
-                masterKey,
-                salt,
-                parallelism,
-                memory,
-                iterations,
-                version)
+            argonType,
+            masterKey,
+            salt,
+            parallelism,
+            memory,
+            iterations,
+            version,
+        )
     }
 
     override fun randomize(kdfParameters: KdfParameters) {
@@ -84,11 +88,12 @@ class Argon2Kdf(private val type: Type) : KdfEngine() {
         kdfParameters.setByteArray(PARAM_SALT, salt)
     }
 
-    override fun getKeyRounds(kdfParameters: KdfParameters): Long {
-        return kdfParameters.getUInt64(PARAM_ITERATIONS)?.toKotlinLong() ?: defaultKeyRounds
-    }
+    override fun getKeyRounds(kdfParameters: KdfParameters): Long = kdfParameters.getUInt64(PARAM_ITERATIONS)?.toKotlinLong() ?: defaultKeyRounds
 
-    override fun setKeyRounds(kdfParameters: KdfParameters, keyRounds: Long) {
+    override fun setKeyRounds(
+        kdfParameters: KdfParameters,
+        keyRounds: Long,
+    ) {
         kdfParameters.setUInt64(PARAM_ITERATIONS, UnsignedLong(keyRounds))
     }
 
@@ -98,11 +103,12 @@ class Argon2Kdf(private val type: Type) : KdfEngine() {
     override val maxKeyRounds: Long
         get() = MAX_ITERATIONS.toKotlinLong()
 
-    override fun getMemoryUsage(kdfParameters: KdfParameters): Long {
-        return kdfParameters.getUInt64(PARAM_MEMORY)?.toKotlinLong() ?: defaultMemoryUsage
-    }
+    override fun getMemoryUsage(kdfParameters: KdfParameters): Long = kdfParameters.getUInt64(PARAM_MEMORY)?.toKotlinLong() ?: defaultMemoryUsage
 
-    override fun setMemoryUsage(kdfParameters: KdfParameters, memory: Long) {
+    override fun setMemoryUsage(
+        kdfParameters: KdfParameters,
+        memory: Long,
+    ) {
         kdfParameters.setUInt64(PARAM_MEMORY, UnsignedLong(memory))
     }
 
@@ -115,19 +121,19 @@ class Argon2Kdf(private val type: Type) : KdfEngine() {
     override val maxMemoryUsage: Long
         get() = MAX_MEMORY
 
-    override fun getParallelism(kdfParameters: KdfParameters): Long {
-        return kdfParameters.getUInt32(PARAM_PARALLELISM)?.let {
+    override fun getParallelism(kdfParameters: KdfParameters): Long =
+        kdfParameters.getUInt32(PARAM_PARALLELISM)?.let {
             UnsignedInt(it).toKotlinLong()
         } ?: defaultParallelism
-    }
 
-    override fun setParallelism(kdfParameters: KdfParameters, parallelism: Long) {
+    override fun setParallelism(
+        kdfParameters: KdfParameters,
+        parallelism: Long,
+    ) {
         kdfParameters.setUInt32(PARAM_PARALLELISM, UnsignedInt.fromKotlinLong(parallelism))
     }
 
-    override fun toString(): String {
-        return "$type"
-    }
+    override fun toString(): String = "$type"
 
     override val defaultParallelism: Long
         get() = DEFAULT_PARALLELISM.toKotlinLong()
@@ -138,49 +144,62 @@ class Argon2Kdf(private val type: Type) : KdfEngine() {
     override val maxParallelism: Long
         get() = MAX_PARALLELISM.toKotlinLong()
 
-    enum class Type(val CIPHER_UUID: UUID, private val typeName: String) {
-        ARGON2_D(bytes16ToUuid(
-                byteArrayOf(0xEF.toByte(),
-                        0x63.toByte(),
-                        0x6D.toByte(),
-                        0xDF.toByte(),
-                        0x8C.toByte(),
-                        0x29.toByte(),
-                        0x44.toByte(),
-                        0x4B.toByte(),
-                        0x91.toByte(),
-                        0xF7.toByte(),
-                        0xA9.toByte(),
-                        0xA4.toByte(),
-                        0x03.toByte(),
-                        0xE3.toByte(),
-                        0x0A.toByte(),
-                        0x0C.toByte())), "Argon2d"),
-        ARGON2_ID(bytes16ToUuid(
-                byteArrayOf(0x9E.toByte(),
-                        0x29.toByte(),
-                        0x8B.toByte(),
-                        0x19.toByte(),
-                        0x56.toByte(),
-                        0xDB.toByte(),
-                        0x47.toByte(),
-                        0x73.toByte(),
-                        0xB2.toByte(),
-                        0x3D.toByte(),
-                        0xFC.toByte(),
-                        0x3E.toByte(),
-                        0xC6.toByte(),
-                        0xF0.toByte(),
-                        0xA1.toByte(),
-                        0xE6.toByte())), "Argon2id");
+    enum class Type(
+        val CIPHER_UUID: UUID,
+        private val typeName: String,
+    ) {
+        ARGON2_D(
+            bytes16ToUuid(
+                byteArrayOf(
+                    0xEF.toByte(),
+                    0x63.toByte(),
+                    0x6D.toByte(),
+                    0xDF.toByte(),
+                    0x8C.toByte(),
+                    0x29.toByte(),
+                    0x44.toByte(),
+                    0x4B.toByte(),
+                    0x91.toByte(),
+                    0xF7.toByte(),
+                    0xA9.toByte(),
+                    0xA4.toByte(),
+                    0x03.toByte(),
+                    0xE3.toByte(),
+                    0x0A.toByte(),
+                    0x0C.toByte(),
+                ),
+            ),
+            "Argon2d",
+        ),
+        ARGON2_ID(
+            bytes16ToUuid(
+                byteArrayOf(
+                    0x9E.toByte(),
+                    0x29.toByte(),
+                    0x8B.toByte(),
+                    0x19.toByte(),
+                    0x56.toByte(),
+                    0xDB.toByte(),
+                    0x47.toByte(),
+                    0x73.toByte(),
+                    0xB2.toByte(),
+                    0x3D.toByte(),
+                    0xFC.toByte(),
+                    0x3E.toByte(),
+                    0xC6.toByte(),
+                    0xF0.toByte(),
+                    0xA1.toByte(),
+                    0xE6.toByte(),
+                ),
+            ),
+            "Argon2id",
+        ),
+        ;
 
-        override fun toString(): String {
-            return typeName
-        }
+        override fun toString(): String = typeName
     }
 
     companion object {
-
         private const val PARAM_SALT = "S" // byte[]
         private const val PARAM_PARALLELISM = "P" // UInt32
         private const val PARAM_MEMORY = "M" // UInt64

@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -44,11 +44,13 @@ import com.kunzisoft.keepass.utils.writeStringIntMap
 import com.kunzisoft.keepass.utils.writeStringParcelableMap
 import java.util.UUID
 
-class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInterface {
-
+class EntryKDBX :
+    EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>,
+    NodeKDBXInterface {
     // To decode each field not parcelable
     @Transient
     private var mDatabase: DatabaseKDBX? = null
+
     @Transient
     private var mDecodeRef = false
 
@@ -87,15 +89,20 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
         additional = parcel.readString() ?: additional
     }
 
-    override fun readParentParcelable(parcel: Parcel): GroupKDBX? {
-        return parcel.readParcelableCompat()
-    }
+    override fun readParentParcelable(parcel: Parcel): GroupKDBX? = parcel.readParcelableCompat()
 
-    override fun writeParentParcelable(parent: GroupKDBX?, parcel: Parcel, flags: Int) {
+    override fun writeParentParcelable(
+        parent: GroupKDBX?,
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(parent, flags)
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(dest, flags)
         dest.writeLong(usageCount.toKotlinLong())
         dest.writeParcelable(locationChanged, flags)
@@ -116,9 +123,11 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
      * Update with deep copy of each entry element
      * @param source
      */
-    fun updateWith(source: EntryKDBX,
-                   copyHistory: Boolean = true,
-                   updateParents: Boolean = true) {
+    fun updateWith(
+        source: EntryKDBX,
+        copyHistory: Boolean = true,
+        updateParents: Boolean = true,
+    ) {
         super.updateWith(source, updateParents)
         usageCount = source.usageCount
         locationChanged = DateInstant(source.locationChanged)
@@ -134,8 +143,9 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
         previousParentGroup = source.previousParentGroup
         autoType = AutoType(source.autoType)
         history.clear()
-        if (copyHistory)
+        if (copyHistory) {
             history.addAll(source.history)
+        }
         additional = source.additional
     }
 
@@ -149,13 +159,9 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
         this.mDecodeRef = false
     }
 
-    override fun initNodeId(): NodeId<UUID> {
-        return NodeIdUUID()
-    }
+    override fun initNodeId(): NodeId<UUID> = NodeIdUUID()
 
-    override fun copyNodeId(nodeId: NodeId<UUID>): NodeId<UUID> {
-        return NodeIdUUID(nodeId.id)
-    }
+    override fun copyNodeId(nodeId: NodeId<UUID>): NodeId<UUID> = NodeIdUUID(nodeId.id)
 
     override val type: Type
         get() = Type.ENTRY
@@ -166,17 +172,21 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
      * @param key
      * @return
      */
-    private fun decodeRefKey(decodeRef: Boolean, key: String, recursionLevel: Int): String {
+    private fun decodeRefKey(
+        decodeRef: Boolean,
+        key: String,
+        recursionLevel: Int,
+    ): String {
         return fields[key]?.toString()?.let { text ->
             return if (decodeRef) {
                 mDatabase?.getFieldReferenceValue(this, text, recursionLevel) ?: text
-            } else text
+            } else {
+                text
+            }
         } ?: ""
     }
 
-    fun decodeTitleKey(recursionLevel: Int): String {
-        return decodeRefKey(mDecodeRef, STR_TITLE, recursionLevel)
-    }
+    fun decodeTitleKey(recursionLevel: Int): String = decodeRefKey(mDecodeRef, STR_TITLE, recursionLevel)
 
     override var title: String
         get() = decodeTitleKey(0)
@@ -185,9 +195,7 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
             fields[STR_TITLE] = ProtectedString(protect, value)
         }
 
-    fun decodeUsernameKey(recursionLevel: Int): String {
-        return decodeRefKey(mDecodeRef, STR_USERNAME, recursionLevel)
-    }
+    fun decodeUsernameKey(recursionLevel: Int): String = decodeRefKey(mDecodeRef, STR_USERNAME, recursionLevel)
 
     override var username: String
         get() = decodeUsernameKey(0)
@@ -196,9 +204,7 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
             fields[STR_USERNAME] = ProtectedString(protect, value)
         }
 
-    fun decodePasswordKey(recursionLevel: Int): String {
-        return decodeRefKey(mDecodeRef, STR_PASSWORD, recursionLevel)
-    }
+    fun decodePasswordKey(recursionLevel: Int): String = decodeRefKey(mDecodeRef, STR_PASSWORD, recursionLevel)
 
     override var password: String
         get() = decodePasswordKey(0)
@@ -207,9 +213,7 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
             fields[STR_PASSWORD] = ProtectedString(protect, value)
         }
 
-    fun decodeUrlKey(recursionLevel: Int): String {
-        return decodeRefKey(mDecodeRef, STR_URL, recursionLevel)
-    }
+    fun decodeUrlKey(recursionLevel: Int): String = decodeRefKey(mDecodeRef, STR_URL, recursionLevel)
 
     override var url
         get() = decodeUrlKey(0)
@@ -218,9 +222,7 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
             fields[STR_URL] = ProtectedString(protect, value)
         }
 
-    fun decodeNotesKey(recursionLevel: Int): String {
-        return decodeRefKey(mDecodeRef, STR_NOTES, recursionLevel)
-    }
+    fun decodeNotesKey(recursionLevel: Int): String = decodeRefKey(mDecodeRef, STR_NOTES, recursionLevel)
 
     override var notes: String
         get() = decodeNotesKey(0)
@@ -229,9 +231,10 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
             fields[STR_NOTES] = ProtectedString(protect, value)
         }
 
-    fun getCustomFieldValue(label: String, recursionLevel: Int = 0): String {
-        return decodeRefKey(mDecodeRef, label, recursionLevel)
-    }
+    fun getCustomFieldValue(
+        label: String,
+        recursionLevel: Int = 0,
+    ): String = decodeRefKey(mDecodeRef, label, recursionLevel)
 
     fun getSize(attachmentPool: AttachmentPool): Long {
         var size = FIXED_LENGTH_SIZE
@@ -263,42 +266,45 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
         locationChanged = DateInstant()
     }
 
-    private fun isStandardField(key: String): Boolean {
-        return (key == STR_TITLE
-                || key == STR_USERNAME
-                || key == STR_PASSWORD
-                || key == STR_URL
-                || key == STR_NOTES)
-    }
+    private fun isStandardField(key: String): Boolean =
+        (
+            key == STR_TITLE ||
+                key == STR_USERNAME ||
+                key == STR_PASSWORD ||
+                key == STR_URL ||
+                key == STR_NOTES
+        )
 
     fun doForEachDecodedCustomField(action: (field: Field) -> Unit) {
         val iterator = fields.entries.iterator()
         while (iterator.hasNext()) {
             val mapEntry = iterator.next()
             if (!isStandardField(mapEntry.key)) {
-                action.invoke(Field(mapEntry.key,
-                        ProtectedString(mapEntry.value.isProtected,
-                                decodeRefKey(mDecodeRef, mapEntry.key, 0)
-                        )
-                    )
+                action.invoke(
+                    Field(
+                        mapEntry.key,
+                        ProtectedString(
+                            mapEntry.value.isProtected,
+                            decodeRefKey(mDecodeRef, mapEntry.key, 0),
+                        ),
+                    ),
                 )
             }
         }
     }
 
-    fun getFieldValue(label: String): ProtectedString? {
-        return fields[label]
-    }
+    fun getFieldValue(label: String): ProtectedString? = fields[label]
 
-    fun getFields(): List<Field> {
-        return fields.map { Field(it.key, it.value) }
-    }
+    fun getFields(): List<Field> = fields.map { Field(it.key, it.value) }
 
     fun putField(field: Field) {
         putField(field.name, field.protectedValue)
     }
 
-    fun putField(label: String, value: ProtectedString) {
+    fun putField(
+        label: String,
+        value: ProtectedString,
+    ) {
         fields[label] = value
     }
 
@@ -313,7 +319,10 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
     /**
      * It's a list because history labels can be defined multiple times
      */
-    fun getAttachments(attachmentPool: AttachmentPool, inHistory: Boolean = false): List<Attachment> {
+    fun getAttachments(
+        attachmentPool: AttachmentPool,
+        inHistory: Boolean = false,
+    ): List<Attachment> {
         val entryAttachmentList = ArrayList<Attachment>()
         for ((label, poolId) in binaries) {
             attachmentPool[poolId]?.let { binary ->
@@ -328,11 +337,12 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
         return entryAttachmentList
     }
 
-    fun containsAttachment(): Boolean {
-        return binaries.isNotEmpty()
-    }
+    fun containsAttachment(): Boolean = binaries.isNotEmpty()
 
-    fun putAttachment(attachment: Attachment, attachmentPool: AttachmentPool) {
+    fun putAttachment(
+        attachment: Attachment,
+        attachmentPool: AttachmentPool,
+    ) {
         binaries[attachment.name] = attachmentPool.put(attachment.binaryData)
     }
 
@@ -357,9 +367,7 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
         history.add(entry)
     }
 
-    fun removeEntryFromHistory(position: Int): EntryKDBX {
-        return history.removeAt(position)
-    }
+    fun removeEntryFromHistory(position: Int): EntryKDBX = history.removeAt(position)
 
     fun removeOldestEntryFromHistory(): EntryKDBX? {
         var min: DateInstant? = null
@@ -374,16 +382,20 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
         }
         return if (index != -1) {
             history.removeAt(index)
-        } else null
+        } else {
+            null
+        }
     }
 
-    override fun touch(modified: Boolean, touchParents: Boolean) {
+    override fun touch(
+        modified: Boolean,
+        touchParents: Boolean,
+    ) {
         super.touch(modified, touchParents)
         usageCount.plusOne()
     }
 
     companion object {
-
         const val STR_TITLE = "Title"
         const val STR_USERNAME = "UserName"
         const val STR_PASSWORD = "Password"
@@ -392,23 +404,21 @@ class EntryKDBX : EntryVersioned<UUID, UUID, GroupKDBX, EntryKDBX>, NodeKDBXInte
 
         private const val FIXED_LENGTH_SIZE: Long = 128 // Approximate fixed length size
 
-        fun newCustomNameAllowed(name: String): Boolean {
-            return !(name.equals(STR_TITLE, true)
-                    || name.equals(STR_USERNAME, true)
-                    || name.equals(STR_PASSWORD, true)
-                    || name.equals(STR_URL, true)
-                    || name.equals(STR_NOTES, true))
-        }
+        fun newCustomNameAllowed(name: String): Boolean =
+            !(
+                name.equals(STR_TITLE, true) ||
+                    name.equals(STR_USERNAME, true) ||
+                    name.equals(STR_PASSWORD, true) ||
+                    name.equals(STR_URL, true) ||
+                    name.equals(STR_NOTES, true)
+            )
 
         @JvmField
-        val CREATOR: Parcelable.Creator<EntryKDBX> = object : Parcelable.Creator<EntryKDBX> {
-            override fun createFromParcel(parcel: Parcel): EntryKDBX {
-                return EntryKDBX(parcel)
-            }
+        val CREATOR: Parcelable.Creator<EntryKDBX> =
+            object : Parcelable.Creator<EntryKDBX> {
+                override fun createFromParcel(parcel: Parcel): EntryKDBX = EntryKDBX(parcel)
 
-            override fun newArray(size: Int): Array<EntryKDBX?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<EntryKDBX?> = arrayOfNulls(size)
             }
-        }
     }
 }

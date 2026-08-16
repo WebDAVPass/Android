@@ -29,7 +29,6 @@ import java.security.MessageDigest
 import kotlin.math.min
 
 class HashedBlockOutputStream : OutputStream {
-
     private lateinit var baseStream: OutputStream
     private lateinit var buffer: ByteArray
     private var bufferPos = 0
@@ -48,7 +47,10 @@ class HashedBlockOutputStream : OutputStream {
         init(os, currentBufferSize)
     }
 
-    private fun init(os: OutputStream, bufferSize: Int) {
+    private fun init(
+        os: OutputStream,
+        bufferSize: Int,
+    ) {
         baseStream = os
         buffer = ByteArray(bufferSize)
     }
@@ -80,7 +82,11 @@ class HashedBlockOutputStream : OutputStream {
     }
 
     @Throws(IOException::class)
-    override fun write(b: ByteArray, offset: Int, count: Int) {
+    override fun write(
+        b: ByteArray,
+        offset: Int,
+        count: Int,
+    ) {
         var currentOffset = offset
         var counter = count
         while (counter > 0) {
@@ -109,7 +115,6 @@ class HashedBlockOutputStream : OutputStream {
             messageDigest.update(buffer, 0, bufferPos)
             val hash: ByteArray = messageDigest.digest()
             baseStream.write(hash)
-
         } else {
             // Write 32-bits of zeros
             baseStream.write8BytesLong(0L)

@@ -27,17 +27,14 @@ import javax.crypto.Cipher
 import javax.crypto.NoSuchPaddingException
 
 class ChaCha20Engine : CipherEngine() {
-
-    override fun ivLength(): Int {
-        return 12
-    }
+    override fun ivLength(): Int = 12
 
     @Throws(NoSuchAlgorithmException::class, NoSuchPaddingException::class, InvalidKeyException::class, InvalidAlgorithmParameterException::class)
-    override fun getCipher(opmode: Int, key: ByteArray, IV: ByteArray): Cipher {
-        return CipherFactory.getChacha20(opmode, key, IV)
-    }
+    override fun getCipher(
+        opmode: Int,
+        key: ByteArray,
+        IV: ByteArray,
+    ): Cipher = CipherFactory.getChacha20(opmode, key, IV)
 
-    override fun getEncryptionAlgorithm(): EncryptionAlgorithm {
-        return EncryptionAlgorithm.ChaCha20
-    }
+    override fun getEncryptionAlgorithm(): EncryptionAlgorithm = EncryptionAlgorithm.ChaCha20
 }

@@ -33,23 +33,23 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
-import xzynine.WebDAVPass.Android.R
-import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
-import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
-import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.ScreenCapture
 import top.yukonga.miuix.kmp.icon.extended.Settings
 import top.yukonga.miuix.kmp.theme.MiuixTheme
+import xzynine.WebDAVPass.Android.R
+import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
+import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 /**
  * 安全设置子页面（原「安全」分组）。
@@ -57,7 +57,7 @@ import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 @Composable
 fun SecuritySettingsContent(
     viewModel: TokenViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -68,24 +68,22 @@ fun SecuritySettingsContent(
     /**
      * 将认证模式转换为下拉索引。
      */
-    fun authModeToIndex(mode: Int): Int {
-        return when (viewModel.autoUnlockViewModel.normalizeAutoUnlockAuthMode(mode)) {
+    fun authModeToIndex(mode: Int): Int =
+        when (viewModel.autoUnlockViewModel.normalizeAutoUnlockAuthMode(mode)) {
             AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_BIOMETRIC -> 1
             AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_PIN -> 2
             else -> 0
         }
-    }
 
     /**
      * 将下拉索引转换为认证模式。
      */
-    fun indexToAuthMode(index: Int): Int {
-        return when (index) {
+    fun indexToAuthMode(index: Int): Int =
+        when (index) {
             1 -> AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_BIOMETRIC
             2 -> AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_PIN
             else -> AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
         }
-    }
 
     var autoUnlockSwitchChecked by remember(currentLib?.id, currentLib?.autoUnlockEnabled) {
         mutableStateOf(currentLib?.autoUnlockEnabled == true)
@@ -93,14 +91,14 @@ fun SecuritySettingsContent(
     var autoUnlockSelectedIndex by remember(
         currentLib?.id,
         currentLib?.autoUnlockEnabled,
-        currentLib?.autoUnlockAuthMode
+        currentLib?.autoUnlockAuthMode,
     ) {
         mutableStateOf(
             if (currentLib?.autoUnlockEnabled == true) {
                 authModeToIndex(currentLib.autoUnlockAuthMode)
             } else {
                 -1
-            }
+            },
         )
     }
     var pendingSettingAuthLibraryId by remember { mutableStateOf<String?>(null) }
@@ -112,65 +110,73 @@ fun SecuritySettingsContent(
     }
     var manualUnlockClockMillis by remember { mutableStateOf(System.currentTimeMillis()) }
 
-    val settingDeviceCredentialLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.StartActivityForResult(),
-        onResult = { result ->
-            val pendingLibraryId = pendingSettingAuthLibraryId
-            val pendingMode = pendingSettingAuthMode
-            pendingSettingAuthLibraryId = null
-            pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
+    val settingDeviceCredentialLauncher =
+        rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.StartActivityForResult(),
+            onResult = { result ->
+                val pendingLibraryId = pendingSettingAuthLibraryId
+                val pendingMode = pendingSettingAuthMode
+                pendingSettingAuthLibraryId = null
+                pendingSettingAuthMode = AutoUnlockViewModel.AUTO_UNLOCK_AUTH_MODE_DEFAULT
 
-            val targetLibrary = currentLibraryState?.takeIf { it.id == pendingLibraryId }
-                ?: return@rememberLauncherForActivityResult
+                val targetLibrary =
+                    currentLibraryState?.takeIf { it.id == pendingLibraryId }
+                        ?: return@rememberLauncherForActivityResult
 
-            if (result.resultCode != Activity.RESULT_OK) {
-                autoUnlockSwitchChecked = targetLibrary.autoUnlockEnabled
-                autoUnlockSelectedIndex = if (targetLibrary.autoUnlockEnabled) {
-                    authModeToIndex(targetLibrary.autoUnlockAuthMode)
-                } else {
-                    -1
+                if (result.resultCode != Activity.RESULT_OK) {
+                    autoUnlockSwitchChecked = targetLibrary.autoUnlockEnabled
+                    autoUnlockSelectedIndex =
+                        if (targetLibrary.autoUnlockEnabled) {
+                            authModeToIndex(targetLibrary.autoUnlockAuthMode)
+                        } else {
+                            -1
+                        }
+                    return@rememberLauncherForActivityResult
                 }
-                return@rememberLauncherForActivityResult
-            }
 
-            val masterPassword = viewModel.libraryViewModel.getCurrentLibraryMasterPassword()
-            if (masterPassword.isNullOrBlank()) {
-                xzylib.base.util.ToastUtils.showShortToast(context, "请先手动解锁一次当前库")
-                return@rememberLauncherForActivityResult
-            }
+                val masterPassword = viewModel.libraryViewModel.getCurrentLibraryMasterPassword()
+                if (masterPassword.isNullOrBlank()) {
+                    xzylib.base.util.ToastUtils
+                        .showShortToast(context, "请先手动解锁一次当前库")
+                    return@rememberLauncherForActivityResult
+                }
 
-            val cipher = viewModel.autoUnlockViewModel.getCipherForEnrollment(targetLibrary)
-            if (cipher == null) {
-                xzylib.base.util.ToastUtils.showShortToast(context, "无法启用自动解锁")
-                return@rememberLauncherForActivityResult
-            }
+                val cipher = viewModel.autoUnlockViewModel.getCipherForEnrollment(targetLibrary)
+                if (cipher == null) {
+                    xzylib.base.util.ToastUtils
+                        .showShortToast(context, "无法启用自动解锁")
+                    return@rememberLauncherForActivityResult
+                }
 
-            val enabled = viewModel.autoUnlockViewModel.enableAutoUnlock(
-                library = targetLibrary,
-                cipher = cipher,
-                masterPassword = masterPassword,
-                resolveLibrary = { viewModel.libraryViewModel.resolveLibrarySnapshot(it) },
-                onPersist = { viewModel.libraryViewModel.persistLibraryMetadata(it) },
-                authMode = pendingMode
-            )
-            if (!enabled) {
-                xzylib.base.util.ToastUtils.showShortToast(context, "自动解锁启用失败")
-            }
-        }
-    )
+                val enabled =
+                    viewModel.autoUnlockViewModel.enableAutoUnlock(
+                        library = targetLibrary,
+                        cipher = cipher,
+                        masterPassword = masterPassword,
+                        resolveLibrary = { viewModel.libraryViewModel.resolveLibrarySnapshot(it) },
+                        onPersist = { viewModel.libraryViewModel.persistLibraryMetadata(it) },
+                        authMode = pendingMode,
+                    )
+                if (!enabled) {
+                    xzylib.base.util.ToastUtils
+                        .showShortToast(context, "自动解锁启用失败")
+                }
+            },
+        )
 
     LaunchedEffect(
         currentLib?.id,
         currentLib?.autoUnlockEnabled,
         currentLib?.autoUnlockAuthMode,
-        currentLib?.forceManualUnlockEvery48Hours
+        currentLib?.forceManualUnlockEvery48Hours,
     ) {
         autoUnlockSwitchChecked = currentLib?.autoUnlockEnabled == true
-        autoUnlockSelectedIndex = if (currentLib?.autoUnlockEnabled == true) {
-            authModeToIndex(currentLib.autoUnlockAuthMode)
-        } else {
-            -1
-        }
+        autoUnlockSelectedIndex =
+            if (currentLib?.autoUnlockEnabled == true) {
+                authModeToIndex(currentLib.autoUnlockAuthMode)
+            } else {
+                -1
+            }
         manualUnlockWindowSwitchChecked = currentLib?.forceManualUnlockEvery48Hours != false
     }
 
@@ -190,33 +196,35 @@ fun SecuritySettingsContent(
         topBar = {
             SettingsTopAppBar(
                 title = "安全",
-                onNavigateBack = onNavigateBack
+                onNavigateBack = onNavigateBack,
             )
-        }
+        },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(it)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(it)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
         ) {
             val isAutoUnlockEnabled = currentLib?.autoUnlockEnabled == true
             val isAutoUnlockInvalidated = currentLib?.autoUnlockInvalidated == true
 
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Preference(
                     type = PreferenceType.Switch,
                     title = "自动解锁",
-                    summary = when {
-                        currentLib == null -> "请先选择数据库文件"
-                        isAutoUnlockInvalidated -> "自动解锁已失效，需手动主密码后重新验证"
-                        isAutoUnlockEnabled -> "已启用自动解锁"
-                        autoUnlockSwitchChecked -> "请选择认证方式并完成一次身份验证"
-                        else -> "开启后可使用生物识别或 PIN 快速解锁"
-                    },
+                    summary =
+                        when {
+                            currentLib == null -> "请先选择数据库文件"
+                            isAutoUnlockInvalidated -> "自动解锁已失效，需手动主密码后重新验证"
+                            isAutoUnlockEnabled -> "已启用自动解锁"
+                            autoUnlockSwitchChecked -> "请选择认证方式并完成一次身份验证"
+                            else -> "开启后可使用生物识别或 PIN 快速解锁"
+                        },
                     checked = autoUnlockSwitchChecked,
                     startAction = {
                         Icon(
@@ -227,7 +235,8 @@ fun SecuritySettingsContent(
                     },
                     onCheckedChange = { checked ->
                         if (currentLib == null) {
-                            xzylib.base.util.ToastUtils.showShortToast(context, "请先选择数据库文件")
+                            xzylib.base.util.ToastUtils
+                                .showShortToast(context, "请先选择数据库文件")
                             autoUnlockSwitchChecked = false
                             return@Preference
                         }
@@ -257,16 +266,17 @@ fun SecuritySettingsContent(
                 Spacer(modifier = Modifier.height(12.dp))
 
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Preference(
                         type = PreferenceType.Spinner,
                         title = "认证方式",
-                        summary = if (autoUnlockSelectedIndex >= 0) {
-                            "当前：${autoUnlockModeItems[autoUnlockSelectedIndex]}"
-                        } else {
-                            "请选择认证方式，选择后将触发身份验证"
-                        },
+                        summary =
+                            if (autoUnlockSelectedIndex >= 0) {
+                                "当前：${autoUnlockModeItems[autoUnlockSelectedIndex]}"
+                            } else {
+                                "请选择认证方式，选择后将触发身份验证"
+                            },
                         items = autoUnlockModeItems.map { DropdownItem(text = it) },
                         selectedIndex = if (autoUnlockSelectedIndex >= 0) autoUnlockSelectedIndex else 0,
                         showValue = autoUnlockSelectedIndex >= 0,
@@ -275,34 +285,34 @@ fun SecuritySettingsContent(
                             val currentAuthIconIndex = if (autoUnlockSelectedIndex >= 0) autoUnlockSelectedIndex else 0
                             Row(
                                 modifier = Modifier.padding(end = 16.dp),
-                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
                             ) {
                                 when (currentAuthIconIndex) {
                                     1 -> {
                                         Image(
                                             painter = painterResource(id = R.drawable.fingerprint_24),
                                             contentDescription = "生物识别",
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(20.dp),
                                         )
                                     }
                                     2 -> {
                                         Image(
                                             painter = painterResource(id = R.drawable.key_vertical_24),
                                             contentDescription = "PIN",
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(20.dp),
                                         )
                                     }
                                     else -> {
                                         Image(
                                             painter = painterResource(id = R.drawable.key_vertical_24),
                                             contentDescription = "默认凭据",
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(20.dp),
                                         )
                                         Text(text = "/")
                                         Image(
                                             painter = painterResource(id = R.drawable.fingerprint_24),
                                             contentDescription = "默认生物识别",
-                                            modifier = Modifier.size(20.dp)
+                                            modifier = Modifier.size(20.dp),
                                         )
                                     }
                                 }
@@ -318,29 +328,34 @@ fun SecuritySettingsContent(
                             val authMode = indexToAuthMode(selectedIndex)
 
                             if (context !is FragmentActivity) {
-                                xzylib.base.util.ToastUtils.showShortToast(context, "当前页面无法发起认证")
+                                xzylib.base.util.ToastUtils
+                                    .showShortToast(context, "当前页面无法发起认证")
                                 return@Preference
                             }
 
                             val masterPassword = viewModel.libraryViewModel.getCurrentLibraryMasterPassword()
                             if (masterPassword.isNullOrBlank()) {
-                                xzylib.base.util.ToastUtils.showShortToast(context, "请先手动解锁一次当前库")
-                                autoUnlockSelectedIndex = if (selectedLibrary.autoUnlockEnabled) {
-                                    authModeToIndex(selectedLibrary.autoUnlockAuthMode)
-                                } else {
-                                    -1
-                                }
+                                xzylib.base.util.ToastUtils
+                                    .showShortToast(context, "请先手动解锁一次当前库")
+                                autoUnlockSelectedIndex =
+                                    if (selectedLibrary.autoUnlockEnabled) {
+                                        authModeToIndex(selectedLibrary.autoUnlockAuthMode)
+                                    } else {
+                                        -1
+                                    }
                                 return@Preference
                             }
 
                             val cipher = viewModel.autoUnlockViewModel.getCipherForEnrollment(selectedLibrary)
                             if (cipher == null) {
-                                xzylib.base.util.ToastUtils.showShortToast(context, "无法启用自动解锁")
-                                autoUnlockSelectedIndex = if (selectedLibrary.autoUnlockEnabled) {
-                                    authModeToIndex(selectedLibrary.autoUnlockAuthMode)
-                                } else {
-                                    -1
-                                }
+                                xzylib.base.util.ToastUtils
+                                    .showShortToast(context, "无法启用自动解锁")
+                                autoUnlockSelectedIndex =
+                                    if (selectedLibrary.autoUnlockEnabled) {
+                                        authModeToIndex(selectedLibrary.autoUnlockAuthMode)
+                                    } else {
+                                        -1
+                                    }
                                 return@Preference
                             }
 
@@ -352,26 +367,29 @@ fun SecuritySettingsContent(
                                 authMode = authMode,
                                 onSuccess = { authCipher ->
                                     if (authCipher != null) {
-                                        val enabled = viewModel.autoUnlockViewModel.enableAutoUnlock(
-                                            library = selectedLibrary,
-                                            cipher = authCipher,
-                                            masterPassword = masterPassword,
-                                            resolveLibrary = { viewModel.libraryViewModel.resolveLibrarySnapshot(it) },
-                                            onPersist = { viewModel.libraryViewModel.persistLibraryMetadata(it) },
-                                            authMode = authMode
-                                        )
+                                        val enabled =
+                                            viewModel.autoUnlockViewModel.enableAutoUnlock(
+                                                library = selectedLibrary,
+                                                cipher = authCipher,
+                                                masterPassword = masterPassword,
+                                                resolveLibrary = { viewModel.libraryViewModel.resolveLibrarySnapshot(it) },
+                                                onPersist = { viewModel.libraryViewModel.persistLibraryMetadata(it) },
+                                                authMode = authMode,
+                                            )
                                         if (!enabled) {
-                                            xzylib.base.util.ToastUtils.showShortToast(context, "自动解锁启用失败")
+                                            xzylib.base.util.ToastUtils
+                                                .showShortToast(context, "自动解锁启用失败")
                                         }
                                     }
                                 },
                                 onFailure = { errorCode, _ ->
                                     var fallbackLaunched = false
                                     if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
-                                        val intent = viewModel.autoUnlockViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
-                                            title = "启用自动解锁",
-                                            subtitle = "请使用 PIN/图案/密码完成验证"
-                                        )
+                                        val intent =
+                                            viewModel.autoUnlockViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
+                                                title = "启用自动解锁",
+                                                subtitle = "请使用 PIN/图案/密码完成验证",
+                                            )
                                         if (intent != null) {
                                             pendingSettingAuthLibraryId = selectedLibrary.id
                                             pendingSettingAuthMode = authMode
@@ -381,13 +399,14 @@ fun SecuritySettingsContent(
                                     }
 
                                     if (!fallbackLaunched) {
-                                        autoUnlockSelectedIndex = if (selectedLibrary.autoUnlockEnabled) {
-                                            authModeToIndex(selectedLibrary.autoUnlockAuthMode)
-                                        } else {
-                                            -1
-                                        }
+                                        autoUnlockSelectedIndex =
+                                            if (selectedLibrary.autoUnlockEnabled) {
+                                                authModeToIndex(selectedLibrary.autoUnlockAuthMode)
+                                            } else {
+                                                -1
+                                            }
                                     }
-                                }
+                                },
                             )
                         },
                     )
@@ -397,30 +416,32 @@ fun SecuritySettingsContent(
             if (currentLib != null) {
                 Spacer(modifier = Modifier.height(12.dp))
 
-                val manualUnlockRemaining = viewModel.autoUnlockViewModel.getManualUnlockWindowRemainingMillis(
-                    library = currentLib,
-                    nowMillis = manualUnlockClockMillis
-                )
+                val manualUnlockRemaining =
+                    viewModel.autoUnlockViewModel.getManualUnlockWindowRemainingMillis(
+                        library = currentLib,
+                        nowMillis = manualUnlockClockMillis,
+                    )
 
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Preference(
                         type = PreferenceType.Switch,
                         title = "强制超时主密码校验",
-                        summary = when {
-                            !manualUnlockWindowSwitchChecked -> "已关闭强制主密码校验"
-                            !autoUnlockSwitchChecked && !currentLib.autoUnlockEnabled -> "启用自动解锁后生效"
-                            manualUnlockRemaining == null -> "强制主密码校验不可用"
-                            manualUnlockRemaining <= 0L -> "已超过48小时：64小时内仍可凭据解锁一次，之后需手动输入主密码"
-                            else -> "剩余：${viewModel.autoUnlockViewModel.formatRemainingHoursMinutes(manualUnlockRemaining)}"
-                        },
+                        summary =
+                            when {
+                                !manualUnlockWindowSwitchChecked -> "已关闭强制主密码校验"
+                                !autoUnlockSwitchChecked && !currentLib.autoUnlockEnabled -> "启用自动解锁后生效"
+                                manualUnlockRemaining == null -> "强制主密码校验不可用"
+                                manualUnlockRemaining <= 0L -> "已超过48小时：64小时内仍可凭据解锁一次，之后需手动输入主密码"
+                                else -> "剩余：${viewModel.autoUnlockViewModel.formatRemainingHoursMinutes(manualUnlockRemaining)}"
+                            },
                         checked = manualUnlockWindowSwitchChecked,
                         startAction = {
                             Icon(
                                 modifier = Modifier.padding(end = 16.dp),
                                 imageVector = MiuixIcons.Settings,
-                                contentDescription = "强制超时主密码校验"
+                                contentDescription = "强制超时主密码校验",
                             )
                         },
                         onCheckedChange = { checked ->
@@ -439,7 +460,7 @@ fun SecuritySettingsContent(
                 val lockTimeoutMinutes by viewModel.lockTimeoutMinutes.collectAsState()
                 val lockTimeoutIndex = lockTimeoutValues.indexOf(lockTimeoutMinutes).coerceAtLeast(0)
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Preference(
                         type = PreferenceType.Spinner,
@@ -448,27 +469,31 @@ fun SecuritySettingsContent(
                         items = lockTimeoutItems.map { DropdownItem(text = it) },
                         selectedIndex = lockTimeoutIndex,
                         showValue = lockTimeoutMinutes > 0,
-                        bottomAction = if (lockTimeoutMinutes > 0) {
-                            {
-                                val lockTimeoutText = buildAnnotatedString {
-                                    append("应用超过")
-                                    withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
-                                        append("${lockTimeoutMinutes} 分钟")
-                                    }
-                                    append("未操作后将自动锁定")
+                        bottomAction =
+                            if (lockTimeoutMinutes > 0) {
+                                {
+                                    val lockTimeoutText =
+                                        buildAnnotatedString {
+                                            append("应用超过")
+                                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) {
+                                                append("$lockTimeoutMinutes 分钟")
+                                            }
+                                            append("未操作后将自动锁定")
+                                        }
+                                    Text(
+                                        text = lockTimeoutText,
+                                        fontSize = MiuixTheme.textStyles.body2.fontSize,
+                                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                    )
                                 }
-                                Text(
-                                    text = lockTimeoutText,
-                                    fontSize = MiuixTheme.textStyles.body2.fontSize,
-                                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                                )
-                            }
-                        } else null,
+                            } else {
+                                null
+                            },
                         startAction = {
                             Icon(
                                 modifier = Modifier.padding(end = 16.dp),
                                 imageVector = MiuixIcons.Lock,
-                                contentDescription = "应用超时锁定"
+                                contentDescription = "应用超时锁定",
                             )
                         },
                         onSelectedIndexChange = { index ->
@@ -481,7 +506,7 @@ fun SecuritySettingsContent(
 
                 val lockOnBackground by viewModel.lockOnBackground.collectAsState()
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Preference(
                         type = PreferenceType.Switch,
@@ -492,7 +517,7 @@ fun SecuritySettingsContent(
                             Icon(
                                 modifier = Modifier.padding(end = 16.dp),
                                 imageVector = MiuixIcons.Lock,
-                                contentDescription = "后台自动锁定"
+                                contentDescription = "后台自动锁定",
                             )
                         },
                         onCheckedChange = { checked ->
@@ -505,22 +530,23 @@ fun SecuritySettingsContent(
 
                 val isSecureRecentsEnabled by viewModel.isSecureRecentsEnabled.collectAsState()
                 Card(
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
                     Preference(
                         type = PreferenceType.Switch,
                         title = "截屏防护",
-                        summary = if (isSecureRecentsEnabled) {
-                            "禁止截屏、录屏与最近任务内容预览"
-                        } else {
-                            "临时关闭，5 分钟后自动恢复"
-                        },
+                        summary =
+                            if (isSecureRecentsEnabled) {
+                                "禁止截屏、录屏与最近任务内容预览"
+                            } else {
+                                "临时关闭，5 分钟后自动恢复"
+                            },
                         checked = isSecureRecentsEnabled,
                         startAction = {
                             Icon(
                                 modifier = Modifier.padding(end = 16.dp),
                                 imageVector = MiuixIcons.ScreenCapture,
-                                contentDescription = "截屏防护"
+                                contentDescription = "截屏防护",
                             )
                         },
                         onCheckedChange = { checked ->

@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -30,8 +30,9 @@ import com.kunzisoft.keepass.database.element.node.Type
 import com.kunzisoft.keepass.utils.readParcelableCompat
 import java.util.*
 
-class GroupKDB : GroupVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface {
-
+class GroupKDB :
+    GroupVersioned<Int, UUID, GroupKDB, EntryKDB>,
+    NodeKDBInterface {
     // Used by KeePass internally, don't use
     var groupFlags = 0
 
@@ -41,21 +42,28 @@ class GroupKDB : GroupVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface
         groupFlags = parcel.readInt()
     }
 
-    override fun readParentParcelable(parcel: Parcel): GroupKDB? {
-        return parcel.readParcelableCompat()
-    }
+    override fun readParentParcelable(parcel: Parcel): GroupKDB? = parcel.readParcelableCompat()
 
-    override fun writeParentParcelable(parent: GroupKDB?, parcel: Parcel, flags: Int) {
+    override fun writeParentParcelable(
+        parent: GroupKDB?,
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(parent, flags)
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(dest, flags)
         dest.writeInt(groupFlags)
     }
 
-    fun updateWith(source: GroupKDB,
-                   updateParents: Boolean = true) {
+    fun updateWith(
+        source: GroupKDB,
+        updateParents: Boolean = true,
+    ) {
         super.updateWith(source, updateParents)
         groupFlags = source.groupFlags
     }
@@ -63,13 +71,9 @@ class GroupKDB : GroupVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface
     override val type: Type
         get() = Type.GROUP
 
-    override fun initNodeId(): NodeId<Int> {
-        return NodeIdInt()
-    }
+    override fun initNodeId(): NodeId<Int> = NodeIdInt()
 
-    override fun copyNodeId(nodeId: NodeId<Int>): NodeId<Int> {
-        return NodeIdInt(nodeId.id)
-    }
+    override fun copyNodeId(nodeId: NodeId<Int>): NodeId<Int> = NodeIdInt(nodeId.id)
 
     fun setGroupId(groupId: Int) {
         this.nodeId = NodeIdInt(groupId)
@@ -78,16 +82,12 @@ class GroupKDB : GroupVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface
     override fun afterAssignNewParent() {}
 
     companion object {
-
         @JvmField
-        val CREATOR: Parcelable.Creator<GroupKDB> = object : Parcelable.Creator<GroupKDB> {
-            override fun createFromParcel(parcel: Parcel): GroupKDB {
-                return GroupKDB(parcel)
-            }
+        val CREATOR: Parcelable.Creator<GroupKDB> =
+            object : Parcelable.Creator<GroupKDB> {
+                override fun createFromParcel(parcel: Parcel): GroupKDB = GroupKDB(parcel)
 
-            override fun newArray(size: Int): Array<GroupKDB?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<GroupKDB?> = arrayOfNulls(size)
             }
-        }
     }
 }

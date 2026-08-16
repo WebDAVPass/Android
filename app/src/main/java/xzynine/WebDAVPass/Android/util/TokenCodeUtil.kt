@@ -13,7 +13,6 @@ import javax.crypto.spec.SecretKeySpec
  * TOTP/HOTP 令牌代码生成工具类
  */
 class TokenCodeUtil {
-    
     /**
      * 生成令牌代码
      */
@@ -33,8 +32,8 @@ class TokenCodeUtil {
                     TokenCode(
                         getHOTP(otpToken, counter + 1),
                         (counter + 1) * period * 1000,
-                        (counter + 2) * period * 1000
-                    )
+                        (counter + 2) * period * 1000,
+                    ),
                 )
             }
         }
@@ -43,7 +42,10 @@ class TokenCodeUtil {
     /**
      * 生成 HOTP 代码
      */
-    private fun getHOTP(otpToken: OtpToken, counter: Long): String {
+    private fun getHOTP(
+        otpToken: OtpToken,
+        counter: Long,
+    ): String {
         // 编码计数器为网络字节序
         val bb = ByteBuffer.allocate(8)
         bb.putLong(counter)
@@ -68,7 +70,7 @@ class TokenCodeUtil {
             binary = binary or (digest[off + 2].toInt() and 0xff shl 0x08)
             binary = binary or (digest[off + 3].toInt() and 0xff)
             var hotp = ""
-            
+
             // Steam 特殊处理
             if (otpToken.issuer == "Steam") {
                 for (i in 0 until otpToken.digits) {
@@ -99,10 +101,34 @@ class TokenCodeUtil {
 
     companion object {
         // Steam 令牌字符集
-        private val STEAMCHARS = charArrayOf(
-            '2', '3', '4', '5', '6', '7', '8', '9', 'B', 'C',
-            'D', 'F', 'G', 'H', 'J', 'K', 'M', 'N', 'P', 'Q',
-            'R', 'T', 'V', 'W', 'X', 'Y'
-        )
+        private val STEAMCHARS =
+            charArrayOf(
+                '2',
+                '3',
+                '4',
+                '5',
+                '6',
+                '7',
+                '8',
+                '9',
+                'B',
+                'C',
+                'D',
+                'F',
+                'G',
+                'H',
+                'J',
+                'K',
+                'M',
+                'N',
+                'P',
+                'Q',
+                'R',
+                'T',
+                'V',
+                'W',
+                'X',
+                'Y',
+            )
     }
 }

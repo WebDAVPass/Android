@@ -24,7 +24,6 @@ import android.os.Parcelable
 import com.kunzisoft.keepass.utils.readParcelableCompat
 
 class IconImage() : IconImageDraw() {
-
     var standard: IconImageStandard = IconImageStandard()
     var custom: IconImageCustom = IconImageCustom()
 
@@ -36,8 +35,10 @@ class IconImage() : IconImageDraw() {
         this.custom = iconImageCustom
     }
 
-    constructor(iconImageStandard: IconImageStandard,
-                iconImageCustom: IconImageCustom) : this() {
+    constructor(
+        iconImageStandard: IconImageStandard,
+        iconImageCustom: IconImageCustom,
+    ) : this() {
         this.standard = iconImageStandard
         this.custom = iconImageCustom
     }
@@ -47,18 +48,17 @@ class IconImage() : IconImageDraw() {
         custom = parcel.readParcelableCompat() ?: custom
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(standard, flags)
         parcel.writeParcelable(custom, flags)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    override fun getIconImageToDraw(): IconImage {
-        return this
-    }
+    override fun getIconImageToDraw(): IconImage = this
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -77,12 +77,8 @@ class IconImage() : IconImageDraw() {
     }
 
     companion object CREATOR : Parcelable.Creator<IconImage> {
-        override fun createFromParcel(parcel: Parcel): IconImage {
-            return IconImage(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): IconImage = IconImage(parcel)
 
-        override fun newArray(size: Int): Array<IconImage?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<IconImage?> = arrayOfNulls(size)
     }
 }

@@ -22,7 +22,7 @@ data class EditableFieldDraft(
      * 是否为条目内建标准字段（UserName/Password/URL/Notes）。
      * 标准字段由独立编辑器管理，不应出现在自定义字段草稿列表中。
      */
-    val isStandard: Boolean = false
+    val isStandard: Boolean = false,
 )
 
 /**
@@ -36,7 +36,7 @@ data class EditableAttachmentDraft(
     val name: String,
     val data: ByteArray? = null,
     val isNew: Boolean = false,
-    val removed: Boolean = false
+    val removed: Boolean = false,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -73,7 +73,7 @@ data class PasswordEntryEditDraft(
     val customIconUuid: String? = null,
     val iconStandardId: Int = 0,
     val newCustomIconBytes: ByteArray? = null,
-    val tags: List<String> = emptyList()
+    val tags: List<String> = emptyList(),
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -120,7 +120,7 @@ data class PasswordGroupEditDraft(
     val groupId: Long? = null,
     val parentGroupId: Long? = null,
     val title: String,
-    val notes: String = ""
+    val notes: String = "",
 )
 
 /**
@@ -129,7 +129,7 @@ data class PasswordGroupEditDraft(
 data class GroupNodeInfo(
     val groupId: Long,
     val title: String,
-    val depth: Int
+    val depth: Int,
 )
 
 /**
@@ -140,7 +140,7 @@ data class DatabaseSettingsInfo(
     val keyRounds: Long,
     val memoryUsage: Long,
     val parallelism: Long,
-    val isCompressionEnabled: Boolean
+    val isCompressionEnabled: Boolean,
 )
 
 /**
@@ -151,7 +151,7 @@ data class SecurityIssueEntry(
     val title: String,
     val account: String,
     val passwordStrengthBits: Double,
-    val expiryTime: Long?
+    val expiryTime: Long?,
 )
 
 /**
@@ -159,7 +159,7 @@ data class SecurityIssueEntry(
  */
 data class SecurityIssuesInfo(
     val expiredEntries: List<SecurityIssueEntry>,
-    val weakPasswordEntries: List<SecurityIssueEntry>
+    val weakPasswordEntries: List<SecurityIssueEntry>,
 ) {
     val expiredCount: Int get() = expiredEntries.size
     val weakCount: Int get() = weakPasswordEntries.size

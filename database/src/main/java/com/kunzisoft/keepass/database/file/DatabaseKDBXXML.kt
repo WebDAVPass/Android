@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@
 package com.kunzisoft.keepass.database.file
 
 object DatabaseKDBXXML {
-
     const val ElemDocNode = "KeePassFile"
     const val ElemMeta = "Meta"
     const val ElemRoot = "Root"

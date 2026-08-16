@@ -40,16 +40,17 @@ fun LandscapePasswordPanes(
     selectedEntryId: Long?,
     onEntryClick: (Long) -> Unit,
     onDetailBack: () -> Unit,
-    onDetailDeleted: () -> Unit
+    onDetailDeleted: () -> Unit,
 ) {
     Row(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
     ) {
         // 中间：密码列表
         Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
         ) {
             PasswordListScreen(
                 tokenViewModel = tokenViewModel,
@@ -60,16 +61,17 @@ fun LandscapePasswordPanes(
                 enableRecycleBinActions = listMode == PasswordListMode.RECENT_DELETED,
                 onEntryClick = onEntryClick,
                 onNavigateBack = {},
-                isEmbedded = true
+                isEmbedded = true,
             )
         }
         // 列表与详情之间的分割线
         VerticalDivider()
         // 右侧：密码详情（始终占位；未选中条目时显示空态）
         Box(
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxHeight()
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .fillMaxHeight(),
         ) {
             val entryId = selectedEntryId
             if (entryId != null) {
@@ -78,21 +80,22 @@ fun LandscapePasswordPanes(
                     entryId = entryId,
                     onNavigateBack = onDetailBack,
                     onDeleted = onDetailDeleted,
-                    isEmbedded = true
+                    isEmbedded = true,
                 )
             } else {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .statusBarsPadding()
-                        .padding(24.dp),
-                    contentAlignment = Alignment.Center
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                            .padding(24.dp),
+                    contentAlignment = Alignment.Center,
                 ) {
                     Text(
                         text = "选择一个条目查看详情",
                         fontSize = 14.sp,
                         color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                        textAlign = TextAlign.Center
+                        textAlign = TextAlign.Center,
                     )
                 }
             }

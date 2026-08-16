@@ -3,19 +3,18 @@ package xzynine.WebDAVPass.Android.data
 import android.content.Context
 import android.net.Uri
 import android.provider.OpenableColumns
-import xzylib.base.util.Logger
 import com.kunzisoft.keepass.database.crypto.kdf.KdfFactory
+import com.kunzisoft.keepass.database.element.Attachment
 import com.kunzisoft.keepass.database.element.Database
 import com.kunzisoft.keepass.database.element.DateInstant
 import com.kunzisoft.keepass.database.element.Entry
-import com.kunzisoft.keepass.database.element.Attachment
 import com.kunzisoft.keepass.database.element.Field
-import com.kunzisoft.keepass.database.element.database.CompressionAlgorithm
-import com.kunzisoft.keepass.database.element.icon.IconImage
 import com.kunzisoft.keepass.database.element.Group
 import com.kunzisoft.keepass.database.element.MasterCredential
-import com.kunzisoft.keepass.database.element.database.DatabaseVersioned
 import com.kunzisoft.keepass.database.element.Tags
+import com.kunzisoft.keepass.database.element.database.CompressionAlgorithm
+import com.kunzisoft.keepass.database.element.database.DatabaseVersioned
+import com.kunzisoft.keepass.database.element.icon.IconImage
 import com.kunzisoft.keepass.database.element.security.ProtectedString
 import com.kunzisoft.keepass.hardware.HardwareKey
 import com.kunzisoft.keepass.model.EntryInfo
@@ -25,19 +24,21 @@ import com.kunzisoft.keepass.otp.OtpEntryFields
 import com.kunzisoft.keepass.otp.OtpEntryFields.isOTP
 import com.kunzisoft.keepass.otp.OtpType
 import com.kunzisoft.keepass.otp.TokenCalculator
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.channelFlow
+import xzylib.base.util.Logger
 import xzynine.WebDAVPass.Android.util.PasswordStrength
-import java.io.ByteArrayOutputStream
 import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.InputStream
 import java.io.OutputStream
 import java.util.UUID
 import kotlin.math.abs
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.channelFlow
 
-class KdbxTokenRepository(context: Context) {
-
+class KdbxTokenRepository(
+    context: Context,
+) {
     private val appContext: Context = context.applicationContext
 
     @Volatile
@@ -66,11 +67,20 @@ class KdbxTokenRepository(context: Context) {
      * 数据库存储定位。
      */
     private sealed interface DatabaseLocation {
-        data class FileLocation(val file: File) : DatabaseLocation
-        data class UriLocation(val uri: Uri) : DatabaseLocation
+        data class FileLocation(
+            val file: File,
+        ) : DatabaseLocation
+
+        data class UriLocation(
+            val uri: Uri,
+        ) : DatabaseLocation
     }
 
-    fun initializeDatabase(localPath: String, masterPassword: String, keyFileData: ByteArray? = null) {
+    fun initializeDatabase(
+        localPath: String,
+        masterPassword: String,
+        keyFileData: ByteArray? = null,
+    ) {
         when (val location = resolveLocation(localPath)) {
             is DatabaseLocation.FileLocation -> {
                 val file = location.file
@@ -92,10 +102,14 @@ class KdbxTokenRepository(context: Context) {
         }
     }
 
-    fun createDatabaseBytes(masterPassword: String, keyFileData: ByteArray? = null): ByteArray {
-        val database = Database().apply {
-            createData(DATABASE_NAME, ROOT_GROUP_NAME, null)
-        }
+    fun createDatabaseBytes(
+        masterPassword: String,
+        keyFileData: ByteArray? = null,
+    ): ByteArray {
+        val database =
+            Database().apply {
+                createData(DATABASE_NAME, ROOT_GROUP_NAME, null)
+            }
 
         return ByteArrayOutputStream().use { outputStream ->
             val cacheFile = File.createTempFile("kdbx-create-", ".tmp")
@@ -106,11 +120,12 @@ class KdbxTokenRepository(context: Context) {
                     isNewLocation = true,
                     // 新建库凭据仅由参数决定，不继承当前已解锁库的密钥文件，
                     // 避免误用旧密钥文件加密导致新库无法用纯密码解锁
-                    masterCredential = MasterCredential(
-                        password = masterPassword,
-                        keyFileData = keyFileData
-                    ),
-                    challengeResponseRetriever = emptyChallengeResponseRetriever
+                    masterCredential =
+                        MasterCredential(
+                            password = masterPassword,
+                            keyFileData = keyFileData,
+                        ),
+                    challengeResponseRetriever = emptyChallengeResponseRetriever,
                 )
                 outputStream.toByteArray()
             } finally {
@@ -119,7 +134,11 @@ class KdbxTokenRepository(context: Context) {
         }
     }
 
-    fun validatePassword(localPath: String, masterPassword: String, keyFileData: ByteArray? = null): Boolean {
+    fun validatePassword(
+        localPath: String,
+        masterPassword: String,
+        keyFileData: ByteArray? = null,
+    ): Boolean {
         val effectiveKeyFileData = keyFileData ?: DatabaseManager.getKeyFileData()
         lastUnlockErrorMessage = null
         return runCatching {
@@ -157,18 +176,19 @@ class KdbxTokenRepository(context: Context) {
         }.getOrDefault(false)
     }
 
-    fun getLastUnlockErrorMessage(): String? {
-        return lastUnlockErrorMessage
-    }
+    fun getLastUnlockErrorMessage(): String? = lastUnlockErrorMessage
 
-    fun loadTokens(localPath: String, masterPassword: String): List<OtpToken> {
-        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+    fun loadTokens(
+        localPath: String,
+        masterPassword: String,
+    ): List<OtpToken> =
+        withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             migrateLegacyTokenConvention(db)
             val entries = collectEntriesOutsideRecycleBin(db, db.rootGroup)
-            entries.mapNotNull { entry -> toToken(entry) }
+            entries
+                .mapNotNull { entry -> toToken(entry) }
                 .sortedBy { it.ordinal }
         }
-    }
 
     /**
      * 流式加载令牌。
@@ -176,53 +196,67 @@ class KdbxTokenRepository(context: Context) {
      * 对比 [loadTokens]：此方法以 Flow 形式逐条发射，调用方可在收集过程中增量更新 UI；
      * 若 [DatabaseManager] 已有缓存实例，则跳过解密直接读取，性能更优。
      */
-    fun loadTokensFlow(localPath: String, masterPassword: String): Flow<OtpToken> = channelFlow {
-        withDatabase(localPath, masterPassword, saveAfter = true) { db ->
-            migrateLegacyTokenConvention(db)
-            collectEntriesOutsideRecycleBin(db, db.rootGroup)
-                .mapNotNull { entry -> toToken(entry) }
-                .sortedBy { it.ordinal }
-                .forEach { token -> trySend(token) }
+    fun loadTokensFlow(
+        localPath: String,
+        masterPassword: String,
+    ): Flow<OtpToken> =
+        channelFlow {
+            withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+                migrateLegacyTokenConvention(db)
+                collectEntriesOutsideRecycleBin(db, db.rootGroup)
+                    .mapNotNull { entry -> toToken(entry) }
+                    .sortedBy { it.ordinal }
+                    .forEach { token -> trySend(token) }
+            }
         }
-    }
 
     /**
      * 读取数据库中全部条目摘要（默认不包含键值详情，搜索时需要字段详情）。
      */
-    fun loadPasswordEntries(localPath: String, masterPassword: String, includeFieldDetails: Boolean = false): List<PasswordEntry> {
-        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+    fun loadPasswordEntries(
+        localPath: String,
+        masterPassword: String,
+        includeFieldDetails: Boolean = false,
+    ): List<PasswordEntry> =
+        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             buildPasswordEntries(
                 database = db,
                 entries = collectEntriesOutsideRecycleBin(db, db.rootGroup),
                 groups = emptyList(),
-                includeFieldDetails = includeFieldDetails
+                includeFieldDetails = includeFieldDetails,
             )
         }
-    }
 
     /**
      * 读取数据库中一级分组可见条目摘要（根组直系条目 + 一级子组条目）。
      */
-    fun loadPasswordEntriesByTopLevel(localPath: String, masterPassword: String): List<PasswordEntry> {
-        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+    fun loadPasswordEntriesByTopLevel(
+        localPath: String,
+        masterPassword: String,
+    ): List<PasswordEntry> =
+        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val rootGroup = db.rootGroup
             buildPasswordEntries(
                 database = db,
                 entries = rootGroup?.getChildEntries()?.filterNot { entry -> isEntryInRecycleBin(db, entry) } ?: emptyList(),
                 groups = rootGroup?.getChildGroups()?.filterNot { group -> db.groupIsInRecycleBin(group) } ?: emptyList(),
-                includeFieldDetails = false
+                includeFieldDetails = false,
             )
         }
-    }
 
     /**
      * 读取指定分组下的直系条目与子分组摘要。
      */
-    fun loadPasswordEntriesByGroup(localPath: String, masterPassword: String, groupStableId: Long): List<PasswordEntry> {
+    fun loadPasswordEntriesByGroup(
+        localPath: String,
+        masterPassword: String,
+        groupStableId: Long,
+    ): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val rootGroup = db.rootGroup
-            val targetGroup = findGroupByStableId(rootGroup, groupStableId)
-                ?: return@withDatabase emptyList()
+            val targetGroup =
+                findGroupByStableId(rootGroup, groupStableId)
+                    ?: return@withDatabase emptyList()
             if (db.groupIsInRecycleBin(targetGroup)) {
                 return@withDatabase emptyList()
             }
@@ -231,7 +265,7 @@ class KdbxTokenRepository(context: Context) {
                 database = db,
                 entries = targetGroup.getChildEntries().filterNot { entry -> isEntryInRecycleBin(db, entry) },
                 groups = targetGroup.getChildGroups().filterNot { group -> db.groupIsInRecycleBin(group) },
-                includeFieldDetails = false
+                includeFieldDetails = false,
             )
         }
     }
@@ -242,7 +276,7 @@ class KdbxTokenRepository(context: Context) {
     fun loadRecentDeletedPasswordEntries(
         localPath: String,
         masterPassword: String,
-        includeFieldDetails: Boolean = false
+        includeFieldDetails: Boolean = false,
     ): List<PasswordEntry> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val recycleBin = db.recycleBin ?: return@withDatabase emptyList()
@@ -250,7 +284,7 @@ class KdbxTokenRepository(context: Context) {
                 database = db,
                 entries = collectEntries(recycleBin),
                 groups = emptyList(),
-                includeFieldDetails = includeFieldDetails
+                includeFieldDetails = includeFieldDetails,
             )
         }
     }
@@ -258,15 +292,20 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 按稳定 ID 读取单条密码详情（包含全部键值，支持回收站条目）。
      */
-    fun loadPasswordEntryById(localPath: String, masterPassword: String, entryId: Long): PasswordEntry? {
+    fun loadPasswordEntryById(
+        localPath: String,
+        masterPassword: String,
+        entryId: Long,
+    ): PasswordEntry? {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
-                ?: return@withDatabase null
+            val entry =
+                findEntryByStableId(db, entryId, includeRecycleBin = true)
+                    ?: return@withDatabase null
             buildPasswordEntries(
                 database = db,
                 entries = listOf(entry),
                 groups = emptyList(),
-                includeFieldDetails = true
+                includeFieldDetails = true,
             ).firstOrNull()
         }
     }
@@ -274,16 +313,22 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 按稳定 ID 读取条目编辑草稿。
      */
-    fun loadPasswordEntryDraft(localPath: String, masterPassword: String, entryId: Long): PasswordEntryEditDraft? {
+    fun loadPasswordEntryDraft(
+        localPath: String,
+        masterPassword: String,
+        entryId: Long,
+    ): PasswordEntryEditDraft? {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
-                ?: return@withDatabase null
+            val entry =
+                findEntryByStableId(db, entryId, includeRecycleBin = true)
+                    ?: return@withDatabase null
             val entryInfo = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
             val attachmentPool = db.attachmentPool
-            val attachments = entry.getAttachments(attachmentPool).mapNotNull { attachment ->
-                val name = attachment.name
-                if (name.isBlank()) null else EditableAttachmentDraft(name = name)
-            }
+            val attachments =
+                entry.getAttachments(attachmentPool).mapNotNull { attachment ->
+                    val name = attachment.name
+                    if (name.isBlank()) null else EditableAttachmentDraft(name = name)
+                }
             val iconUuid = entry.icon.custom.uuid
             val customIconUuid = if (iconUuid == DatabaseVersioned.UUID_ZERO) null else iconUuid.toString()
             PasswordEntryEditDraft(
@@ -294,18 +339,19 @@ class KdbxTokenRepository(context: Context) {
                 password = entryInfo.password,
                 url = entryInfo.url,
                 notes = entryInfo.notes,
-                customFields = entryInfo.customFields.map { field ->
-                    EditableFieldDraft(
-                        name = field.name,
-                        value = field.protectedValue.stringValue,
-                        isProtected = field.protectedValue.isProtected
-                    )
-                },
+                customFields =
+                    entryInfo.customFields.map { field ->
+                        EditableFieldDraft(
+                            name = field.name,
+                            value = field.protectedValue.stringValue,
+                            isProtected = field.protectedValue.isProtected,
+                        )
+                    },
                 attachments = attachments,
                 expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
                 customIconUuid = customIconUuid,
                 iconStandardId = entry.icon.standard.id,
-                tags = entry.tags.toList()
+                tags = entry.tags.toList(),
             )
         }
     }
@@ -313,10 +359,15 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 读取条目的历史版本摘要列表（按 KDBX 存储顺序返回）。
      */
-    fun loadEntryHistory(localPath: String, masterPassword: String, entryId: Long): List<EntryHistoryInfo> {
+    fun loadEntryHistory(
+        localPath: String,
+        masterPassword: String,
+        entryId: Long,
+    ): List<EntryHistoryInfo> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
-                ?: return@withDatabase emptyList()
+            val entry =
+                findEntryByStableId(db, entryId, includeRecycleBin = true)
+                    ?: return@withDatabase emptyList()
             entry.getHistory().mapIndexed { index, historyEntry ->
                 val info = historyEntry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
                 EntryHistoryInfo(
@@ -328,7 +379,7 @@ class KdbxTokenRepository(context: Context) {
                     url = info.url,
                     notes = info.notes,
                     customFieldCount = info.customFields.size,
-                    attachmentCount = info.attachments.size
+                    attachmentCount = info.attachments.size,
                 )
             }
         }
@@ -345,11 +396,12 @@ class KdbxTokenRepository(context: Context) {
         localPath: String,
         masterPassword: String,
         entryId: Long,
-        historyIndex: Int
+        historyIndex: Int,
     ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
-            val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
-                ?: return@withDatabase false
+            val entry =
+                findEntryByStableId(db, entryId, includeRecycleBin = false)
+                    ?: return@withDatabase false
             val history = entry.getHistory()
             if (historyIndex !in history.indices) {
                 return@withDatabase false
@@ -374,10 +426,15 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 按稳定 ID 读取分组编辑草稿。
      */
-    fun loadPasswordGroupDraft(localPath: String, masterPassword: String, groupId: Long): PasswordGroupEditDraft? {
+    fun loadPasswordGroupDraft(
+        localPath: String,
+        masterPassword: String,
+        groupId: Long,
+    ): PasswordGroupEditDraft? {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val group = findGroupByStableId(db.rootGroup, groupId)
-                ?: return@withDatabase null
+            val group =
+                findGroupByStableId(db.rootGroup, groupId)
+                    ?: return@withDatabase null
             if (group.parent == null) {
                 return@withDatabase null
             }
@@ -386,7 +443,7 @@ class KdbxTokenRepository(context: Context) {
                 groupId = toStableGroupId(group),
                 parentGroupId = toStableParentGroupId(group.parent),
                 title = groupInfo.title,
-                notes = groupInfo.notes ?: ""
+                notes = groupInfo.notes ?: "",
             )
         }
     }
@@ -394,7 +451,11 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 新建条目并返回稳定 ID。
      */
-    fun createPasswordEntry(localPath: String, masterPassword: String, draft: PasswordEntryEditDraft): Long? {
+    fun createPasswordEntry(
+        localPath: String,
+        masterPassword: String,
+        draft: PasswordEntryEditDraft,
+    ): Long? {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val parent = resolveParentGroup(db, draft.parentGroupId) ?: return@withDatabase null
             if (db.groupIsInRecycleBin(parent)) {
@@ -402,17 +463,18 @@ class KdbxTokenRepository(context: Context) {
             }
 
             val entry = db.createEntry() ?: return@withDatabase null
-            val entryInfo = EntryInfo().apply {
-                title = draft.title
-                username = draft.username
-                password = draft.password
-                url = draft.url
-                notes = draft.notes
-                tags = draft.tags.toTags()
-                customFields = mergeCustomFields(db, entry, draft.customFields)
-                attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
-                applyExpiryAndIcon(this, db, draft)
-            }
+            val entryInfo =
+                EntryInfo().apply {
+                    title = draft.title
+                    username = draft.username
+                    password = draft.password
+                    url = draft.url
+                    notes = draft.notes
+                    tags = draft.tags.toTags()
+                    customFields = mergeCustomFields(db, entry, draft.customFields)
+                    attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
+                    applyExpiryAndIcon(this, db, draft)
+                }
             entry.setEntryInfo(db, entryInfo)
             db.addEntryTo(entry, parent)
             toStableId(entry)
@@ -422,23 +484,29 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 更新条目。
      */
-    fun updatePasswordEntry(localPath: String, masterPassword: String, draft: PasswordEntryEditDraft): Boolean {
+    fun updatePasswordEntry(
+        localPath: String,
+        masterPassword: String,
+        draft: PasswordEntryEditDraft,
+    ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val entryId = draft.entryId ?: return@withDatabase false
-            val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
-                ?: return@withDatabase false
+            val entry =
+                findEntryByStableId(db, entryId, includeRecycleBin = false)
+                    ?: return@withDatabase false
 
-            val entryInfo = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false).apply {
-                title = draft.title
-                username = draft.username
-                password = draft.password
-                url = draft.url
-                notes = draft.notes
-                tags = draft.tags.toTags()
-                customFields = mergeCustomFields(db, entry, draft.customFields)
-                attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
-                applyExpiryAndIcon(this, db, draft)
-            }
+            val entryInfo =
+                entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false).apply {
+                    title = draft.title
+                    username = draft.username
+                    password = draft.password
+                    url = draft.url
+                    notes = draft.notes
+                    tags = draft.tags.toTags()
+                    customFields = mergeCustomFields(db, entry, draft.customFields)
+                    attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
+                    applyExpiryAndIcon(this, db, draft)
+                }
             entry.setEntryInfo(db, entryInfo)
             // 清理被删除附件后遗留的孤儿二进制，避免 KDBX 体积膨胀
             db.removeUnlinkedAttachments()
@@ -477,8 +545,9 @@ class KdbxTokenRepository(context: Context) {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             var count = 0
             iconUpdates.forEach { (entryId, bytes) ->
-                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
-                    ?: return@forEach
+                val entry =
+                    findEntryByStableId(db, entryId, includeRecycleBin = false)
+                        ?: return@forEach
                 val customIconId = UUID.nameUUIDFromBytes(bytes)
                 db.buildNewCustomIcon(customIconId) { customIcon, binary ->
                     if (customIcon != null && binary != null) {
@@ -500,7 +569,11 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 加载指定条目的合并摘要（标准字段 + 自定义字段 + 附件名），不进行重复分组判断。
      */
-    fun loadEntryMergeInfos(localPath: String, masterPassword: String, entryIds: List<Long>): List<DuplicateEntryInfo> {
+    fun loadEntryMergeInfos(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+    ): List<DuplicateEntryInfo> {
         if (entryIds.isEmpty()) {
             return emptyList()
         }
@@ -520,15 +593,20 @@ class KdbxTokenRepository(context: Context) {
      * 组内条目「账号+密码+URL」完全一致时视为无冲突（[DuplicateGroupInfo.isConflict] 为 false），
      * 可直接自动合并；存在差异的组需要手动逐字段选择。
      */
-    fun detectDuplicateGroups(localPath: String, masterPassword: String, entryIds: List<Long>): List<DuplicateGroupInfo> {
+    fun detectDuplicateGroups(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+    ): List<DuplicateGroupInfo> {
         if (entryIds.isEmpty()) {
             return emptyList()
         }
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val infos = entryIds.mapNotNull { entryId ->
-                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@mapNotNull null
-                buildDuplicateEntryInfo(db, entry)
-            }
+            val infos =
+                entryIds.mapNotNull { entryId ->
+                    val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@mapNotNull null
+                    buildDuplicateEntryInfo(db, entry)
+                }
             groupDuplicateInfos(infos)
         }
     }
@@ -551,29 +629,33 @@ class KdbxTokenRepository(context: Context) {
         masterPassword: String,
         masterEntryId: Long,
         sourceEntryIds: List<Long>,
-        fieldSelections: Map<String, Long>
+        fieldSelections: Map<String, Long>,
     ): Int {
         if (sourceEntryIds.isEmpty()) {
             return 0
         }
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
-            val master = findEntryByStableId(db, masterEntryId, includeRecycleBin = false)
-                ?: return@withDatabase 0
-            val sources = sourceEntryIds
-                .mapNotNull { findEntryByStableId(db, it, includeRecycleBin = false) }
-                .filter { it !== master }
+            val master =
+                findEntryByStableId(db, masterEntryId, includeRecycleBin = false)
+                    ?: return@withDatabase 0
+            val sources =
+                sourceEntryIds
+                    .mapNotNull { findEntryByStableId(db, it, includeRecycleBin = false) }
+                    .filter { it !== master }
             if (sources.isEmpty()) {
                 return@withDatabase 0
             }
 
             val masterInfo = master.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
-            val sourceInfos = sources.associate { source ->
-                toStableId(source) to source.getEntryInfo(
-                    db,
-                    raw = true,
-                    removeTemplateConfiguration = false
-                )
-            }
+            val sourceInfos =
+                sources.associate { source ->
+                    toStableId(source) to
+                        source.getEntryInfo(
+                            db,
+                            raw = true,
+                            removeTemplateConfiguration = false,
+                        )
+                }
 
             // 1. 主条目当前版本先入历史，防止合并覆盖后丢失
             master.addEntryToHistory(Entry(master, copyHistory = false))
@@ -582,7 +664,13 @@ class KdbxTokenRepository(context: Context) {
             val sourceInfoOf: (Long?) -> EntryInfo = { sourceId ->
                 sourceId?.let { sourceInfos[it] } ?: masterInfo
             }
-            fun <T> pickStandard(key: String, masterValue: T, isEmpty: (T) -> Boolean, getter: (EntryInfo) -> T): T {
+
+            fun <T> pickStandard(
+                key: String,
+                masterValue: T,
+                isEmpty: (T) -> Boolean,
+                getter: (EntryInfo) -> T,
+            ): T {
                 val sourceId = fieldSelections[key]
                 if (sourceId != null) {
                     return getter(sourceInfoOf(sourceId))
@@ -673,7 +761,10 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 构建单条目合并摘要。
      */
-    private fun buildDuplicateEntryInfo(database: Database, entry: Entry): DuplicateEntryInfo {
+    private fun buildDuplicateEntryInfo(
+        database: Database,
+        entry: Entry,
+    ): DuplicateEntryInfo {
         val info = entry.getEntryInfo(database, raw = true, removeTemplateConfiguration = false)
         val fieldValues = linkedMapOf<String, String>()
         fieldValues[MergeFieldKeys.TITLE] = info.title
@@ -693,7 +784,7 @@ class KdbxTokenRepository(context: Context) {
             hasPassword = info.password.isNotEmpty(),
             modifiedTime = info.lastModificationTime.toMilliseconds(),
             fieldValues = fieldValues,
-            attachmentNames = entry.getAttachments(database.attachmentPool).map { it.name }
+            attachmentNames = entry.getAttachments(database.attachmentPool).map { it.name },
         )
     }
 
@@ -705,6 +796,7 @@ class KdbxTokenRepository(context: Context) {
             return emptyList()
         }
         val parent = IntArray(infos.size) { it }
+
         fun find(x: Int): Int {
             var root = x
             while (parent[root] != root) {
@@ -718,7 +810,11 @@ class KdbxTokenRepository(context: Context) {
             }
             return root
         }
-        fun union(a: Int, b: Int) {
+
+        fun union(
+            a: Int,
+            b: Int,
+        ) {
             val ra = find(a)
             val rb = find(b)
             if (ra != rb) {
@@ -726,13 +822,14 @@ class KdbxTokenRepository(context: Context) {
             }
         }
 
-        val norms = infos.map { info ->
-            Triple(
-                info.title.trim().lowercase(),
-                info.account.trim().lowercase(),
-                info.url.trim().lowercase()
-            )
-        }
+        val norms =
+            infos.map { info ->
+                Triple(
+                    info.title.trim().lowercase(),
+                    info.account.trim().lowercase(),
+                    info.url.trim().lowercase(),
+                )
+            }
         val passwords = infos.map { it.fieldValue(MergeFieldKeys.PASSWORD) }
         for (i in infos.indices) {
             for (j in i + 1 until infos.size) {
@@ -767,7 +864,7 @@ class KdbxTokenRepository(context: Context) {
                 DuplicateGroupInfo(
                     groupId = index,
                     entries = list.sortedByDescending { it.modifiedTime },
-                    isConflict = hasFieldConflict(list)
+                    isConflict = hasFieldConflict(list),
                 )
             }
     }
@@ -791,10 +888,15 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 删除条目（仅回收站删除）。
      */
-    fun deletePasswordEntry(localPath: String, masterPassword: String, entryId: Long): Boolean {
+    fun deletePasswordEntry(
+        localPath: String,
+        masterPassword: String,
+        entryId: Long,
+    ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
-            val entry = findEntryByStableId(db, entryId, includeRecycleBin = false)
-                ?: return@withDatabase false
+            val entry =
+                findEntryByStableId(db, entryId, includeRecycleBin = false)
+                    ?: return@withDatabase false
             if (!db.canRecycle(entry)) {
                 return@withDatabase false
             }
@@ -808,7 +910,11 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 新建分组并返回稳定 ID。
      */
-    fun createPasswordGroup(localPath: String, masterPassword: String, draft: PasswordGroupEditDraft): Long? {
+    fun createPasswordGroup(
+        localPath: String,
+        masterPassword: String,
+        draft: PasswordGroupEditDraft,
+    ): Long? {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val parent = resolveParentGroup(db, draft.parentGroupId) ?: return@withDatabase null
             if (db.groupIsInRecycleBin(parent)) {
@@ -816,10 +922,11 @@ class KdbxTokenRepository(context: Context) {
             }
 
             val group = db.createGroup(virtual = false) ?: return@withDatabase null
-            val groupInfo = GroupInfo().apply {
-                title = draft.title
-                notes = draft.notes
-            }
+            val groupInfo =
+                GroupInfo().apply {
+                    title = draft.title
+                    notes = draft.notes
+                }
             group.setGroupInfo(groupInfo)
             db.addGroupTo(group, parent)
             toStableGroupId(group)
@@ -829,19 +936,25 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 更新分组。
      */
-    fun updatePasswordGroup(localPath: String, masterPassword: String, draft: PasswordGroupEditDraft): Boolean {
+    fun updatePasswordGroup(
+        localPath: String,
+        masterPassword: String,
+        draft: PasswordGroupEditDraft,
+    ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val groupId = draft.groupId ?: return@withDatabase false
-            val group = findGroupByStableId(db.rootGroup, groupId)
-                ?: return@withDatabase false
+            val group =
+                findGroupByStableId(db.rootGroup, groupId)
+                    ?: return@withDatabase false
             if (group.parent == null || db.groupIsInRecycleBin(group)) {
                 return@withDatabase false
             }
 
-            val groupInfo = group.getGroupInfo().apply {
-                title = draft.title
-                notes = draft.notes
-            }
+            val groupInfo =
+                group.getGroupInfo().apply {
+                    title = draft.title
+                    notes = draft.notes
+                }
             group.setGroupInfo(groupInfo)
 
             val targetParent = resolveParentGroup(db, draft.parentGroupId) ?: return@withDatabase false
@@ -865,10 +978,15 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 删除分组（仅回收站删除）。
      */
-    fun deletePasswordGroup(localPath: String, masterPassword: String, groupId: Long): Boolean {
+    fun deletePasswordGroup(
+        localPath: String,
+        masterPassword: String,
+        groupId: Long,
+    ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
-            val group = findGroupByStableId(db.rootGroup, groupId)
-                ?: return@withDatabase false
+            val group =
+                findGroupByStableId(db.rootGroup, groupId)
+                    ?: return@withDatabase false
             if (group.parent == null || db.groupIsInRecycleBin(group)) {
                 return@withDatabase false
             }
@@ -887,13 +1005,18 @@ class KdbxTokenRepository(context: Context) {
      *
      * @return 成功恢复的数量
      */
-    fun restoreRecentDeletedPasswordEntries(localPath: String, masterPassword: String, entryIds: List<Long>): Int {
+    fun restoreRecentDeletedPasswordEntries(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+    ): Int {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val recycleBin = db.recycleBin ?: return@withDatabase 0
             var restored = 0
             entryIds.forEach { entryId ->
-                val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
-                    ?: return@forEach
+                val entry =
+                    findEntryByStableId(db, entryId, includeRecycleBin = true)
+                        ?: return@forEach
                 val parent = entry.parent ?: return@forEach
                 if (recycleBin != parent) {
                     // 条目位于被回收的分组内：恢复其所属的最外层已回收分组（整组连同子条目一起恢复）
@@ -902,18 +1025,20 @@ class KdbxTokenRepository(context: Context) {
                         recycledGroup = recycledGroup.parent
                     }
                     if (recycledGroup != null && recycledGroup.parent == recycleBin) {
-                        val target = findGroupByUuid(db.rootGroup, recycledGroup.previousParentGroup)
-                            ?: db.rootGroup
-                            ?: return@withDatabase restored
+                        val target =
+                            findGroupByUuid(db.rootGroup, recycledGroup.previousParentGroup)
+                                ?: db.rootGroup
+                                ?: return@withDatabase restored
                         // 计数按实际恢复的条目数（整组含子分组）
                         restored += collectEntries(recycledGroup).size
                         db.undoRecycle(recycledGroup, target)
                     }
                     return@forEach
                 }
-                val target = findGroupByUuid(db.rootGroup, entry.previousParentGroup)
-                    ?: db.rootGroup
-                    ?: return@withDatabase restored
+                val target =
+                    findGroupByUuid(db.rootGroup, entry.previousParentGroup)
+                        ?: db.rootGroup
+                        ?: return@withDatabase restored
                 db.undoRecycle(entry, target)
                 restored++
             }
@@ -926,15 +1051,20 @@ class KdbxTokenRepository(context: Context) {
      *
      * @return 成功删除的数量
      */
-    fun permanentlyDeleteRecentDeletedPasswordEntries(localPath: String, masterPassword: String, entryIds: List<Long>): Int {
+    fun permanentlyDeleteRecentDeletedPasswordEntries(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+    ): Int {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val recycleBin = db.recycleBin ?: return@withDatabase 0
             var deleted = 0
             // 已处理过的回收站分组，避免同组多条条目重复删除
             val deletedGroups = mutableSetOf<Long>()
             entryIds.forEach { entryId ->
-                val entry = findEntryByStableId(db, entryId, includeRecycleBin = true)
-                    ?: return@forEach
+                val entry =
+                    findEntryByStableId(db, entryId, includeRecycleBin = true)
+                        ?: return@forEach
                 val parent = entry.parent ?: return@forEach
                 if (recycleBin != parent) {
                     // 条目位于被回收的分组内：整组永久删除（其条目无法单独恢复）
@@ -966,11 +1096,18 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 加载全部分组树（不含回收站），用于移动/复制的目标分组选择。
      */
-    fun loadAllPasswordGroups(localPath: String, masterPassword: String): List<GroupNodeInfo> {
+    fun loadAllPasswordGroups(
+        localPath: String,
+        masterPassword: String,
+    ): List<GroupNodeInfo> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val rootGroup = db.rootGroup ?: return@withDatabase emptyList()
             val result = mutableListOf<GroupNodeInfo>()
-            fun walk(group: Group, depth: Int) {
+
+            fun walk(
+                group: Group,
+                depth: Int,
+            ) {
                 group.getChildGroups().forEach { child ->
                     if (!db.groupIsInRecycleBin(child)) {
                         result.add(GroupNodeInfo(groupId = toStableGroupId(child), title = child.title, depth = depth))
@@ -993,7 +1130,7 @@ class KdbxTokenRepository(context: Context) {
         masterPassword: String,
         entryIds: List<Long>,
         groupIds: List<Long>,
-        targetGroupId: Long?
+        targetGroupId: Long?,
     ): Int {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val target = resolveParentGroup(db, targetGroupId) ?: return@withDatabase 0
@@ -1001,10 +1138,12 @@ class KdbxTokenRepository(context: Context) {
                 return@withDatabase 0
             }
             // 一次性建立稳定 ID → 节点的索引，避免对每个 ID 都全树遍历（O(n×m) → O(n+m)）
-            val entryIndex = collectEntriesOutsideRecycleBin(db, db.rootGroup)
-                .associateBy { toStableId(it) }
-            val groupIndex = collectAllGroups(db.rootGroup)
-                .associateBy { toStableGroupId(it) }
+            val entryIndex =
+                collectEntriesOutsideRecycleBin(db, db.rootGroup)
+                    .associateBy { toStableId(it) }
+            val groupIndex =
+                collectAllGroups(db.rootGroup)
+                    .associateBy { toStableGroupId(it) }
             var moved = 0
             entryIds.forEach { entryId ->
                 val entry = entryIndex[entryId] ?: return@forEach
@@ -1036,7 +1175,7 @@ class KdbxTokenRepository(context: Context) {
         masterPassword: String,
         entryIds: List<Long>,
         groupIds: List<Long>,
-        targetGroupId: Long?
+        targetGroupId: Long?,
     ): Int {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val target = resolveParentGroup(db, targetGroupId) ?: return@withDatabase 0
@@ -1044,10 +1183,12 @@ class KdbxTokenRepository(context: Context) {
                 return@withDatabase 0
             }
             // 一次性建立稳定 ID → 节点的索引，避免对每个 ID 都全树遍历（O(n×m) → O(n+m)）
-            val entryIndex = collectEntriesOutsideRecycleBin(db, db.rootGroup)
-                .associateBy { toStableId(it) }
-            val groupIndex = collectAllGroups(db.rootGroup)
-                .associateBy { toStableGroupId(it) }
+            val entryIndex =
+                collectEntriesOutsideRecycleBin(db, db.rootGroup)
+                    .associateBy { toStableId(it) }
+            val groupIndex =
+                collectAllGroups(db.rootGroup)
+                    .associateBy { toStableGroupId(it) }
             var copied = 0
             entryIds.forEach { entryId ->
                 val entry = entryIndex[entryId] ?: return@forEach
@@ -1070,7 +1211,11 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 递归复制分组（含其下所有条目与子分组），复制出的分组标题追加 " (~)"。
      */
-    private fun copyGroupRecursive(database: Database, group: Group, newParent: Group) {
+    private fun copyGroupRecursive(
+        database: Database,
+        group: Group,
+        newParent: Group,
+    ) {
         val copiedGroup = database.createGroup() ?: return
         copiedGroup.title = group.title + " (~)"
         copiedGroup.notes = group.notes
@@ -1087,7 +1232,10 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 判断 [candidate] 是否位于 [group] 的子树内（含自身），用于防止移动到自身/子孙。
      */
-    private fun isGroupInSubtree(group: Group, candidate: Group): Boolean {
+    private fun isGroupInSubtree(
+        group: Group,
+        candidate: Group,
+    ): Boolean {
         var current: Group? = candidate
         while (current != null) {
             if (current === group) {
@@ -1120,9 +1268,9 @@ class KdbxTokenRepository(context: Context) {
         keyRounds: Long? = null,
         memoryUsage: Long? = null,
         parallelism: Long? = null,
-        isCompressionEnabled: Boolean? = null
-    ): Boolean {
-        return runCatching {
+        isCompressionEnabled: Boolean? = null,
+    ): Boolean =
+        runCatching {
             val location = resolveLocation(localPath)
             // 用用户输入的旧密码显式打开验证（绕过缓存真实解密），
             // 防止未锁屏设备上的他人不输旧密码直接改凭据
@@ -1135,11 +1283,12 @@ class KdbxTokenRepository(context: Context) {
             val (database, cacheDirectory) = cachedPair ?: openDatabase(location, masterPassword, currentKeyFile)
             try {
                 kdfEngineName?.let { name ->
-                    val engine = when (name) {
-                        "Argon2d" -> KdfFactory.argon2dKdf
-                        "Argon2id" -> KdfFactory.argon2idKdf
-                        else -> KdfFactory.aesKdf
-                    }
+                    val engine =
+                        when (name) {
+                            "Argon2d" -> KdfFactory.argon2dKdf
+                            "Argon2id" -> KdfFactory.argon2idKdf
+                            else -> KdfFactory.aesKdf
+                        }
                     database.kdfEngine = engine
                 }
                 keyRounds?.let { database.numberKeyEncryptionRounds = it }
@@ -1155,7 +1304,7 @@ class KdbxTokenRepository(context: Context) {
                     location = location,
                     masterPassword = newMasterPassword,
                     cacheDirectory = cacheDirectory,
-                    keyFileData = effectiveKeyFile
+                    keyFileData = effectiveKeyFile,
                 )
                 // 登记新密钥文件，供后续重新加密保存复用
                 DatabaseManager.setKeyFileData(effectiveKeyFile)
@@ -1174,33 +1323,32 @@ class KdbxTokenRepository(context: Context) {
         }.onFailure {
             Logger.e(LOG_TAG, "changeDatabaseSettings failed, path=$localPath, message=${it.message}", it)
         }.getOrDefault(false)
-    }
 
     /**
      * 读取数据库当前安全设置（供设置页展示）。
      */
     fun loadDatabaseSettingsInfo(
         localPath: String,
-        masterPassword: String
-    ): DatabaseSettingsInfo {
-        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val kdfName = db.kdfEngine?.let {
-                when (it.uuid) {
-                    KdfFactory.aesKdf.uuid -> "AES"
-                    KdfFactory.argon2dKdf.uuid -> "Argon2d"
-                    KdfFactory.argon2idKdf.uuid -> "Argon2id"
-                    else -> it.toString()
-                }
-            } ?: "未知"
+        masterPassword: String,
+    ): DatabaseSettingsInfo =
+        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            val kdfName =
+                db.kdfEngine?.let {
+                    when (it.uuid) {
+                        KdfFactory.aesKdf.uuid -> "AES"
+                        KdfFactory.argon2dKdf.uuid -> "Argon2d"
+                        KdfFactory.argon2idKdf.uuid -> "Argon2id"
+                        else -> it.toString()
+                    }
+                } ?: "未知"
             DatabaseSettingsInfo(
                 kdfEngineName = kdfName,
                 keyRounds = db.numberKeyEncryptionRounds,
                 memoryUsage = db.memoryUsage,
                 parallelism = db.parallelism,
-                isCompressionEnabled = db.compressionAlgorithm == CompressionAlgorithm.GZIP
+                isCompressionEnabled = db.compressionAlgorithm == CompressionAlgorithm.GZIP,
             )
         }
-    }
 
     /**
      * 将当前数据库导出到指定输出流（含删除历史/历史记录/附件等全部内容）。
@@ -1212,9 +1360,9 @@ class KdbxTokenRepository(context: Context) {
     fun exportDatabaseTo(
         localPath: String,
         masterPassword: String,
-        outputStreamProvider: () -> OutputStream?
-    ): Boolean {
-        return runCatching {
+        outputStreamProvider: () -> OutputStream?,
+    ): Boolean =
+        runCatching {
             val location = resolveLocation(localPath)
             // 优先复用已解锁的缓存实例，避免重复解密
             val cachedPair = DatabaseManager.tryGet(localPath)
@@ -1225,11 +1373,12 @@ class KdbxTokenRepository(context: Context) {
                     cacheFile = cacheFile,
                     databaseOutputStream = outputStreamProvider,
                     isNewLocation = true,
-                    masterCredential = MasterCredential(
-                        password = masterPassword,
-                        keyFileData = DatabaseManager.getKeyFileData()
-                    ),
-                    challengeResponseRetriever = emptyChallengeResponseRetriever
+                    masterCredential =
+                        MasterCredential(
+                            password = masterPassword,
+                            keyFileData = DatabaseManager.getKeyFileData(),
+                        ),
+                    challengeResponseRetriever = emptyChallengeResponseRetriever,
                 )
                 true
             } finally {
@@ -1240,7 +1389,6 @@ class KdbxTokenRepository(context: Context) {
         }.onFailure {
             Logger.e(LOG_TAG, "exportDatabaseTo failed, path=$localPath, message=${it.message}", it)
         }.getOrDefault(false)
-    }
 
     /**
      * 将本地 .kdbx 文件合并进当前数据库（与云端合并同一语义，KeePassDX mergeData）。
@@ -1253,9 +1401,9 @@ class KdbxTokenRepository(context: Context) {
         localPath: String,
         masterPassword: String,
         mergeFileUri: String,
-        mergeMasterPassword: String
-    ): Boolean {
-        return runCatching {
+        mergeMasterPassword: String,
+    ): Boolean =
+        runCatching {
             withDatabase(localPath, masterPassword, saveAfter = true) { db ->
                 val mergeLocation = resolveLocation(mergeFileUri)
                 openInputStream(mergeLocation).use { input ->
@@ -1263,12 +1411,13 @@ class KdbxTokenRepository(context: Context) {
                         databaseToMergeStream = input,
                         // 合并文件的凭据仅使用其主密码（界面只收集密码）；
                         // 使用密钥文件保护的库暂不支持合并
-                        databaseToMergeMasterCredential = MasterCredential(
-                            password = mergeMasterPassword
-                        ),
+                        databaseToMergeMasterCredential =
+                            MasterCredential(
+                                password = mergeMasterPassword,
+                            ),
                         databaseToMergeChallengeResponseRetriever = emptyChallengeResponseRetriever,
                         isRAMSufficient = { true },
-                        progressTaskUpdater = null
+                        progressTaskUpdater = null,
                     )
                 }
                 true
@@ -1280,46 +1429,49 @@ class KdbxTokenRepository(context: Context) {
             DatabaseManager.invalidateCacheKeepKeyFile()
             Logger.e(LOG_TAG, "mergeLocalDatabaseFile failed, path=$localPath, message=${it.message}", it)
         }.getOrDefault(false)
-    }
 
     /**
      * 安全性检查：返回已过期条目与弱密码条目（不含回收站）。
      *
      * 弱密码判定使用 [PasswordStrength.isWeak]（熵低于 60 bits）。
      */
-    fun loadSecurityIssues(localPath: String, masterPassword: String): SecurityIssuesInfo {
-        return runCatching {
+    fun loadSecurityIssues(
+        localPath: String,
+        masterPassword: String,
+    ): SecurityIssuesInfo =
+        runCatching {
             withDatabase(localPath, masterPassword, saveAfter = false) { db ->
                 val nowMillis = System.currentTimeMillis()
                 val expired = mutableListOf<SecurityIssueEntry>()
                 val weak = mutableListOf<SecurityIssueEntry>()
 
-            collectEntriesOutsideRecycleBin(db, db.rootGroup).forEach { entry ->
-                val entryId = toStableId(entry)
-                val title = entry.title
-                    .takeIf { it.isNotBlank() }
-                    ?: entry.url.takeIf { it.isNotBlank() }
-                    ?: entry.username.takeIf { it.isNotBlank() }
-                    ?: entryId.toString()
-                val account = entry.username.takeIf { it.isNotBlank() } ?: ""
-                // 仅当条目显式标记为过期时才参与过期判定：
-                // 无过期设置的条目 expiryTime 可能是过去的占位值（如默认「当前时间+30天」），
-                // 直接比较时间戳会把从未设置过期的条目误判为已过期
-                val expiryMillis = if (entry.expires) entry.expiryTime.toMilliseconds() else 0L
-                val password = entry.password
-                val strengthBits = PasswordStrength.estimateBits(password)
+                collectEntriesOutsideRecycleBin(db, db.rootGroup).forEach { entry ->
+                    val entryId = toStableId(entry)
+                    val title =
+                        entry.title
+                            .takeIf { it.isNotBlank() }
+                            ?: entry.url.takeIf { it.isNotBlank() }
+                            ?: entry.username.takeIf { it.isNotBlank() }
+                            ?: entryId.toString()
+                    val account = entry.username.takeIf { it.isNotBlank() } ?: ""
+                    // 仅当条目显式标记为过期时才参与过期判定：
+                    // 无过期设置的条目 expiryTime 可能是过去的占位值（如默认「当前时间+30天」），
+                    // 直接比较时间戳会把从未设置过期的条目误判为已过期
+                    val expiryMillis = if (entry.expires) entry.expiryTime.toMilliseconds() else 0L
+                    val password = entry.password
+                    val strengthBits = PasswordStrength.estimateBits(password)
 
-                if (expiryMillis in 1..<nowMillis) {
-                    expired.add(
-                        SecurityIssueEntry(
-                            entryId = entryId,
-                            title = title,
-                            account = account,
-                            passwordStrengthBits = strengthBits,
-                            expiryTime = expiryMillis
+                    if (expiryMillis in 1..<nowMillis) {
+                        expired.add(
+                            SecurityIssueEntry(
+                                entryId = entryId,
+                                title = title,
+                                account = account,
+                                passwordStrengthBits = strengthBits,
+                                expiryTime = expiryMillis,
+                            ),
                         )
-                    )
-                }
+                    }
                     if (PasswordStrength.isWeak(password)) {
                         weak.add(
                             SecurityIssueEntry(
@@ -1327,8 +1479,8 @@ class KdbxTokenRepository(context: Context) {
                                 title = title,
                                 account = account,
                                 passwordStrengthBits = strengthBits,
-                                expiryTime = expiryMillis.takeIf { it > 0L }
-                            )
+                                expiryTime = expiryMillis.takeIf { it > 0L },
+                            ),
                         )
                     }
                 }
@@ -1338,7 +1490,6 @@ class KdbxTokenRepository(context: Context) {
         }.onFailure {
             Logger.e(LOG_TAG, "loadSecurityIssues failed, path=$localPath, message=${it.message}", it)
         }.getOrDefault(SecurityIssuesInfo(emptyList(), emptyList()))
-    }
 
     /**
      * 一次性加载一级密码条目及全局总计数。
@@ -1350,27 +1501,31 @@ class KdbxTokenRepository(context: Context) {
      */
     fun loadPasswordEntriesByTopLevelWithCount(
         localPath: String,
-        masterPassword: String
-    ): Pair<List<PasswordEntry>, Int> {
-        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+        masterPassword: String,
+    ): Pair<List<PasswordEntry>, Int> =
+        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val rootGroup = db.rootGroup
-            val childEntries = rootGroup?.getChildEntries()
-                ?.filterNot { entry -> isEntryInRecycleBin(db, entry) }
-                ?: emptyList()
-            val childGroups = rootGroup?.getChildGroups()
-                ?.filterNot { group -> db.groupIsInRecycleBin(group) }
-                ?: emptyList()
-            val topLevelList = buildPasswordEntries(
-                database = db,
-                entries = childEntries,
-                groups = childGroups,
-                includeFieldDetails = false
-            )
+            val childEntries =
+                rootGroup
+                    ?.getChildEntries()
+                    ?.filterNot { entry -> isEntryInRecycleBin(db, entry) }
+                    ?: emptyList()
+            val childGroups =
+                rootGroup
+                    ?.getChildGroups()
+                    ?.filterNot { group -> db.groupIsInRecycleBin(group) }
+                    ?: emptyList()
+            val topLevelList =
+                buildPasswordEntries(
+                    database = db,
+                    entries = childEntries,
+                    groups = childGroups,
+                    includeFieldDetails = false,
+                )
             // 一次遍历同时统计全局总数
             val totalCount = collectEntriesOutsideRecycleBin(db, rootGroup).size
             topLevelList to totalCount
         }
-    }
 
     /**
      * 一次性加载回收站密码条目及总计数。
@@ -1382,18 +1537,20 @@ class KdbxTokenRepository(context: Context) {
      */
     fun loadRecentDeletedPasswordEntriesWithCount(
         localPath: String,
-        masterPassword: String
+        masterPassword: String,
     ): Pair<List<PasswordEntry>, Int> {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val recycleBin = db.recycleBin
-                ?: return@withDatabase emptyList<PasswordEntry>() to 0
+            val recycleBin =
+                db.recycleBin
+                    ?: return@withDatabase emptyList<PasswordEntry>() to 0
             val entries = collectEntries(recycleBin)
-            val list = buildPasswordEntries(
-                database = db,
-                entries = entries,
-                groups = emptyList(),
-                includeFieldDetails = false
-            )
+            val list =
+                buildPasswordEntries(
+                    database = db,
+                    entries = entries,
+                    groups = emptyList(),
+                    includeFieldDetails = false,
+                )
             list to entries.size
         }
     }
@@ -1401,16 +1558,21 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 统计数据库中全部条目数量（不构建明细对象）。
      */
-    fun countPasswordEntries(localPath: String, masterPassword: String): Int {
-        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+    fun countPasswordEntries(
+        localPath: String,
+        masterPassword: String,
+    ): Int =
+        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             collectEntriesOutsideRecycleBin(db, db.rootGroup).size
         }
-    }
 
     /**
      * 统计回收站中条目数量。
      */
-    fun countRecentDeletedPasswordEntries(localPath: String, masterPassword: String): Int {
+    fun countRecentDeletedPasswordEntries(
+        localPath: String,
+        masterPassword: String,
+    ): Int {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val recycleBin = db.recycleBin ?: return@withDatabase 0
             collectEntries(recycleBin).size
@@ -1424,7 +1586,11 @@ class KdbxTokenRepository(context: Context) {
      * - 使用数据库模块内置 merge 能力；
      * - 合并后按 `dataModifiedSinceLastLoading` 自动决定是否写回。
      */
-    fun mergeRemoteDatabaseBytes(localPath: String, masterPassword: String, remoteBytes: ByteArray): Boolean {
+    fun mergeRemoteDatabaseBytes(
+        localPath: String,
+        masterPassword: String,
+        remoteBytes: ByteArray,
+    ): Boolean {
         if (remoteBytes.isEmpty()) {
             Logger.d(SYNC_LOG_TAG, "跳过远端合并：远端数据为空")
             return false
@@ -1433,19 +1599,20 @@ class KdbxTokenRepository(context: Context) {
         return runCatching {
             Logger.d(
                 SYNC_LOG_TAG,
-                "开始合并远端数据库：本地路径=$localPath, 远端数据大小=${remoteBytes.size}"
+                "开始合并远端数据库：本地路径=$localPath, 远端数据大小=${remoteBytes.size}",
             )
             withDatabase(localPath, masterPassword, saveAfter = true) { db ->
                 ByteArrayInputStream(remoteBytes).use { input ->
                     db.mergeData(
                         databaseToMergeStream = input,
-                        databaseToMergeMasterCredential = MasterCredential(
-                            password = masterPassword,
-                            keyFileData = DatabaseManager.getKeyFileData()
-                        ),
+                        databaseToMergeMasterCredential =
+                            MasterCredential(
+                                password = masterPassword,
+                                keyFileData = DatabaseManager.getKeyFileData(),
+                            ),
                         databaseToMergeChallengeResponseRetriever = emptyChallengeResponseRetriever,
                         isRAMSufficient = { true },
-                        progressTaskUpdater = null
+                        progressTaskUpdater = null,
                     )
                 }
                 true
@@ -1461,15 +1628,27 @@ class KdbxTokenRepository(context: Context) {
         }.getOrDefault(false)
     }
 
-    fun isDuplicate(localPath: String, masterPassword: String, secret: String, algorithm: String, digits: Int, period: Int): Boolean {
-        return loadTokens(localPath, masterPassword)
+    fun isDuplicate(
+        localPath: String,
+        masterPassword: String,
+        secret: String,
+        algorithm: String,
+        digits: Int,
+        period: Int,
+    ): Boolean =
+        loadTokens(localPath, masterPassword)
             .any { it.secret == secret && it.algorithm == algorithm && it.digits == digits && it.period == period }
-    }
 
-    fun addToken(localPath: String, masterPassword: String, token: OtpToken): Boolean {
+    fun addToken(
+        localPath: String,
+        masterPassword: String,
+        token: OtpToken,
+    ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
-            val existing = collectEntries(db.rootGroup).mapNotNull { toToken(it) }
-                .any { it.uniqueId == token.uniqueId || (it.secret == token.secret && it.algorithm == token.algorithm && it.digits == token.digits && it.period == token.period) }
+            val existing =
+                collectEntries(db.rootGroup)
+                    .mapNotNull { toToken(it) }
+                    .any { it.uniqueId == token.uniqueId || (it.secret == token.secret && it.algorithm == token.algorithm && it.digits == token.digits && it.period == token.period) }
             if (existing) {
                 return@withDatabase false
             }
@@ -1482,7 +1661,11 @@ class KdbxTokenRepository(context: Context) {
         }
     }
 
-    fun updateToken(localPath: String, masterPassword: String, token: OtpToken): Boolean {
+    fun updateToken(
+        localPath: String,
+        masterPassword: String,
+        token: OtpToken,
+    ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val entry = findEntryByToken(db, token) ?: return@withDatabase false
             applyTokenToEntry(db, entry, token)
@@ -1491,7 +1674,11 @@ class KdbxTokenRepository(context: Context) {
         }
     }
 
-    fun deleteToken(localPath: String, masterPassword: String, tokenId: Long): Boolean {
+    fun deleteToken(
+        localPath: String,
+        masterPassword: String,
+        tokenId: Long,
+    ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val entry = findEntryById(db, tokenId) ?: return@withDatabase false
             if (!db.canRecycle(entry)) {
@@ -1502,7 +1689,11 @@ class KdbxTokenRepository(context: Context) {
         }
     }
 
-    fun incrementCounter(localPath: String, masterPassword: String, tokenId: Long): Boolean {
+    fun incrementCounter(
+        localPath: String,
+        masterPassword: String,
+        tokenId: Long,
+    ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val entry = findEntryById(db, tokenId) ?: return@withDatabase false
             val otpElement = entry.getOtpElement() ?: return@withDatabase false
@@ -1513,54 +1704,68 @@ class KdbxTokenRepository(context: Context) {
             otpElement.counter += 1L
             // 按当前条目约定的字段顺序组装 OTP URI：title=issuer、username=label（旧版反存数据按反向传入）
             val oldConvention = isOldTokenConvention(entry, otpElement)
-            val otpField = OtpEntryFields.buildOtpField(
-                otpElement,
-                if (oldConvention) entry.username else entry.title,
-                if (oldConvention) entry.title else entry.username
-            )
+            val otpField =
+                OtpEntryFields.buildOtpField(
+                    otpElement,
+                    if (oldConvention) entry.username else entry.title,
+                    if (oldConvention) entry.title else entry.username,
+                )
 
-            val entryInfo = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false).apply {
-                customFields = customFields
-                    .filterNot { field -> field.isOTP() }
-                    .toMutableList()
-                customFields.add(otpField)
-            }
+            val entryInfo =
+                entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false).apply {
+                    customFields =
+                        customFields
+                            .filterNot { field -> field.isOTP() }
+                            .toMutableList()
+                    customFields.add(otpField)
+                }
             entry.setEntryInfo(db, entryInfo)
             db.updateEntry(entry)
             true
         }
     }
 
-    private fun findEntryByToken(db: Database, token: OtpToken): Entry? {
+    private fun findEntryByToken(
+        db: Database,
+        token: OtpToken,
+    ): Entry? {
         val entries = collectEntriesOutsideRecycleBin(db, db.rootGroup)
 
-        entries.firstOrNull { entry -> toStableId(entry) == token.id }
+        entries
+            .firstOrNull { entry -> toStableId(entry) == token.id }
             ?.let { return it }
 
         return entries.firstOrNull { entry ->
             val parsed = toToken(entry) ?: return@firstOrNull false
-            parsed.uniqueId == token.uniqueId || (
-                parsed.secret == token.secret &&
-                    parsed.algorithm == token.algorithm &&
-                    parsed.digits == token.digits &&
-                    parsed.period == token.period
+            parsed.uniqueId == token.uniqueId ||
+                (
+                    parsed.secret == token.secret &&
+                        parsed.algorithm == token.algorithm &&
+                        parsed.digits == token.digits &&
+                        parsed.period == token.period
                 )
         }
     }
 
-    private fun findEntryById(db: Database, tokenId: Long): Entry? {
-        return findEntryByStableId(db, tokenId, includeRecycleBin = false)
-    }
+    private fun findEntryById(
+        db: Database,
+        tokenId: Long,
+    ): Entry? = findEntryByStableId(db, tokenId, includeRecycleBin = false)
 
     /**
      * 按稳定 ID 查找条目。
      */
-    private fun findEntryByStableId(db: Database, entryId: Long, includeRecycleBin: Boolean): Entry? {
-        val source = if (includeRecycleBin) {
-            collectEntries(db.rootGroup)
-        } else {
-            collectEntriesOutsideRecycleBin(db, db.rootGroup)
-        }
+    private fun findEntryByStableId(
+        db: Database,
+        entryId: Long,
+        includeRecycleBin: Boolean,
+    ): Entry? {
+        val source =
+            if (includeRecycleBin) {
+                collectEntries(db.rootGroup)
+            } else {
+                collectEntriesOutsideRecycleBin(db, db.rootGroup)
+            }
         return source.firstOrNull { toStableId(it) == entryId }
     }
 
@@ -1571,12 +1776,14 @@ class KdbxTokenRepository(context: Context) {
      * 若标题与 OTP name 相同、账号与 OTP issuer 相同，即判定为旧版反存。
      * 两字段均非空时才认定，避免 label 恰与 issuer 相同导致误判。
      */
-    private fun isOldTokenConvention(entry: Entry, otpElement: OtpElement): Boolean {
-        return entry.title == otpElement.name &&
+    private fun isOldTokenConvention(
+        entry: Entry,
+        otpElement: OtpElement,
+    ): Boolean =
+        entry.title == otpElement.name &&
             entry.username == otpElement.issuer &&
             entry.title.isNotBlank() &&
             entry.username.isNotBlank()
-    }
 
     /**
      * 迁移旧版反存约定的令牌条目（title=label、username=issuer → 互相对换）。
@@ -1605,31 +1812,35 @@ class KdbxTokenRepository(context: Context) {
         val secret = otpElement.getBase32Secret().takeIf { it.isNotBlank() } ?: return null
         val algorithm = otpElement.algorithm.name
         val digits = otpElement.digits
-        val tokenType = if (otpElement.type == OtpType.HOTP) {
-            OtpTokenType.HOTP
-        } else {
-            OtpTokenType.TOTP
-        }
+        val tokenType =
+            if (otpElement.type == OtpType.HOTP) {
+                OtpTokenType.HOTP
+            } else {
+                OtpTokenType.TOTP
+            }
         val period = if (tokenType == OtpTokenType.TOTP) otpElement.period else 30
         val counter = if (tokenType == OtpTokenType.HOTP) otpElement.counter else 0L
 
-        val uniqueId = xzynine.WebDAVPass.Android.util.UniqueIdGenerator.generate(
-            secret,
-            algorithm,
-            digits,
-            period
-        )
+        val uniqueId =
+            xzynine.WebDAVPass.Android.util.UniqueIdGenerator.generate(
+                secret,
+                algorithm,
+                digits,
+                period,
+            )
 
         // 约定：title = 服务商（issuer），username = 账号（label），与 EntryInfo.setOtp 一致。
         // 旧版本曾把两者反存（title=label、username=issuer），按 OTP 字段中的 issuer/name 判定迁移。
         val oldConvention = isOldTokenConvention(entry, otpElement)
         val label = if (oldConvention) entry.title else entry.username.takeIf { it.isNotBlank() }
         val issuer = if (oldConvention) entry.username else entry.title.takeIf { it.isNotBlank() }
-        val finalLabel = label
-            ?: otpElement.name.takeIf { it.isNotBlank() }
-            ?: "Token"
-        val finalIssuer = issuer
-            ?: otpElement.issuer.takeIf { it.isNotBlank() }
+        val finalLabel =
+            label
+                ?: otpElement.name.takeIf { it.isNotBlank() }
+                ?: "Token"
+        val finalIssuer =
+            issuer
+                ?: otpElement.issuer.takeIf { it.isNotBlank() }
         val description = entry.notes.takeIf { it.isNotBlank() }
 
         val ordinal = -entry.creationTime.toMilliseconds()
@@ -1648,46 +1859,55 @@ class KdbxTokenRepository(context: Context) {
             counter = counter,
             period = period,
             encryptionType = EncryptionType.NONE,
-            uniqueId = uniqueId
+            uniqueId = uniqueId,
         )
     }
 
-    private fun applyTokenToEntry(database: Database, entry: Entry, token: OtpToken) {
+    private fun applyTokenToEntry(
+        database: Database,
+        entry: Entry,
+        token: OtpToken,
+    ) {
         val otpType = if (token.tokenType == OtpTokenType.HOTP) OtpType.HOTP else OtpType.TOTP
-        val otpElement = OtpElement().apply {
-            type = otpType
-            issuer = token.issuer ?: ""
-            name = token.label
-            algorithm = toHashAlgorithm(token.algorithm)
-            digits = token.digits
-            setBase32Secret(token.secret)
-            if (otpType == OtpType.HOTP) {
-                counter = token.counter
-            } else {
-                period = token.period
-            }
-        }
-
-        val otpField = OtpEntryFields.buildOtpField(
-            otpElement,
-            token.issuer ?: "",
-            token.label
-        )
-
-        val filteredFields = entry.getExtraFields()
-            .filterNot { field -> field.isOTP() }
-            .toMutableList()
-            .apply {
-                add(otpField)
+        val otpElement =
+            OtpElement().apply {
+                type = otpType
+                issuer = token.issuer ?: ""
+                name = token.label
+                algorithm = toHashAlgorithm(token.algorithm)
+                digits = token.digits
+                setBase32Secret(token.secret)
+                if (otpType == OtpType.HOTP) {
+                    counter = token.counter
+                } else {
+                    period = token.period
+                }
             }
 
-        val entryInfo = EntryInfo().apply {
-            title = token.issuer?.takeIf { it.isNotBlank() } ?: token.label
-            username = token.label
-            password = ""
-            notes = token.description ?: ""
-            customFields = filteredFields
-        }
+        val otpField =
+            OtpEntryFields.buildOtpField(
+                otpElement,
+                token.issuer ?: "",
+                token.label,
+            )
+
+        val filteredFields =
+            entry
+                .getExtraFields()
+                .filterNot { field -> field.isOTP() }
+                .toMutableList()
+                .apply {
+                    add(otpField)
+                }
+
+        val entryInfo =
+            EntryInfo().apply {
+                title = token.issuer?.takeIf { it.isNotBlank() } ?: token.label
+                username = token.label
+                password = ""
+                notes = token.description ?: ""
+                customFields = filteredFields
+            }
         entry.setEntryInfo(database, entryInfo)
     }
 
@@ -1699,7 +1919,7 @@ class KdbxTokenRepository(context: Context) {
         fieldName: String,
         rawValue: String,
         fixedType: RemainingValueType? = null,
-        isProtected: Boolean = false
+        isProtected: Boolean = false,
     ) {
         if (rawValue.isBlank()) {
             return
@@ -1710,21 +1930,24 @@ class KdbxTokenRepository(context: Context) {
                 rawValue = rawValue,
                 valueType = fixedType ?: detectValueType(null, rawValue),
                 isProtected = isProtected,
-                isStandard = true
-            )
+                isStandard = true,
+            ),
         )
     }
 
     /**
      * 推断字段值类型，无法识别时返回文本类型。
      */
-    private fun detectValueType(field: Field?, rawValue: String): RemainingValueType {
+    private fun detectValueType(
+        field: Field?,
+        rawValue: String,
+    ): RemainingValueType {
         val normalized = rawValue.trim()
         val fieldName = field?.name?.lowercase() ?: ""
 
-        if (field?.isOTP() == true
-            || fieldName == "otp"
-            || normalized.startsWith("otpauth://", ignoreCase = true)
+        if (field?.isOTP() == true ||
+            fieldName == "otp" ||
+            normalized.startsWith("otpauth://", ignoreCase = true)
         ) {
             return RemainingValueType.OTP
         }
@@ -1733,8 +1956,8 @@ class KdbxTokenRepository(context: Context) {
             return RemainingValueType.PASSWORD
         }
 
-        if (normalized.startsWith("http://", ignoreCase = true)
-            || normalized.startsWith("https://", ignoreCase = true)
+        if (normalized.startsWith("http://", ignoreCase = true) ||
+            normalized.startsWith("https://", ignoreCase = true)
         ) {
             return RemainingValueType.URL
         }
@@ -1743,10 +1966,10 @@ class KdbxTokenRepository(context: Context) {
             return RemainingValueType.EMAIL
         }
 
-        if (normalized.equals("true", true)
-            || normalized.equals("false", true)
-            || normalized == "0"
-            || normalized == "1"
+        if (normalized.equals("true", true) ||
+            normalized.equals("false", true) ||
+            normalized == "0" ||
+            normalized == "1"
         ) {
             return RemainingValueType.BOOLEAN
         }
@@ -1769,7 +1992,7 @@ class KdbxTokenRepository(context: Context) {
         database: Database,
         entries: List<Entry>,
         groups: List<Group>,
-        includeFieldDetails: Boolean
+        includeFieldDetails: Boolean,
     ): List<PasswordEntry> {
         val result = mutableListOf<PasswordEntry>()
         // 自定义图标按 UUID 记忆化：共享同一图标的条目只解压复制一次
@@ -1786,33 +2009,36 @@ class KdbxTokenRepository(context: Context) {
                     customIconBytes = readCustomIconBytes(database, group),
                     keyValues = emptyList(),
                     isFolderGroup = true,
-                    isFolderPlaceholder = true
-                )
+                    isFolderPlaceholder = true,
+                ),
             )
         }
 
         entries.forEach { entry ->
-            val title = entry.title
-                .takeIf { it.isNotBlank() }
-                ?: entry.url.takeIf { it.isNotBlank() }
-                ?: entry.username.takeIf { it.isNotBlank() }
-                ?: toStableId(entry).toString()
+            val title =
+                entry.title
+                    .takeIf { it.isNotBlank() }
+                    ?: entry.url.takeIf { it.isNotBlank() }
+                    ?: entry.username.takeIf { it.isNotBlank() }
+                    ?: toStableId(entry).toString()
             val account = entry.username.takeIf { it.isNotBlank() } ?: ""
-            val values = if (includeFieldDetails) {
-                buildEntryKeyValues(entry)
-            } else {
-                emptyList()
-            }
+            val values =
+                if (includeFieldDetails) {
+                    buildEntryKeyValues(entry)
+                } else {
+                    emptyList()
+                }
 
             val attachmentPool = database.attachmentPool
-            val attachments = entry.getAttachments(attachmentPool).mapNotNull { attachment ->
-                val name = attachment.name
-                if (name.isBlank()) {
-                    null
-                } else {
-                    EntryAttachmentInfo(name = name, size = attachment.binaryData.getSize())
+            val attachments =
+                entry.getAttachments(attachmentPool).mapNotNull { attachment ->
+                    val name = attachment.name
+                    if (name.isBlank()) {
+                        null
+                    } else {
+                        EntryAttachmentInfo(name = name, size = attachment.binaryData.getSize())
+                    }
                 }
-            }
             val iconUuid = entry.icon.custom.uuid
             val customIconUuid = if (iconUuid == DatabaseVersioned.UUID_ZERO) null else iconUuid.toString()
 
@@ -1832,8 +2058,8 @@ class KdbxTokenRepository(context: Context) {
                     creationTime = entry.creationTime.toMilliseconds(),
                     modifiedTime = entry.lastModificationTime.toMilliseconds(),
                     isFolderGroup = false,
-                    isFolderPlaceholder = false
-                )
+                    isFolderPlaceholder = false,
+                ),
             )
         }
 
@@ -1847,7 +2073,7 @@ class KdbxTokenRepository(context: Context) {
         return result.sortedWith(
             compareBy<PasswordEntry> { if (it.isFolderGroup) 0 else 1 }
                 .thenBy { keysOf(it).first }
-                .thenBy { keysOf(it).second }
+                .thenBy { keysOf(it).second },
         )
     }
 
@@ -1870,8 +2096,8 @@ class KdbxTokenRepository(context: Context) {
                         fieldName = field.name,
                         rawValue = value,
                         valueType = detectValueType(field, value),
-                        isProtected = field.protectedValue.isProtected
-                    )
+                        isProtected = field.protectedValue.isProtected,
+                    ),
                 )
             }
         }
@@ -1882,9 +2108,10 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 将字符串列表转换为 KDBX Tags。
      */
-    private fun List<String>.toTags(): Tags = Tags().apply {
-        this@toTags.forEach { tag -> put(tag) }
-    }
+    private fun List<String>.toTags(): Tags =
+        Tags().apply {
+            this@toTags.forEach { tag -> put(tag) }
+        }
 
     private fun collectEntries(group: Group?): List<Entry> {
         if (group == null) {
@@ -1917,23 +2144,28 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 收集非回收站范围内的条目。
      */
-    private fun collectEntriesOutsideRecycleBin(database: Database, group: Group?): List<Entry> {
-        return collectEntries(group).filterNot { entry -> isEntryInRecycleBin(database, entry) }
-    }
+    private fun collectEntriesOutsideRecycleBin(
+        database: Database,
+        group: Group?,
+    ): List<Entry> = collectEntries(group).filterNot { entry -> isEntryInRecycleBin(database, entry) }
 
-    private fun isEntryInRecycleBin(database: Database, entry: Entry): Boolean {
+    private fun isEntryInRecycleBin(
+        database: Database,
+        entry: Entry,
+    ): Boolean {
         val parent = entry.parent ?: return false
         return database.groupIsInRecycleBin(parent)
     }
 
-    private fun resolveRecycleBinTitle(database: Database): String {
-        return database.recycleBin?.title?.takeIf { it.isNotBlank() } ?: RECYCLE_BIN_FALLBACK_TITLE
-    }
+    private fun resolveRecycleBinTitle(database: Database): String = database.recycleBin?.title?.takeIf { it.isNotBlank() } ?: RECYCLE_BIN_FALLBACK_TITLE
 
     /**
      * 按节点 UUID 查找分组（含自身），用于恢复条目到原分组。
      */
-    private fun findGroupByUuid(group: Group?, uuid: UUID): Group? {
+    private fun findGroupByUuid(
+        group: Group?,
+        uuid: UUID,
+    ): Group? {
         if (group == null) {
             return null
         }
@@ -1953,7 +2185,10 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 通过稳定ID查找分组。
      */
-    private fun findGroupByStableId(group: Group?, groupStableId: Long): Group? {
+    private fun findGroupByStableId(
+        group: Group?,
+        groupStableId: Long,
+    ): Group? {
         if (group == null) {
             return null
         }
@@ -1974,7 +2209,10 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 解析草稿中的父分组，空值表示根分组。
      */
-    private fun resolveParentGroup(database: Database, parentGroupId: Long?): Group? {
+    private fun resolveParentGroup(
+        database: Database,
+        parentGroupId: Long?,
+    ): Group? {
         if (parentGroupId == null) {
             return database.rootGroup
         }
@@ -1995,7 +2233,10 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 读取分组自定义图标二进制数据。
      */
-    private fun readCustomIconBytes(database: Database, group: Group): ByteArray? {
+    private fun readCustomIconBytes(
+        database: Database,
+        group: Group,
+    ): ByteArray? {
         val iconUuid = group.icon.custom.uuid
         if (iconUuid == DatabaseVersioned.UUID_ZERO) {
             return null
@@ -2013,16 +2254,23 @@ class KdbxTokenRepository(context: Context) {
      * 生成分组稳定ID，使用负值避免和条目ID冲突。
      */
     private fun toStableGroupId(group: Group): Long {
-        val uuid = (group.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
-            ?: UUID(0L, 0L)
-        val absolute = when (val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits) {
-            Long.MIN_VALUE -> 0L
-            else -> abs(mixed)
-        }
+        val uuid =
+            (group.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
+                ?: UUID(0L, 0L)
+        val absolute =
+            when (val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits) {
+                Long.MIN_VALUE -> 0L
+                else -> abs(mixed)
+            }
         return -(absolute + 1L)
     }
 
-    private fun <T> withDatabase(localPath: String, masterPassword: String, saveAfter: Boolean, block: (Database) -> T): T {
+    private fun <T> withDatabase(
+        localPath: String,
+        masterPassword: String,
+        saveAfter: Boolean,
+        block: (Database) -> T,
+    ): T {
         // 优先使用已缓存的数据库实例，避免重复解密
         val cachedPair = DatabaseManager.tryGet(localPath)
         if (cachedPair != null) {
@@ -2056,24 +2304,25 @@ class KdbxTokenRepository(context: Context) {
     private fun openDatabase(
         location: DatabaseLocation,
         masterPassword: String,
-        keyFileData: ByteArray? = DatabaseManager.getKeyFileData()
+        keyFileData: ByteArray? = DatabaseManager.getKeyFileData(),
     ): Pair<Database, File> {
         val cacheDirectory = buildCacheDirectory(location)
         val database = Database()
         openInputStream(location).use { input ->
             database.loadData(
                 databaseStream = input,
-                masterCredential = MasterCredential(
-                    password = masterPassword,
-                    keyFileData = keyFileData
-                ),
+                masterCredential =
+                    MasterCredential(
+                        password = masterPassword,
+                        keyFileData = keyFileData,
+                    ),
                 challengeResponseRetriever = emptyChallengeResponseRetriever,
                 readOnly = false,
                 allowUserVerification = false,
                 cacheDirectory = cacheDirectory,
                 isRAMSufficient = { true },
                 fixDuplicateUUID = false,
-                progressTaskUpdater = null
+                progressTaskUpdater = null,
             )
         }
         return database to cacheDirectory
@@ -2091,7 +2340,7 @@ class KdbxTokenRepository(context: Context) {
         location: DatabaseLocation,
         masterPassword: String,
         cacheDirectory: File,
-        keyFileData: ByteArray? = DatabaseManager.getKeyFileData()
+        keyFileData: ByteArray? = DatabaseManager.getKeyFileData(),
     ) {
         val cacheFile = File.createTempFile("kdbx-save-", ".tmp", cacheDirectory)
         // Database.saveData 内部 finally 会删除 cacheFile，无需外层重复处理
@@ -2108,11 +2357,12 @@ class KdbxTokenRepository(context: Context) {
                         cacheFile = cacheFile,
                         databaseOutputStream = { tempFile.outputStream() },
                         isNewLocation = true,
-                        masterCredential = MasterCredential(
-                            password = masterPassword,
-                            keyFileData = keyFileData
-                        ),
-                        challengeResponseRetriever = emptyChallengeResponseRetriever
+                        masterCredential =
+                            MasterCredential(
+                                password = masterPassword,
+                                keyFileData = keyFileData,
+                            ),
+                        challengeResponseRetriever = emptyChallengeResponseRetriever,
                     )
                     // 同文件系统下 rename 原子替换目标；失败（如跨卷）则回退到整文件复制
                     if (!tempFile.renameTo(target)) {
@@ -2131,11 +2381,12 @@ class KdbxTokenRepository(context: Context) {
                     cacheFile = cacheFile,
                     databaseOutputStream = { openOutputStream(location) },
                     isNewLocation = true,
-                    masterCredential = MasterCredential(
-                        password = masterPassword,
-                        keyFileData = keyFileData
-                    ),
-                    challengeResponseRetriever = emptyChallengeResponseRetriever
+                    masterCredential =
+                        MasterCredential(
+                            password = masterPassword,
+                            keyFileData = keyFileData,
+                        ),
+                    challengeResponseRetriever = emptyChallengeResponseRetriever,
                 )
             }
         }
@@ -2148,18 +2399,23 @@ class KdbxTokenRepository(context: Context) {
      * 为定位构建缓存目录。
      */
     private fun buildCacheDirectory(location: DatabaseLocation): File {
-        val cacheDirectory = when (location) {
-            is DatabaseLocation.FileLocation -> {
-                val parent = location.file.parentFile ?: File(System.getProperty("java.io.tmpdir") ?: ".")
-                File(parent, ".kdbx-cache")
-            }
+        val cacheDirectory =
+            when (location) {
+                is DatabaseLocation.FileLocation -> {
+                    val parent = location.file.parentFile ?: File(System.getProperty("java.io.tmpdir") ?: ".")
+                    File(parent, ".kdbx-cache")
+                }
 
-            is DatabaseLocation.UriLocation -> {
-                val raw = location.uri.toString().hashCode().toLong()
-                val safeHash = if (raw == Long.MIN_VALUE) 0L else abs(raw)
-                File(appContext.cacheDir, ".kdbx-cache-$safeHash")
+                is DatabaseLocation.UriLocation -> {
+                    val raw =
+                        location.uri
+                            .toString()
+                            .hashCode()
+                            .toLong()
+                    val safeHash = if (raw == Long.MIN_VALUE) 0L else abs(raw)
+                    File(appContext.cacheDir, ".kdbx-cache-$safeHash")
+                }
             }
-        }
         if (!cacheDirectory.exists()) {
             cacheDirectory.mkdirs()
         }
@@ -2180,8 +2436,8 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 按定位打开输入流。
      */
-    private fun openInputStream(location: DatabaseLocation): InputStream {
-        return when (location) {
+    private fun openInputStream(location: DatabaseLocation): InputStream =
+        when (location) {
             is DatabaseLocation.FileLocation -> {
                 location.file.inputStream()
             }
@@ -2191,13 +2447,12 @@ class KdbxTokenRepository(context: Context) {
                     ?: throw IllegalStateException("无法读取数据库文件")
             }
         }
-    }
 
     /**
      * 按定位打开输出流。
      */
-    private fun openOutputStream(location: DatabaseLocation): OutputStream {
-        return when (location) {
+    private fun openOutputStream(location: DatabaseLocation): OutputStream =
+        when (location) {
             is DatabaseLocation.FileLocation -> {
                 location.file.parentFile?.let {
                     if (!it.exists()) {
@@ -2212,12 +2467,15 @@ class KdbxTokenRepository(context: Context) {
                     ?: throw IllegalStateException("无法写入数据库文件")
             }
         }
-    }
 
     /**
      * 确保定位目标可初始化。
      */
-    private fun ensureLocationInitialized(location: DatabaseLocation, masterPassword: String, keyFileData: ByteArray? = null) {
+    private fun ensureLocationInitialized(
+        location: DatabaseLocation,
+        masterPassword: String,
+        keyFileData: ByteArray? = null,
+    ) {
         when (location) {
             is DatabaseLocation.FileLocation -> {
                 val file = location.file
@@ -2237,11 +2495,10 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 判断 Uri 是否已有内容。
      */
-    private fun hasUriData(uri: Uri): Boolean {
-        return appContext.contentResolver.openInputStream(uri)?.use { input ->
+    private fun hasUriData(uri: Uri): Boolean =
+        appContext.contentResolver.openInputStream(uri)?.use { input ->
             input.read() != -1
         } ?: false
-    }
 
     /**
      * 构建定位调试信息。
@@ -2254,33 +2511,35 @@ class KdbxTokenRepository(context: Context) {
                     return "fileMissing"
                 }
                 val length = file.length()
-                val head = runCatching {
-                    file.inputStream().use { input ->
-                        val bytes = ByteArray(8)
-                        val read = input.read(bytes)
-                        if (read <= 0) {
-                            "empty"
-                        } else {
-                            bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+                val head =
+                    runCatching {
+                        file.inputStream().use { input ->
+                            val bytes = ByteArray(8)
+                            val read = input.read(bytes)
+                            if (read <= 0) {
+                                "empty"
+                            } else {
+                                bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+                            }
                         }
-                    }
-                }.getOrElse { "readError:${it.javaClass.simpleName}" }
+                    }.getOrElse { "readError:${it.javaClass.simpleName}" }
                 "size=$length, head=$head"
             }
 
             is DatabaseLocation.UriLocation -> {
                 val size = queryUriSize(location.uri)?.toString() ?: "unknown"
-                val head = runCatching {
-                    appContext.contentResolver.openInputStream(location.uri)?.use { input ->
-                        val bytes = ByteArray(8)
-                        val read = input.read(bytes)
-                        if (read <= 0) {
-                            "empty"
-                        } else {
-                            bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
-                        }
-                    } ?: "openNull"
-                }.getOrElse { "readError:${it.javaClass.simpleName}" }
+                val head =
+                    runCatching {
+                        appContext.contentResolver.openInputStream(location.uri)?.use { input ->
+                            val bytes = ByteArray(8)
+                            val read = input.read(bytes)
+                            if (read <= 0) {
+                                "empty"
+                            } else {
+                                bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+                            }
+                        } ?: "openNull"
+                    }.getOrElse { "readError:${it.javaClass.simpleName}" }
                 "uriSize=$size, head=$head"
             }
         }
@@ -2290,8 +2549,9 @@ class KdbxTokenRepository(context: Context) {
      * 查询 Uri 的声明大小。
      */
     private fun queryUriSize(uri: Uri): Long? {
-        val cursor = appContext.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
-            ?: return null
+        val cursor =
+            appContext.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
+                ?: return null
         return cursor.use { cursor ->
             if (!cursor.moveToFirst()) {
                 return null
@@ -2306,21 +2566,21 @@ class KdbxTokenRepository(context: Context) {
     }
 
     private fun toStableId(entry: Entry): Long {
-        val uuid = (entry.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
-            ?: UUID(0L, 0L)
+        val uuid =
+            (entry.nodeId as? com.kunzisoft.keepass.database.element.node.NodeIdUUID)?.id
+                ?: UUID(0L, 0L)
         return when (val mixed = uuid.mostSignificantBits xor uuid.leastSignificantBits) {
             Long.MIN_VALUE -> 0L
             else -> abs(mixed)
         }
     }
 
-    private fun toHashAlgorithm(algorithm: String): TokenCalculator.HashAlgorithm {
-        return when (algorithm.uppercase()) {
+    private fun toHashAlgorithm(algorithm: String): TokenCalculator.HashAlgorithm =
+        when (algorithm.uppercase()) {
             TokenCalculator.HashAlgorithm.SHA256.name -> TokenCalculator.HashAlgorithm.SHA256
             TokenCalculator.HashAlgorithm.SHA512.name -> TokenCalculator.HashAlgorithm.SHA512
             else -> TokenCalculator.HashAlgorithm.SHA1
         }
-    }
 
     /**
      * 读取条目自定义图标二进制数据。
@@ -2331,7 +2591,7 @@ class KdbxTokenRepository(context: Context) {
     private fun readCustomIconBytes(
         database: Database,
         entry: Entry,
-        cache: MutableMap<String, ByteArray?>
+        cache: MutableMap<String, ByteArray?>,
     ): ByteArray? {
         val iconUuid = entry.icon.custom.uuid
         if (iconUuid == DatabaseVersioned.UUID_ZERO) {
@@ -2342,11 +2602,13 @@ class KdbxTokenRepository(context: Context) {
             return cache[uuidKey]
         }
 
-        val bytes = runCatching {
-            database.getBinaryForCustomIcon(iconUuid)
-                ?.getUnGzipInputDataStream(database.binaryCache)
-                ?.use { input -> input.readBytes() }
-        }.getOrNull()
+        val bytes =
+            runCatching {
+                database
+                    .getBinaryForCustomIcon(iconUuid)
+                    ?.getUnGzipInputDataStream(database.binaryCache)
+                    ?.use { input -> input.readBytes() }
+            }.getOrNull()
         cache[uuidKey] = bytes
         return bytes
     }
@@ -2367,7 +2629,7 @@ class KdbxTokenRepository(context: Context) {
     private fun mergeCustomFields(
         database: Database,
         entry: Entry,
-        uiFields: List<EditableFieldDraft>
+        uiFields: List<EditableFieldDraft>,
     ): MutableList<Field> {
         val originalExtras = entry.getExtraFields()
         val result = mutableListOf<Field>()
@@ -2410,16 +2672,19 @@ class KdbxTokenRepository(context: Context) {
     private fun buildEntryInfoAttachments(
         database: Database,
         entry: Entry,
-        draft: PasswordEntryEditDraft
+        draft: PasswordEntryEditDraft,
     ): List<Attachment> {
-        val removedNames = draft.attachments
-            .filter { it.removed }
-            .map { it.name }
-            .toSet()
+        val removedNames =
+            draft.attachments
+                .filter { it.removed }
+                .map { it.name }
+                .toSet()
 
-        val kept = entry.getAttachments(database.attachmentPool)
-            .filter { it.name !in removedNames }
-            .toMutableList()
+        val kept =
+            entry
+                .getAttachments(database.attachmentPool)
+                .filter { it.name !in removedNames }
+                .toMutableList()
 
         draft.attachments.forEach { att ->
             if (att.isNew && att.data != null && !att.removed) {
@@ -2443,7 +2708,11 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 应用过期时间与图标到 [EntryInfo]。
      */
-    private fun applyExpiryAndIcon(entryInfo: EntryInfo, database: Database, draft: PasswordEntryEditDraft) {
+    private fun applyExpiryAndIcon(
+        entryInfo: EntryInfo,
+        database: Database,
+        draft: PasswordEntryEditDraft,
+    ) {
         if (draft.expiryTime != null) {
             entryInfo.expires = true
             entryInfo.expiryTime = DateInstant.fromMilliseconds(draft.expiryTime)
@@ -2475,13 +2744,19 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 读取条目附件的字节内容（供 UI 查看/保存）。
      */
+
     /**
      * 读取条目附件的字节内容（供 UI 查看/保存）。
      *
      * 采用增量读取并施加 [MAX_ATTACHMENT_BYTES] 硬性上限：超过上限的附件直接拒绝返回，
      * 避免在内存中全量展开导致 OOM。
      */
-    fun getEntryAttachmentBytes(localPath: String, masterPassword: String, entryId: Long, name: String): ByteArray? {
+    fun getEntryAttachmentBytes(
+        localPath: String,
+        masterPassword: String,
+        entryId: Long,
+        name: String,
+    ): ByteArray? {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@withDatabase null
             val pool = db.attachmentPool
@@ -2504,7 +2779,7 @@ class KdbxTokenRepository(context: Context) {
         masterPassword: String,
         entryId: Long,
         name: String,
-        output: OutputStream
+        output: OutputStream,
     ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@withDatabase false
@@ -2521,7 +2796,10 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 增量读取输入流，超过 [limit] 字节则抛出 [IllegalStateException] 以拒绝超大附件。
      */
-    private fun readBoundedBytes(input: InputStream, limit: Int): ByteArray {
+    private fun readBoundedBytes(
+        input: InputStream,
+        limit: Int,
+    ): ByteArray {
         val buffer = ByteArrayOutputStream(8 * 1024)
         val chunk = ByteArray(8 * 1024)
         var total = 0
@@ -2540,7 +2818,11 @@ class KdbxTokenRepository(context: Context) {
     /**
      * 增量拷贝输入流到输出流，超过 [limit] 字节则抛出 [IllegalStateException] 以拒绝超大附件。
      */
-    private fun copyBounded(input: InputStream, output: OutputStream, limit: Int) {
+    private fun copyBounded(
+        input: InputStream,
+        output: OutputStream,
+        limit: Int,
+    ) {
         val chunk = ByteArray(8 * 1024)
         var total = 0
         while (true) {

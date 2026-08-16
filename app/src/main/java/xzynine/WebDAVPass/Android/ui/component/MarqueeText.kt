@@ -23,20 +23,21 @@ fun MarqueeText(
     fontSize: TextUnit,
     modifier: Modifier = Modifier,
     color: Color = Color.Unspecified,
-    fontWeight: FontWeight? = null
+    fontWeight: FontWeight? = null,
 ) {
     Text(
         text = text,
-        modifier = modifier.basicMarquee(
-            iterations = Int.MAX_VALUE,
-            animationMode = MarqueeAnimationMode.Immediately,
-            repeatDelayMillis = 600,
-            velocity = 32.dp
-        ),
+        modifier =
+            modifier.basicMarquee(
+                iterations = Int.MAX_VALUE,
+                animationMode = MarqueeAnimationMode.Immediately,
+                repeatDelayMillis = 600,
+                velocity = 32.dp,
+            ),
         color = color,
         fontSize = fontSize,
         fontWeight = fontWeight,
         maxLines = 1,
-        overflow = TextOverflow.Clip
+        overflow = TextOverflow.Clip,
     )
 }

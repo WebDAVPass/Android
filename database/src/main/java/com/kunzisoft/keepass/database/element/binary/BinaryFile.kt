@@ -1,6 +1,6 @@
 /*
  * Copyright 2018 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -32,18 +32,20 @@ import javax.crypto.CipherOutputStream
 import javax.crypto.spec.IvParameterSpec
 
 class BinaryFile : BinaryData {
-
     private var mDataFile: File? = null
 
     // Cipher to encrypt temp file
     @Transient
     private var cipherEncryption: Cipher = Cipher.getInstance(LoadedKey.BINARY_CIPHER)
+
     @Transient
     private var cipherDecryption: Cipher = Cipher.getInstance(LoadedKey.BINARY_CIPHER)
 
-    constructor(dataFile: File,
-                compressed: Boolean = false,
-                protected: Boolean = false) : super(compressed, protected) {
+    constructor(
+        dataFile: File,
+        compressed: Boolean = false,
+        protected: Boolean = false,
+    ) : super(compressed, protected) {
         this.mDataFile = dataFile
     }
 
@@ -53,23 +55,25 @@ class BinaryFile : BinaryData {
         }
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(dest, flags)
         dest.writeString(mDataFile?.absolutePath)
     }
 
     @Throws(IOException::class)
-    override fun getInputDataStream(binaryCache: BinaryCache): InputStream {
-        return buildInputStream(mDataFile, binaryCache)
-    }
+    override fun getInputDataStream(binaryCache: BinaryCache): InputStream = buildInputStream(mDataFile, binaryCache)
 
     @Throws(IOException::class)
-    override fun getOutputDataStream(binaryCache: BinaryCache): OutputStream {
-        return buildOutputStream(mDataFile, binaryCache)
-    }
+    override fun getOutputDataStream(binaryCache: BinaryCache): OutputStream = buildOutputStream(mDataFile, binaryCache)
 
     @Throws(IOException::class)
-    private fun buildInputStream(file: File?, binaryCache: BinaryCache): InputStream {
+    private fun buildInputStream(
+        file: File?,
+        binaryCache: BinaryCache,
+    ): InputStream {
         val cipherKey = binaryCache.loadedCipherKey
         return when {
             file != null && file.length() > 0 -> {
@@ -81,7 +85,10 @@ class BinaryFile : BinaryData {
     }
 
     @Throws(IOException::class)
-    private fun buildOutputStream(file: File?, binaryCache: BinaryCache): OutputStream {
+    private fun buildOutputStream(
+        file: File?,
+        binaryCache: BinaryCache,
+    ): OutputStream {
         val cipherKey = binaryCache.loadedCipherKey
         return when {
             file != null -> {
@@ -142,13 +149,12 @@ class BinaryFile : BinaryData {
     }
 
     override fun clear(binaryCache: BinaryCache) {
-        if (mDataFile != null && !mDataFile!!.delete())
+        if (mDataFile != null && !mDataFile!!.delete()) {
             throw IOException("Unable to delete temp file " + mDataFile!!.absolutePath)
+        }
     }
 
-    override fun toString(): String {
-        return mDataFile.toString()
-    }
+    override fun toString(): String = mDataFile.toString()
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -168,15 +174,11 @@ class BinaryFile : BinaryData {
         private val TAG = BinaryFile::class.java.name
 
         @JvmField
-        val CREATOR: Parcelable.Creator<BinaryFile> = object : Parcelable.Creator<BinaryFile> {
-            override fun createFromParcel(parcel: Parcel): BinaryFile {
-                return BinaryFile(parcel)
-            }
+        val CREATOR: Parcelable.Creator<BinaryFile> =
+            object : Parcelable.Creator<BinaryFile> {
+                override fun createFromParcel(parcel: Parcel): BinaryFile = BinaryFile(parcel)
 
-            override fun newArray(size: Int): Array<BinaryFile?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<BinaryFile?> = arrayOfNulls(size)
             }
-        }
     }
-
 }

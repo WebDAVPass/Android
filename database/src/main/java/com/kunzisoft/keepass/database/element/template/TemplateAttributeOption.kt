@@ -25,7 +25,6 @@ import com.kunzisoft.keepass.utils.readStringStringMap
 import com.kunzisoft.keepass.utils.writeStringStringMap
 
 class TemplateAttributeOption() : Parcelable {
-
     private val mOptions: MutableMap<String, String> = mutableMapOf()
 
     constructor(parcel: Parcel) : this() {
@@ -35,26 +34,29 @@ class TemplateAttributeOption() : Parcelable {
         }
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeStringStringMap(mOptions)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     var alias: String?
         get() {
             val tempAlias = mOptions[ALIAS_ATTR]
-            if (tempAlias.isNullOrEmpty())
+            if (tempAlias.isNullOrEmpty()) {
                 return null
+            }
             return tempAlias
         }
         set(value) {
-            if (value == null)
+            if (value == null) {
                 mOptions.remove(ALIAS_ATTR)
-            else
+            } else {
                 mOptions[ALIAS_ATTR] = value
+            }
         }
 
     var default: String
@@ -65,16 +67,16 @@ class TemplateAttributeOption() : Parcelable {
             mOptions[DEFAULT_ATTR] = value
         }
 
-    fun getNumberChars(): Int {
-        return try {
-            if (mOptions[TEXT_NUMBER_CHARS_ATTR].equals(TEXT_NUMBER_CHARS_VALUE_MANY_STRING, true))
+    fun getNumberChars(): Int =
+        try {
+            if (mOptions[TEXT_NUMBER_CHARS_ATTR].equals(TEXT_NUMBER_CHARS_VALUE_MANY_STRING, true)) {
                 TEXT_NUMBER_CHARS_VALUE_MANY
-            else
+            } else {
                 mOptions[TEXT_NUMBER_CHARS_ATTR]?.toInt() ?: TEXT_NUMBER_CHARS_VALUE_DEFAULT
+            }
         } catch (e: Exception) {
             TEXT_NUMBER_CHARS_VALUE_DEFAULT
         }
-    }
 
     fun setNumberChars(numberChars: Int) {
         mOptions[TEXT_NUMBER_CHARS_ATTR] = numberChars.toString()
@@ -84,16 +86,16 @@ class TemplateAttributeOption() : Parcelable {
         mOptions[TEXT_NUMBER_CHARS_ATTR] = TEXT_NUMBER_CHARS_VALUE_MANY_STRING
     }
 
-    fun getNumberLines(): Int {
-        return try {
-            if (mOptions[TEXT_NUMBER_LINES_ATTR].equals(TEXT_NUMBER_LINES_VALUE_MANY_STRING, true))
+    fun getNumberLines(): Int =
+        try {
+            if (mOptions[TEXT_NUMBER_LINES_ATTR].equals(TEXT_NUMBER_LINES_VALUE_MANY_STRING, true)) {
                 TEXT_NUMBER_LINES_VALUE_MANY
-            else
+            } else {
                 mOptions[TEXT_NUMBER_LINES_ATTR]?.toInt() ?: TEXT_NUMBER_LINES_VALUE_DEFAULT
+            }
         } catch (e: Exception) {
             TEXT_NUMBER_LINES_VALUE_DEFAULT
         }
-    }
 
     fun setNumberLines(numberLines: Int) {
         val lines = if (numberLines == 0) 1 else numberLines
@@ -104,45 +106,40 @@ class TemplateAttributeOption() : Parcelable {
         mOptions[TEXT_NUMBER_LINES_ATTR] = TEXT_NUMBER_LINES_VALUE_MANY_STRING
     }
 
-    fun isLink(): Boolean {
-        return try {
+    fun isLink(): Boolean =
+        try {
             mOptions[TEXT_LINK_ATTR]?.toBoolean() ?: TEXT_LINK_VALUE_DEFAULT
         } catch (e: Exception) {
             TEXT_LINK_VALUE_DEFAULT
         }
-    }
 
     fun setLink(isLink: Boolean) {
         mOptions[TEXT_LINK_ATTR] = isLink.toString()
     }
 
-    fun isAssociatedWithPasswordGenerator(): Boolean {
-        return try {
+    fun isAssociatedWithPasswordGenerator(): Boolean =
+        try {
             mOptions[PASSWORD_GENERATOR_ATTR]?.toBoolean() ?: PASSWORD_GENERATOR_VALUE_DEFAULT
         } catch (e: Exception) {
             PASSWORD_GENERATOR_VALUE_DEFAULT
         }
-    }
 
     fun associatePasswordGenerator() {
         mOptions[PASSWORD_GENERATOR_ATTR] = true.toString()
     }
 
-    fun getListItems(): List<String> {
-        return mOptions[LIST_ITEMS]?.split(LIST_ITEMS_SEPARATOR) ?: listOf()
-    }
+    fun getListItems(): List<String> = mOptions[LIST_ITEMS]?.split(LIST_ITEMS_SEPARATOR) ?: listOf()
 
     fun setListItems(vararg items: String) {
         mOptions[LIST_ITEMS] = items.joinToString(LIST_ITEMS_SEPARATOR)
     }
 
-    fun getDateFormat(): DateInstant.Type {
-        return when (mOptions[DATETIME_FORMAT_ATTR]) {
+    fun getDateFormat(): DateInstant.Type =
+        when (mOptions[DATETIME_FORMAT_ATTR]) {
             DATETIME_FORMAT_VALUE_DATE -> DateInstant.Type.DATE
             DATETIME_FORMAT_VALUE_TIME -> DateInstant.Type.TIME
             else -> DateInstant.Type.DATE_TIME
         }
-    }
 
     fun setDateFormatToDate() {
         mOptions[DATETIME_FORMAT_ATTR] = DATETIME_FORMAT_VALUE_DATE
@@ -152,23 +149,23 @@ class TemplateAttributeOption() : Parcelable {
         mOptions[DATETIME_FORMAT_ATTR] = DATETIME_FORMAT_VALUE_TIME
     }
 
-    fun getExpirable(): Boolean {
-        return try {
+    fun getExpirable(): Boolean =
+        try {
             mOptions[DATETIME_EXPIRABLE_ATTR]?.toBoolean() ?: DATETIME_EXPIRABLE_VALUE_DEFAULT
         } catch (e: Exception) {
             DATETIME_EXPIRABLE_VALUE_DEFAULT
         }
-    }
 
     fun setExpirable(value: Boolean) {
         mOptions[DATETIME_EXPIRABLE_ATTR] = value.toString().lowercase()
     }
 
-    fun get(label: String): String? {
-        return mOptions[label]
-    }
+    fun get(label: String): String? = mOptions[label]
 
-    fun put(label: String, value: String) {
+    fun put(
+        label: String,
+        value: String,
+    ) {
         mOptions[label] = value
     }
 
@@ -177,13 +174,9 @@ class TemplateAttributeOption() : Parcelable {
     }
 
     companion object CREATOR : Parcelable.Creator<TemplateAttributeOption> {
-        override fun createFromParcel(parcel: Parcel): TemplateAttributeOption {
-            return TemplateAttributeOption(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): TemplateAttributeOption = TemplateAttributeOption(parcel)
 
-        override fun newArray(size: Int): Array<TemplateAttributeOption?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<TemplateAttributeOption?> = arrayOfNulls(size)
 
         /**
          * Applicable to each type
@@ -267,26 +260,29 @@ class TemplateAttributeOption() : Parcelable {
         private const val DATETIME_EXPIRABLE_ATTR = "expirable"
         private const val DATETIME_EXPIRABLE_VALUE_DEFAULT = false
 
-        private fun removeSpecialChars(string: String): String {
-            return string.filterNot { "{,:}".indexOf(it) > -1 }
-        }
+        private fun removeSpecialChars(string: String): String = string.filterNot { "{,:}".indexOf(it) > -1 }
 
         fun getOptionsFromString(label: String): TemplateAttributeOption {
             val options = TemplateAttributeOption()
-            val optionsMap =  if (label.contains("{") || label.contains("}")) {
-                try {
-                    label.trim().substringAfter("{").substringBefore("}")
-                        .split(",").associate {
-                            val keyValue = it.trim()
-                            val (left, right) = keyValue.split(":")
-                            left to right
-                        }.toMutableMap()
-                } catch (e: Exception) {
+            val optionsMap =
+                if (label.contains("{") || label.contains("}")) {
+                    try {
+                        label
+                            .trim()
+                            .substringAfter("{")
+                            .substringBefore("}")
+                            .split(",")
+                            .associate {
+                                val keyValue = it.trim()
+                                val (left, right) = keyValue.split(":")
+                                left to right
+                            }.toMutableMap()
+                    } catch (e: Exception) {
+                        mutableMapOf()
+                    }
+                } else {
                     mutableMapOf()
                 }
-            } else {
-                mutableMapOf()
-            }
             options.mOptions.apply {
                 clear()
                 putAll(optionsMap)
@@ -300,8 +296,9 @@ class TemplateAttributeOption() : Parcelable {
                 optionsString += " {"
                 var first = true
                 for ((key, value) in options.mOptions) {
-                    if (!first)
+                    if (!first) {
                         optionsString += ", "
+                    }
                     first = false
                     optionsString += "${removeSpecialChars(key)}:${removeSpecialChars(value)}"
                 }

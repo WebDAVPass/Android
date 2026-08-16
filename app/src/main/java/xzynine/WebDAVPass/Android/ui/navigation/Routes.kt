@@ -37,10 +37,14 @@ sealed interface Route : NavKey {
     data object TokenList : Route
 
     @Serializable
-    data class PasswordList(val listMode: PasswordListMode) : Route
+    data class PasswordList(
+        val listMode: PasswordListMode,
+    ) : Route
 
     @Serializable
-    data class PasswordEntryDetail(val entryId: Long) : Route
+    data class PasswordEntryDetail(
+        val entryId: Long,
+    ) : Route
 
     @Serializable
     data object SecurityCheck : Route

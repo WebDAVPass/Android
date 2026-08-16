@@ -22,8 +22,9 @@ package com.kunzisoft.keepass.database.element.node
 import android.os.Parcelable
 import com.kunzisoft.keepass.database.element.icon.IconImage
 
-interface NodeVersionedInterface<ParentGroup> : NodeTimeInterface, Parcelable {
-
+interface NodeVersionedInterface<ParentGroup> :
+    NodeTimeInterface,
+    Parcelable {
     var title: String
     var icon: IconImage
     val type: Type
@@ -44,5 +45,8 @@ interface NodeVersionedInterface<ParentGroup> : NodeTimeInterface, Parcelable {
      */
     fun nodeIndexInParentForNaturalOrder(): Int
 
-    fun touch(modified: Boolean, touchParents: Boolean)
+    fun touch(
+        modified: Boolean,
+        touchParents: Boolean,
+    )
 }

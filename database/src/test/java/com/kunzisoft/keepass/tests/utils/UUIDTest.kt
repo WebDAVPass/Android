@@ -25,8 +25,7 @@ import com.kunzisoft.keepass.utils.UUIDUtils.asUUID
 import junit.framework.TestCase
 import java.util.UUID
 
-class UUIDTest: TestCase() {
-
+class UUIDTest : TestCase() {
     fun testUUIDHexString() {
         val randomUUID = UUID.randomUUID()
         val hexStringUUID = randomUUID.asHexString()
@@ -36,7 +35,12 @@ class UUIDTest: TestCase() {
 
     fun testUUIDString() {
         val staticUUID = "4be0643f-1d98-573b-97cd-ca98a65347dd"
-        val stringUUID = UUID.fromString(staticUUID).asBytes().asUUID().toString()
+        val stringUUID =
+            UUID
+                .fromString(staticUUID)
+                .asBytes()
+                .asUUID()
+                .toString()
         assertEquals(staticUUID, stringUUID)
     }
 

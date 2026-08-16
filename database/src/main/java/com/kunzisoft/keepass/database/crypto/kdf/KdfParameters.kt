@@ -19,21 +19,20 @@
  */
 package com.kunzisoft.keepass.database.crypto.kdf
 
+import com.kunzisoft.keepass.database.crypto.VariantDictionary
 import com.kunzisoft.keepass.utils.bytes16ToUuid
 import com.kunzisoft.keepass.utils.uuidTo16Bytes
-import com.kunzisoft.keepass.database.crypto.VariantDictionary
 import java.io.IOException
 import java.util.*
 
-class KdfParameters: VariantDictionary {
-
+class KdfParameters : VariantDictionary {
     val uuid: UUID
 
-    constructor(uuid: UUID): super() {
+    constructor(uuid: UUID) : super() {
         this.uuid = uuid
     }
 
-    constructor(uuid: UUID, d: VariantDictionary): super(d) {
+    constructor(uuid: UUID, d: VariantDictionary) : super(d) {
         this.uuid = uuid
     }
 
@@ -42,7 +41,6 @@ class KdfParameters: VariantDictionary {
     }
 
     companion object {
-
         private const val PARAM_UUID = "\$UUID"
 
         @Throws(IOException::class)
@@ -56,9 +54,6 @@ class KdfParameters: VariantDictionary {
         }
 
         @Throws(IOException::class)
-        fun serialize(kdfParameters: KdfParameters): ByteArray {
-            return VariantDictionary.serialize(kdfParameters)
-        }
+        fun serialize(kdfParameters: KdfParameters): ByteArray = VariantDictionary.serialize(kdfParameters)
     }
-
 }

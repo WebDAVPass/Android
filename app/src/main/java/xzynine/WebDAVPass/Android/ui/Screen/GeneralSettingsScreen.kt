@@ -20,18 +20,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences
-import xzynine.WebDAVPass.Android.autofill.KeeAutofillService
-import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.GridView
+import xzynine.WebDAVPass.Android.autofill.AutofillSavePreferences
+import xzynine.WebDAVPass.Android.autofill.KeeAutofillService
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 /**
  * 填充器设置子页面（自动填充相关）。
@@ -39,7 +39,7 @@ import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 @Composable
 fun FillerSettingsContent(
     viewModel: TokenViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
 ) {
     val context = LocalContext.current
 
@@ -48,19 +48,20 @@ fun FillerSettingsContent(
         topBar = {
             SettingsTopAppBar(
                 title = "填充器设置",
-                onNavigateBack = onNavigateBack
+                onNavigateBack = onNavigateBack,
             )
-        }
+        },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(it)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState())
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(it)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
         ) {
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Preference(
                     type = PreferenceType.Arrow,
@@ -76,27 +77,32 @@ fun FillerSettingsContent(
                     onClick = {
                         val autofillServiceExtra = "android.provider.extra.AUTOFILL_SERVICE"
                         val autofillSettingsAction = "android.settings.AUTOFILL_SETTINGS"
-                        val requestIntent = Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
-                            putExtra(
-                                autofillServiceExtra,
-                                ComponentName(context, KeeAutofillService::class.java)
-                            )
-                        }
-                        val credentialsPickerIntent = Intent().apply {
-                            component = ComponentName(
-                                "com.android.settings",
-                                "com.android.settings.applications.credentials.CredentialsPickerActivity"
-                            )
-                        }
-                        val fallbackIntent = Intent(autofillSettingsAction)
-                        val intent = when {
-                            requestIntent.resolveActivity(context.packageManager) != null -> requestIntent
-                            credentialsPickerIntent.resolveActivity(context.packageManager) != null -> credentialsPickerIntent
-                            fallbackIntent.resolveActivity(context.packageManager) != null -> fallbackIntent
-                            else -> Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
-                                data = android.net.Uri.fromParts("package", context.packageName, null)
+                        val requestIntent =
+                            Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
+                                putExtra(
+                                    autofillServiceExtra,
+                                    ComponentName(context, KeeAutofillService::class.java),
+                                )
                             }
-                        }
+                        val credentialsPickerIntent =
+                            Intent().apply {
+                                component =
+                                    ComponentName(
+                                        "com.android.settings",
+                                        "com.android.settings.applications.credentials.CredentialsPickerActivity",
+                                    )
+                            }
+                        val fallbackIntent = Intent(autofillSettingsAction)
+                        val intent =
+                            when {
+                                requestIntent.resolveActivity(context.packageManager) != null -> requestIntent
+                                credentialsPickerIntent.resolveActivity(context.packageManager) != null -> credentialsPickerIntent
+                                fallbackIntent.resolveActivity(context.packageManager) != null -> fallbackIntent
+                                else ->
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                                        data = android.net.Uri.fromParts("package", context.packageName, null)
+                                    }
+                            }
                         context.startActivity(intent)
                     },
                 )
@@ -113,7 +119,7 @@ fun FillerSettingsContent(
                 askToSaveChecked = AutofillSavePreferences.askToSaveData
             }
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Preference(
                     type = PreferenceType.Switch,
@@ -124,7 +130,7 @@ fun FillerSettingsContent(
                         Icon(
                             modifier = Modifier.padding(end = 16.dp),
                             imageVector = MiuixIcons.Edit,
-                            contentDescription = "自动填充时提示保存"
+                            contentDescription = "自动填充时提示保存",
                         )
                     },
                     onCheckedChange = { checked ->

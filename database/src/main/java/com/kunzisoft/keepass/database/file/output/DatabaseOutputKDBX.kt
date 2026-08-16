@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -56,10 +56,9 @@ import javax.crypto.Cipher
 import javax.crypto.CipherOutputStream
 import kotlin.experimental.or
 
-
-class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
-    : DatabaseOutput<DatabaseHeaderKDBX>() {
-
+class DatabaseOutputKDBX(
+    private val mDatabaseKDBX: DatabaseKDBX,
+) : DatabaseOutput<DatabaseHeaderKDBX>() {
     private var randomStream: StreamCipher? = null
     private lateinit var xml: XmlSerializer
     private var header: DatabaseHeaderKDBX? = null
@@ -67,25 +66,27 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
     private var headerHmac: ByteArray? = null
 
     @Throws(DatabaseOutputException::class)
-    override fun writeDatabase(outputStream: OutputStream,
-                               assignMasterKey: () -> Unit) {
-
+    override fun writeDatabase(
+        outputStream: OutputStream,
+        assignMasterKey: () -> Unit,
+    ) {
         try {
             header = outputHeader(outputStream, assignMasterKey)
 
-            val osPlain: OutputStream = if (header!!.version.isBefore(FILE_VERSION_40)) {
-                val cos = attachStreamEncryptor(header!!, outputStream)
-                cos.write(header!!.streamStartBytes)
+            val osPlain: OutputStream =
+                if (header!!.version.isBefore(FILE_VERSION_40)) {
+                    val cos = attachStreamEncryptor(header!!, outputStream)
+                    cos.write(header!!.streamStartBytes)
 
-                HashedBlockOutputStream(cos)
-            } else {
-                outputStream.write(hashOfHeader!!)
-                outputStream.write(headerHmac!!)
+                    HashedBlockOutputStream(cos)
+                } else {
+                    outputStream.write(hashOfHeader!!)
+                    outputStream.write(headerHmac!!)
 
-                attachStreamEncryptor(header!!, HmacBlockOutputStream(outputStream, mDatabaseKDBX.hmacKey!!))
-            }
+                    attachStreamEncryptor(header!!, HmacBlockOutputStream(outputStream, mDatabaseKDBX.hmacKey!!))
+                }
 
-            when(mDatabaseKDBX.compressionAlgorithm) {
+            when (mDatabaseKDBX.compressionAlgorithm) {
                 CompressionAlgorithm.GZIP -> GZIPOutputStream(osPlain)
                 else -> osPlain
             }.use { xmlOutputStream ->
@@ -100,13 +101,16 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
     }
 
     @Throws(IOException::class)
-    private fun outputInnerHeader(database: DatabaseKDBX,
-                                  header: DatabaseHeaderKDBX,
-                                  dataOutputStream: OutputStream) {
+    private fun outputInnerHeader(
+        database: DatabaseKDBX,
+        header: DatabaseHeaderKDBX,
+        dataOutputStream: OutputStream,
+    ) {
         dataOutputStream.writeByte(DatabaseHeaderKDBX.PwDbInnerHeaderV4Fields.InnerRandomStreamID)
         dataOutputStream.write4BytesUInt(UnsignedInt(4))
-        if (header.innerRandomStream == null)
+        if (header.innerRandomStream == null) {
             throw IOException("Can't write innerRandomStream")
+        }
         dataOutputStream.write4BytesUInt(header.innerRandomStream!!.id)
 
         val streamKeySize = header.innerRandomStreamKey.size
@@ -142,7 +146,6 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
 
     @Throws(IllegalArgumentException::class, IllegalStateException::class, IOException::class)
     private fun outputDatabase(outputStream: OutputStream) {
-
         xml = Xml.newSerializer()
 
         xml.setOutput(outputStream, "UTF-8")
@@ -159,40 +162,41 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
             groupStack.push(root)
 
             if (!root.doForEachChild(
-                            object : NodeHandler<EntryKDBX>() {
-                                override fun operate(node: EntryKDBX): Boolean {
-                                    try {
-                                        writeEntry(node, false)
-                                    } catch (ex: IOException) {
-                                        throw RuntimeException(ex)
-                                    }
+                    object : NodeHandler<EntryKDBX>() {
+                        override fun operate(node: EntryKDBX): Boolean {
+                            try {
+                                writeEntry(node, false)
+                            } catch (ex: IOException) {
+                                throw RuntimeException(ex)
+                            }
 
-                                    return true
-                                }
-                            },
-                            object : NodeHandler<GroupKDBX>() {
-                                override fun operate(node: GroupKDBX): Boolean {
-                                    while (true) {
-                                        try {
-                                            if (node.parent === groupStack.peek()) {
-                                                groupStack.push(node)
-                                                startGroup(node)
-                                                break
-                                            } else {
-                                                groupStack.pop()
-                                                if (groupStack.size <= 0) return false
-                                                endGroup()
-                                            }
-                                        } catch (e: IOException) {
-                                            throw RuntimeException(e)
-                                        }
-
+                            return true
+                        }
+                    },
+                    object : NodeHandler<GroupKDBX>() {
+                        override fun operate(node: GroupKDBX): Boolean {
+                            while (true) {
+                                try {
+                                    if (node.parent === groupStack.peek()) {
+                                        groupStack.push(node)
+                                        startGroup(node)
+                                        break
+                                    } else {
+                                        groupStack.pop()
+                                        if (groupStack.size <= 0) return false
+                                        endGroup()
                                     }
-                                    return true
+                                } catch (e: IOException) {
+                                    throw RuntimeException(e)
                                 }
-                            })
-            )
+                            }
+                            return true
+                        }
+                    },
+                )
+            ) {
                 throw RuntimeException("Writing groups failed")
+            }
 
             while (groupStack.size > 1) {
                 xml.endTag(null, DatabaseKDBXXML.ElemGroup)
@@ -250,8 +254,9 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
         writeUuid(DatabaseKDBXXML.ElemLastTopVisibleGroup, mDatabaseKDBX.lastTopVisibleGroupUUID)
 
         // Seem to work properly if always in meta
-        if (header!!.version.isBefore(FILE_VERSION_40))
+        if (header!!.version.isBefore(FILE_VERSION_40)) {
             writeMetaBinaries()
+        }
 
         writeCustomData(mDatabaseKDBX.customData)
 
@@ -259,13 +264,17 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
     }
 
     @Throws(DatabaseOutputException::class)
-    private fun attachStreamEncryptor(header: DatabaseHeaderKDBX, os: OutputStream): CipherOutputStream {
+    private fun attachStreamEncryptor(
+        header: DatabaseHeaderKDBX,
+        os: OutputStream,
+    ): CipherOutputStream {
         val cipher: Cipher
         try {
-            cipher = mDatabaseKDBX
-                .encryptionAlgorithm
-                .cipherEngine
-                .getCipher(Cipher.ENCRYPT_MODE, mDatabaseKDBX.finalKey!!, header.encryptionIV)
+            cipher =
+                mDatabaseKDBX
+                    .encryptionAlgorithm
+                    .cipherEngine
+                    .getCipher(Cipher.ENCRYPT_MODE, mDatabaseKDBX.finalKey!!, header.encryptionIV)
         } catch (e: Exception) {
             throw DatabaseOutputException("Invalid algorithm.", e)
         }
@@ -313,8 +322,10 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
     }
 
     @Throws(DatabaseOutputException::class)
-    private fun outputHeader(outputStream: OutputStream,
-                             assignMasterKey: () -> Unit): DatabaseHeaderKDBX {
+    private fun outputHeader(
+        outputStream: OutputStream,
+        assignMasterKey: () -> Unit,
+    ): DatabaseHeaderKDBX {
         try {
             val header = DatabaseHeaderKDBX(mDatabaseKDBX)
             setIVs(header)
@@ -340,7 +351,11 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
         writeUuid(DatabaseKDBXXML.ElemUuid, group.id)
         writeString(DatabaseKDBXXML.ElemName, group.title)
         writeString(DatabaseKDBXXML.ElemNotes, group.notes)
-        writeLong(DatabaseKDBXXML.ElemIcon, group.icon.standard.id.toLong())
+        writeLong(
+            DatabaseKDBXXML.ElemIcon,
+            group.icon.standard.id
+                .toLong(),
+        )
 
         if (!group.icon.custom.isUnknown) {
             writeUuid(DatabaseKDBXXML.ElemCustomIconID, group.icon.custom.uuid)
@@ -363,12 +378,18 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
     }
 
     @Throws(IllegalArgumentException::class, IllegalStateException::class, IOException::class)
-    private fun writeEntry(entry: EntryKDBX, isHistory: Boolean) {
-
+    private fun writeEntry(
+        entry: EntryKDBX,
+        isHistory: Boolean,
+    ) {
         xml.startTag(null, DatabaseKDBXXML.ElemEntry)
 
         writeUuid(DatabaseKDBXXML.ElemUuid, entry.id)
-        writeLong(DatabaseKDBXXML.ElemIcon, entry.icon.standard.id.toLong())
+        writeLong(
+            DatabaseKDBXXML.ElemIcon,
+            entry.icon.standard.id
+                .toLong(),
+        )
 
         if (!entry.icon.custom.isUnknown) {
             writeUuid(DatabaseKDBXXML.ElemCustomIconID, entry.icon.custom.uuid)
@@ -398,7 +419,11 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
     }
 
     @Throws(IllegalArgumentException::class, IllegalStateException::class, IOException::class)
-    private fun writeString(name: String, value: String, filterXmlChars: Boolean = false) {
+    private fun writeString(
+        name: String,
+        value: String,
+        filterXmlChars: Boolean = false,
+    ) {
         var xmlString = value
 
         xml.startTag(null, name)
@@ -412,36 +437,53 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
     }
 
     @Throws(IllegalArgumentException::class, IllegalStateException::class, IOException::class)
-    private fun writeDateInstant(name: String, date: DateInstant) {
+    private fun writeDateInstant(
+        name: String,
+        date: DateInstant,
+    ) {
         if (header!!.version.isBefore(FILE_VERSION_40)) {
             writeString(name, date.toISO8601Format())
         } else {
-            writeString(name, String(
-                Base64.encode(
-                    longTo8Bytes(date.toDotNetSeconds()), BASE64_FLAG)
-                )
+            writeString(
+                name,
+                String(
+                    Base64.encode(
+                        longTo8Bytes(date.toDotNetSeconds()),
+                        BASE64_FLAG,
+                    ),
+                ),
             )
         }
     }
 
     @Throws(IllegalArgumentException::class, IllegalStateException::class, IOException::class)
-    private fun writeLong(name: String, value: Long) {
+    private fun writeLong(
+        name: String,
+        value: Long,
+    ) {
         writeString(name, value.toString())
     }
 
     @Throws(IllegalArgumentException::class, IllegalStateException::class, IOException::class)
-    private fun writeBoolean(name: String, value: Boolean?) {
-        val text: String = when {
-            value == null -> DatabaseKDBXXML.ValNull
-            value -> DatabaseKDBXXML.ValTrue
-            else -> DatabaseKDBXXML.ValFalse
-        }
+    private fun writeBoolean(
+        name: String,
+        value: Boolean?,
+    ) {
+        val text: String =
+            when {
+                value == null -> DatabaseKDBXXML.ValNull
+                value -> DatabaseKDBXXML.ValTrue
+                else -> DatabaseKDBXXML.ValFalse
+            }
 
         writeString(name, text)
     }
 
     @Throws(IllegalArgumentException::class, IllegalStateException::class, IOException::class)
-    private fun writeUuid(name: String, uuid: UUID) {
+    private fun writeUuid(
+        name: String,
+        uuid: UUID,
+    ) {
         val data = uuidTo16Bytes(uuid)
         writeString(name, String(Base64.encode(data, BASE64_FLAG)))
     }
@@ -472,7 +514,7 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
             }
         }
     }
-    */
+     */
 
     // Only uses with kdbx3.1 to write binaries in meta tag
     // With kdbx4, don't use this method because binaries are in header file
@@ -667,8 +709,9 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
 
     @Throws(IllegalArgumentException::class, IllegalStateException::class, IOException::class)
     private fun writePreviousParentGroup(previousParentGroup: UUID) {
-        if (!header!!.version.isBefore(FILE_VERSION_41)
-                && previousParentGroup != DatabaseVersioned.UUID_ZERO) {
+        if (!header!!.version.isBefore(FILE_VERSION_41) &&
+            previousParentGroup != DatabaseVersioned.UUID_ZERO
+        ) {
             writeUuid(DatabaseKDBXXML.ElemPreviousParentGroup, previousParentGroup)
         }
     }
@@ -724,8 +767,10 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
                 } catch (e: Exception) {
                     Log.e(TAG, "Unable to write custom icon", e)
                 } finally {
-                    writeString(DatabaseKDBXXML.ElemCustomIconItemData,
-                            String(Base64.encode(customImageData, BASE64_FLAG)))
+                    writeString(
+                        DatabaseKDBXXML.ElemCustomIconItemData,
+                        String(Base64.encode(customImageData, BASE64_FLAG)),
+                    )
                 }
                 if (iconCustom.name.isNotEmpty()) {
                     writeString(DatabaseKDBXXML.ElemName, iconCustom.name)
@@ -753,11 +798,11 @@ class DatabaseOutputKDBX(private val mDatabaseKDBX: DatabaseKDBX)
             character = element
             val hexChar = character.code
             if (
-                    hexChar in 0x20..0xD7FF ||
-                    hexChar == 0x9 ||
-                    hexChar == 0xA ||
-                    hexChar == 0xD ||
-                    hexChar in 0xE000..0xFFFD
+                hexChar in 0x20..0xD7FF ||
+                hexChar == 0x9 ||
+                hexChar == 0xA ||
+                hexChar == 0xD ||
+                hexChar in 0xE000..0xFFFD
             ) {
                 stringBuilder.append(character)
             }

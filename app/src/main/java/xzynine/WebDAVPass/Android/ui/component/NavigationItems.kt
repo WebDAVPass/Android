@@ -10,8 +10,8 @@ import top.yukonga.miuix.kmp.basic.NavigationRailItem
 import top.yukonga.miuix.kmp.basic.rememberNavigationRailState
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.ListView
+import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.icon.extended.Settings
 
@@ -20,13 +20,13 @@ import top.yukonga.miuix.kmp.icon.extended.Settings
  */
 enum class CategoryNavigationItem(
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
 ) {
     ALL_PASSWORDS("全部密码", MiuixIcons.ListView),
     TOKENS("动态令牌", MiuixIcons.Recent),
     SECURITY("安全性", MiuixIcons.Lock),
     RECENT_DELETED("最近删除", MiuixIcons.Delete),
-    SETTINGS("设置", MiuixIcons.Settings)
+    SETTINGS("设置", MiuixIcons.Settings),
 }
 
 /**
@@ -40,15 +40,17 @@ fun AppNavigationRail(
     onItemSelected: (CategoryNavigationItem) -> Unit,
     modifier: Modifier = Modifier,
     expanded: Boolean = false,
-    header: (@Composable ColumnScope.() -> Unit)? = null
+    header: (@Composable ColumnScope.() -> Unit)? = null,
 ) {
-    val railState = rememberNavigationRailState(
-        initialValue = if (expanded) {
-            top.yukonga.miuix.kmp.basic.NavigationRailValue.Expanded
-        } else {
-            top.yukonga.miuix.kmp.basic.NavigationRailValue.Collapsed
-        }
-    )
+    val railState =
+        rememberNavigationRailState(
+            initialValue =
+                if (expanded) {
+                    top.yukonga.miuix.kmp.basic.NavigationRailValue.Expanded
+                } else {
+                    top.yukonga.miuix.kmp.basic.NavigationRailValue.Collapsed
+                },
+        )
     // initialValue 仅在首次创建时读取，窗口宽度变化后需主动同步展开/收起
     LaunchedEffect(expanded) {
         if (expanded) {
@@ -61,14 +63,14 @@ fun AppNavigationRail(
     NavigationRail(
         state = railState,
         header = header,
-        modifier = modifier
+        modifier = modifier,
     ) {
         CategoryNavigationItem.entries.forEachIndexed { index, item ->
             NavigationRailItem(
                 selected = selectedIndex == index,
                 onClick = { onItemSelected(item) },
                 icon = item.icon,
-                label = item.label
+                label = item.label,
             )
         }
     }

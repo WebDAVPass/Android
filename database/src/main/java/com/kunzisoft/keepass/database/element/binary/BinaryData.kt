@@ -1,6 +1,6 @@
 /*
  * Copyright 2018 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -36,7 +36,6 @@ import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
 
 abstract class BinaryData : Parcelable {
-
     var isCompressed: Boolean = false
         protected set
     var isProtected: Boolean = false
@@ -60,7 +59,10 @@ abstract class BinaryData : Parcelable {
         mBinaryHash = parcel.readInt()
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         dest.writeBooleanCompat(isCompressed)
         dest.writeBooleanCompat(isProtected)
         dest.writeBooleanCompat(isCorrupted)
@@ -75,22 +77,20 @@ abstract class BinaryData : Parcelable {
     abstract fun getOutputDataStream(binaryCache: BinaryCache): OutputStream
 
     @Throws(IOException::class)
-    fun getUnGzipInputDataStream(binaryCache: BinaryCache): InputStream {
-        return if (isCompressed) {
+    fun getUnGzipInputDataStream(binaryCache: BinaryCache): InputStream =
+        if (isCompressed) {
             GZIPInputStream(getInputDataStream(binaryCache))
         } else {
             getInputDataStream(binaryCache)
         }
-    }
 
     @Throws(IOException::class)
-    fun getGzipOutputDataStream(binaryCache: BinaryCache): OutputStream {
-        return if (isCompressed) {
+    fun getGzipOutputDataStream(binaryCache: BinaryCache): OutputStream =
+        if (isCompressed) {
             GZIPOutputStream(getOutputDataStream(binaryCache))
         } else {
             getOutputDataStream(binaryCache)
         }
-    }
 
     @Throws(IOException::class)
     abstract fun compress(binaryCache: BinaryCache)
@@ -99,26 +99,18 @@ abstract class BinaryData : Parcelable {
     abstract fun decompress(binaryCache: BinaryCache)
 
     @Throws(IOException::class)
-    fun dataExists(): Boolean {
-        return mLength > 0
-    }
+    fun dataExists(): Boolean = mLength > 0
 
     @Throws(IOException::class)
-    fun getSize(): Long {
-        return mLength
-    }
+    fun getSize(): Long = mLength
 
     @Throws(IOException::class)
-    fun binaryHash(): Int {
-        return mBinaryHash
-    }
+    fun binaryHash(): Int = mBinaryHash
 
     @Throws(IOException::class)
     abstract fun clear(binaryCache: BinaryCache)
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -140,13 +132,14 @@ abstract class BinaryData : Parcelable {
         return result
     }
 
-
     /**
      * Custom OutputStream to calculate the size and hash of binary file
      */
-    protected inner class BinaryCountingOutputStream(out: OutputStream): CountingOutputStream(out) {
-
+    protected inner class BinaryCountingOutputStream(
+        out: OutputStream,
+    ) : CountingOutputStream(out) {
         private val mMessageDigest: MessageDigest
+
         init {
             mLength = 0
             mMessageDigest = MessageDigest.getInstance("MD5")
@@ -168,7 +161,11 @@ abstract class BinaryData : Parcelable {
             mMessageDigest.update(bts)
         }
 
-        override fun write(bts: ByteArray, st: Int, end: Int) {
+        override fun write(
+            bts: ByteArray,
+            st: Int,
+            end: Int,
+        ) {
             super.write(bts, st, end)
             mMessageDigest.update(bts, st, end)
         }
@@ -186,15 +183,20 @@ abstract class BinaryData : Parcelable {
         private const val MAX_BINARY_BYTE = 10485760 // 10 MB
         const val BASE64_FLAG = Base64.NO_WRAP
 
-        fun canMemoryBeAllocatedInRAM(context: Context, memoryWanted: Long): Boolean {
-            if (memoryWanted > MAX_BINARY_BYTE)
+        fun canMemoryBeAllocatedInRAM(
+            context: Context,
+            memoryWanted: Long,
+        ): Boolean {
+            if (memoryWanted > MAX_BINARY_BYTE) {
                 return false
+            }
             val memoryInfo = ActivityManager.MemoryInfo()
-            (context.getSystemService(Context.ACTIVITY_SERVICE)
-                    as? ActivityManager?)?.getMemoryInfo(memoryInfo)
+            (
+                context.getSystemService(Context.ACTIVITY_SERVICE)
+                    as? ActivityManager?
+            )?.getMemoryInfo(memoryInfo)
             val availableMemory = memoryInfo.availMem
             return availableMemory > (memoryWanted * 5)
         }
     }
-
 }

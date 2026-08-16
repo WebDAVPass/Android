@@ -1,6 +1,6 @@
 /*
  * Copyright 2020 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -25,8 +25,9 @@ import android.os.Parcelable
 /**
  * Parameters for searching strings in the database.
  */
-class SearchParameters() : Parcelable{
+class SearchParameters() : Parcelable {
     var searchQuery: String = ""
+
     // Add an optional string to search with the main search query
     var searchOptions: List<String> = listOf()
     var allowEmptyQuery = true
@@ -78,7 +79,10 @@ class SearchParameters() : Parcelable{
         searchInTemplates = parcel.readByte() != 0.toByte()
     }
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeString(searchQuery)
         parcel.writeByte(if (allowEmptyQuery) 1 else 0)
         parcel.writeByte(if (caseSensitive) 1 else 0)
@@ -103,17 +107,11 @@ class SearchParameters() : Parcelable{
         parcel.writeByte(if (searchInTemplates) 1 else 0)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     companion object CREATOR : Parcelable.Creator<SearchParameters> {
-        override fun createFromParcel(parcel: Parcel): SearchParameters {
-            return SearchParameters(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): SearchParameters = SearchParameters(parcel)
 
-        override fun newArray(size: Int): Array<SearchParameters?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<SearchParameters?> = arrayOfNulls(size)
     }
 }

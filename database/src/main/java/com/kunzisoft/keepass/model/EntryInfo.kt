@@ -46,7 +46,6 @@ import java.util.Locale
 import java.util.UUID
 
 class EntryInfo : NodeInfo {
-
     var id: UUID = UUID.randomUUID()
     var username: String = ""
     var password: String = ""
@@ -87,11 +86,12 @@ class EntryInfo : NodeInfo {
         isTemplate = parcel.readBooleanCompat()
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(parcel, flags)
         parcel.writeParcelable(ParcelUuid(id), flags)
         parcel.writeString(username)
@@ -111,21 +111,17 @@ class EntryInfo : NodeInfo {
         parcel.writeBooleanCompat(isTemplate)
     }
 
-    fun getOtpToken(): String? {
-        return otpModel?.let {
+    fun getOtpToken(): String? =
+        otpModel?.let {
             OtpElement(it).token
         }
-    }
 
-    fun getCustomFieldsForFilling(): List<Field> {
-        return customFields.filter {
+    fun getCustomFieldsForFilling(): List<Field> =
+        customFields.filter {
             !it.isOTP() && !it.isPasskey()
         }
-    }
 
-    fun containsCustomField(label: String): Boolean {
-        return customFields.lastOrNull { it.name == label } != null
-    }
+    fun containsCustomField(label: String): Boolean = customFields.lastOrNull { it.name == label } != null
 
     fun getGeneratedFieldValue(label: String): String {
         if (label == OTP_TOKEN_FIELD) {
@@ -151,10 +147,15 @@ class EntryInfo : NodeInfo {
      * Add a field to the custom fields list with a suffix position,
      * replace if name already exists
      */
-    fun addOrReplaceFieldWithSuffix(field: Field, position: Int) {
-        addOrReplaceField(Field(
-            field.name + suffixFieldNamePosition(position),
-            field.protectedValue)
+    fun addOrReplaceFieldWithSuffix(
+        field: Field,
+        position: Int,
+    ) {
+        addOrReplaceField(
+            Field(
+                field.name + suffixFieldNamePosition(position),
+                field.protectedValue,
+            ),
         )
     }
 
@@ -165,13 +166,17 @@ class EntryInfo : NodeInfo {
      * @param position the number to add to the suffix
      * @return the increment number and the custom field created
      */
-    fun addUniqueField(field: Field, position: Int = 0): Pair<Int, Field> {
+    fun addUniqueField(
+        field: Field,
+        position: Int = 0,
+    ): Pair<Int, Field> {
         val suffix = suffixFieldNamePosition(position)
         if (customFields.any { currentField -> currentField.name == field.name + suffix }) {
-            val fieldFound = customFields.find {
-                it.name == field.name + suffix
-                        && it.protectedValue.stringValue == field.protectedValue.stringValue
-            }
+            val fieldFound =
+                customFields.find {
+                    it.name == field.name + suffix &&
+                        it.protectedValue.stringValue == field.protectedValue.stringValue
+                }
             return if (fieldFound != null) {
                 Pair(position, fieldFound)
             } else {
@@ -187,35 +192,36 @@ class EntryInfo : NodeInfo {
     /**
      * Capitalize and remove suffix of a title
      */
-    fun String.toTitle(): String {
-        return this.replaceFirstChar {
+    fun String.toTitle(): String =
+        this.replaceFirstChar {
             if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
         }
-    }
 
     /**
      * True if this entry contains domain or applicationId,
      * OTP is ignored and considered not present
      */
-    fun containsSearchInfo(searchInfo: SearchInfo): Boolean {
-        return searchInfo.webDomain?.let { webDomain ->
+    fun containsSearchInfo(searchInfo: SearchInfo): Boolean =
+        searchInfo.webDomain?.let { webDomain ->
             containsDomainOrApplicationId(webDomain)
         } ?: searchInfo.applicationId?.let { applicationId ->
             containsDomainOrApplicationId(applicationId)
         } ?: false
-    }
 
     /**
      * Add searchInfo to current EntryInfo
      */
-    private fun saveSearchInfo(database: Database?, searchInfo: SearchInfo) {
+    private fun saveSearchInfo(
+        database: Database?,
+        searchInfo: SearchInfo,
+    ) {
         searchInfo.otpString?.let { otpString ->
             setOtp(otpString)
         } ?: searchInfo.webDomain?.let { webDomain ->
             setWebDomain(
                 webDomain,
                 searchInfo.webScheme,
-                database?.allowEntryCustomFields() == true
+                database?.allowEntryCustomFields() == true,
             )
         } ?: searchInfo.applicationId?.let { applicationId ->
             setApplicationId(applicationId)
@@ -229,7 +235,10 @@ class EntryInfo : NodeInfo {
      * Add registerInfo to current EntryInfo,
      * return true if data has been overwrite
      */
-    fun saveRegisterInfo(database: Database?, registerInfo: RegisterInfo): Boolean {
+    fun saveRegisterInfo(
+        database: Database?,
+        registerInfo: RegisterInfo,
+    ): Boolean {
         saveSearchInfo(database, registerInfo.searchInfo)
         registerInfo.username?.let { username = it }
         registerInfo.password?.let { password = it }
@@ -249,17 +258,19 @@ class EntryInfo : NodeInfo {
     /**
      * Add AppOrigin
      */
-    fun saveAppOrigin(database: Database?, appOrigin: AppOrigin?) {
+    fun saveAppOrigin(
+        database: Database?,
+        appOrigin: AppOrigin?,
+    ) {
         setAppOrigin(appOrigin, database?.allowEntryCustomFields() == true)
     }
 
-    fun getVisualTitle(): String {
-        return title.ifEmpty {
+    fun getVisualTitle(): String =
+        title.ifEmpty {
             url.ifEmpty {
                 username.ifEmpty { id.toString() }
             }
         }
-    }
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -307,25 +318,18 @@ class EntryInfo : NodeInfo {
         return result
     }
 
-
     companion object {
-
         /**
          * Create a field name suffix depending on the field position
          */
-        fun suffixFieldNamePosition(position: Int): String {
-            return if (position > 0) "_$position" else ""
-        }
+        fun suffixFieldNamePosition(position: Int): String = if (position > 0) "_$position" else ""
 
         @JvmField
-        val CREATOR: Parcelable.Creator<EntryInfo> = object : Parcelable.Creator<EntryInfo> {
-            override fun createFromParcel(parcel: Parcel): EntryInfo {
-                return EntryInfo(parcel)
-            }
+        val CREATOR: Parcelable.Creator<EntryInfo> =
+            object : Parcelable.Creator<EntryInfo> {
+                override fun createFromParcel(parcel: Parcel): EntryInfo = EntryInfo(parcel)
 
-            override fun newArray(size: Int): Array<EntryInfo?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<EntryInfo?> = arrayOfNulls(size)
             }
-        }
     }
 }

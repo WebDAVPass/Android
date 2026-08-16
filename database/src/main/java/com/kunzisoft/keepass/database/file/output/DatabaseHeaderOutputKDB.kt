@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -19,14 +19,15 @@
  */
 package com.kunzisoft.keepass.database.file.output
 
-import com.kunzisoft.keepass.utils.uIntTo4Bytes
 import com.kunzisoft.keepass.database.file.DatabaseHeaderKDB
+import com.kunzisoft.keepass.utils.uIntTo4Bytes
 import java.io.IOException
 import java.io.OutputStream
 
-class DatabaseHeaderOutputKDB(private val mHeader: DatabaseHeaderKDB,
-                              private val mOutputStream: OutputStream) {
-
+class DatabaseHeaderOutputKDB(
+    private val mHeader: DatabaseHeaderKDB,
+    private val mOutputStream: OutputStream,
+) {
     @Throws(IOException::class)
     fun outputStart() {
         mOutputStream.write(uIntTo4Bytes(mHeader.signature1))

@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -21,11 +21,9 @@ package com.kunzisoft.keepass.database.element.node
 
 import android.os.Parcel
 import android.os.Parcelable
-
 import java.util.Random
 
 class NodeIdInt : NodeId<Int> {
-
     override var id: Int = -1
         private set
 
@@ -39,44 +37,40 @@ class NodeIdInt : NodeId<Int> {
         id = parcel.readInt()
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(dest, flags)
         dest.writeInt(id)
     }
 
     override fun equals(other: Any?): Boolean {
-        if (this === other)
+        if (this === other) {
             return true
-        if (other == null)
+        }
+        if (other == null) {
             return false
+        }
         if (other !is NodeIdInt) {
             return false
         }
         return id == other.id
     }
 
-    override fun hashCode(): Int {
-        return id.hashCode()
-    }
+    override fun hashCode(): Int = id.hashCode()
 
-    override fun toString(): String {
-        return id.toString()
-    }
+    override fun toString(): String = id.toString()
 
-    override fun toVisualString(): String? {
-        return null
-    }
+    override fun toVisualString(): String? = null
 
     companion object {
         @JvmField
-        val CREATOR: Parcelable.Creator<NodeIdInt> = object : Parcelable.Creator<NodeIdInt> {
-            override fun createFromParcel(parcel: Parcel): NodeIdInt {
-                return NodeIdInt(parcel)
-            }
+        val CREATOR: Parcelable.Creator<NodeIdInt> =
+            object : Parcelable.Creator<NodeIdInt> {
+                override fun createFromParcel(parcel: Parcel): NodeIdInt = NodeIdInt(parcel)
 
-            override fun newArray(size: Int): Array<NodeIdInt?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<NodeIdInt?> = arrayOfNulls(size)
             }
-        }
     }
 }

@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -25,8 +25,9 @@ import com.kunzisoft.keepass.database.exception.DatabaseInputException
 import com.kunzisoft.keepass.tasks.ProgressTaskUpdater
 import java.io.InputStream
 
-abstract class DatabaseInput<D : DatabaseVersioned<*, *, *, *>> (protected var mDatabase: D) {
-
+abstract class DatabaseInput<D : DatabaseVersioned<*, *, *, *>>(
+    protected var mDatabase: D,
+) {
     private var startTimeKey = System.currentTimeMillis()
     private var startTimeContent = System.currentTimeMillis()
 
@@ -35,9 +36,11 @@ abstract class DatabaseInput<D : DatabaseVersioned<*, *, *, *>> (protected var m
      */
 
     @Throws(DatabaseInputException::class)
-    abstract fun openDatabase(databaseInputStream: InputStream,
-                              progressTaskUpdater: ProgressTaskUpdater?,
-                              assignMasterKey: (() -> Unit)): D
+    abstract fun openDatabase(
+        databaseInputStream: InputStream,
+        progressTaskUpdater: ProgressTaskUpdater?,
+        assignMasterKey: (() -> Unit),
+    ): D
 
     protected fun startKeyTimer(progressTaskUpdater: ProgressTaskUpdater?) {
         progressTaskUpdater?.retrievingDatabaseKey()

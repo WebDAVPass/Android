@@ -29,11 +29,11 @@ import xzynine.WebDAVPass.Android.ui.Screen.SecurityCheckScreen
 import xzynine.WebDAVPass.Android.ui.Screen.SecuritySettingsContent
 import xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen
 import xzynine.WebDAVPass.Android.ui.Screen.TokenListScreen
-import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.navigation.Route
 import xzynine.WebDAVPass.Android.ui.navigation.pop
 import xzynine.WebDAVPass.Android.ui.navigation.push
 import xzynine.WebDAVPass.Android.ui.navigation.replaceAll
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 /**
  * 锁定回退守卫：库被锁定或未选择库时，将当前路由重置到锁定页/欢迎页。
@@ -44,7 +44,7 @@ import xzynine.WebDAVPass.Android.ui.navigation.replaceAll
 fun LibraryLockGuard(
     backStack: NavBackStack,
     tokenViewModel: TokenViewModel,
-    showWelcome: MutableState<Boolean>
+    showWelcome: MutableState<Boolean>,
 ) {
     val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
     val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
@@ -88,7 +88,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
                 },
                 onEntryClick = { entryId ->
                     backStack.push(Route.PasswordEntryDetail(entryId))
-                }
+                },
             )
             MiuixPopupHost()
         }
@@ -117,7 +117,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
                 },
                 onNavigateBack = {
                     backStack.pop()
-                }
+                },
             )
             MiuixPopupHost()
         }
@@ -130,7 +130,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
                 viewModel = tokenViewModel,
                 onNavigateBack = {
                     backStack.pop()
-                }
+                },
             )
             MiuixPopupHost()
         }
@@ -143,7 +143,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
                 viewModel = tokenViewModel,
                 onNavigateBack = {
                     backStack.pop()
-                }
+                },
             )
             MiuixPopupHost()
         }
@@ -164,7 +164,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
                 },
                 onNavigateBack = {
                     backStack.pop()
-                }
+                },
             )
             MiuixPopupHost()
         }
@@ -177,7 +177,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
                 viewModel = tokenViewModel,
                 onNavigateBack = {
                     backStack.pop()
-                }
+                },
             )
             MiuixPopupHost()
         }
@@ -187,7 +187,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
             AboutScreen(
                 onNavigateBack = {
                     backStack.pop()
-                }
+                },
             )
             MiuixPopupHost()
         }
@@ -207,27 +207,28 @@ inline fun NavEntryBuilder.addCommonMainEntries(
                             }) {
                                 Icon(
                                     imageVector = MiuixIcons.Back,
-                                    contentDescription = "返回"
+                                    contentDescription = "返回",
                                 )
                             }
                         },
-                        actions = {}
+                        actions = {},
                     )
                 },
                 content = { paddingValues ->
                     Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(paddingValues)
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .padding(paddingValues),
                     ) {
                         TokenListScreen(
                             tokenViewModel = tokenViewModel,
                             onEntryClick = { entryId ->
                                 backStack.push(Route.PasswordEntryDetail(entryId))
-                            }
+                            },
                         )
                     }
-                }
+                },
             )
             MiuixPopupHost()
         }

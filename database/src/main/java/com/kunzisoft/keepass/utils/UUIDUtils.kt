@@ -24,7 +24,6 @@ import java.util.Locale
 import java.util.UUID
 
 object UUIDUtils {
-
     /**
      * Specific UUID string format for KeePass database
      */
@@ -99,19 +98,19 @@ object UUIDUtils {
         return UUID(firstLong, secondLong)
     }
 
-    fun UUID.asBytes(): ByteArray {
-        return ByteBuffer.allocate(16).apply {
-            putLong(mostSignificantBits)
-            putLong(leastSignificantBits)
-        }.array()
-    }
+    fun UUID.asBytes(): ByteArray =
+        ByteBuffer
+            .allocate(16)
+            .apply {
+                putLong(mostSignificantBits)
+                putLong(leastSignificantBits)
+            }.array()
 
     // Use short to represent unsigned byte
-    private fun byteToChar(bt: Char): Char {
-        return if (bt.code >= 10) {
+    private fun byteToChar(bt: Char): Char =
+        if (bt.code >= 10) {
             ('A'.code + bt.code - 10).toChar()
         } else {
             ('0'.code + bt.code).toChar()
         }
-    }
 }

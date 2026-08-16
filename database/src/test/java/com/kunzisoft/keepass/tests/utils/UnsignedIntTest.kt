@@ -3,8 +3,7 @@ package com.kunzisoft.keepass.tests.utils
 import com.kunzisoft.keepass.utils.UnsignedInt
 import junit.framework.TestCase
 
-class UnsignedIntTest: TestCase() {
-
+class UnsignedIntTest : TestCase() {
     fun testUInt() {
         val standardInt = UnsignedInt(15).toKotlinInt()
         assertEquals(15, standardInt)

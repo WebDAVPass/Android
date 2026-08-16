@@ -26,7 +26,6 @@ import com.kunzisoft.keepass.database.element.template.TemplateField.LABEL_HOLDE
 import com.kunzisoft.keepass.database.element.template.TemplateField.LABEL_NUMBER
 
 object CreditCardEntryFields {
-
     const val CREDIT_CARD_TAG = "Credit Card"
 
     /**
@@ -36,13 +35,15 @@ object CreditCardEntryFields {
         val cardHolderField = getField(LABEL_HOLDER)
         val cardNumberField = getField(LABEL_NUMBER)
         val cardCVVField = getField(LABEL_CVV)
-        if (cardHolderField == null
-            || cardNumberField == null)
+        if (cardHolderField == null ||
+            cardNumberField == null
+        ) {
             return null
+        }
         return CreditCard(
             cardholder = cardHolderField,
             number = cardNumberField,
-            cvv = cardCVVField
+            cvv = cardCVVField,
         )
     }
 
@@ -53,24 +54,24 @@ object CreditCardEntryFields {
                 addOrReplaceField(
                     Field(
                         LABEL_HOLDER,
-                        ProtectedString(enableProtection = false, it)
-                    )
+                        ProtectedString(enableProtection = false, it),
+                    ),
                 )
             }
             creditCard.number?.let {
                 addOrReplaceField(
                     Field(
                         LABEL_NUMBER,
-                        ProtectedString(enableProtection = false, it)
-                    )
+                        ProtectedString(enableProtection = false, it),
+                    ),
                 )
             }
             creditCard.cvv?.let {
                 addOrReplaceField(
                     Field(
                         LABEL_CVV,
-                        ProtectedString(enableProtection = true, it)
-                    )
+                        ProtectedString(enableProtection = true, it),
+                    ),
                 )
             }
         }
@@ -79,13 +80,12 @@ object CreditCardEntryFields {
     /**
      * Detect if the current field is a Credit Card field
      */
-    fun Field.isCreditCard(): Boolean {
-        return when(name) {
+    fun Field.isCreditCard(): Boolean =
+        when (name) {
             CREDIT_CARD_TAG -> true
             LABEL_HOLDER -> true
             LABEL_NUMBER -> true
             LABEL_CVV -> true
             else -> false
         }
-    }
 }

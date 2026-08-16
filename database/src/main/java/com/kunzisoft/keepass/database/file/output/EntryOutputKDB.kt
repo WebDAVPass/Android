@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -30,11 +30,12 @@ import java.nio.charset.Charset
 /**
  * Output the GroupKDB to the stream
  */
-class EntryOutputKDB(private val mDatabase: DatabaseKDB,
-                     private val mEntry: EntryKDB,
-                     private val mOutputStream: OutputStream) {
-
-    //NOTE: Need be to careful about using ints.  The actual type written to file is a unsigned int
+class EntryOutputKDB(
+    private val mDatabase: DatabaseKDB,
+    private val mEntry: EntryKDB,
+    private val mOutputStream: OutputStream,
+) {
+    // NOTE: Need be to careful about using ints.  The actual type written to file is a unsigned int
     @Throws(DatabaseOutputException::class)
     fun output() {
         try {
@@ -54,7 +55,7 @@ class EntryOutputKDB(private val mDatabase: DatabaseKDB,
             mOutputStream.write(uIntTo4Bytes(UnsignedInt(mEntry.icon.standard.id)))
 
             // Title
-            //byte[] title = mEntry.title.getBytes("UTF-8");
+            // byte[] title = mEntry.title.getBytes("UTF-8");
             mOutputStream.write(TITLE_FIELD_TYPE)
             writeStringToStream(mOutputStream, mEntry.title)
 
@@ -115,7 +116,10 @@ class EntryOutputKDB(private val mDatabase: DatabaseKDB,
     }
 
     @Throws(IOException::class)
-    private fun writeDate(type: ByteArray, date: ByteArray?) {
+    private fun writeDate(
+        type: ByteArray,
+        date: ByteArray?,
+    ) {
         mOutputStream.write(type)
         mOutputStream.write(DATE_FIELD_SIZE)
         if (date != null) {
@@ -126,7 +130,10 @@ class EntryOutputKDB(private val mDatabase: DatabaseKDB,
     }
 
     @Throws(IOException::class)
-    private fun writePassword(str: String, os: OutputStream): Int {
+    private fun writePassword(
+        str: String,
+        os: OutputStream,
+    ): Int {
         val initial = str.toByteArray(Charset.forName("UTF-8"))
         val length = initial.size + 1
         os.write(uIntTo4Bytes(UnsignedInt(length)))
@@ -136,30 +143,30 @@ class EntryOutputKDB(private val mDatabase: DatabaseKDB,
     }
 
     companion object {
-
         private val TAG = EntryOutputKDB::class.java.name
-        // Constants
-        private val UUID_FIELD_TYPE:ByteArray = uShortTo2Bytes(1)
-        private val GROUPID_FIELD_TYPE:ByteArray = uShortTo2Bytes(2)
-        private val IMAGEID_FIELD_TYPE:ByteArray = uShortTo2Bytes(3)
-        private val TITLE_FIELD_TYPE:ByteArray = uShortTo2Bytes(4)
-        private val URL_FIELD_TYPE:ByteArray = uShortTo2Bytes(5)
-        private val USERNAME_FIELD_TYPE:ByteArray = uShortTo2Bytes(6)
-        private val PASSWORD_FIELD_TYPE:ByteArray = uShortTo2Bytes(7)
-        private val ADDITIONAL_FIELD_TYPE:ByteArray = uShortTo2Bytes(8)
-        private val CREATE_FIELD_TYPE:ByteArray = uShortTo2Bytes(9)
-        private val MOD_FIELD_TYPE:ByteArray = uShortTo2Bytes(10)
-        private val ACCESS_FIELD_TYPE:ByteArray = uShortTo2Bytes(11)
-        private val EXPIRE_FIELD_TYPE:ByteArray = uShortTo2Bytes(12)
-        private val BINARY_DESC_FIELD_TYPE:ByteArray = uShortTo2Bytes(13)
-        private val BINARY_DATA_FIELD_TYPE:ByteArray = uShortTo2Bytes(14)
-        private val END_FIELD_TYPE:ByteArray = uShortTo2Bytes(0xFFFF)
 
-        private val UUID_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(16))
-        private val GROUPID_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(4))
-        private val DATE_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(5))
-        private val IMAGEID_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(4))
-        private val ZERO_FIELD_SIZE:ByteArray = uIntTo4Bytes(UnsignedInt(0))
-        private val ZERO_FIVE:ByteArray = byteArrayOf(0x00, 0x00, 0x00, 0x00, 0x00)
+        // Constants
+        private val UUID_FIELD_TYPE: ByteArray = uShortTo2Bytes(1)
+        private val GROUPID_FIELD_TYPE: ByteArray = uShortTo2Bytes(2)
+        private val IMAGEID_FIELD_TYPE: ByteArray = uShortTo2Bytes(3)
+        private val TITLE_FIELD_TYPE: ByteArray = uShortTo2Bytes(4)
+        private val URL_FIELD_TYPE: ByteArray = uShortTo2Bytes(5)
+        private val USERNAME_FIELD_TYPE: ByteArray = uShortTo2Bytes(6)
+        private val PASSWORD_FIELD_TYPE: ByteArray = uShortTo2Bytes(7)
+        private val ADDITIONAL_FIELD_TYPE: ByteArray = uShortTo2Bytes(8)
+        private val CREATE_FIELD_TYPE: ByteArray = uShortTo2Bytes(9)
+        private val MOD_FIELD_TYPE: ByteArray = uShortTo2Bytes(10)
+        private val ACCESS_FIELD_TYPE: ByteArray = uShortTo2Bytes(11)
+        private val EXPIRE_FIELD_TYPE: ByteArray = uShortTo2Bytes(12)
+        private val BINARY_DESC_FIELD_TYPE: ByteArray = uShortTo2Bytes(13)
+        private val BINARY_DATA_FIELD_TYPE: ByteArray = uShortTo2Bytes(14)
+        private val END_FIELD_TYPE: ByteArray = uShortTo2Bytes(0xFFFF)
+
+        private val UUID_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(16))
+        private val GROUPID_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(4))
+        private val DATE_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(5))
+        private val IMAGEID_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(4))
+        private val ZERO_FIELD_SIZE: ByteArray = uIntTo4Bytes(UnsignedInt(0))
+        private val ZERO_FIVE: ByteArray = byteArrayOf(0x00, 0x00, 0x00, 0x00, 0x00)
     }
 }

@@ -6,7 +6,6 @@ import com.kunzisoft.keepass.database.element.security.ProtectedString.Companion
 import com.kunzisoft.keepass.database.element.security.ProtectedString.Companion.toFieldValue
 
 object PasskeyEntryFields {
-
     // field names from KeypassXC are used
     const val FIELD_USERNAME = "KPEX_PASSKEY_USERNAME"
 
@@ -32,12 +31,14 @@ object PasskeyEntryFields {
         // Optional fields
         val backupEligibilityField: Boolean? = getField(FIELD_FLAG_BE)?.toBooleanCompat()
         val backupStateField: Boolean? = getField(FIELD_FLAG_BS)?.toBooleanCompat()
-        if (usernameField == null
-            || privateKeyField == null
-            || credentialIdField == null
-            || userHandleField == null
-            || relyingPartyField == null)
+        if (usernameField == null ||
+            privateKeyField == null ||
+            credentialIdField == null ||
+            userHandleField == null ||
+            relyingPartyField == null
+        ) {
             return null
+        }
         return Passkey(
             username = usernameField,
             privateKeyPem = privateKeyField,
@@ -45,18 +46,17 @@ object PasskeyEntryFields {
             userHandle = userHandleField,
             relyingParty = relyingPartyField,
             backupEligibility = backupEligibilityField,
-            backupState = backupStateField
+            backupState = backupStateField,
         )
     }
 
-    fun EntryInfo.containsPasskey(): Boolean {
-        return this.tags.contains(PASSKEY_TAG)
-                || this.containsCustomField(FIELD_USERNAME)
-                || this.containsCustomField(FIELD_PRIVATE_KEY)
-                || this.containsCustomField(FIELD_CREDENTIAL_ID)
-                || this.containsCustomField(FIELD_USER_HANDLE)
-                || this.containsCustomField(FIELD_RELYING_PARTY)
-    }
+    fun EntryInfo.containsPasskey(): Boolean =
+        this.tags.contains(PASSKEY_TAG) ||
+            this.containsCustomField(FIELD_USERNAME) ||
+            this.containsCustomField(FIELD_PRIVATE_KEY) ||
+            this.containsCustomField(FIELD_CREDENTIAL_ID) ||
+            this.containsCustomField(FIELD_USER_HANDLE) ||
+            this.containsCustomField(FIELD_RELYING_PARTY)
 
     /**
      * Set a passkey in an entry,
@@ -65,57 +65,63 @@ object PasskeyEntryFields {
     fun EntryInfo.setPasskey(passkey: Passkey?): Boolean {
         var overwrite = false
         if (passkey != null) {
-            if (containsPasskey())
+            if (containsPasskey()) {
                 overwrite = true
+            }
             tags.put(PASSKEY_TAG)
-            if (this.username.isEmpty())
+            if (this.username.isEmpty()) {
                 this.username = passkey.username
+            }
             addOrReplaceField(
                 Field(
                     FIELD_USERNAME,
-                    ProtectedString(enableProtection = false, passkey.username)
-                )
+                    ProtectedString(enableProtection = false, passkey.username),
+                ),
             )
             addOrReplaceField(
                 Field(
                     FIELD_PRIVATE_KEY,
-                    ProtectedString(enableProtection = true, passkey.privateKeyPem)
-                )
+                    ProtectedString(enableProtection = true, passkey.privateKeyPem),
+                ),
             )
             addOrReplaceField(
                 Field(
                     FIELD_CREDENTIAL_ID,
-                    ProtectedString(enableProtection = true, passkey.credentialId)
-                )
+                    ProtectedString(enableProtection = true, passkey.credentialId),
+                ),
             )
             addOrReplaceField(
                 Field(
                     FIELD_USER_HANDLE,
-                    ProtectedString(enableProtection = true, passkey.userHandle)
-                )
+                    ProtectedString(enableProtection = true, passkey.userHandle),
+                ),
             )
             addOrReplaceField(
                 Field(
                     FIELD_RELYING_PARTY,
-                    ProtectedString(enableProtection = false, passkey.relyingParty)
-                )
+                    ProtectedString(enableProtection = false, passkey.relyingParty),
+                ),
             )
             passkey.backupEligibility?.let { backupEligibility ->
                 addOrReplaceField(
                     Field(
                         FIELD_FLAG_BE,
-                        ProtectedString(enableProtection = false,
-                            backupEligibility.toFieldValue())
-                    )
+                        ProtectedString(
+                            enableProtection = false,
+                            backupEligibility.toFieldValue(),
+                        ),
+                    ),
                 )
             }
             passkey.backupState?.let { backupState ->
                 addOrReplaceField(
                     Field(
                         FIELD_FLAG_BS,
-                        ProtectedString(enableProtection = false,
-                            backupState.toFieldValue())
-                    )
+                        ProtectedString(
+                            enableProtection = false,
+                            backupState.toFieldValue(),
+                        ),
+                    ),
                 )
             }
         }
@@ -144,28 +150,29 @@ object PasskeyEntryFields {
         newCustomFields.remove(backupEligibilityField)
         newCustomFields.remove(backupStateField)
         // Empty auto generated Passkey field
-        if (fieldsToParse.contains(usernameField)
-            || fieldsToParse.contains(privateKeyField)
-            || fieldsToParse.contains(credentialIdField)
-            || fieldsToParse.contains(userHandleField)
-            || fieldsToParse.contains(relyingPartyField)
-            || fieldsToParse.contains(backupEligibilityField)
-            || fieldsToParse.contains(backupStateField)
-        )
+        if (fieldsToParse.contains(usernameField) ||
+            fieldsToParse.contains(privateKeyField) ||
+            fieldsToParse.contains(credentialIdField) ||
+            fieldsToParse.contains(userHandleField) ||
+            fieldsToParse.contains(relyingPartyField) ||
+            fieldsToParse.contains(backupEligibilityField) ||
+            fieldsToParse.contains(backupStateField)
+        ) {
             newCustomFields.add(
                 Field(
                     name = PASSKEY_FIELD,
-                    value = ProtectedString(enableProtection = false)
-                )
+                    value = ProtectedString(enableProtection = false),
+                ),
             )
+        }
         return newCustomFields
     }
 
     /**
      * Detect if the current field is a Passkey
      */
-    fun Field.isPasskey(): Boolean {
-        return when(name) {
+    fun Field.isPasskey(): Boolean =
+        when (name) {
             PASSKEY_FIELD -> true
             FIELD_USERNAME -> true
             FIELD_PRIVATE_KEY -> true
@@ -174,19 +181,14 @@ object PasskeyEntryFields {
             FIELD_RELYING_PARTY -> true
             else -> false
         }
-    }
 
     /**
      * Detect if the current field is a Passkey credential id
      */
-    fun Field.isCredentialId(): Boolean {
-        return name == FIELD_CREDENTIAL_ID
-    }
+    fun Field.isCredentialId(): Boolean = name == FIELD_CREDENTIAL_ID
 
     /**
      * Detect if the current field is a Passkey relying party
      */
-    fun Field.isRelyingParty(): Boolean {
-        return name == FIELD_RELYING_PARTY
-    }
+    fun Field.isRelyingParty(): Boolean = name == FIELD_RELYING_PARTY
 }

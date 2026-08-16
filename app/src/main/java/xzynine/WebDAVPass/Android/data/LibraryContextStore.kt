@@ -21,7 +21,9 @@ import xzylib.base.util.Logger
  * - 首次访问时同步预热内存缓存，并执行一次性的旧 SharedPreferences 数据迁移；
  * - 读取走内存缓存，写入同步更新缓存并异步落库，对外保持同步 API。
  */
-class LibraryContextStore(private val context: Context) {
+class LibraryContextStore(
+    private val context: Context,
+) {
     private val gson = Gson()
     private val database = AppDatabaseHolder.getInstance(context)
 
@@ -29,17 +31,22 @@ class LibraryContextStore(private val context: Context) {
      * 异步落库协程作用域（与应用同生命周期，随单例 ViewModel 存活）。
      * 安装 [CoroutineExceptionHandler] 以捕获 DAO 写入异常，避免异常传播到未捕获处理器导致崩溃。
      */
-    private val ioScope = CoroutineScope(
-        SupervisorJob() + Dispatchers.IO + CoroutineExceptionHandler { _, throwable ->
-            Logger.e("LibraryContextStore", "异步落库失败", throwable)
-        }
-    )
+    private val ioScope =
+        CoroutineScope(
+            SupervisorJob() + Dispatchers.IO +
+                CoroutineExceptionHandler { _, throwable ->
+                    Logger.e("LibraryContextStore", "异步落库失败", throwable)
+                },
+        )
 
     private val lock = Any()
+
     @Volatile
     private var loaded = false
+
     @Volatile
     private var history = mutableListOf<LibraryContext>()
+
     @Volatile
     private var currentId: String? = null
 
@@ -87,11 +94,12 @@ class LibraryContextStore(private val context: Context) {
             val spCurrentId = preferences.getString(KEY_CURRENT_ID, null)
 
             if (!spHistoryRaw.isNullOrBlank()) {
-                val spHistory = runCatching {
-                    val type = object : TypeToken<List<LibraryContext>>() {}.type
-                    (gson.fromJson<List<LibraryContext>>(spHistoryRaw, type) ?: emptyList())
-                        .map { normalizeContext(it) }
-                }.getOrDefault(emptyList())
+                val spHistory =
+                    runCatching {
+                        val type = object : TypeToken<List<LibraryContext>>() {}.type
+                        (gson.fromJson<List<LibraryContext>>(spHistoryRaw, type) ?: emptyList())
+                            .map { normalizeContext(it) }
+                    }.getOrDefault(emptyList())
 
                 // 库表为空时导入历史库（凭据加密落库）
                 if (spHistory.isNotEmpty() && database.libraryContextDao().getAllOnce().isEmpty()) {
@@ -111,7 +119,8 @@ class LibraryContextStore(private val context: Context) {
             }
 
             // 迁移完成，清除旧存储
-            preferences.edit()
+            preferences
+                .edit()
                 .remove(KEY_HISTORY)
                 .remove(KEY_CURRENT_ID)
                 .apply()
@@ -124,10 +133,11 @@ class LibraryContextStore(private val context: Context) {
      * 说明：按 (服务器根地址, 用户名, 密码) 去重；已存在的账号仅在新密码不同时更新。
      */
     private suspend fun seedWebDavConfigsFromHistory(libraries: List<LibraryContext>) {
-        val accounts = libraries
-            .filter { it.sourceType == LibrarySourceType.CLOUD }
-            .filter { !it.remoteBaseUrl.isNullOrBlank() && !it.username.isNullOrBlank() && !it.password.isNullOrBlank() }
-            .distinctBy { Triple(it.remoteBaseUrl, it.username, it.password) }
+        val accounts =
+            libraries
+                .filter { it.sourceType == LibrarySourceType.CLOUD }
+                .filter { !it.remoteBaseUrl.isNullOrBlank() && !it.username.isNullOrBlank() && !it.password.isNullOrBlank() }
+                .distinctBy { Triple(it.remoteBaseUrl, it.username, it.password) }
 
         if (accounts.isEmpty()) {
             return
@@ -139,14 +149,15 @@ class LibraryContextStore(private val context: Context) {
 
         accounts.forEach { library ->
             val baseUrl = normalizeBaseUrl(library.remoteBaseUrl!!)
-            val match = existing.firstOrNull {
-                normalizeBaseUrl(it.url) == baseUrl && it.username == library.username
-            }
+            val match =
+                existing.firstOrNull {
+                    normalizeBaseUrl(it.url) == baseUrl && it.username == library.username
+                }
             if (match != null) {
                 val currentPlain = WebDavPasswordCipher.decrypt(match.password)
                 if (currentPlain == null || currentPlain != library.password) {
                     database.webDavConfigDao().update(
-                        match.copy(password = WebDavPasswordCipher.encrypt(library.password!!))
+                        match.copy(password = WebDavPasswordCipher.encrypt(library.password!!)),
                     )
                 }
             } else {
@@ -159,8 +170,8 @@ class LibraryContextStore(private val context: Context) {
                         directory = null,
                         username = library.username!!,
                         password = WebDavPasswordCipher.encrypt(library.password!!),
-                        sortNumber = sortCursor
-                    )
+                        sortNumber = sortCursor,
+                    ),
                 )
             }
         }
@@ -173,7 +184,7 @@ class LibraryContextStore(private val context: Context) {
         database.webDavConfigDao().getAllOnce().forEach { config ->
             if (!config.password.startsWith(WebDavPasswordCipher.PREFIX)) {
                 database.webDavConfigDao().update(
-                    config.copy(password = WebDavPasswordCipher.encrypt(config.password))
+                    config.copy(password = WebDavPasswordCipher.encrypt(config.password)),
                 )
             }
         }
@@ -182,18 +193,18 @@ class LibraryContextStore(private val context: Context) {
     /**
      * 保证服务器根地址以 "/" 结尾
      */
-    private fun normalizeBaseUrl(raw: String): String {
-        return if (raw.endsWith("/")) raw else "$raw/"
-    }
+    private fun normalizeBaseUrl(raw: String): String = if (raw.endsWith("/")) raw else "$raw/"
 
     /**
      * 从数据库加载缓存
      */
     private suspend fun loadFromDatabase() {
         val entities = database.libraryContextDao().getAllOnce()
-        history = entities.map { it.toLibraryContext() }
-            .sortedByDescending { it.lastUsedAt }
-            .toMutableList()
+        history =
+            entities
+                .map { it.toLibraryContext() }
+                .sortedByDescending { it.lastUsedAt }
+                .toMutableList()
         currentId = database.appSettingsDao().getValue(KEY_CURRENT_ID)?.value
     }
 
@@ -288,9 +299,7 @@ class LibraryContextStore(private val context: Context) {
      *
      * @return 若成功移除返回 true。
      */
-    fun removeHistoryById(id: String): Boolean {
-        return removeHistoryByIds(setOf(id)) > 0
-    }
+    fun removeHistoryById(id: String): Boolean = removeHistoryByIds(setOf(id)) > 0
 
     /**
      * 批量移除历史库。
@@ -341,12 +350,16 @@ class LibraryContextStore(private val context: Context) {
     /**
      * 释放被移除历史项的 Uri 权限（若仍被其他历史项引用则保留）。
      */
-    private fun releaseObsoleteUriPermissions(removedItems: List<LibraryContext>, remainedItems: List<LibraryContext>) {
+    private fun releaseObsoleteUriPermissions(
+        removedItems: List<LibraryContext>,
+        remainedItems: List<LibraryContext>,
+    ) {
         val remainedLocalPaths = remainedItems.map { it.localPath }.toSet()
-        val targetUris = removedItems
-            .mapNotNull { item -> toContentUri(item.localPath) }
-            .filter { uri -> !remainedLocalPaths.contains(uri.toString()) }
-            .distinctBy { it.toString() }
+        val targetUris =
+            removedItems
+                .mapNotNull { item -> toContentUri(item.localPath) }
+                .filter { uri -> !remainedLocalPaths.contains(uri.toString()) }
+                .distinctBy { it.toString() }
 
         if (targetUris.isEmpty()) {
             return
@@ -391,23 +404,26 @@ class LibraryContextStore(private val context: Context) {
      * 这里统一修正为预期行为，避免云端库被误判为关闭自动同步（仅迁移时使用）。
      */
     private fun normalizeContext(item: LibraryContext): LibraryContext {
-        val hasSyncMetadata = item.lastSyncAt != null
-                || item.lastRemoteModifiedAt != null
-                || !item.lastSyncStatus.isNullOrBlank()
-                || !item.lastSyncError.isNullOrBlank()
+        val hasSyncMetadata =
+            item.lastSyncAt != null ||
+                item.lastRemoteModifiedAt != null ||
+                !item.lastSyncStatus.isNullOrBlank() ||
+                !item.lastSyncError.isNullOrBlank()
 
-        val normalizedAutoSync = when (item.sourceType) {
-            LibrarySourceType.CLOUD -> {
-                if (hasSyncMetadata) item.autoSyncEnabled else true
+        val normalizedAutoSync =
+            when (item.sourceType) {
+                LibrarySourceType.CLOUD -> {
+                    if (hasSyncMetadata) item.autoSyncEnabled else true
+                }
+
+                LibrarySourceType.LOCAL -> false
             }
 
-            LibrarySourceType.LOCAL -> false
-        }
-
-        val normalizedAuthMode = when (item.autoUnlockAuthMode) {
-            0, 1, 2 -> item.autoUnlockAuthMode
-            else -> 0
-        }
+        val normalizedAuthMode =
+            when (item.autoUnlockAuthMode) {
+                0, 1, 2 -> item.autoUnlockAuthMode
+                else -> 0
+            }
 
         // 兼容旧版本：缺省视为启用48小时手动主密码策略。
         val normalizedForceManualUnlock = item.forceManualUnlockEvery48Hours ?: true
@@ -416,7 +432,7 @@ class LibraryContextStore(private val context: Context) {
             autoSyncEnabled = normalizedAutoSync,
             autoUnlockAuthMode = normalizedAuthMode,
             forceManualUnlockEvery48Hours = normalizedForceManualUnlock,
-            autoUnlockInvalidated = item.autoUnlockInvalidated
+            autoUnlockInvalidated = item.autoUnlockInvalidated,
         )
     }
 

@@ -10,17 +10,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
@@ -31,24 +33,22 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import kotlinx.coroutines.launch
-import xzynine.WebDAVPass.Android.data.PasswordEntry
-import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
+import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.DuplicateEntryInfo
 import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
+import xzynine.WebDAVPass.Android.data.PasswordEntry
+import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.DuplicateScanDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryMergeDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
-import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import xzynine.WebDAVPass.Android.ui.component.buildBrandIconBytes
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
+import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.viewmodel.toPasswordIndexKey
-import androidx.compose.ui.platform.LocalContext
-import xzynine.WebDAVPass.Android.ui.component.buildBrandIconBytes
-import xzylib.base.util.ToastUtils
 
 /**
  * 全部密码列表页面。
@@ -68,7 +68,7 @@ fun PasswordListScreen(
     enableRecycleBinActions: Boolean = false,
     onEntryClick: (Long) -> Unit,
     onNavigateBack: () -> Unit,
-    isEmbedded: Boolean = false
+    isEmbedded: Boolean = false,
 ) {
     val focusManager = LocalFocusManager.current
     val context = LocalContext.current
@@ -157,15 +157,16 @@ fun PasswordListScreen(
         coroutineScope.launch {
             val entryIds = selectedTargets.keys.filter { selectedTargets[it] == false }
             val groupIds = selectedTargets.keys.filter { selectedTargets[it] == true }
-            val count = if (groupPickerIsMove) {
-                tokenViewModel.movePasswordTargets(entryIds, groupIds, targetGroupId)
-            } else {
-                tokenViewModel.copyPasswordTargets(entryIds, groupIds, targetGroupId)
-            }
+            val count =
+                if (groupPickerIsMove) {
+                    tokenViewModel.movePasswordTargets(entryIds, groupIds, targetGroupId)
+                } else {
+                    tokenViewModel.copyPasswordTargets(entryIds, groupIds, targetGroupId)
+                }
             if (count > 0) {
                 ToastUtils.showShortToast(
                     context,
-                    if (groupPickerIsMove) "已移动 $count 项" else "已复制 $count 项"
+                    if (groupPickerIsMove) "已移动 $count 项" else "已复制 $count 项",
                 )
             } else {
                 ToastUtils.showShortToast(context, if (groupPickerIsMove) "移动失败" else "复制失败")
@@ -189,7 +190,10 @@ fun PasswordListScreen(
         }
     }
 
-    fun setSelection(item: PasswordEntry, checked: Boolean) {
+    fun setSelection(
+        item: PasswordEntry,
+        checked: Boolean,
+    ) {
         if (!allowWriteActions) {
             return
         }
@@ -233,13 +237,13 @@ fun PasswordListScreen(
 
     fun solidifySelectedBrandIcons() {
         val entryIds = selectedTargets.keys.filter { selectedTargets[it] == false }.toSet()
-        val matched = entries
-            .filter { it.entryId in entryIds && !it.isFolderPlaceholder }
-            .mapNotNull { entry ->
-                buildBrandIconBytes(context, entry.title, entry.account)
-                    ?.let { entry.entryId to it }
-            }
-            .toMap()
+        val matched =
+            entries
+                .filter { it.entryId in entryIds && !it.isFolderPlaceholder }
+                .mapNotNull { entry ->
+                    buildBrandIconBytes(context, entry.title, entry.account)
+                        ?.let { entry.entryId to it }
+                }.toMap()
         if (matched.isEmpty()) {
             ToastUtils.showShortToast(context, "选中的条目无匹配的品牌图标")
             return
@@ -249,9 +253,7 @@ fun PasswordListScreen(
     }
 
     /** 当前视图条目 ID（排除分组占位项），用于扫描与多选合并。 */
-    fun visibleEntryIds(): List<Long> {
-        return entries.filter { !it.isFolderPlaceholder }.map { it.entryId }
-    }
+    fun visibleEntryIds(): List<Long> = entries.filter { !it.isFolderPlaceholder }.map { it.entryId }
 
     /** 扫描当前视图，检测重复候选组。 */
     fun scanDuplicateEntries() {
@@ -303,7 +305,10 @@ fun PasswordListScreen(
     }
 
     /** 冲突组：关闭扫描结果对话框，打开逐项选择编辑器。 */
-    fun openManualMergeForGroup(group: DuplicateGroupInfo, masterEntryId: Long) {
+    fun openManualMergeForGroup(
+        group: DuplicateGroupInfo,
+        masterEntryId: Long,
+    ) {
         showDuplicateScanDialog.value = false
         mergeDialogEntries.value = group.entries
         mergeDialogMasterId = masterEntryId
@@ -321,13 +326,20 @@ fun PasswordListScreen(
     }
 
     /** 编辑器确认：先弹最终确认对话框。 */
-    fun requestMerge(masterEntryId: Long, fieldSelections: Map<String, Long>) {
+    fun requestMerge(
+        masterEntryId: Long,
+        fieldSelections: Map<String, Long>,
+    ) {
         mergeConfirmTarget = masterEntryId to fieldSelections
         showMergeConfirm.value = true
     }
 
     /** 执行合并（编辑器或扫描结果触发的自动合并统一走这里）。 */
-    fun executeMerge(masterEntryId: Long, sourceEntryIds: List<Long>, fieldSelections: Map<String, Long>) {
+    fun executeMerge(
+        masterEntryId: Long,
+        sourceEntryIds: List<Long>,
+        fieldSelections: Map<String, Long>,
+    ) {
         coroutineScope.launch {
             val count = tokenViewModel.mergeEntryGroup(masterEntryId, sourceEntryIds, fieldSelections)
             if (count > 0) {
@@ -348,7 +360,10 @@ fun PasswordListScreen(
     }
 
     /** 自动合并组：弹出确认框后执行。 */
-    fun requestAutoMerge(group: DuplicateGroupInfo, masterEntryId: Long) {
+    fun requestAutoMerge(
+        group: DuplicateGroupInfo,
+        masterEntryId: Long,
+    ) {
         val sourceIds = group.entries.map { it.entryId }.filter { it != masterEntryId }
         autoMergeTarget = masterEntryId to sourceIds
         showAutoMergeConfirm.value = true
@@ -396,7 +411,7 @@ fun PasswordListScreen(
             caseSensitive = searchCaseSensitive,
             sortMode = sortMode,
             ascending = sortAscending,
-            hideExpired = hideExpired
+            hideExpired = hideExpired,
         )
     }
 
@@ -433,26 +448,26 @@ fun PasswordListScreen(
 
     // groupedEntries 改变时才重新计算各分区标题的起始下标（含标题行本身）
     // data: List<Pair<startIndex, letter>>，用于 activeLetter 的 O(n) 定位
-    val sectionBoundaries = remember(groupedEntries) {
-        var idx = 0
-        groupedEntries.map { (letter, items) ->
-            val start = idx
-            idx += 1 + items.size  // 1 个标题行 + N 个条目行
-            start to letter
+    val sectionBoundaries =
+        remember(groupedEntries) {
+            var idx = 0
+            groupedEntries.map { (letter, items) ->
+                val start = idx
+                idx += 1 + items.size // 1 个标题行 + N 个条目行
+                start to letter
+            }
         }
-    }
 
     // activeLetter：每帧只做整数比较，不再访问 groupedEntries 内部结构
     val activeLetter by remember(listState, sectionBoundaries) {
         derivedStateOf {
             val v = listState.firstVisibleItemIndex
-            sectionBoundaries.lastOrNull { (start, _) -> v >= start }
+            sectionBoundaries
+                .lastOrNull { (start, _) -> v >= start }
                 ?.second
                 ?.let { letter -> if (letter == PasswordFolderIndexLabel) FolderIndexBarLabel else letter }
         }
     }
-
-
 
     // 嵌入模式与独立模式共用 Scaffold：保留顶栏功能区
     // 嵌入模式用紧凑 SmallTopAppBar（由 TopAppBar 自行处理状态栏 insets，缓解高度压缩）
@@ -467,53 +482,53 @@ fun PasswordListScreen(
                             IconButton(
                                 onClick = {
                                     clearSelectionMode()
-                                }
+                                },
                             ) {
                                 Icon(
                                     imageVector = MiuixIcons.Close,
-                                    contentDescription = "取消选择"
+                                    contentDescription = "取消选择",
                                 )
                             }
                         } else if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
                             IconButton(
                                 onClick = {
                                     tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
-                                }
+                                },
                             ) {
                                 Icon(
                                     imageVector = MiuixIcons.Back,
-                                    contentDescription = "返回上一级"
+                                    contentDescription = "返回上一级",
                                 )
                             }
                         }
                     },
                     actions = {
-                    PasswordListTopBarActions(
-                        isSelectionMode = isSelectionMode.value,
-                        selectedTargets = selectedTargets,
-                        enableRecycleBinActions = enableRecycleBinActions,
-                        allowWriteActions = allowWriteActions,
-                        enableGroupNavigation = enableGroupNavigation,
-                        sortMode = sortMode,
-                        onSortModeChange = { sortModeOrdinal = it.ordinal },
-                        sortAscending = sortAscending,
-                        onSortAscendingChange = { sortAscending = it },
-                        hideExpired = hideExpired,
-                        onHideExpiredChange = { hideExpired = it },
-                        onSelectAll = { selectAllVisible() },
-                        onInvertSelection = { invertSelection() },
-                        onRestoreSelected = { restoreSelectedEntries() },
-                        onRequestPermanentDelete = { showPermanentDeleteDialog.value = true },
-                        onRequestDelete = { showDeleteDialog.value = true },
-                        onSolidifyBrandIcons = { solidifySelectedBrandIcons() },
-                        onMergeSelection = { openEntryMergeForSelection() },
-                        onMoveSelection = { openGroupPicker(isMove = true) },
-                        onCopySelection = { openGroupPicker(isMove = false) },
-                        onScanDuplicates = { scanDuplicateEntries() },
-                        onCreateEntry = { showCreateEntryDialog.value = true },
-                        onCreateGroup = { showCreateGroupDialog.value = true }
-                    )
-                }
+                        PasswordListTopBarActions(
+                            isSelectionMode = isSelectionMode.value,
+                            selectedTargets = selectedTargets,
+                            enableRecycleBinActions = enableRecycleBinActions,
+                            allowWriteActions = allowWriteActions,
+                            enableGroupNavigation = enableGroupNavigation,
+                            sortMode = sortMode,
+                            onSortModeChange = { sortModeOrdinal = it.ordinal },
+                            sortAscending = sortAscending,
+                            onSortAscendingChange = { sortAscending = it },
+                            hideExpired = hideExpired,
+                            onHideExpiredChange = { hideExpired = it },
+                            onSelectAll = { selectAllVisible() },
+                            onInvertSelection = { invertSelection() },
+                            onRestoreSelected = { restoreSelectedEntries() },
+                            onRequestPermanentDelete = { showPermanentDeleteDialog.value = true },
+                            onRequestDelete = { showDeleteDialog.value = true },
+                            onSolidifyBrandIcons = { solidifySelectedBrandIcons() },
+                            onMergeSelection = { openEntryMergeForSelection() },
+                            onMoveSelection = { openGroupPicker(isMove = true) },
+                            onCopySelection = { openGroupPicker(isMove = false) },
+                            onScanDuplicates = { scanDuplicateEntries() },
+                            onCreateEntry = { showCreateEntryDialog.value = true },
+                            onCreateGroup = { showCreateGroupDialog.value = true },
+                        )
+                    },
                 )
             } else {
                 TopAppBar(
@@ -523,117 +538,119 @@ fun PasswordListScreen(
                             IconButton(
                                 onClick = {
                                     clearSelectionMode()
-                                }
+                                },
                             ) {
                                 Icon(
                                     imageVector = MiuixIcons.Close,
-                                    contentDescription = "取消选择"
+                                    contentDescription = "取消选择",
                                 )
                             }
                         } else if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
                             IconButton(
                                 onClick = {
                                     tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
-                                }
+                                },
                             ) {
                                 Icon(
                                     imageVector = MiuixIcons.Back,
-                                    contentDescription = "返回上一级"
+                                    contentDescription = "返回上一级",
                                 )
                             }
                         } else {
                             IconButton(
-                                onClick = onNavigateBack
+                                onClick = onNavigateBack,
                             ) {
                                 Icon(
                                     imageVector = MiuixIcons.Back,
-                                    contentDescription = "返回"
+                                    contentDescription = "返回",
                                 )
                             }
                         }
                     },
                     actions = {
-                    PasswordListTopBarActions(
-                        isSelectionMode = isSelectionMode.value,
-                        selectedTargets = selectedTargets,
-                        enableRecycleBinActions = enableRecycleBinActions,
-                        allowWriteActions = allowWriteActions,
-                        enableGroupNavigation = enableGroupNavigation,
-                        sortMode = sortMode,
-                        onSortModeChange = { sortModeOrdinal = it.ordinal },
-                        sortAscending = sortAscending,
-                        onSortAscendingChange = { sortAscending = it },
-                        hideExpired = hideExpired,
-                        onHideExpiredChange = { hideExpired = it },
-                        onSelectAll = { selectAllVisible() },
-                        onInvertSelection = { invertSelection() },
-                        onRestoreSelected = { restoreSelectedEntries() },
-                        onRequestPermanentDelete = { showPermanentDeleteDialog.value = true },
-                        onRequestDelete = { showDeleteDialog.value = true },
-                        onSolidifyBrandIcons = { solidifySelectedBrandIcons() },
-                        onMergeSelection = { openEntryMergeForSelection() },
-                        onMoveSelection = { openGroupPicker(isMove = true) },
-                        onCopySelection = { openGroupPicker(isMove = false) },
-                        onScanDuplicates = { scanDuplicateEntries() },
-                        onCreateEntry = { showCreateEntryDialog.value = true },
-                        onCreateGroup = { showCreateGroupDialog.value = true }
-                    )
-                }
+                        PasswordListTopBarActions(
+                            isSelectionMode = isSelectionMode.value,
+                            selectedTargets = selectedTargets,
+                            enableRecycleBinActions = enableRecycleBinActions,
+                            allowWriteActions = allowWriteActions,
+                            enableGroupNavigation = enableGroupNavigation,
+                            sortMode = sortMode,
+                            onSortModeChange = { sortModeOrdinal = it.ordinal },
+                            sortAscending = sortAscending,
+                            onSortAscendingChange = { sortAscending = it },
+                            hideExpired = hideExpired,
+                            onHideExpiredChange = { hideExpired = it },
+                            onSelectAll = { selectAllVisible() },
+                            onInvertSelection = { invertSelection() },
+                            onRestoreSelected = { restoreSelectedEntries() },
+                            onRequestPermanentDelete = { showPermanentDeleteDialog.value = true },
+                            onRequestDelete = { showDeleteDialog.value = true },
+                            onSolidifyBrandIcons = { solidifySelectedBrandIcons() },
+                            onMergeSelection = { openEntryMergeForSelection() },
+                            onMoveSelection = { openGroupPicker(isMove = true) },
+                            onCopySelection = { openGroupPicker(isMove = false) },
+                            onScanDuplicates = { scanDuplicateEntries() },
+                            onCreateEntry = { showCreateEntryDialog.value = true },
+                            onCreateGroup = { showCreateGroupDialog.value = true },
+                        )
+                    },
                 )
             }
-        }
+        },
     ) { paddingValues ->
-            PasswordListScreenContent(
-                modifier = Modifier.padding(paddingValues),
-                searchQuery = searchQuery,
-                onSearchQueryChange = { searchQuery = it },
-                searchExpanded = searchExpanded,
-                onSearchExpandedChange = { searchExpanded = it },
-                searchCaseSensitive = searchCaseSensitive,
-                onSearchCaseSensitiveChange = { searchCaseSensitive = it },
-                focusManager = focusManager,
-                groupedEntries = groupedEntries,
-                listState = listState,
-                emptyStateText = emptyStateText,
-                emptySearchStateText = emptySearchStateText,
-                enableGroupNavigation = enableGroupNavigation,
-                tokenViewModel = tokenViewModel,
-                onEntryClick = onEntryClick,
-                isSelectionMode = isSelectionMode.value,
-                selectedTargets = selectedTargets,
-                onItemLongClick = { item -> setSelection(item, true) },
-                onItemCheckedChange = { item, checked -> setSelection(item, checked) },
-                indexLetters = indexLetters,
-                enabledIndexLetters = enabledIndexLetters,
-                activeLetter = activeLetter,
-                sectionBoundaries = sectionBoundaries,
-                passwordIndexKeys = passwordIndexKeys,
-                coroutineScope = coroutineScope,
-                context = context
-            )
-        }
+        PasswordListScreenContent(
+            modifier = Modifier.padding(paddingValues),
+            searchQuery = searchQuery,
+            onSearchQueryChange = { searchQuery = it },
+            searchExpanded = searchExpanded,
+            onSearchExpandedChange = { searchExpanded = it },
+            searchCaseSensitive = searchCaseSensitive,
+            onSearchCaseSensitiveChange = { searchCaseSensitive = it },
+            focusManager = focusManager,
+            groupedEntries = groupedEntries,
+            listState = listState,
+            emptyStateText = emptyStateText,
+            emptySearchStateText = emptySearchStateText,
+            enableGroupNavigation = enableGroupNavigation,
+            tokenViewModel = tokenViewModel,
+            onEntryClick = onEntryClick,
+            isSelectionMode = isSelectionMode.value,
+            selectedTargets = selectedTargets,
+            onItemLongClick = { item -> setSelection(item, true) },
+            onItemCheckedChange = { item, checked -> setSelection(item, checked) },
+            indexLetters = indexLetters,
+            enabledIndexLetters = enabledIndexLetters,
+            activeLetter = activeLetter,
+            sectionBoundaries = sectionBoundaries,
+            passwordIndexKeys = passwordIndexKeys,
+            coroutineScope = coroutineScope,
+            context = context,
+        )
+    }
 
     PasswordEntryEditorDialog(
         title = "新建条目",
         show = showCreateEntryDialog,
-        initialDraft = PasswordEntryEditDraft(
-            title = createEntryTitle,
-            username = createEntryUsername,
-            password = createEntryPassword,
-            url = createEntryUrl,
-            notes = createEntryNotes
-        ),
+        initialDraft =
+            PasswordEntryEditDraft(
+                title = createEntryTitle,
+                username = createEntryUsername,
+                password = createEntryPassword,
+                url = createEntryUrl,
+                notes = createEntryNotes,
+            ),
         onDismiss = {
             showCreateEntryDialog.value = false
         },
         onConfirm = { draft ->
             coroutineScope.launch {
-                val createdId = tokenViewModel.createPasswordEntry(
-                    draft.copy(
-                        entryId = null,
-                        parentGroupId = passwordGroupStack.lastOrNull()
+                val createdId =
+                    tokenViewModel.createPasswordEntry(
+                        draft.copy(
+                            entryId = null,
+                            parentGroupId = passwordGroupStack.lastOrNull(),
+                        ),
                     )
-                )
                 if (createdId != null) {
                     showCreateEntryDialog.value = false
                     createEntryTitle = ""
@@ -643,7 +660,7 @@ fun PasswordListScreen(
                     createEntryNotes = ""
                 }
             }
-        }
+        },
     )
 
     PasswordGroupEditorDialog(
@@ -658,21 +675,22 @@ fun PasswordListScreen(
         },
         onConfirm = {
             coroutineScope.launch {
-                val createdId = tokenViewModel.createPasswordGroup(
-                    PasswordGroupEditDraft(
-                        groupId = null,
-                        parentGroupId = passwordGroupStack.lastOrNull(),
-                        title = createGroupTitle.trim(),
-                        notes = createGroupNotes
+                val createdId =
+                    tokenViewModel.createPasswordGroup(
+                        PasswordGroupEditDraft(
+                            groupId = null,
+                            parentGroupId = passwordGroupStack.lastOrNull(),
+                            title = createGroupTitle.trim(),
+                            notes = createGroupNotes,
+                        ),
                     )
-                )
                 if (createdId != null) {
                     showCreateGroupDialog.value = false
                     createGroupTitle = ""
                     createGroupNotes = ""
                 }
             }
-        }
+        },
     )
 
     if (allowWriteActions && !enableRecycleBinActions && isSelectionMode.value && selectedTargets.isNotEmpty()) {
@@ -697,7 +715,7 @@ fun PasswordListScreen(
                     }
                     clearSelectionMode()
                 }
-            }
+            },
         )
     }
 
@@ -721,7 +739,7 @@ fun PasswordListScreen(
                     solidifyUpdates = emptyMap()
                     clearSelectionMode()
                 }
-            }
+            },
         )
     }
 
@@ -746,7 +764,7 @@ fun PasswordListScreen(
                     }
                     clearSelectionMode()
                 }
-            }
+            },
         )
     }
 
@@ -755,7 +773,7 @@ fun PasswordListScreen(
         show = showGroupPicker.value,
         groups = pickerGroups,
         onDismiss = { showGroupPicker.value = false },
-        onPick = { targetGroupId -> moveOrCopySelectedEntries(targetGroupId) }
+        onPick = { targetGroupId -> moveOrCopySelectedEntries(targetGroupId) },
     )
 
     if (duplicateGroups.value.isNotEmpty() && showDuplicateScanDialog.value) {
@@ -764,7 +782,7 @@ fun PasswordListScreen(
             show = showDuplicateScanDialog.value,
             onDismiss = { showDuplicateScanDialog.value = false },
             onAutoMerge = { group, masterId -> requestAutoMerge(group, masterId) },
-            onManualMerge = { group, masterId -> openManualMergeForGroup(group, masterId) }
+            onManualMerge = { group, masterId -> openManualMergeForGroup(group, masterId) },
         )
     }
 
@@ -774,7 +792,7 @@ fun PasswordListScreen(
             show = showMergeDialog.value,
             initialMasterEntryId = mergeDialogMasterId,
             onDismiss = { dismissMergeDialog() },
-            onConfirm = { masterId, selections -> requestMerge(masterId, selections) }
+            onConfirm = { masterId, selections -> requestMerge(masterId, selections) },
         )
     }
 
@@ -786,7 +804,7 @@ fun PasswordListScreen(
             show = showAutoMergeConfirm,
             onDismiss = { showAutoMergeConfirm.value = false },
             confirmButtonText = "合并",
-            onConfirm = { executeMerge(masterId, sourceIds, emptyMap()) }
+            onConfirm = { executeMerge(masterId, sourceIds, emptyMap()) },
         )
     }
 
@@ -799,7 +817,7 @@ fun PasswordListScreen(
             show = showMergeConfirm,
             onDismiss = { showMergeConfirm.value = false },
             confirmButtonText = "合并",
-            onConfirm = { executeMerge(masterId, sourceIds, selections) }
+            onConfirm = { executeMerge(masterId, sourceIds, selections) },
         )
     }
 }
@@ -810,15 +828,16 @@ fun PasswordListScreen(
 @Composable
 fun PasswordSectionHeader(letter: String) {
     Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 2.dp)
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .padding(top = 2.dp),
     ) {
         Text(
             text = letter,
             fontSize = 13.sp,
             color = MiuixTheme.colorScheme.onSurfaceSecondary,
-            modifier = Modifier.padding(horizontal = 2.dp, vertical = 4.dp)
+            modifier = Modifier.padding(horizontal = 2.dp, vertical = 4.dp),
         )
     }
 }
@@ -827,4 +846,3 @@ fun PasswordSectionHeader(letter: String) {
  * 索引栏中用于表示文件夹分组的标记。
  */
 const val FolderIndexBarLabel = "📁"
-

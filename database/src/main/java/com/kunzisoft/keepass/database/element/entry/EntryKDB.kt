@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -55,8 +55,9 @@ import java.util.*
  * @author Dominik Reichl <dominik.reichl></dominik.reichl>@t-online.de>
  * @author Jeremy Jamet <jeremy.jamet></jeremy.jamet>@kunzisoft.com>
  */
-class EntryKDB : EntryVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface {
-
+class EntryKDB :
+    EntryVersioned<Int, UUID, GroupKDB, EntryKDB>,
+    NodeKDBInterface {
     /** A string describing what is in binaryData  */
     var binaryDescription = ""
     private var binaryDataId: Int? = null
@@ -74,9 +75,7 @@ class EntryKDB : EntryVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface
         return icon.standard.id == KEY_ID
     }
 
-    fun isMetaStreamDefaultUsername(): Boolean {
-        return isMetaStream() && notes == PMS_STREAM_DEFAULTUSER
-    }
+    fun isMetaStreamDefaultUsername(): Boolean = isMetaStream() && notes == PMS_STREAM_DEFAULTUSER
 
     private fun setMetaStream() {
         binaryDescription = PMS_ID_BINDESC
@@ -91,22 +90,16 @@ class EntryKDB : EntryVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface
         setMetaStream()
     }
 
-    fun isMetaStreamDatabaseColor(): Boolean {
-        return isMetaStream() && notes == PMS_STREAM_DBCOLOR
-    }
+    fun isMetaStreamDatabaseColor(): Boolean = isMetaStream() && notes == PMS_STREAM_DBCOLOR
 
     fun setMetaStreamDatabaseColor() {
         notes = PMS_STREAM_DBCOLOR
         setMetaStream()
     }
 
-    override fun initNodeId(): NodeId<UUID> {
-        return NodeIdUUID()
-    }
+    override fun initNodeId(): NodeId<UUID> = NodeIdUUID()
 
-    override fun copyNodeId(nodeId: NodeId<UUID>): NodeId<UUID> {
-        return NodeIdUUID(nodeId.id)
-    }
+    override fun copyNodeId(nodeId: NodeId<UUID>): NodeId<UUID> = NodeIdUUID(nodeId.id)
 
     constructor() : super()
 
@@ -121,15 +114,20 @@ class EntryKDB : EntryVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface
         binaryDataId = if (rawBinaryDataId == -1) null else rawBinaryDataId
     }
 
-    override fun readParentParcelable(parcel: Parcel): GroupKDB? {
-        return parcel.readParcelableCompat()
-    }
+    override fun readParentParcelable(parcel: Parcel): GroupKDB? = parcel.readParcelableCompat()
 
-    override fun writeParentParcelable(parent: GroupKDB?, parcel: Parcel, flags: Int) {
+    override fun writeParentParcelable(
+        parent: GroupKDB?,
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeParcelable(parent, flags)
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         super.writeToParcel(dest, flags)
         dest.writeString(title)
         dest.writeString(username)
@@ -140,8 +138,10 @@ class EntryKDB : EntryVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface
         dest.writeInt(binaryDataId ?: -1)
     }
 
-    fun updateWith(source: EntryKDB,
-                   updateParents: Boolean = true) {
+    fun updateWith(
+        source: EntryKDB,
+        updateParents: Boolean = true,
+    ) {
         super.updateWith(source, updateParents)
         title = source.title
         username = source.username
@@ -177,9 +177,7 @@ class EntryKDB : EntryVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface
         return null
     }
 
-    fun containsAttachment(): Boolean {
-        return binaryDataId != null
-    }
+    fun containsAttachment(): Boolean = binaryDataId != null
 
     fun getBinary(attachmentPool: AttachmentPool): BinaryData? {
         this.binaryDataId?.let {
@@ -188,11 +186,17 @@ class EntryKDB : EntryVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface
         return null
     }
 
-    fun putBinary(binaryData: BinaryData, attachmentPool: AttachmentPool) {
+    fun putBinary(
+        binaryData: BinaryData,
+        attachmentPool: AttachmentPool,
+    ) {
         this.binaryDataId = attachmentPool.put(binaryData)
     }
 
-    fun putAttachment(attachment: Attachment, attachmentPool: AttachmentPool) {
+    fun putAttachment(
+        attachment: Attachment,
+        attachmentPool: AttachmentPool,
+    ) {
         this.binaryDescription = attachment.name
         this.binaryDataId = attachmentPool.put(attachment.binaryData)
     }
@@ -205,29 +209,25 @@ class EntryKDB : EntryVersioned<Int, UUID, GroupKDB, EntryKDB>, NodeKDBInterface
     }
 
     companion object {
-
         /** Size of byte buffer needed to hold this struct.  */
         private const val PMS_ID_BINDESC = "bin-stream"
         private const val PMS_ID_TITLE = "Meta-Info"
         private const val PMS_ID_USER = "SYSTEM"
         private const val PMS_ID_URL = "$"
 
-         const val PMS_STREAM_SIMPLESTATE = "Simple UI State"
-         const val PMS_STREAM_DEFAULTUSER = "Default User Name"
-         const val PMS_STREAM_SEARCHHISTORYITEM = "Search History Item"
-         const val PMS_STREAM_CUSTOMKVP = "Custom KVP"
-         const val PMS_STREAM_DBCOLOR = "Database Color"
-         const val PMS_STREAM_KPXICON2 = "KPX_CUSTOM_ICONS_2"
+        const val PMS_STREAM_SIMPLESTATE = "Simple UI State"
+        const val PMS_STREAM_DEFAULTUSER = "Default User Name"
+        const val PMS_STREAM_SEARCHHISTORYITEM = "Search History Item"
+        const val PMS_STREAM_CUSTOMKVP = "Custom KVP"
+        const val PMS_STREAM_DBCOLOR = "Database Color"
+        const val PMS_STREAM_KPXICON2 = "KPX_CUSTOM_ICONS_2"
 
         @JvmField
-        val CREATOR: Parcelable.Creator<EntryKDB> = object : Parcelable.Creator<EntryKDB> {
-            override fun createFromParcel(parcel: Parcel): EntryKDB {
-                return EntryKDB(parcel)
-            }
+        val CREATOR: Parcelable.Creator<EntryKDB> =
+            object : Parcelable.Creator<EntryKDB> {
+                override fun createFromParcel(parcel: Parcel): EntryKDB = EntryKDB(parcel)
 
-            override fun newArray(size: Int): Array<EntryKDB?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<EntryKDB?> = arrayOfNulls(size)
             }
-        }
     }
 }

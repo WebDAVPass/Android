@@ -47,7 +47,7 @@ fun EntryHistoryDialog(
     show: MutableState<Boolean>,
     histories: List<EntryHistoryInfo>,
     onDismiss: () -> Unit,
-    onRestore: (EntryHistoryInfo) -> Unit
+    onRestore: (EntryHistoryInfo) -> Unit,
 ) {
     var pendingRestore by remember { mutableStateOf<EntryHistoryInfo?>(null) }
 
@@ -57,7 +57,7 @@ fun EntryHistoryDialog(
         onDismissRequest = {
             pendingRestore = null
             onDismiss()
-        }
+        },
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             val restore = pendingRestore
@@ -66,22 +66,22 @@ fun EntryHistoryDialog(
                     text = "将当前条目恢复为该版本？",
                     fontSize = 14.sp,
                     color = MiuixTheme.colorScheme.onSurface,
-                    modifier = Modifier.padding(bottom = 8.dp)
+                    modifier = Modifier.padding(bottom = 8.dp),
                 )
                 Text(
                     text = "${LocalTimeFormatter.formatLocalDateTime(restore.lastModificationTime)} · ${restore.title.ifBlank { "（无标题）" }}",
                     fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                    modifier = Modifier.padding(bottom = 16.dp),
                 )
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
                     TextButton(
                         text = "取消",
                         onClick = { pendingRestore = null },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     )
                     Spacer(modifier = Modifier.width(16.dp))
                     Button(
@@ -89,7 +89,7 @@ fun EntryHistoryDialog(
                             pendingRestore = null
                             onRestore(restore)
                         },
-                        modifier = Modifier.weight(1f)
+                        modifier = Modifier.weight(1f),
                     ) {
                         Text(text = "恢复此版本")
                     }
@@ -99,16 +99,17 @@ fun EntryHistoryDialog(
                     text = "暂无历史记录",
                     fontSize = 14.sp,
                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 24.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
                 )
             } else {
                 LazyColumn(modifier = Modifier.fillMaxWidth()) {
                     items(histories, key = { it.index }) { history ->
                         HistoryRow(
                             history = history,
-                            onRestoreClick = { pendingRestore = history }
+                            onRestoreClick = { pendingRestore = history },
                         )
                     }
                 }
@@ -120,22 +121,23 @@ fun EntryHistoryDialog(
 @Composable
 private fun HistoryRow(
     history: EntryHistoryInfo,
-    onRestoreClick: () -> Unit
+    onRestoreClick: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onRestoreClick)
-                .padding(vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onRestoreClick)
+                    .padding(vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = LocalTimeFormatter.formatLocalDateTime(history.lastModificationTime),
                     fontSize = 14.sp,
                     fontWeight = FontWeight.Medium,
-                    color = MiuixTheme.colorScheme.onSurface
+                    color = MiuixTheme.colorScheme.onSurface,
                 )
                 Text(
                     text = buildHistorySummary(history),
@@ -143,13 +145,13 @@ private fun HistoryRow(
                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 2.dp)
+                    modifier = Modifier.padding(top = 2.dp),
                 )
             }
             TextButton(
                 text = "恢复",
                 onClick = onRestoreClick,
-                modifier = Modifier.padding(start = 8.dp)
+                modifier = Modifier.padding(start = 8.dp),
             )
         }
         HorizontalDivider(thickness = 0.5.dp, color = MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.3f))

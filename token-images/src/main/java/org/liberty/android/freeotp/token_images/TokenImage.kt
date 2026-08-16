@@ -2,9 +2,11 @@ package org.liberty.android.freeotp.token_images
 
 import java.util.*
 
-enum class TokenImage(val resource: Int,
-                      val issuer: String? = null,
-                      val alsoMatchLabel: Boolean = false) {
+enum class TokenImage(
+    val resource: Int,
+    val issuer: String? = null,
+    val alsoMatchLabel: Boolean = false,
+) {
     OneAndOne(R.drawable.token_image_1and1),
     OnePassword(R.drawable.token_image_1password),
     TwentyThreeAndMe(R.drawable.token_image_23andme),
@@ -77,6 +79,7 @@ enum class TokenImage(val resource: Int,
     ElectronicArts(R.drawable.token_image_electronic_arts),
     Email(R.drawable.token_image_email),
     EpicGames(R.drawable.token_image_epic_games),
+
     // 新增：NGA 与 NVIDIA（位图资源名需与 drawable 文件一致）
     Nga(R.drawable.token_image_nga),
     Nvidia(R.drawable.token_image_nvidia),
@@ -266,7 +269,8 @@ enum class TokenImage(val resource: Int,
     Zapier(R.drawable.token_image_zapier),
     Zendesk(R.drawable.token_image_zendesk),
     Zoho(R.drawable.token_image_zoho),
-    Zoom(R.drawable.token_image_zoom);
+    Zoom(R.drawable.token_image_zoom),
+    ;
 
     /** 预归一化匹配目标（issuer 或枚举名），每个枚举只计算一次，避免每行匹配时重复 lowercase+过滤 */
     val normalizedTarget: String by lazy { normalize(issuer ?: name) }
@@ -277,7 +281,10 @@ private fun normalize(text: String): String {
     return text.lowercase(Locale.getDefault()).filter { it.isLetterOrDigit() }
 }
 
-fun TokenImage.matchToken(issuer: String?, label: String?): Boolean {
+fun TokenImage.matchToken(
+    issuer: String?,
+    label: String?,
+): Boolean {
     val target = normalizedTarget
 
     val issuerMatched = issuer?.let { normalize(it).contains(target) } ?: false
@@ -288,4 +295,3 @@ fun TokenImage.matchToken(issuer: String?, label: String?): Boolean {
         issuerMatched
     }
 }
-

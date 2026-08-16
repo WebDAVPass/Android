@@ -18,7 +18,7 @@ import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordDataAccess
 @Serializable
 enum class PasswordListMode : Parcelable {
     ALL_PASSWORDS,
-    RECENT_DELETED
+    RECENT_DELETED,
 }
 
 /**
@@ -28,7 +28,7 @@ internal class PasswordListModeSubViewModel(
     private val repository: KdbxTokenRepository,
     private val scope: CoroutineScope,
     private var accessProvider: () -> PasswordDataAccess,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val _passwordListMode = MutableStateFlow(PasswordListMode.ALL_PASSWORDS)
     val passwordListMode: StateFlow<PasswordListMode> = _passwordListMode.asStateFlow()
@@ -78,9 +78,10 @@ internal class PasswordListModeSubViewModel(
                 return@launch
             }
 
-            val count = withContext(ioDispatcher) {
-                repository.countRecentDeletedPasswordEntries(localPath, access.masterPassword)
-            }
+            val count =
+                withContext(ioDispatcher) {
+                    repository.countRecentDeletedPasswordEntries(localPath, access.masterPassword)
+                }
             _recentDeletedCount.value = count
         }
     }

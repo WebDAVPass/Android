@@ -30,8 +30,8 @@ data class Passkey(
     val userHandle: String,
     val relyingParty: String,
     val backupEligibility: Boolean?,
-    val backupState: Boolean?
-): Parcelable {
+    val backupState: Boolean?,
+) : Parcelable {
     // Do not compare BE and BS because are modifiable by the user
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

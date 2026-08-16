@@ -57,7 +57,7 @@ import xzynine.WebDAVPass.Android.ui.component.PreferenceType
  */
 @Composable
 fun AboutScreen(
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -78,47 +78,49 @@ fun AboutScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = MiuixIcons.Back,
-                            contentDescription = "返回"
+                            contentDescription = "返回",
                         )
                     }
                 },
                 actions = {},
-                defaultWindowInsetsPadding = true
+                defaultWindowInsetsPadding = true,
             )
-        }
+        },
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(it)
-                .padding(16.dp)
-                .verticalScroll(rememberScrollState()),
-            horizontalAlignment = Alignment.CenterHorizontally
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .padding(it)
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             // 图标头图（占据上方约四分之一，居中，不在 Card 中）
             Image(
                 painter = painterResource(id = R.drawable.ic_launcher_playstore),
                 contentDescription = "应用图标",
-                modifier = Modifier
-                    .size(96.dp)
-                    .clip(RoundedCornerShape(20.dp))
-                    .padding(top = 24.dp, bottom = 12.dp)
+                modifier =
+                    Modifier
+                        .size(96.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .padding(top = 24.dp, bottom = 12.dp),
             )
 
             // 应用名称 + 版本号（居中，非 Preference）
             Text(
                 text = "WebDAVPass",
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
             Text(
                 text = "版本 ${BuildConfig.VERSION_NAME}",
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
             )
 
             Spacer(modifier = Modifier.height(24.dp))
 
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Preference(
                     type = PreferenceType.Arrow,
@@ -143,17 +145,19 @@ fun AboutScreen(
                         coroutineScope.launch {
                             loadingChangelog = true
                             try {
-                                val result = CheckUpdateManager(context).checkUpdate(
-                                    owner = "WebDAVPass",
-                                    repo = "Android",
-                                    currentVersion = BuildConfig.VERSION_NAME,
-                                    rule = VersionRule.LATEST
-                                )
-                                val releases = when (result) {
-                                    is UpdateResult.HasUpdate -> result.allReleases
-                                    is UpdateResult.NoUpdate -> result.allReleases
-                                    is UpdateResult.Error -> null
-                                }
+                                val result =
+                                    CheckUpdateManager(context).checkUpdate(
+                                        owner = "WebDAVPass",
+                                        repo = "Android",
+                                        currentVersion = BuildConfig.VERSION_NAME,
+                                        rule = VersionRule.LATEST,
+                                    )
+                                val releases =
+                                    when (result) {
+                                        is UpdateResult.HasUpdate -> result.allReleases
+                                        is UpdateResult.NoUpdate -> result.allReleases
+                                        is UpdateResult.Error -> null
+                                    }
                                 if (releases == null) {
                                     if (result is UpdateResult.Error) {
                                         ToastUtils.showShortToast(context, "加载更新日志失败：${result.message}")
@@ -167,14 +171,14 @@ fun AboutScreen(
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Preference(
                     type = PreferenceType.Arrow,
@@ -192,16 +196,17 @@ fun AboutScreen(
                         coroutineScope.launch {
                             checkingUpdate = true
                             try {
-                                val result = try {
-                                    CheckUpdateManager(context).checkUpdate(
-                                        owner = "WebDAVPass",
-                                        repo = "Android",
-                                        currentVersion = BuildConfig.VERSION_NAME
-                                    )
-                                } catch (e: Exception) {
-                                    ToastUtils.showShortToast(context, "检查更新失败：${e.message}")
-                                    null
-                                }
+                                val result =
+                                    try {
+                                        CheckUpdateManager(context).checkUpdate(
+                                            owner = "WebDAVPass",
+                                            repo = "Android",
+                                            currentVersion = BuildConfig.VERSION_NAME,
+                                        )
+                                    } catch (e: Exception) {
+                                        ToastUtils.showShortToast(context, "检查更新失败：${e.message}")
+                                        null
+                                    }
                                 if (result != null) {
                                     updateResult = result
                                 }
@@ -210,14 +215,14 @@ fun AboutScreen(
                             }
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
 
             Spacer(modifier = Modifier.height(12.dp))
 
             Card(
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Preference(
                     type = PreferenceType.Arrow,
@@ -231,7 +236,7 @@ fun AboutScreen(
                         )
                     },
                     onClick = { showOpenSource = true },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -240,20 +245,20 @@ fun AboutScreen(
     updateResult?.let { result ->
         UpdateResultDialog(
             result = result,
-            onDismiss = { updateResult = null }
+            onDismiss = { updateResult = null },
         )
     }
 
     ChangelogDialog(
         show = showChangelog,
         releases = changelogReleases,
-        onDismiss = { showChangelog = false }
+        onDismiss = { showChangelog = false },
     )
 
     OpenSourceDrawer(
         show = showOpenSource,
         onDismiss = { showOpenSource = false },
-        context = context
+        context = context,
     )
 }
 
@@ -263,7 +268,7 @@ fun AboutScreen(
 @Composable
 private fun UpdateResultDialog(
     result: UpdateResult,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -274,12 +279,13 @@ private fun UpdateResultDialog(
             val release = result.releaseInfo
             ConfirmationDialog(
                 title = "发现新版本 ${release.version}",
-                summary = buildString {
-                    append("当前版本：${result.currentVersion}\n")
-                    if (release.releaseNotes.isNotBlank()) {
-                        append("更新说明：\n${release.releaseNotes.take(500)}")
-                    }
-                },
+                summary =
+                    buildString {
+                        append("当前版本：${result.currentVersion}\n")
+                        if (release.releaseNotes.isNotBlank()) {
+                            append("更新说明：\n${release.releaseNotes.take(500)}")
+                        }
+                    },
                 show = show,
                 onDismiss = onDismiss,
                 confirmButtonText = "下载更新",
@@ -294,7 +300,7 @@ private fun UpdateResultDialog(
                             else -> ToastUtils.showShortToast(context, "下载失败，请到 GitHub Releases 手动下载")
                         }
                     }
-                }
+                },
             )
         }
 
@@ -305,7 +311,7 @@ private fun UpdateResultDialog(
                 show = show,
                 onDismiss = onDismiss,
                 confirmButtonText = "确定",
-                onConfirm = onDismiss
+                onConfirm = onDismiss,
             )
         }
 
@@ -316,7 +322,7 @@ private fun UpdateResultDialog(
                 show = show,
                 onDismiss = onDismiss,
                 confirmButtonText = "确定",
-                onConfirm = onDismiss
+                onConfirm = onDismiss,
             )
         }
     }
@@ -329,25 +335,27 @@ private fun UpdateResultDialog(
 private fun ChangelogDialog(
     show: Boolean,
     releases: List<ReleaseInfo>?,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
 ) {
     WindowDialog(
         show = show,
         title = "更新日志",
-        onDismissRequest = onDismiss
+        onDismissRequest = onDismiss,
     ) {
         LazyColumn(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             val list = releases ?: emptyList()
             items(list.size) { index ->
                 val release = list[index]
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 10.dp)
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
                 ) {
                     Text(
                         text = "v${release.version}",
@@ -360,7 +368,7 @@ private fun ChangelogDialog(
                     if (release.releaseNotes.isNotBlank()) {
                         Text(
                             text = release.releaseNotes,
-                            modifier = Modifier.padding(top = 4.dp)
+                            modifier = Modifier.padding(top = 4.dp),
                         )
                     }
                 }

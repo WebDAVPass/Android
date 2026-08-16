@@ -22,8 +22,7 @@ package com.kunzisoft.keepass.database.element.group
 import com.kunzisoft.keepass.database.element.node.NodeHandler
 import com.kunzisoft.keepass.database.element.node.NodeVersionedInterface
 
-interface GroupVersionedInterface<Group: GroupVersionedInterface<Group, Entry>, Entry> : NodeVersionedInterface<Group> {
-
+interface GroupVersionedInterface<Group : GroupVersionedInterface<Group, Entry>, Entry> : NodeVersionedInterface<Group> {
     fun getChildGroups(): List<Group>
 
     fun getChildEntries(): List<Entry>
@@ -43,40 +42,47 @@ interface GroupVersionedInterface<Group: GroupVersionedInterface<Group, Entry>, 
     fun removeChildren()
 
     @Suppress("UNCHECKED_CAST")
-    fun doForEachChildAndForIt(entryHandler: NodeHandler<Entry>,
-                               groupHandler: NodeHandler<Group>) {
+    fun doForEachChildAndForIt(
+        entryHandler: NodeHandler<Entry>,
+        groupHandler: NodeHandler<Group>,
+    ) {
         doForEachChild(entryHandler, groupHandler)
         groupHandler.operate(this as Group)
     }
 
-    fun doForEachChild(entryHandler: NodeHandler<Entry>?,
-                       groupHandler: NodeHandler<Group>?,
-                       stopIterationWhenGroupHandlerOperateFalse: Boolean = true): Boolean {
+    fun doForEachChild(
+        entryHandler: NodeHandler<Entry>?,
+        groupHandler: NodeHandler<Group>?,
+        stopIterationWhenGroupHandlerOperateFalse: Boolean = true,
+    ): Boolean {
         if (entryHandler != null) {
             for (entry in this.getChildEntries()) {
-                if (!entryHandler.operate(entry))
+                if (!entryHandler.operate(entry)) {
                     return false
+                }
             }
         }
         for (group in this.getChildGroups()) {
             var doActionForChild = true
             if (groupHandler != null && !groupHandler.operate(group)) {
                 doActionForChild = false
-                if (stopIterationWhenGroupHandlerOperateFalse)
+                if (stopIterationWhenGroupHandlerOperateFalse) {
                     return false
+                }
             }
-            if (doActionForChild)
+            if (doActionForChild) {
                 group.doForEachChild(entryHandler, groupHandler, stopIterationWhenGroupHandlerOperateFalse)
+            }
         }
         return true
     }
 
-    fun searchChildEntry(criteria: (entry: Entry) -> Boolean): Entry? {
-        return searchChildEntry(this, criteria)
-    }
+    fun searchChildEntry(criteria: (entry: Entry) -> Boolean): Entry? = searchChildEntry(this, criteria)
 
-    private fun searchChildEntry(rootGroup: GroupVersionedInterface<Group, Entry>,
-                                 criteria: (entry: Entry) -> Boolean): Entry? {
+    private fun searchChildEntry(
+        rootGroup: GroupVersionedInterface<Group, Entry>,
+        criteria: (entry: Entry) -> Boolean,
+    ): Entry? {
         for (childEntry in rootGroup.getChildEntries()) {
             if (criteria.invoke(childEntry)) {
                 return childEntry
@@ -91,12 +97,12 @@ interface GroupVersionedInterface<Group: GroupVersionedInterface<Group, Entry>, 
         return null
     }
 
-    fun searchChildGroup(criteria: (group: Group) -> Boolean): Group? {
-        return searchChildGroup(this, criteria)
-    }
+    fun searchChildGroup(criteria: (group: Group) -> Boolean): Group? = searchChildGroup(this, criteria)
 
-    private fun searchChildGroup(rootGroup: GroupVersionedInterface<Group, Entry>,
-                                 criteria: (group: Group) -> Boolean): Group? {
+    private fun searchChildGroup(
+        rootGroup: GroupVersionedInterface<Group, Entry>,
+        criteria: (group: Group) -> Boolean,
+    ): Group? {
         for (childGroup in rootGroup.getChildGroups()) {
             if (criteria.invoke(childGroup)) {
                 return childGroup

@@ -25,27 +25,26 @@ import com.kunzisoft.keepass.database.element.binary.BinaryByte
 import com.kunzisoft.keepass.database.element.binary.BinaryData
 import com.kunzisoft.keepass.utils.readParcelableCompat
 
-
-data class Attachment(var name: String,
-                      var binaryData: BinaryData) : Parcelable {
-
+data class Attachment(
+    var name: String,
+    var binaryData: BinaryData,
+) : Parcelable {
     constructor(parcel: Parcel) : this(
-            parcel.readString() ?: "",
-            parcel.readParcelableCompat<BinaryData>() ?: BinaryByte()
+        parcel.readString() ?: "",
+        parcel.readParcelableCompat<BinaryData>() ?: BinaryByte(),
     )
 
-    override fun writeToParcel(parcel: Parcel, flags: Int) {
+    override fun writeToParcel(
+        parcel: Parcel,
+        flags: Int,
+    ) {
         parcel.writeString(name)
         parcel.writeParcelable(binaryData, flags)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
-    override fun toString(): String {
-        return "$name at $binaryData"
-    }
+    override fun toString(): String = "$name at $binaryData"
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -56,17 +55,11 @@ data class Attachment(var name: String,
         return true
     }
 
-    override fun hashCode(): Int {
-        return name.hashCode()
-    }
+    override fun hashCode(): Int = name.hashCode()
 
     companion object CREATOR : Parcelable.Creator<Attachment> {
-        override fun createFromParcel(parcel: Parcel): Attachment {
-            return Attachment(parcel)
-        }
+        override fun createFromParcel(parcel: Parcel): Attachment = Attachment(parcel)
 
-        override fun newArray(size: Int): Array<Attachment?> {
-            return arrayOfNulls(size)
-        }
+        override fun newArray(size: Int): Array<Attachment?> = arrayOfNulls(size)
     }
 }

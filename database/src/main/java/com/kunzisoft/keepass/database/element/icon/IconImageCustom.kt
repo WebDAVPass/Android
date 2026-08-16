@@ -1,6 +1,6 @@
 /*
  * Copyright 2021 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -28,7 +28,6 @@ import com.kunzisoft.keepass.utils.readParcelableCompat
 import java.util.UUID
 
 class IconImageCustom : IconImageDraw {
-
     val uuid: UUID
     var name: String = ""
     var lastModificationTime: DateInstant? = null
@@ -61,15 +60,16 @@ class IconImageCustom : IconImageDraw {
         lastModificationTime = parcel.readParcelableCompat()
     }
 
-    override fun writeToParcel(dest: Parcel, flags: Int) {
+    override fun writeToParcel(
+        dest: Parcel,
+        flags: Int,
+    ) {
         dest.writeParcelable(ParcelUuid(uuid), flags)
         dest.writeString(name)
         dest.writeParcelable(lastModificationTime, flags)
     }
 
-    override fun describeContents(): Int {
-        return 0
-    }
+    override fun describeContents(): Int = 0
 
     override fun hashCode(): Int {
         val prime = 31
@@ -78,17 +78,18 @@ class IconImageCustom : IconImageDraw {
         return result
     }
 
-    override fun getIconImageToDraw(): IconImage {
-        return IconImage(this)
-    }
+    override fun getIconImageToDraw(): IconImage = IconImage(this)
 
     override fun equals(other: Any?): Boolean {
-        if (this === other)
+        if (this === other) {
             return true
-        if (other == null)
+        }
+        if (other == null) {
             return false
-        if (other !is IconImageCustom)
+        }
+        if (other !is IconImageCustom) {
             return false
+        }
         return uuid == other.uuid
     }
 
@@ -96,16 +97,12 @@ class IconImageCustom : IconImageDraw {
         get() = uuid == DatabaseVersioned.UUID_ZERO
 
     companion object {
-
         @JvmField
-        val CREATOR: Parcelable.Creator<IconImageCustom> = object : Parcelable.Creator<IconImageCustom> {
-            override fun createFromParcel(parcel: Parcel): IconImageCustom {
-                return IconImageCustom(parcel)
-            }
+        val CREATOR: Parcelable.Creator<IconImageCustom> =
+            object : Parcelable.Creator<IconImageCustom> {
+                override fun createFromParcel(parcel: Parcel): IconImageCustom = IconImageCustom(parcel)
 
-            override fun newArray(size: Int): Array<IconImageCustom?> {
-                return arrayOfNulls(size)
+                override fun newArray(size: Int): Array<IconImageCustom?> = arrayOfNulls(size)
             }
-        }
     }
 }

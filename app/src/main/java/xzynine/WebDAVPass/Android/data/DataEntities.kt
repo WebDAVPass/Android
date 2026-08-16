@@ -9,7 +9,7 @@ import androidx.room.PrimaryKey
  *
  * 说明：令牌实际存储在 kdbx 库文件中，仅作为内存模型使用，不注册 Room 实体。
  */
-data class OtpToken (
+data class OtpToken(
     val id: Long = 0,
     val ordinal: Long,
     val issuer: String?,
@@ -23,7 +23,7 @@ data class OtpToken (
     val counter: Long,
     val period: Int,
     val encryptionType: EncryptionType,
-    val uniqueId: String
+    val uniqueId: String,
 )
 
 /**
@@ -52,7 +52,7 @@ data class WebDavConfig(
     @ColumnInfo(name = "password")
     var password: String,
     @ColumnInfo(name = "sort_number")
-    var sortNumber: Int = 0
+    var sortNumber: Int = 0,
 ) {
     /**
      * 解析完整的基础地址。
@@ -79,5 +79,5 @@ data class WebDavConfig(
 data class AppSetting(
     @PrimaryKey
     val key: String,
-    val value: String
+    val value: String,
 )

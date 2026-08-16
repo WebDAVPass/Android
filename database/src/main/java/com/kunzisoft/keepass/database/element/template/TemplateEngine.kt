@@ -17,7 +17,6 @@ package com.kunzisoft.keepass.database.element.template
  *  You should have received a copy of the GNU General Public License
  *  along with KeePassDX.  If not, see <http://www.gnu.org/licenses/>.
  */
-import android.content.res.Resources
 import android.graphics.Color
 import android.util.Log
 import com.kunzisoft.keepass.database.element.Field
@@ -31,8 +30,9 @@ import com.kunzisoft.keepass.database.element.security.ProtectedString
 import java.util.*
 import kotlin.collections.HashMap
 
-abstract class TemplateEngine(private val mDatabase: DatabaseKDBX) {
-
+abstract class TemplateEngine(
+    private val mDatabase: DatabaseKDBX,
+) {
     private val mCacheTemplates = HashMap<UUID, Template>()
 
     fun getTemplates(): List<Template> {
@@ -55,18 +55,17 @@ abstract class TemplateEngine(private val mDatabase: DatabaseKDBX) {
         return templates
     }
 
-    fun getTemplateCreation(): Template {
-        return Template(CREATION)
-    }
+    fun getTemplateCreation(): Template = Template(CREATION)
 
     fun createNewTemplatesGroup(templatesGroupName: String): GroupKDBX {
-        val newTemplatesGroup = mDatabase.createGroup().apply {
-            title = templatesGroupName
-            icon.standard = mDatabase.getStandardIcon(IconImageStandard.BUILD_ID)
-            enableAutoType = false
-            enableSearching = false
-            isExpanded = false
-        }
+        val newTemplatesGroup =
+            mDatabase.createGroup().apply {
+                title = templatesGroupName
+                icon.standard = mDatabase.getStandardIcon(IconImageStandard.BUILD_ID)
+                enableAutoType = false
+                enableSearching = false
+                isExpanded = false
+            }
         mDatabase.addGroupTo(newTemplatesGroup, mDatabase.rootGroup)
         // Build default templates
         getDefaults().forEach { defaultTemplate ->
@@ -83,9 +82,9 @@ abstract class TemplateEngine(private val mDatabase: DatabaseKDBX) {
 
     protected fun getTemplateByCache(uuid: UUID): Template? {
         try {
-            if (mCacheTemplates.containsKey(uuid))
+            if (mCacheTemplates.containsKey(uuid)) {
                 return mCacheTemplates[uuid]
-            else {
+            } else {
                 mDatabase.getEntryById(uuid)?.let { templateEntry ->
                     getTemplateFromTemplateEntry(templateEntry).let { newTemplate ->
                         mCacheTemplates[uuid] = newTemplate
@@ -105,7 +104,10 @@ abstract class TemplateEngine(private val mDatabase: DatabaseKDBX) {
 
     abstract fun removeMetaTemplateRecognitionFromEntry(entry: EntryKDBX): EntryKDBX
 
-    abstract fun addMetaTemplateRecognitionToEntry(template: Template, entry: EntryKDBX): EntryKDBX
+    abstract fun addMetaTemplateRecognitionToEntry(
+        template: Template,
+        entry: EntryKDBX,
+    ): EntryKDBX
 
     abstract fun buildTemplateEntryField(attribute: TemplateAttribute): Field
 
@@ -114,45 +116,52 @@ abstract class TemplateEngine(private val mDatabase: DatabaseKDBX) {
     abstract fun encodeTemplateEntry(templateEntry: EntryKDBX): EntryKDBX
 
     fun createTemplateEntry(template: Template): EntryKDBX {
-        val newEntry = EntryKDBX().apply {
-            nodeId = NodeIdUUID(template.uuid)
-            title = template.title
-            icon = template.icon
-            template.sections.forEachIndexed { index, section ->
-                section.attributes.forEach { attribute ->
-                    if (index > 0) {
-                        // Label is not important with section => [Section_X]: Divider
-                        val sectionName = if (section.name.isEmpty())
-                            "$SECTION_DECODED_TEMPLATE_PREFIX${index-1}"
-                        else
-                            section.name
-                        putField(Field(addTemplateDecorator(sectionName),
-                            ProtectedString(false, TemplateAttributeType.DIVIDER.typeString))
-                        )
-                    }
+        val newEntry =
+            EntryKDBX().apply {
+                nodeId = NodeIdUUID(template.uuid)
+                title = template.title
+                icon = template.icon
+                template.sections.forEachIndexed { index, section ->
+                    section.attributes.forEach { attribute ->
+                        if (index > 0) {
+                            // Label is not important with section => [Section_X]: Divider
+                            val sectionName =
+                                if (section.name.isEmpty()) {
+                                    "$SECTION_DECODED_TEMPLATE_PREFIX${index - 1}"
+                                } else {
+                                    section.name
+                                }
+                            putField(
+                                Field(
+                                    addTemplateDecorator(sectionName),
+                                    ProtectedString(false, TemplateAttributeType.DIVIDER.typeString),
+                                ),
+                            )
+                        }
 
-                    putField(buildTemplateEntryField(attribute))
+                        putField(buildTemplateEntryField(attribute))
+                    }
                 }
             }
-        }
         return encodeTemplateEntry(newEntry)
     }
 
     private fun buildTemplateSectionFromFields(fields: List<Field>): TemplateSection {
         val sectionAttributes = mutableListOf<TemplateAttribute>()
         fields.forEach { field ->
-            sectionAttributes.add(TemplateAttribute(
-                removeTemplateDecorator(field.name),
-                TemplateAttributeType.getFromString(field.protectedValue.stringValue),
-                field.protectedValue.isProtected,
-                TemplateAttributeOption.getOptionsFromString(field.protectedValue.stringValue))
+            sectionAttributes.add(
+                TemplateAttribute(
+                    removeTemplateDecorator(field.name),
+                    TemplateAttributeType.getFromString(field.protectedValue.stringValue),
+                    field.protectedValue.isProtected,
+                    TemplateAttributeOption.getOptionsFromString(field.protectedValue.stringValue),
+                ),
             )
         }
         return TemplateSection(sectionAttributes)
     }
 
     private fun getTemplateFromTemplateEntry(templateEntry: EntryKDBX): Template {
-
         val templateEntryDecoded = decodeTemplateEntry(templateEntry)
         val templateSections = mutableListOf<TemplateSection>()
         val sectionFields = mutableListOf<Field>()
@@ -170,13 +179,15 @@ abstract class TemplateEngine(private val mDatabase: DatabaseKDBX) {
         templateEntry.backgroundColor.let {
             try {
                 backgroundColor = Color.parseColor(it)
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+            }
         }
         var foregroundColor: Int? = null
         templateEntry.foregroundColor.let {
             try {
                 foregroundColor = Color.parseColor(it)
-            } catch (e: Exception) {}
+            } catch (e: Exception) {
+            }
         }
 
         return Template(
@@ -186,12 +197,11 @@ abstract class TemplateEngine(private val mDatabase: DatabaseKDBX) {
             backgroundColor,
             foregroundColor,
             templateSections,
-            getVersion()
+            getVersion(),
         )
     }
 
     companion object {
-
         private val TAG = TemplateEngine::class.java.name
 
         private const val PREFIX_DECODED_TEMPLATE = "["
@@ -201,16 +211,21 @@ abstract class TemplateEngine(private val mDatabase: DatabaseKDBX) {
         val CREATION: Template
             get() {
                 val sections = mutableListOf<TemplateSection>()
-                val mainSection = TemplateSection(mutableListOf<TemplateAttribute>().apply {
-                    // Dynamic part
-                })
+                val mainSection =
+                    TemplateSection(
+                        mutableListOf<TemplateAttribute>().apply {
+                            // Dynamic part
+                        },
+                    )
                 sections.add(mainSection)
-                return Template(UUID(0, 1),
+                return Template(
+                    UUID(0, 1),
                     TemplateField.LABEL_TEMPLATE,
                     IconImage(IconImageStandard(IconImageStandard.BUILD_ID)),
-                    sections)
+                    sections,
+                )
             }
-        
+
         fun getDefaults(): List<Template> {
             val templateBuilder = TemplateBuilder()
             return listOf(
@@ -220,22 +235,19 @@ abstract class TemplateEngine(private val mDatabase: DatabaseKDBX) {
                 templateBuilder.idCard,
                 templateBuilder.creditCard,
                 templateBuilder.bank,
-                templateBuilder.cryptocurrency)
+                templateBuilder.cryptocurrency,
+            )
         }
 
-        fun containsTemplateDecorator(name: String): Boolean {
-            return name.startsWith(PREFIX_DECODED_TEMPLATE)
-                    && name.endsWith(SUFFIX_DECODED_TEMPLATE)
-        }
+        fun containsTemplateDecorator(name: String): Boolean =
+            name.startsWith(PREFIX_DECODED_TEMPLATE) &&
+                name.endsWith(SUFFIX_DECODED_TEMPLATE)
 
-        fun addTemplateDecorator(name: String): String {
-            return "$PREFIX_DECODED_TEMPLATE${name}$SUFFIX_DECODED_TEMPLATE"
-        }
+        fun addTemplateDecorator(name: String): String = "$PREFIX_DECODED_TEMPLATE${name}$SUFFIX_DECODED_TEMPLATE"
 
-        fun removeTemplateDecorator(name: String): String {
-            return name
+        fun removeTemplateDecorator(name: String): String =
+            name
                 .removePrefix(PREFIX_DECODED_TEMPLATE)
                 .removeSuffix(SUFFIX_DECODED_TEMPLATE)
-        }
     }
 }

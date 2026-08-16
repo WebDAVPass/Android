@@ -1,6 +1,6 @@
 /*
  * Copyright 2019 Jeremy Jamet / Kunzisoft.
- *     
+ *
  * This file is part of KeePassDX.
  *
  *  KeePassDX is free software: you can redistribute it and/or modify
@@ -20,7 +20,6 @@
 package com.kunzisoft.keepass.database.file
 
 abstract class DatabaseHeader {
-
     /**
      * Seed that gets hashed with the userkey to form the final key
      */
@@ -30,5 +29,4 @@ abstract class DatabaseHeader {
      * IV used for content encryption
      */
     var encryptionIV = ByteArray(16)
-
 }
