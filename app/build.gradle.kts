@@ -9,23 +9,33 @@ plugins {
 import java.io.File
 import java.util.Properties
 
-// 使用 buildSrc 的 JGit 实现计算版本信息
+// 版本号不再由构建系统从 git 历史推导（已移除 buildSrc 的 JGit 逻辑），
+// 注入优先级：-PversionName/-PversionCode（gradle property）→ VERSION_NAME/VERSION_CODE（环境变量）
+// → version.properties 固定值（本地构建使用，不递增）。
+// version.properties 由发版流程（release.yml）维护写回，递增步长为
+// 上次修改版本号 commit 到当前 HEAD 的提交数。
+fun loadFixedVersion(): Pair<String, Int> {
+    val props = Properties()
+    val file = rootProject.file("version.properties")
+    require(file.exists()) {
+        "Missing version.properties. Provide -PversionName/-PversionCode (or env VERSION_NAME/VERSION_CODE) when building in CI."
+    }
+    file.inputStream().use { props.load(it) }
 
-// 主版本号（major）
-// - 直接在此处设置主版本号；不再从 gradle.properties 读取。
-// - 在发布重大版本时请在这里更新此值（并可同时调整下方的 versionMajorSubtract）。
-// 例如：val versionMajor: Int = 1
-val versionMajor: Int = 1 // <-- 在此处直接修改主版本号
+    val name = props.getProperty("versionName")
+        ?: error("versionName is missing in version.properties")
+    val code = props.getProperty("versionCode")?.toIntOrNull()
+        ?: error("versionCode is missing or not an Int in version.properties")
+    return name to code
+}
 
-// 使用 buildSrc 中的 Versioning 实现来计算版本信息
-// 支持在此文件内直接设置次版本（minor）减量（不使用 gradle.properties）：
-// - 当主版本号（versionMajor）升级后，可以在下面直接把 `versionMajorSubtract` 改为期望的值，
-//   这样 main 的提交计数会在计算中减去该值（下限为 0），防止次版本无限递增。
-// - 示例：如果希望在 major 升级后把 main 的计数回退 340，则设置为 340。
-val versionMajorSubtract: Int = 0 // <-- 在此处直接修改以手动应用减量
-val versionInfo = Versioning.compute(rootProject.projectDir, versionMajor, versionMajorSubtract)
-val computedVersionName = versionInfo.versionName
-val computedVersionCode = versionInfo.versionCode
+val (fixedVersionName, fixedVersionCode) = loadFixedVersion()
+val injectedVersionName = providers.gradleProperty("versionName").orNull
+    ?: System.getenv("VERSION_NAME")
+    ?: fixedVersionName
+val injectedVersionCode = (providers.gradleProperty("versionCode").orNull
+    ?: System.getenv("VERSION_CODE")
+    ?: fixedVersionCode.toString()).toIntOrNull() ?: fixedVersionCode
 
 android {
     namespace = "xzynine.WebDAVPass.Android"
@@ -54,9 +64,9 @@ android {
         applicationId = "xzynine.webdavpass"
         minSdk = 29
         targetSdk = 36
-        // 使用自动计算的版本号
-        versionCode = computedVersionCode
-        versionName = computedVersionName
+        // 版本号由 CI 注入或读取 version.properties 固定值
+        versionCode = injectedVersionCode
+        versionName = injectedVersionName
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -175,6 +185,6 @@ dependencies {
 
 tasks.register("printVersionName") {
     doLast {
-        println(computedVersionName)
+        println(injectedVersionName)
     }
 }
