@@ -55,6 +55,8 @@ jobs:
           cat > .git/info/exclude <<'EXCLUDE'
           package.json
           release.config.mjs
+          node_modules/
+          package-lock.json
           EXCLUDE
           cat > package.json <<'JSON'
           {
@@ -106,6 +108,11 @@ jobs:
           writeFileSync(file, out)
           console.log(`回写 version.properties: versionName=${nextVersion}, versionCode=${nextCode}`)
           JS
+
+      - name: 安装 semantic-release 及插件（不写入仓库，node_modules 已排除）
+        run: |
+          npm install --no-save --no-package-lock --no-audit --no-fund \
+            semantic-release @semantic-release/exec @semantic-release/git
 
       - name: 执行 semantic-release（推断版本、回写、打 tag、PAT 推送）
         env:
