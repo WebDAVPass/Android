@@ -2,6 +2,7 @@ package xzynine.WebDAVPass.Android.ui.Screen
 
 import android.content.ClipData
 import android.content.ClipDescription
+import android.content.ActivityNotFoundException
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
@@ -129,18 +130,18 @@ fun PasskeyInfoRow(
 
 /**
  * 通过系统浏览器打开网址，无 scheme 时自动补充 https://。
+ *
+ * API 30+ 包可见性限制下 resolveActivity 可能返回 null，因此不再预先判断，
+ * 直接发起 chooser，无可用处理器时由 ActivityNotFoundException 兜底提示。
  */
 fun openUrl(context: Context, rawUrl: String) {
-    runCatching {
-        val schemePattern = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
-        val url = if (schemePattern.containsMatchIn(rawUrl)) rawUrl else "https://$rawUrl"
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
-        if (intent.resolveActivity(context.packageManager) != null) {
-            context.startActivity(Intent.createChooser(intent, "打开网址"))
-        } else {
-            ToastUtils.showShortToast(context, "没有可打开该网址的应用")
-        }
-    }.onFailure {
+    val schemePattern = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
+    val url = if (schemePattern.containsMatchIn(rawUrl)) rawUrl else "https://$rawUrl"
+    try {
+        context.startActivity(Intent.createChooser(Intent(Intent.ACTION_VIEW, Uri.parse(url)), "打开网址"))
+    } catch (e: ActivityNotFoundException) {
+        ToastUtils.showShortToast(context, "没有可打开该网址的应用")
+    } catch (e: Exception) {
         ToastUtils.showShortToast(context, "网址无法打开")
     }
 }
@@ -251,9 +252,12 @@ fun AttachmentEditRow(
  *
  * MIME 通过文件扩展名推断（[MimeTypeMap]）而非依赖 FileProvider 的 getType（其常返回 null），
  * 避免兜底为 application/octet-stream 导致选择器无可用处理器而抛出 ActivityNotFoundException。
+ *
+ * API 30+ 包可见性限制下 resolveActivity 可能返回 null，因此不再预先判断，
+ * 直接发起 chooser，无可用处理器时由 ActivityNotFoundException 兜底提示。
  */
 fun openAttachment(context: Context, name: String, file: java.io.File) {
-    runCatching {
+    try {
         val uri = androidx.core.content.FileProvider.getUriForFile(
             context,
             context.packageName + ".fileprovider",
@@ -270,12 +274,10 @@ fun openAttachment(context: Context, name: String, file: java.io.File) {
             setDataAndType(uri, mime)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
-        if (intent.resolveActivity(context.packageManager) != null) {
-            context.startActivity(Intent.createChooser(intent, "打开附件"))
-        } else {
-            ToastUtils.showShortToast(context, "没有可打开该类型附件的应用")
-        }
-    }.onFailure {
+        context.startActivity(Intent.createChooser(intent, "打开附件"))
+    } catch (e: ActivityNotFoundException) {
+        ToastUtils.showShortToast(context, "没有可打开该类型附件的应用")
+    } catch (e: Exception) {
         ToastUtils.showShortToast(context, "打开附件失败")
     }
 }

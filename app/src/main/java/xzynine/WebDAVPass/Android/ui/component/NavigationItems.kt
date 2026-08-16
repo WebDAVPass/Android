@@ -2,6 +2,7 @@ package xzynine.WebDAVPass.Android.ui.component
 
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import top.yukonga.miuix.kmp.basic.NavigationRail
@@ -50,6 +51,14 @@ fun AppNavigationRail(
             top.yukonga.miuix.kmp.basic.NavigationRailValue.Collapsed
         }
     )
+    // initialValue 仅在首次创建时读取，窗口宽度变化后需主动同步展开/收起
+    LaunchedEffect(expanded) {
+        if (expanded) {
+            railState.expand()
+        } else {
+            railState.collapse()
+        }
+    }
 
     NavigationRail(
         state = railState,

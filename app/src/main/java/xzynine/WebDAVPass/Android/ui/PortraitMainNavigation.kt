@@ -10,6 +10,8 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.FabPosition
 import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
@@ -99,7 +101,10 @@ fun PortraitMainNavigation(
                     // 当前库被清除：回欢迎页选择/新建库。
                     // 用同步快照兜底：currentLibrary 流在冷启动首帧可能尚未预热，
                     // 此时 lib 为 null 但历史库实际存在，不应误弹回欢迎页。
-                    lib == null && tokenViewModel.libraryViewModel.getCurrentLibrarySync() == null -> {
+                    // 读库涉及 Room，放 IO 线程执行避免阻塞主线程。
+                    lib == null && withContext(Dispatchers.IO) {
+                        tokenViewModel.libraryViewModel.getCurrentLibrarySync() == null
+                    } -> {
                         backStack.replaceAll(listOf(Route.Welcome))
                         showWelcome.value = true
                     }
@@ -119,21 +124,7 @@ fun PortraitMainNavigation(
             )
         }
         entry<Route.Home> {
-            val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-            val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-            LaunchedEffect(isLibraryUnlocked, lib) {
-                if (!isLibraryUnlocked || lib == null) {
-                    // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                    // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                    if (lib != null) {
-                        backStack.replaceAll(listOf(Route.Locked))
-                    } else {
-                        backStack.replaceAll(listOf(Route.Welcome))
-                    }
-                    showWelcome.value = true
-                }
-            }
+            LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
             Box(modifier = Modifier.fillMaxSize()) {
                 Scaffold(
@@ -193,26 +184,13 @@ fun PortraitMainNavigation(
         }
         entry<Route.PasswordList> { key ->
             val listMode = key.listMode
-            val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-            val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
             LaunchedEffect(listMode) {
                 tokenViewModel.passwordViewModel.setPasswordListMode(listMode, refreshNow = true)
                 tokenViewModel.passwordViewModel.refreshRecentDeletedCount()
             }
 
-            LaunchedEffect(isLibraryUnlocked, lib) {
-                if (!isLibraryUnlocked || lib == null) {
-                    // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                    // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                    if (lib != null) {
-                        backStack.replaceAll(listOf(Route.Locked))
-                    } else {
-                        backStack.replaceAll(listOf(Route.Welcome))
-                    }
-                    showWelcome.value = true
-                }
-            }
+            LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
             DisposableEffect(listMode) {
                 onDispose {
@@ -243,21 +221,7 @@ fun PortraitMainNavigation(
         }
         entry<Route.PasswordEntryDetail> { key ->
             val entryId = key.entryId
-            val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-            val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-            LaunchedEffect(isLibraryUnlocked, lib) {
-                if (!isLibraryUnlocked || lib == null) {
-                    // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                    // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                    if (lib != null) {
-                        backStack.replaceAll(listOf(Route.Locked))
-                    } else {
-                        backStack.replaceAll(listOf(Route.Welcome))
-                    }
-                    showWelcome.value = true
-                }
-            }
+            LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
             Box(modifier = Modifier.fillMaxSize()) {
                 PasswordEntryDetailScreen(

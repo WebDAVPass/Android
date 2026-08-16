@@ -115,21 +115,7 @@ fun LandscapeMainNavigation(
                     showCloudBindingDialog = showCloudBindingDialog,
                 )
                 entry<Route.Home> {
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-                    LaunchedEffect(isLibraryUnlocked, lib) {
-                        if (!isLibraryUnlocked || lib == null) {
-                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                            if (lib != null) {
-                                backStack.replaceAll(listOf(Route.Locked))
-                            } else {
-                                backStack.replaceAll(listOf(Route.Welcome))
-                            }
-                            showWelcome.value = true
-                        }
-                    }
+                    LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
                     // 横屏主页：不显示四卡片导航，直接以三栏布局接管（列表 + 详情）
                     // 库名与设置入口已移至左侧导航栏顶部，不再占内容区高度
@@ -170,26 +156,13 @@ fun LandscapeMainNavigation(
                 }
                 entry<Route.PasswordList> { key ->
                     val listMode = key.listMode
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
 
                     LaunchedEffect(listMode) {
                         tokenViewModel.passwordViewModel.setPasswordListMode(listMode, refreshNow = true)
                         tokenViewModel.passwordViewModel.refreshRecentDeletedCount()
                     }
 
-                    LaunchedEffect(isLibraryUnlocked, lib) {
-                        if (!isLibraryUnlocked || lib == null) {
-                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                            if (lib != null) {
-                                backStack.replaceAll(listOf(Route.Locked))
-                            } else {
-                                backStack.replaceAll(listOf(Route.Welcome))
-                            }
-                            showWelcome.value = true
-                        }
-                    }
+                    LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
                     DisposableEffect(listMode) {
                         onDispose {
@@ -220,21 +193,7 @@ fun LandscapeMainNavigation(
                 }
                 entry<Route.PasswordEntryDetail> { key ->
                     val entryId = key.entryId
-                    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-                    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-                    LaunchedEffect(isLibraryUnlocked, lib) {
-                        if (!isLibraryUnlocked || lib == null) {
-                            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                            if (lib != null) {
-                                backStack.replaceAll(listOf(Route.Locked))
-                            } else {
-                                backStack.replaceAll(listOf(Route.Welcome))
-                            }
-                            showWelcome.value = true
-                        }
-                    }
+                    LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
                     // 横屏详情：中间列表跟随导航栏分类，右侧显示详情
                     LaunchedEffect(selectedNavIndex) {

@@ -69,6 +69,7 @@ import top.yukonga.miuix.kmp.icon.extended.More
 import top.yukonga.miuix.kmp.icon.extended.Music
 import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Tune
+import xzynine.WebDAVPass.Android.BuildConfig
 import java.net.URLEncoder
 import java.text.Collator
 
@@ -115,6 +116,15 @@ private enum class BrowserSortField {
 }
 
 private const val LOG_TAG = "tag:WebDAV-UI"
+
+/**
+ * 仅 debug 构建输出日志（日志中不得包含服务器地址等敏感信息）。
+ */
+private fun logDebug(message: String) {
+    if (BuildConfig.DEBUG) {
+        Log.d(LOG_TAG, message)
+    }
+}
 
 /**
  * WebDAV 文件浏览弹窗
@@ -268,12 +278,12 @@ fun WebDavFileBrowserDialog(
             withContext(Dispatchers.IO) {
                 val baseUrl = normalizeServerRootUrl(serverUrl)
                 val dirUrl = buildDirectoryUrl(baseUrl, relativeDirectory)
-                Log.d(LOG_TAG, "loadDirectory start, dirUrl=$dirUrl")
+                logDebug("loadDirectory start, dir=$relativeDirectory")
                 val raw = WebDav(dirUrl, Authorization(username, password)).listFiles()
                     .map { WebDavFileEntry.fromWebDavFile(it, normalizeRelativePath(relativeDirectory)) }
                     .filter { it.isDirectory || matchesFilter(it) }
                     .distinctBy { it.relativePath }
-                Log.d(LOG_TAG, "loadDirectory done, size=${raw.size}, dirUrl=$dirUrl")
+                logDebug("loadDirectory done, size=${raw.size}, dir=$relativeDirectory")
                 raw
             }.let { raw ->
                 currentDirectory = normalizeRelativePath(relativeDirectory)
@@ -281,7 +291,7 @@ fun WebDavFileBrowserDialog(
             }
         } catch (e: Exception) {
             val msg = e.message.orEmpty()
-            Log.e(LOG_TAG, "loadDirectory failed, dir=$relativeDirectory, message=$msg", e)
+            Log.e(LOG_TAG, "loadDirectory failed, dir=$relativeDirectory, message=$msg")
             errorText = msg.ifBlank { "未知错误" }
         } finally {
             loading = false
@@ -306,17 +316,24 @@ fun WebDavFileBrowserDialog(
                 if (dirPrefix.isBlank()) fileName else "$dirPrefix/$fileName"
             )
             withContext(Dispatchers.IO) {
-                val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-                    ?: error("无法读取所选文件")
-                val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
-                WebDav(url, Authorization(username, password)).upload(bytes, mime)
+                // 流式上传：Uri 先落临时文件再走 File 上传，避免大文件 readBytes() 全量进内存
+                val tempFile = java.io.File.createTempFile("upload", null, context.cacheDir)
+                try {
+                    context.contentResolver.openInputStream(uri)?.use { input ->
+                        tempFile.outputStream().use { input.copyTo(it) }
+                    } ?: error("无法读取所选文件")
+                    val mime = context.contentResolver.getType(uri) ?: "application/octet-stream"
+                    WebDav(url, Authorization(username, password)).upload(tempFile, mime)
+                } finally {
+                    tempFile.delete()
+                }
             }
-            Log.d(LOG_TAG, "upload done, url=$url")
+            logDebug("upload done, file=$fileName")
             message = "上传成功：$fileName"
             loadDirectory(currentDirectory)
         } catch (e: Exception) {
             val msg = e.message.orEmpty()
-            Log.e(LOG_TAG, "upload failed, message=$msg", e)
+            Log.e(LOG_TAG, "upload failed, message=$msg")
             message = "上传失败：${msg.ifBlank { "未知错误" }}"
         } finally {
             working = false
@@ -332,17 +349,19 @@ fun WebDavFileBrowserDialog(
         try {
             val url = buildFileUrl(serverUrl, entry.relativePath)
             withContext(Dispatchers.IO) {
-                val bytes = WebDav(url, Authorization(username, password)).download()
-                val target = saveToDownloads(context, entry.name, bytes)
-                if (target == null) {
-                    error("保存到下载目录失败")
+                // 流式下载：边读边写 MediaStore，避免大文件 download() 全量进内存
+                WebDav(url, Authorization(username, password)).downloadInputStream().use { input ->
+                    val ok = saveToDownloads(context, entry.name, input)
+                    if (!ok) {
+                        error("保存到下载目录失败")
+                    }
                 }
             }
-            Log.d(LOG_TAG, "download done, url=$url")
+            logDebug("download done, file=${entry.name}")
             message = "已保存到系统下载目录"
         } catch (e: Exception) {
             val msg = e.message.orEmpty()
-            Log.e(LOG_TAG, "download failed, message=$msg", e)
+            Log.e(LOG_TAG, "download failed, message=$msg")
             message = "下载失败：${msg.ifBlank { "未知错误" }}"
         } finally {
             working = false
@@ -360,13 +379,13 @@ fun WebDavFileBrowserDialog(
             withContext(Dispatchers.IO) {
                 WebDav(url, Authorization(username, password)).delete()
             }
-            Log.d(LOG_TAG, "delete done, url=$url")
+            logDebug("delete done, file=${entry.name}")
             message = "已删除：${entry.name}"
             detailEntry = null
             loadDirectory(currentDirectory)
         } catch (e: Exception) {
             val msg = e.message.orEmpty()
-            Log.e(LOG_TAG, "delete failed, message=$msg", e)
+            Log.e(LOG_TAG, "delete failed, message=$msg")
             message = "删除失败：${msg.ifBlank { "未知错误" }}"
         } finally {
             working = false
@@ -462,12 +481,12 @@ fun WebDavFileBrowserDialog(
                                 withContext(Dispatchers.IO) {
                                     WebDav(url, Authorization(username, password)).makeAsDir()
                                 }
-                                Log.d(LOG_TAG, "create folder done, url=$url")
+                                logDebug("create folder done, name=${newFolderName.trim()}")
                                 message = "创建成功：${newFolderName.trim()}"
                                 loadDirectory(currentDirectory)
                             } catch (e: Exception) {
                                 val msg = e.message.orEmpty()
-                                Log.e(LOG_TAG, "create folder failed, message=$msg", e)
+                                Log.e(LOG_TAG, "create folder failed, message=$msg")
                                 message = "创建失败：${msg.ifBlank { "未知错误" }}"
                             } finally {
                                 working = false
@@ -990,11 +1009,11 @@ private fun kindLabel(entry: WebDavFileEntry): String = when (entry.kind) {
 }
 
 /**
- * 保存字节到系统下载目录（Android 10+ MediaStore，无需存储权限）
+ * 流式保存到系统下载目录（Android 10+ MediaStore，无需存储权限）。
  *
- * @return 保存后的 Uri，失败返回 null
+ * @return 保存成功返回 true，失败返回 false
  */
-private fun saveToDownloads(context: Context, fileName: String, bytes: ByteArray): Uri? {
+private fun saveToDownloads(context: Context, fileName: String, input: java.io.InputStream): Boolean {
     val values = ContentValues().apply {
         put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
         put(MediaStore.MediaColumns.MIME_TYPE, "application/octet-stream")
@@ -1003,14 +1022,13 @@ private fun saveToDownloads(context: Context, fileName: String, bytes: ByteArray
     val uri = context.contentResolver.insert(
         MediaStore.Downloads.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY),
         values
-    ) ?: return null
+    ) ?: return false
     val ok = context.contentResolver.openOutputStream(uri)?.use { output ->
-        output.write(bytes)
+        input.copyTo(output)
         true
     } ?: false
     if (!ok) {
         context.contentResolver.delete(uri, null, null)
-        return null
     }
-    return uri
+    return ok
 }

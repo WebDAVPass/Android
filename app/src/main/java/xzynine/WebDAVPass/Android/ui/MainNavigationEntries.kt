@@ -3,6 +3,7 @@ package xzynine.WebDAVPass.Android.ui
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
@@ -35,6 +36,34 @@ import xzynine.WebDAVPass.Android.ui.navigation.push
 import xzynine.WebDAVPass.Android.ui.navigation.replaceAll
 
 /**
+ * 锁定回退守卫：库被锁定或未选择库时，将当前路由重置到锁定页/欢迎页。
+ *
+ * 横竖屏导航的各路由入口统一调用，避免守卫逻辑在 13 个入口逐字重复，策略调整易漏改。
+ */
+@Composable
+fun LibraryLockGuard(
+    backStack: NavBackStack,
+    tokenViewModel: TokenViewModel,
+    showWelcome: MutableState<Boolean>
+) {
+    val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
+    val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
+
+    LaunchedEffect(isLibraryUnlocked, lib) {
+        if (!isLibraryUnlocked || lib == null) {
+            // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
+            // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
+            if (lib != null) {
+                backStack.replaceAll(listOf(Route.Locked))
+            } else {
+                backStack.replaceAll(listOf(Route.Welcome))
+            }
+            showWelcome.value = true
+        }
+    }
+}
+
+/**
  * 横竖屏导航共用的路由入口（安全检测、设置系、令牌列表等），
  * 两套导航（LandscapeMainNavigation / PortraitMainNavigation）均在其 NavDisplay 的 entry DSL 中调用。
  *
@@ -49,21 +78,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
     showCloudBindingDialog: MutableState<Boolean>,
 ) {
     entry<Route.SecurityCheck> {
-        val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-        val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-        LaunchedEffect(isLibraryUnlocked, lib) {
-            if (!isLibraryUnlocked || lib == null) {
-                // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                if (lib != null) {
-                    backStack.replaceAll(listOf(Route.Locked))
-                } else {
-                    backStack.replaceAll(listOf(Route.Welcome))
-                }
-                showWelcome.value = true
-            }
-        }
+        LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
         Box(modifier = Modifier.fillMaxSize()) {
             SecurityCheckScreen(
@@ -79,21 +94,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
         }
     }
     entry<Route.Settings> {
-        val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-        val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-        LaunchedEffect(isLibraryUnlocked, lib) {
-            if (!isLibraryUnlocked || lib == null) {
-                // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                if (lib != null) {
-                    backStack.replaceAll(listOf(Route.Locked))
-                } else {
-                    backStack.replaceAll(listOf(Route.Welcome))
-                }
-                showWelcome.value = true
-            }
-        }
+        LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
         val context = LocalContext.current
         Box(modifier = Modifier.fillMaxSize()) {
@@ -122,21 +123,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
         }
     }
     entry<Route.GeneralSettings> {
-        val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-        val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-        LaunchedEffect(isLibraryUnlocked, lib) {
-            if (!isLibraryUnlocked || lib == null) {
-                // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                if (lib != null) {
-                    backStack.replaceAll(listOf(Route.Locked))
-                } else {
-                    backStack.replaceAll(listOf(Route.Welcome))
-                }
-                showWelcome.value = true
-            }
-        }
+        LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
         Box(modifier = Modifier.fillMaxSize()) {
             FillerSettingsContent(
@@ -149,21 +136,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
         }
     }
     entry<Route.SecuritySettings> {
-        val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-        val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-        LaunchedEffect(isLibraryUnlocked, lib) {
-            if (!isLibraryUnlocked || lib == null) {
-                // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                if (lib != null) {
-                    backStack.replaceAll(listOf(Route.Locked))
-                } else {
-                    backStack.replaceAll(listOf(Route.Welcome))
-                }
-                showWelcome.value = true
-            }
-        }
+        LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
         Box(modifier = Modifier.fillMaxSize()) {
             SecuritySettingsContent(
@@ -176,21 +149,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
         }
     }
     entry<Route.BackupSettings> {
-        val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-        val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-        LaunchedEffect(isLibraryUnlocked, lib) {
-            if (!isLibraryUnlocked || lib == null) {
-                // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                if (lib != null) {
-                    backStack.replaceAll(listOf(Route.Locked))
-                } else {
-                    backStack.replaceAll(listOf(Route.Welcome))
-                }
-                showWelcome.value = true
-            }
-        }
+        LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
         val context = LocalContext.current
         Box(modifier = Modifier.fillMaxSize()) {
@@ -211,21 +170,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
         }
     }
     entry<Route.DatabaseSettings> {
-        val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-        val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-        LaunchedEffect(isLibraryUnlocked, lib) {
-            if (!isLibraryUnlocked || lib == null) {
-                // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                if (lib != null) {
-                    backStack.replaceAll(listOf(Route.Locked))
-                } else {
-                    backStack.replaceAll(listOf(Route.Welcome))
-                }
-                showWelcome.value = true
-            }
-        }
+        LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
         Box(modifier = Modifier.fillMaxSize()) {
             DatabaseSettingsScreen(
@@ -248,21 +193,7 @@ inline fun NavEntryBuilder.addCommonMainEntries(
         }
     }
     entry<Route.TokenList> {
-        val isLibraryUnlocked by tokenViewModel.libraryViewModel.isLibraryUnlocked.collectAsState()
-        val lib by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
-
-        LaunchedEffect(isLibraryUnlocked, lib) {
-            if (!isLibraryUnlocked || lib == null) {
-                // 锁定回退：存在已记录的库 → 锁定页；否则回欢迎页
-                // showWelcome 仅用于扫描弹窗显隐，锁定页与欢迎页同样置 true
-                if (lib != null) {
-                    backStack.replaceAll(listOf(Route.Locked))
-                } else {
-                    backStack.replaceAll(listOf(Route.Welcome))
-                }
-                showWelcome.value = true
-            }
-        }
+        LibraryLockGuard(backStack = backStack, tokenViewModel = tokenViewModel, showWelcome = showWelcome)
 
         Box(modifier = Modifier.fillMaxSize()) {
             Scaffold(

@@ -240,10 +240,10 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     private fun startUnlockDataLoading() {
         viewModelScope.launch {
             var loaded = false
-            repeat(UNLOCK_LOAD_RETRY_COUNT) { attemptIndex ->
+            for (attemptIndex in 0 until UNLOCK_LOAD_RETRY_COUNT) {
                 loaded = loadTokensInternal()
                 if (loaded) {
-                    return@repeat
+                    break
                 }
                 if (attemptIndex < UNLOCK_LOAD_RETRY_COUNT - 1) {
                     delay(UNLOCK_LOAD_RETRY_DELAY_MS.milliseconds)
@@ -310,28 +310,36 @@ class TokenViewModel(private val context: Context) : ViewModel() {
     }
 
     /**
-     * 将 Uri 指向的 kdbx 文件登记为本地库
+     * 将 Uri 指向的 kdbx 文件登记为本地库。
+     *
+     * suspend：URI 权限持久化涉及 Binder 调用，放 IO 线程执行，避免阻塞主线程。
      */
-    fun persistKdbxFromUri(uri: Uri): String? {
-        return runCatching {
-            takePersistableUriPermission(uri)
-            uri.toString()
-        }.getOrNull()
+    suspend fun persistKdbxFromUri(uri: Uri): String? {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                takePersistableUriPermission(uri)
+                uri.toString()
+            }.getOrNull()
+        }
     }
 
     /**
      * 通过系统 CreateDocument 创建本地 kdbx 文件并就地使用。
+     *
+     * suspend：KDBX 加密序列化与写盘放 IO 线程执行，避免阻塞主线程触发 ANR。
      */
-    fun createLocalKdbx(uri: Uri, masterPassword: String, keyFileData: ByteArray? = null): String? {
-        return runCatching {
-            val kdbxBytes = kdbxTokenRepository.createDatabaseBytes(masterPassword, keyFileData)
-            context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
-                out.write(kdbxBytes)
-            } ?: return null
+    suspend fun createLocalKdbx(uri: Uri, masterPassword: String, keyFileData: ByteArray? = null): String? {
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val kdbxBytes = kdbxTokenRepository.createDatabaseBytes(masterPassword, keyFileData)
+                context.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                    out.write(kdbxBytes)
+                } ?: return@runCatching null
 
-            takePersistableUriPermission(uri)
-            uri.toString()
-        }.getOrNull()
+                takePersistableUriPermission(uri)
+                uri.toString()
+            }.getOrNull()
+        }
     }
 
     fun createEmptyKdbxBytes(masterPassword: String, keyFileData: ByteArray? = null): ByteArray {

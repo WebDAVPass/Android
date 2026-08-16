@@ -39,6 +39,7 @@ import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
@@ -52,6 +53,7 @@ import xzynine.WebDAVPass.Android.ui.component.TokenCard
 import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 import xzynine.WebDAVPass.Android.util.QrCodeUtil
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.TokenCode
 
@@ -649,13 +651,18 @@ fun PasswordEntryDetailContent(
                                     sizeText = formatFileSize(att.size),
                                     onClick = {
                                         coroutineScope.launch {
-                                            val file = java.io.File(context.cacheDir, "attachments").apply { mkdirs() }
-                                                .resolve(att.name.replace("/", "_"))
-                                            val ok = runCatching {
-                                                file.outputStream().use { out ->
-                                                    tokenViewModel.copyEntryAttachmentTo(entryId, att.name, out)
-                                                }
-                                            }.getOrElse { false }
+                                            val dir = java.io.File(context.cacheDir, "attachments").apply { mkdirs() }
+                                            val file = dir.resolve(att.name.replace("/", "_"))
+                                            // 解密写入放 IO 线程；先删同名旧文件，避免附件更新后残留旧明文
+                                            val ok = withContext(Dispatchers.IO) {
+                                                runCatching {
+                                                    file.delete()
+                                                    file.outputStream().use { out ->
+                                                        tokenViewModel.copyEntryAttachmentTo(entryId, att.name, out)
+                                                    }
+                                                    true
+                                                }.getOrElse { false }
+                                            }
                                             if (ok) {
                                                 openAttachment(context, att.name, file)
                                             } else {

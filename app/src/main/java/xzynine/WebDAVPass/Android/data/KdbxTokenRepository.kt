@@ -744,9 +744,10 @@ class KdbxTokenRepository(context: Context) {
                 if (url1.isNotEmpty() && url2.isNotEmpty() && (url1.contains(url2) || url2.contains(url1))) {
                     hits++
                 }
-                // 账号与密码都不同（两两精确比较）则不算重复，即使标题/URL 匹配
+                // 账号与密码都不同（两两精确比较）则不算重复，即使标题/URL 匹配；
+                // 账号比较需双方非空，避免两账号皆空时误判为同一账号而合并
                 val samePassword = passwords[i] == passwords[j]
-                if (hits >= 2 && (account1 == account2 || samePassword)) {
+                if (hits >= 2 && ((account1.isNotEmpty() && account1 == account2) || samePassword)) {
                     union(i, j)
                 }
             }
@@ -1840,10 +1841,11 @@ class KdbxTokenRepository(context: Context) {
             )
         }
 
-        // 排序键缓存：避免比较器内每次比较都重复 lowercase()，O(n log n) → 每项仅计算一次
-        val sortKeyCache = HashMap<PasswordEntry, Pair<String, String>>()
+        // 排序键缓存：避免比较器内每次比较都重复 lowercase()，O(n log n) → 每项仅计算一次。
+        // 以 entryId 为键避免用 PasswordEntry 作 HashMap 键（深哈希抵消缓存收益）
+        val sortKeyCache = HashMap<Long, Pair<String, String>>()
         val keysOf: (PasswordEntry) -> Pair<String, String> = { entry ->
-            sortKeyCache.getOrPut(entry) { entry.title.lowercase() to entry.account.lowercase() }
+            sortKeyCache.getOrPut(entry.entryId) { entry.title.lowercase() to entry.account.lowercase() }
         }
 
         return result.sortedWith(

@@ -487,7 +487,8 @@ fun DatabaseSettingsScreen(
                     Preference(
                         type = PreferenceType.Arrow,
                         title = "合并数据库",
-                        summary = "将其他 .kdbx 文件的内容合并进当前库",
+                        summary = if (mergeLoading) "正在合并..." else "将其他 .kdbx 文件的内容合并进当前库",
+                        enabled = !mergeLoading,
                         startAction = {
                             Icon(
                                 modifier = Modifier.padding(end = 16.dp),
@@ -496,6 +497,7 @@ fun DatabaseSettingsScreen(
                             )
                         },
                         onClick = {
+                            if (mergeLoading) return@Preference
                             mergeLauncher.launch(arrayOf("application/octet-stream", "*/*"))
                         },
                     )
@@ -510,15 +512,20 @@ fun DatabaseSettingsScreen(
                         onDismiss = { if (!mergeLoading) pendingMergeUri = null },
                         onConfirm = { mergePassword ->
                             if (mergeLoading) return@PasswordInputDialog
-                            pendingMergeUri = null
+                            // 合并期间保留对话框（summary 显示进行中、禁止关闭与重复提交），
+                            // 完成后才清理 URI 关闭对话框，避免并发合并
                             coroutineScope.launch {
                                 mergeLoading = true
-                                val ok = viewModel.mergeLocalDatabase(mergeUri, mergePassword)
-                                mergeLoading = false
-                                if (ok) {
-                                    ToastUtils.showShortToast(context, "合并完成")
-                                } else {
-                                    ToastUtils.showShortToast(context, "合并失败：密码错误或文件无效")
+                                try {
+                                    val ok = viewModel.mergeLocalDatabase(mergeUri, mergePassword)
+                                    if (ok) {
+                                        ToastUtils.showShortToast(context, "合并完成")
+                                    } else {
+                                        ToastUtils.showShortToast(context, "合并失败：密码错误或文件无效")
+                                    }
+                                } finally {
+                                    mergeLoading = false
+                                    pendingMergeUri = null
                                 }
                             }
                         }

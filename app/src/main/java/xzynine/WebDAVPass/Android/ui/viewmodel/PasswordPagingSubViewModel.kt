@@ -1,4 +1,4 @@
-package xzynine.WebDAVPass.Android.ui.ViewModel
+package xzynine.WebDAVPass.Android.ui.viewmodel
 
 import android.icu.text.Transliterator
 import kotlinx.coroutines.CoroutineDispatcher
@@ -15,6 +15,7 @@ import xzynine.WebDAVPass.Android.data.PasswordEntry
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 
 internal data class PasswordDataAccess(
     val isLibraryUnlocked: Boolean,
@@ -377,8 +378,9 @@ internal class PasswordPagingSubViewModel(
         ascending: Boolean = true,
         hideExpired: Boolean = false
     ): List<IndexedSection> {
-        // 预计算排序键缓存：lowercase() 若在比较器内每次比较都重算，全量排序退化为 O(n log n) 字符串小写
-        val sortKeyCache = HashMap<PasswordEntry, String>()
+        // 预计算排序键缓存：lowercase() 若在比较器内每次比较都重算，全量排序退化为 O(n log n) 字符串小写。
+        // 以 entryId 为键避免用 PasswordEntry 作 HashMap 键（深哈希抵消缓存收益）
+        val sortKeyCache = HashMap<Long, String>()
         val values = source
             .asSequence()
             .filter { item ->
@@ -433,12 +435,12 @@ internal class PasswordPagingSubViewModel(
     private fun passwordEntryComparator(
         sortMode: PasswordSortMode,
         ascending: Boolean,
-        sortKeyCache: HashMap<PasswordEntry, String>
+        sortKeyCache: HashMap<Long, String>
     ): Comparator<PasswordEntry> {
         val byKey: Comparator<PasswordEntry> = when (sortMode) {
-            PasswordSortMode.DEFAULT -> compareBy { sortKeyCache.getOrPut(it) { it.title.ifBlank { it.account }.lowercase() } }
-            PasswordSortMode.TITLE -> compareBy { sortKeyCache.getOrPut(it) { it.title.lowercase() } }
-            PasswordSortMode.ACCOUNT -> compareBy { sortKeyCache.getOrPut(it) { it.account.lowercase() } }
+            PasswordSortMode.DEFAULT -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.title.ifBlank { it.account }.lowercase() } }
+            PasswordSortMode.TITLE -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.title.lowercase() } }
+            PasswordSortMode.ACCOUNT -> compareBy { sortKeyCache.getOrPut(it.entryId) { it.account.lowercase() } }
             PasswordSortMode.MODIFIED_TIME -> compareBy { it.modifiedTime }
             PasswordSortMode.CREATED_TIME -> compareBy { it.creationTime }
         }

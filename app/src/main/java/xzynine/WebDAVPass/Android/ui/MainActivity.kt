@@ -26,6 +26,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -164,9 +165,17 @@ fun MainScreen() {
     val showCloudBindingDialog = remember { mutableStateOf(false) }
     val showWelcomeState = rememberSaveable { mutableStateOf(true) }
     var showWelcome by showWelcomeState
-    // 首次启动引导：未完成时先展示引导页，完成后露出初始路由（欢迎页/锁定页）
-    val onboardingCompleted = remember { isOnboardingCompleted(context) }
-    var showOnboarding by remember { mutableStateOf(!onboardingCompleted) }
+    // 首次启动引导：异步读取完成标记（内部 IO），读取完成前不渲染任何路由，
+    // 避免首帧 runBlocking 阻塞主线程，也避免引导/主页误闪
+    val onboardingCompleted = produceState<Boolean?>(initialValue = null) {
+        value = isOnboardingCompleted(context)
+    }
+    var showOnboarding by remember { mutableStateOf(false) }
+    LaunchedEffect(onboardingCompleted.value) {
+        if (onboardingCompleted.value == false) {
+            showOnboarding = true
+        }
+    }
     val currentLibrary by tokenViewModel.libraryViewModel.currentLibrary.collectAsState()
     val showScanBottomSheet = remember { mutableStateOf(false) }
 
@@ -176,9 +185,9 @@ fun MainScreen() {
     val isWideScreen = configuration.screenWidthDp >= 600
     val isLandscapeWideScreen = isLandscape && isWideScreen
 
-    // 横屏模式下的导航状态
-    var selectedNavIndex by remember { mutableIntStateOf(0) }
-    var selectedEntryId by remember { mutableStateOf<Long?>(null) }
+    // 横屏模式下的导航状态（rememberSaveable：配置变更/进程重建后与 backStack 保持一致）
+    var selectedNavIndex by rememberSaveable { mutableIntStateOf(0) }
+    var selectedEntryId by rememberSaveable { mutableStateOf<Long?>(null) }
 
     // 初始路由：存在已记录的库文件 → 锁定页（解锁目标为上次库）；否则欢迎页。
     // 用同步快照一次性决定，避免首帧 currentLibrary 流尚未预热导致初始路由闪烁或旋转后丢失导航栈。
@@ -265,7 +274,9 @@ fun MainScreen() {
                     }
                 }
         ) {
-            if (showOnboarding) {
+            if (onboardingCompleted.value == null) {
+                // 引导状态读取中：空白占位，不渲染路由
+            } else if (showOnboarding) {
                 OnboardingScreen(
                     onFinish = {
                         showOnboarding = false

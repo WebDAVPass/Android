@@ -144,26 +144,29 @@ fun AboutScreen(
                         }
                         coroutineScope.launch {
                             loadingChangelog = true
-                            val result = CheckUpdateManager(context).checkUpdate(
-                                owner = "WebDAVPass",
-                                repo = "Android",
-                                currentVersion = BuildConfig.VERSION_NAME,
-                                rule = VersionRule.LATEST
-                            )
-                            loadingChangelog = false
-                            val releases = when (result) {
-                                is UpdateResult.HasUpdate -> result.allReleases
-                                is UpdateResult.NoUpdate -> result.allReleases
-                                is UpdateResult.Error -> null
-                            }
-                            if (releases == null) {
-                                if (result is UpdateResult.Error) {
-                                    ToastUtils.showShortToast(context, "加载更新日志失败：${result.message}")
+                            try {
+                                val result = CheckUpdateManager(context).checkUpdate(
+                                    owner = "WebDAVPass",
+                                    repo = "Android",
+                                    currentVersion = BuildConfig.VERSION_NAME,
+                                    rule = VersionRule.LATEST
+                                )
+                                val releases = when (result) {
+                                    is UpdateResult.HasUpdate -> result.allReleases
+                                    is UpdateResult.NoUpdate -> result.allReleases
+                                    is UpdateResult.Error -> null
                                 }
-                                return@launch
+                                if (releases == null) {
+                                    if (result is UpdateResult.Error) {
+                                        ToastUtils.showShortToast(context, "加载更新日志失败：${result.message}")
+                                    }
+                                    return@launch
+                                }
+                                changelogReleases = releases
+                                showChangelog = true
+                            } finally {
+                                loadingChangelog = false
                             }
-                            changelogReleases = releases
-                            showChangelog = true
                         }
                     },
                     modifier = Modifier.fillMaxWidth()
@@ -190,13 +193,23 @@ fun AboutScreen(
                         if (checkingUpdate) return@Preference
                         coroutineScope.launch {
                             checkingUpdate = true
-                            val result = CheckUpdateManager(context).checkUpdate(
-                                owner = "WebDAVPass",
-                                repo = "Android",
-                                currentVersion = BuildConfig.VERSION_NAME
-                            )
-                            checkingUpdate = false
-                            updateResult = result
+                            try {
+                                val result = try {
+                                    CheckUpdateManager(context).checkUpdate(
+                                        owner = "WebDAVPass",
+                                        repo = "Android",
+                                        currentVersion = BuildConfig.VERSION_NAME
+                                    )
+                                } catch (e: Exception) {
+                                    ToastUtils.showShortToast(context, "检查更新失败：${e.message}")
+                                    null
+                                }
+                                if (result != null) {
+                                    updateResult = result
+                                }
+                            } finally {
+                                checkingUpdate = false
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxWidth()

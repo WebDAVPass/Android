@@ -38,7 +38,7 @@ import androidx.compose.ui.unit.sp
 import androidx.core.graphics.createBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -57,10 +57,11 @@ internal const val SETTING_KEY_ONBOARDING_COMPLETED = "onboarding_completed"
 /**
  * 判断首次引导是否已完成。
  *
- * 同步读取 app_settings（数据量小，毫秒级），供启动时一次性判断是否展示引导页。
+ * 异步读取 app_settings（数据量小，毫秒级），供启动时一次性判断是否展示引导页；
+ * 由调用方在协程/IO 上下文中调用，避免阻塞主线程。
  */
-internal fun isOnboardingCompleted(context: Context): Boolean {
-    return runBlocking(Dispatchers.IO) {
+internal suspend fun isOnboardingCompleted(context: Context): Boolean {
+    return withContext(Dispatchers.IO) {
         runCatching {
             AppDatabaseHolder.getInstance(context)
                 .appSettingsDao()
@@ -165,15 +166,18 @@ fun OnboardingScreen(
         Button(
             onClick = {
                 if (isLastPage) {
-                    // 标记引导完成（写入失败不阻塞进入应用）
-                    coroutineScope.launch(Dispatchers.IO) {
-                        runCatching {
-                            AppDatabaseHolder.getInstance(context)
-                                .appSettingsDao()
-                                .put(AppSetting(SETTING_KEY_ONBOARDING_COMPLETED, "true"))
+                    // 标记引导完成：先完成写入再回调 onFinish()，
+                    // 避免协程挂起期间 composition 结束导致写入被取消、引导重复出现
+                    coroutineScope.launch {
+                        withContext(Dispatchers.IO) {
+                            runCatching {
+                                AppDatabaseHolder.getInstance(context)
+                                    .appSettingsDao()
+                                    .put(AppSetting(SETTING_KEY_ONBOARDING_COMPLETED, "true"))
+                            }
                         }
+                        onFinish()
                     }
-                    onFinish()
                 } else {
                     coroutineScope.launch {
                         pagerState.animateScrollToPage(pagerState.currentPage + 1)

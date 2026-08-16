@@ -43,9 +43,9 @@ import xzynine.WebDAVPass.Android.ui.Dialog.DuplicateScanDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryMergeDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordSortMode
-import xzynine.WebDAVPass.Android.ui.ViewModel.toPasswordIndexKey
+import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordFolderIndexLabel
+import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
+import xzynine.WebDAVPass.Android.ui.viewmodel.toPasswordIndexKey
 import androidx.compose.ui.platform.LocalContext
 import xzynine.WebDAVPass.Android.ui.component.buildBrandIconBytes
 import xzylib.base.util.ToastUtils

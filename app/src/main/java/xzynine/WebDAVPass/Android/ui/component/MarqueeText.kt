@@ -20,9 +20,9 @@ import top.yukonga.miuix.kmp.basic.Text
 @Composable
 fun MarqueeText(
     text: String,
+    fontSize: TextUnit,
     modifier: Modifier = Modifier,
     color: Color = Color.Unspecified,
-    fontSize: TextUnit,
     fontWeight: FontWeight? = null
 ) {
     Text(

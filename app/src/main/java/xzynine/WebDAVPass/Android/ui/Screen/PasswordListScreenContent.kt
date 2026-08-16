@@ -46,8 +46,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Flip
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordFolderIndexLabel
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordSortMode
+import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordFolderIndexLabel
+import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 import android.content.Context

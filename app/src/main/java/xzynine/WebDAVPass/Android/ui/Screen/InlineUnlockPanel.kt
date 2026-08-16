@@ -513,6 +513,8 @@ private fun InlineUnlockPanelContent(
 
     // 持久化的密钥文件 URI 自动加载，避免用户每次手动选择。
     // 加载完成前禁止解锁提交，避免密钥文件保护的库因凭据缺失被误判为密码错误。
+    // 加载完成后（顺序保证）若自动解锁可用且 48 小时窗口未过期，主动唤起识别接口（PIN/生物识别）；
+    // 密钥文件加载失败（data 为 null）时不自动唤起，避免凭据缺失的解锁误判。
     LaunchedEffect(library.id) {
         val persistedKeyFileUri = library.keyFileUri
         if (!persistedKeyFileUri.isNullOrBlank()) {
@@ -525,6 +527,14 @@ private fun InlineUnlockPanelContent(
             inlineKeyFileLoading = false
             // 加载失败时不提示，用户仍可手动选择密钥文件
         }
+        if (tokenViewModel.autoUnlockViewModel.isAutoUnlockAvailable(library) &&
+            !tokenViewModel.autoUnlockViewModel.isManualUnlockWindowExpired(library)
+        ) {
+            if (!persistedKeyFileUri.isNullOrBlank() && inlineKeyFileData == null) {
+                return@LaunchedEffect
+            }
+            launchCredentialUnlockFromInline(library)
+        }
     }
 
     // 面板出现时聚焦主密码输入框。
@@ -536,16 +546,6 @@ private fun InlineUnlockPanelContent(
         if (!shouldAutoPrompt) {
             inlineUnlockFocusRequester.requestFocus()
             keyboardController?.show()
-        }
-    }
-
-    // 自动解锁可用且 48 小时窗口未过期时，进入面板主动唤起识别接口（PIN/生物识别）而非键盘。
-    // 48 小时过期后（含 64 小时硬性截止）不再自动唤起，回到键盘输入。
-    LaunchedEffect(library.id) {
-        if (tokenViewModel.autoUnlockViewModel.isAutoUnlockAvailable(library) &&
-            !tokenViewModel.autoUnlockViewModel.isManualUnlockWindowExpired(library)
-        ) {
-            launchCredentialUnlockFromInline(library)
         }
     }
 
