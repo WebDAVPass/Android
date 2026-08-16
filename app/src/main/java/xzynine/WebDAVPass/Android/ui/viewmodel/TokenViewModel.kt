@@ -561,7 +561,7 @@ class TokenViewModel(private val context: Context) : ViewModel() {
      */
     suspend fun copyEntryAttachmentTo(entryId: Long, name: String, output: OutputStream): Boolean {
         val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
-        val masterPassword = libraryViewModel.getMasterPasswordInternal() ?: return false
+        val masterPassword = libraryViewModel.getMasterPasswordInternal()
         return withContext(Dispatchers.IO) {
             kdbxTokenRepository.copyEntryAttachmentTo(localPath, masterPassword, entryId, name, output)
         }

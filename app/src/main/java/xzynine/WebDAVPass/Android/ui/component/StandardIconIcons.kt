@@ -1,6 +1,7 @@
 package xzynine.WebDAVPass.Android.ui.component
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.BatteryAlert
@@ -14,7 +15,6 @@ import androidx.compose.material.icons.rounded.FolderZip
 import androidx.compose.material.icons.rounded.HourglassDisabled
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.LocalPostOffice
-import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.Public
@@ -128,7 +128,7 @@ internal val standardIconVectorMap: Map<Int, ImageVector> = mapOf(
     53 to MiuixIcons.Ok, // Checked
     54 to MiuixIcons.Edit, // Pen
     55 to MiuixIcons.Image, // Thumbnail
-    56 to Icons.Rounded.MenuBook, // Book
+    56 to Icons.AutoMirrored.Rounded.MenuBook, // Book
     57 to MiuixIcons.ListView, // List
     58 to Icons.Rounded.VpnKey, // UserKey
     59 to Icons.Rounded.Construction, // Tool

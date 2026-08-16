@@ -561,7 +561,6 @@ private fun processImageProxy(
                         TokenQRCodeDecoder.ParseResult.ErrorType.CHECKSUM_ERROR -> "二维码校验和错误"
                         TokenQRCodeDecoder.ParseResult.ErrorType.FORMAT_ERROR -> "二维码格式错误"
                         TokenQRCodeDecoder.ParseResult.ErrorType.UNKNOWN_ERROR -> "二维码解析失败"
-                        else -> "二维码解析失败"
                     }
                     // 添加更多调试信息，包括图像信息
                     Logger.e("QRCodeScanner", "$errorMessage: 图像尺寸=${image.width}x${image.height}，图像格式=${image.format}")

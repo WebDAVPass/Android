@@ -52,9 +52,12 @@ fun SetupSystemBars() {
         controller.isAppearanceLightStatusBars = !isDarkTheme
         controller.isAppearanceLightNavigationBars = !isDarkTheme
         
-        // 设置状态栏和导航栏颜色
-        win.statusBarColor = barColor
-        win.navigationBarColor = barColor
+        // 设置状态栏和导航栏颜色（Android 15+ 强制 edge-to-edge，系统栏颜色由系统处理）
+        // API 35 以下无动态设置系统栏颜色的替代 API，只能保留弃用 setter
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+            win.statusBarColor = barColor
+            win.navigationBarColor = barColor
+        }
         
         // Android 10+ 关闭导航栏对比度强制
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
