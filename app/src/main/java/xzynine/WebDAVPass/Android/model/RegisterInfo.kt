@@ -3,6 +3,7 @@ package xzynine.WebDAVPass.Android.model
 import android.content.res.Resources
 import android.os.Parcel
 import android.os.Parcelable
+import com.kunzisoft.keepass.utils.readParcelableCompat
 
 data class RegisterInfo(
     val searchInfo: SearchInfo,
@@ -10,7 +11,7 @@ data class RegisterInfo(
     val password: String? = null,
 ) : Parcelable {
     constructor(parcel: Parcel) : this(
-        searchInfo = parcel.readParcelable(SearchInfo::class.java.classLoader) ?: SearchInfo(),
+        searchInfo = parcel.readParcelableCompat<SearchInfo>() ?: SearchInfo(),
         username = parcel.readString(),
         password = parcel.readString(),
     )

@@ -55,6 +55,7 @@ class BiometricKeyStoreManager(
             )
         } else {
             // API 23-29: set validity duration to allow KeyguardManager fallback
+            // 该 API 在 API 30 才弃用，旧版本无替代方案
             builder.setUserAuthenticationValidityDurationSeconds(10)
         }
 
@@ -132,6 +133,7 @@ class BiometricKeyStoreManager(
         if (!keyguardManager.isDeviceSecure) {
             return null
         }
+        // 仅 API 29 使用（外层已限定 Build.VERSION.SDK_INT < R），API 30 起弃用且无替代
         return keyguardManager.createConfirmDeviceCredentialIntent(title, subtitle)
     }
 

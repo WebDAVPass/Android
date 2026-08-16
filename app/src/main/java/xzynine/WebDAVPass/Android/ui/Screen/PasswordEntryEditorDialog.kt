@@ -399,7 +399,7 @@ fun MutableList<EditableFieldDraft>.applyTemplateFields(template: Template) {
                 add(
                     EditableFieldDraft(
                         name = decoratedName,
-                        value = attribute.options.default ?: "",
+                        value = attribute.options.default,
                         isProtected = attribute.protected,
                         valueType = mapTemplateAttributeType(attribute.type, attribute.protected),
                     ),

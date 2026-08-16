@@ -1,6 +1,7 @@
 package xzynine.WebDAVPass.Android.ui.component
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.AttachMoney
 import androidx.compose.material.icons.rounded.Badge
 import androidx.compose.material.icons.rounded.BatteryAlert
@@ -14,7 +15,6 @@ import androidx.compose.material.icons.rounded.FolderZip
 import androidx.compose.material.icons.rounded.HourglassDisabled
 import androidx.compose.material.icons.rounded.Inventory2
 import androidx.compose.material.icons.rounded.LocalPostOffice
-import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.PhotoCamera
 import androidx.compose.material.icons.rounded.Print
 import androidx.compose.material.icons.rounded.Public
