@@ -294,11 +294,10 @@ fun DatabaseSettingsScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                         if (newPassword.isNotEmpty()) {
-                            val bits = newPasswordStrengthBits
                             Text(
-                                text = "强度：${strengthLabel(bits)}（${bits.toInt()} bits）",
+                                text = "强度：${strengthLabel(newPasswordStrengthBits)}（${newPasswordStrengthBits.toInt()} bits）",
                                 fontSize = 12.sp,
-                                color = if (bits < PasswordStrength.WEAK_PASSWORD_THRESHOLD_BITS)
+                                color = if (newPasswordStrengthBits < PasswordStrength.WEAK_PASSWORD_THRESHOLD_BITS)
                                     MiuixTheme.colorScheme.error
                                 else MiuixTheme.colorScheme.primary
                             )
@@ -334,7 +333,7 @@ fun DatabaseSettingsScreen(
                                     color = MiuixTheme.colorScheme.onSurfaceSecondary
                                 )
                                 Text(
-                                    text = if (keyFileName.isBlank()) "点击选择密钥文件，不选则沿用当前" else keyFileName,
+                                    text = keyFileName.ifBlank { "点击选择密钥文件，不选则沿用当前" },
                                     fontSize = 14.sp,
                                     color = if (keyFileName.isBlank()) MiuixTheme.colorScheme.primary
                                     else MiuixTheme.colorScheme.onSurface

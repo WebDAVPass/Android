@@ -567,9 +567,13 @@ class KdbxTokenRepository(context: Context) {
             }
 
             val masterInfo = master.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
-            val sourceInfos = sources.map { source ->
-                toStableId(source) to source.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
-            }.toMap()
+            val sourceInfos = sources.associate { source ->
+                toStableId(source) to source.getEntryInfo(
+                    db,
+                    raw = true,
+                    removeTemplateConfiguration = false
+                )
+            }
 
             // 1. 主条目当前版本先入历史，防止合并覆盖后丢失
             master.addEntryToHistory(Entry(master, copyHistory = false))
@@ -1128,11 +1132,7 @@ class KdbxTokenRepository(context: Context) {
 
             // 优先复用已解锁的缓存实例，避免重复解密
             val cachedPair = DatabaseManager.tryGet(localPath)
-            val (database, cacheDirectory) = if (cachedPair != null) {
-                cachedPair
-            } else {
-                openDatabase(location, masterPassword, currentKeyFile)
-            }
+            val (database, cacheDirectory) = cachedPair ?: openDatabase(location, masterPassword, currentKeyFile)
             try {
                 kdfEngineName?.let { name ->
                     val engine = when (name) {
@@ -1185,10 +1185,10 @@ class KdbxTokenRepository(context: Context) {
     ): DatabaseSettingsInfo {
         return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
             val kdfName = db.kdfEngine?.let {
-                when {
-                    it.uuid == KdfFactory.aesKdf.uuid -> "AES"
-                    it.uuid == KdfFactory.argon2dKdf.uuid -> "Argon2d"
-                    it.uuid == KdfFactory.argon2idKdf.uuid -> "Argon2id"
+                when (it.uuid) {
+                    KdfFactory.aesKdf.uuid -> "AES"
+                    KdfFactory.argon2dKdf.uuid -> "Argon2d"
+                    KdfFactory.argon2idKdf.uuid -> "Argon2id"
                     else -> it.toString()
                 }
             } ?: "未知"
@@ -1218,11 +1218,7 @@ class KdbxTokenRepository(context: Context) {
             val location = resolveLocation(localPath)
             // 优先复用已解锁的缓存实例，避免重复解密
             val cachedPair = DatabaseManager.tryGet(localPath)
-            val (database, cacheDirectory) = if (cachedPair != null) {
-                cachedPair
-            } else {
-                openDatabase(location, masterPassword)
-            }
+            val (database, cacheDirectory) = cachedPair ?: openDatabase(location, masterPassword)
             val cacheFile = File.createTempFile("kdbx-export-", ".tmp", cacheDirectory)
             try {
                 database.saveData(
@@ -1313,7 +1309,7 @@ class KdbxTokenRepository(context: Context) {
                 val password = entry.password
                 val strengthBits = PasswordStrength.estimateBits(password)
 
-                if (expiryMillis > 0L && expiryMillis < nowMillis) {
+                if (expiryMillis in 1..<nowMillis) {
                     expired.add(
                         SecurityIssueEntry(
                             entryId = entryId,
@@ -1514,7 +1510,7 @@ class KdbxTokenRepository(context: Context) {
                 return@withDatabase false
             }
 
-            otpElement.counter = otpElement.counter + 1L
+            otpElement.counter += 1L
             // 按当前条目约定的字段顺序组装 OTP URI：title=issuer、username=label（旧版反存数据按反向传入）
             val oldConvention = isOldTokenConvention(entry, otpElement)
             val otpField = OtpEntryFields.buildOtpField(
@@ -2296,7 +2292,7 @@ class KdbxTokenRepository(context: Context) {
     private fun queryUriSize(uri: Uri): Long? {
         val cursor = appContext.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)
             ?: return null
-        return try {
+        return cursor.use { cursor ->
             if (!cursor.moveToFirst()) {
                 return null
             }
@@ -2306,8 +2302,6 @@ class KdbxTokenRepository(context: Context) {
             } else {
                 cursor.getLong(sizeIndex)
             }
-        } finally {
-            cursor.close()
         }
     }
 

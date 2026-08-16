@@ -60,6 +60,7 @@ import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.resolveDisplayName
 import java.io.File
+import kotlin.time.Duration.Companion.milliseconds
 
 /** 密钥文件大小上限（1 MiB），与 CreateMasterPasswordDialog 保持一致。 */
 private const val MAX_KEY_FILE_BYTES = 1024 * 1024
@@ -163,10 +164,9 @@ private fun InlineUnlockPanelContent(
                     return@rememberLauncherForActivityResult
                 }
                 val targetLibrary = currentLibraryState?.takeIf { it.id == pendingLibrary.id } ?: pendingLibrary
-                val cipher = tokenViewModel.autoUnlockViewModel.getCipherForEnrollment(targetLibrary)
-                if (cipher == null) {
-                    return@rememberLauncherForActivityResult
-                }
+                val cipher =
+                    tokenViewModel.autoUnlockViewModel.getCipherForEnrollment(targetLibrary)
+                        ?: return@rememberLauncherForActivityResult
                 val enabled = tokenViewModel.autoUnlockViewModel.enableAutoUnlock(
                     library = targetLibrary,
                     cipher = cipher,
@@ -553,7 +553,7 @@ private fun InlineUnlockPanelContent(
     LaunchedEffect(Unit) {
         manualUnlockClockMillis = System.currentTimeMillis()
         while (true) {
-            delay(60_000L)
+            delay(60_000L.milliseconds)
             manualUnlockClockMillis = System.currentTimeMillis()
         }
     }
@@ -582,9 +582,10 @@ private fun InlineUnlockPanelContent(
                 !isManualWindowEnabled -> "强制主密码校验：已关闭"
                 manualWindowRemaining == null -> "强制主密码校验：不可用"
                 manualWindowRemaining <= 0L -> {
-                    val deadlineRemaining = credentialUnlockRemaining
-                    if (deadlineRemaining != null && deadlineRemaining > 0L) {
-                        "已超过48小时，最后一次凭据解锁机会（剩余${tokenViewModel.autoUnlockViewModel.formatRemainingHoursMinutes(deadlineRemaining)}）"
+                    if (credentialUnlockRemaining != null && credentialUnlockRemaining > 0L) {
+                        "已超过48小时，最后一次凭据解锁机会（剩余${tokenViewModel.autoUnlockViewModel.formatRemainingHoursMinutes(
+                            credentialUnlockRemaining
+                        )}）"
                     } else {
                         "已超过64小时，仅支持手动输入主密码"
                     }
@@ -636,7 +637,7 @@ private fun InlineUnlockPanelContent(
                     color = MiuixTheme.colorScheme.onSurfaceSecondary
                 )
                 Text(
-                    text = if (inlineKeyFileName.isBlank()) "点击选择密钥文件" else inlineKeyFileName,
+                    text = inlineKeyFileName.ifBlank { "点击选择密钥文件" },
                     fontSize = 13.sp,
                     color = if (inlineKeyFileName.isBlank()) MiuixTheme.colorScheme.primary
                     else MiuixTheme.colorScheme.onSurface
@@ -819,10 +820,7 @@ fun promptAutoUnlockEnroll(
     }
 
     val authMode = tokenViewModel.autoUnlockViewModel.normalizeAutoUnlockAuthMode(targetLibrary.autoUnlockAuthMode)
-    val cipher = tokenViewModel.autoUnlockViewModel.getCipherForEnrollment(targetLibrary)
-    if (cipher == null) {
-        return
-    }
+    val cipher = tokenViewModel.autoUnlockViewModel.getCipherForEnrollment(targetLibrary) ?: return
 
     tokenViewModel.autoUnlockViewModel.biometricKeyStoreManager.authenticate(
         activity = context,

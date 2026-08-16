@@ -90,7 +90,7 @@ fun PasswordEntryDetailScreen(
         val notesField = entry.keyValues.firstOrNull { it.fieldName.equals("Notes", ignoreCase = true) }
 
         editTitle = entry.title
-        editUsername = if (entry.account.isNotBlank()) entry.account else (usernameField?.rawValue ?: "")
+        editUsername = entry.account.ifBlank { (usernameField?.rawValue ?: "") }
         editPassword = passwordField?.rawValue ?: ""
         editUrl = urlField?.rawValue ?: ""
         editNotes = notesField?.rawValue ?: ""
@@ -370,7 +370,7 @@ fun PasswordEntryDetailScreen(
 
     if (showIconPicker) {
         IconPickerDialog(
-            show = showIconPicker,
+            show = true,
             currentStandardIconId = editIconStandardId,
             currentCustomIconBytes = editNewCustomIconBytes ?: selectedEntry?.customIconBytes,
             iconPrimary = selectedEntry?.title,

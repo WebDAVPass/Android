@@ -114,8 +114,7 @@ fun PasswordEntryDetailContent(
             return
         }
 
-        val entry = selectedEntry
-        if (entry == null) {
+    if (selectedEntry == null) {
             Box(
                 modifier = modifier.fillMaxSize(),
                 contentAlignment = Alignment.Center
@@ -125,17 +124,17 @@ fun PasswordEntryDetailContent(
             return
         }
 
-        val usernameField = entry.keyValues.firstOrNull { it.fieldName.equals("UserName", ignoreCase = true) }
-        val passwordField = entry.keyValues.firstOrNull {
+        val usernameField = selectedEntry.keyValues.firstOrNull { it.fieldName.equals("UserName", ignoreCase = true) }
+        val passwordField = selectedEntry.keyValues.firstOrNull {
             it.fieldName.equals("Password", ignoreCase = true) || it.valueType == RemainingValueType.PASSWORD
         }
-        val urlField = entry.keyValues.firstOrNull {
+        val urlField = selectedEntry.keyValues.firstOrNull {
             it.fieldName.equals("URL", ignoreCase = true) || it.valueType == RemainingValueType.URL
         }
-        val notesField = entry.keyValues.firstOrNull { it.fieldName.equals("Notes", ignoreCase = true) }
-        val otpFields = entry.keyValues.filter { isOtpField(it) }
+        val notesField = selectedEntry.keyValues.firstOrNull { it.fieldName.equals("Notes", ignoreCase = true) }
+        val otpFields = selectedEntry.keyValues.filter { isOtpField(it) }
         val otpSecretField = otpFields.firstOrNull()
-        val additionalFields = entry.keyValues.filterNot { item ->
+        val additionalFields = selectedEntry.keyValues.filterNot { item ->
             item == usernameField
                 || item == passwordField
                 || item == urlField
@@ -151,13 +150,13 @@ fun PasswordEntryDetailContent(
                 || PasskeyEntryFields.FIELD_FLAG_BE == item.fieldName
                 || PasskeyEntryFields.FIELD_FLAG_BS == item.fieldName
         }
-        val passkeyValues = entry.keyValues.associate { it.fieldName to it.rawValue }
+        val passkeyValues = selectedEntry.keyValues.associate { it.fieldName to it.rawValue }
         val passkeyRelyingParty = passkeyValues[PasskeyEntryFields.FIELD_RELYING_PARTY]
         val passkeyUsername = passkeyValues[PasskeyEntryFields.FIELD_USERNAME]
         val passkeyCredentialId = passkeyValues[PasskeyEntryFields.FIELD_CREDENTIAL_ID]
         val hasPasskey = passkeyValues.containsKey(PasskeyEntryFields.FIELD_CREDENTIAL_ID)
         val usernameValue = when {
-            entry.account.isNotBlank() -> entry.account
+            selectedEntry.account.isNotBlank() -> selectedEntry.account
             usernameField?.rawValue?.isNotBlank() == true -> usernameField.rawValue
             else -> "--"
         }
@@ -317,10 +316,10 @@ fun PasswordEntryDetailContent(
                                     modifier = Modifier.fillMaxWidth(),
                                     startAction = {
                                         EntryIcon(
-                                            customIconBytes = entry.customIconBytes,
-                                            standardIconId = entry.standardIconId,
-                                            primary = entry.title,
-                                            secondary = entry.account,
+                                            customIconBytes = selectedEntry.customIconBytes,
+                                            standardIconId = selectedEntry.standardIconId,
+                                            primary = selectedEntry.title,
+                                            secondary = selectedEntry.account,
                                             modifier = Modifier.padding(end = 16.dp).size(32.dp),
                                             contentDescription = "条目图标"
                                         )
@@ -441,10 +440,10 @@ fun PasswordEntryDetailContent(
                             ) {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     EntryIcon(
-                                        customIconBytes = editNewCustomIconBytes ?: entry.customIconBytes,
+                                        customIconBytes = editNewCustomIconBytes ?: selectedEntry.customIconBytes,
                                         standardIconId = editIconStandardId,
-                                        primary = entry.title,
-                                        secondary = entry.account,
+                                        primary = selectedEntry.title,
+                                        secondary = selectedEntry.account,
                                         modifier = Modifier.size(36.dp)
                                     )
                                     Text(
@@ -459,14 +458,14 @@ fun PasswordEntryDetailContent(
                                     tint = MiuixTheme.colorScheme.onSurfaceSecondary
                                 )
                             }
-                        } else if (entry.tags.isNotEmpty()) {
+                        } else if (selectedEntry.tags.isNotEmpty()) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 14.dp, vertical = 10.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                entry.tags.forEach { tag ->
+                                selectedEntry.tags.forEach { tag ->
                                     Card(
                                         modifier = Modifier,
                                         colors = CardDefaults.defaultColors(
@@ -513,12 +512,12 @@ fun PasswordEntryDetailContent(
                                 value = editExpiryTime,
                                 onValueChange = { onEditExpiryTimeChange(it) }
                             )
-                        } else if (entry.expiryTime != null) {
-                            val expired = entry.isExpired
+                        } else if (selectedEntry.expiryTime != null) {
+                            val expired = selectedEntry.isExpired
                             Preference(
                             type = PreferenceType.Arrow,
                                 title = "过期时间",
-                                summary = formatExpiry(entry.expiryTime, expired),
+                                summary = formatExpiry(selectedEntry.expiryTime, expired),
                                 modifier = Modifier.fillMaxWidth(),
                                 onClick = {}
                             )
@@ -593,7 +592,7 @@ fun PasswordEntryDetailContent(
                 val attachmentCount = if (isEditing) {
                     editAttachments.count { !it.removed }
                 } else {
-                    entry.attachments.size
+                    selectedEntry.attachments.size
                 }
                 SmallTitle(text = "附件 ($attachmentCount)")
             }
@@ -613,7 +612,7 @@ fun PasswordEntryDetailContent(
                     onClick = {}
                 ) {
                     Column(modifier = Modifier.fillMaxWidth()) {
-                        if (entry.attachments.isEmpty() && !isEditing) {
+                        if (selectedEntry.attachments.isEmpty() && !isEditing) {
                             Text(
                                 text = "无附件",
                                 fontSize = 13.sp,
@@ -645,7 +644,7 @@ fun PasswordEntryDetailContent(
                                 }
                             }
                         } else {
-                            entry.attachments.forEachIndexed { index, att ->
+                            selectedEntry.attachments.forEachIndexed { index, att ->
                                 AttachmentViewRow(
                                     name = att.name,
                                     sizeText = formatFileSize(att.size),
@@ -671,7 +670,7 @@ fun PasswordEntryDetailContent(
                                         }
                                     }
                                 )
-                                if (index < entry.attachments.lastIndex) {
+                                if (index < selectedEntry.attachments.lastIndex) {
                                     HorizontalDivider(
                                         modifier = Modifier.padding(horizontal = 14.dp),
                                         thickness = 0.5.dp

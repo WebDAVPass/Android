@@ -1,6 +1,7 @@
 package xzynine.WebDAVPass.Android.ui.component
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -9,36 +10,33 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import android.graphics.Bitmap
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.VpnKey
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kunzisoft.keepass.icon.IconPack
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.liberty.android.freeotp.token_images.TokenImage
 import org.liberty.android.freeotp.token_images.matchToken
 import top.yukonga.miuix.kmp.basic.Card
@@ -47,8 +45,6 @@ import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.ProgressIndicatorDefaults
 import top.yukonga.miuix.kmp.basic.Text
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.VpnKey
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.data.OtpToken
@@ -112,7 +108,7 @@ private fun computeEntryIconRes(
             return keepassRes
         }
     }
-    return TokenImage.values().firstOrNull { it.matchToken(primary, secondary) }?.resource
+    return TokenImage.entries.firstOrNull { it.matchToken(primary, secondary) }?.resource
 }
 
 @Composable
@@ -130,7 +126,7 @@ fun EntryIcon(
      * 1) 优先渲染自定义图标（二进制，含固化的品牌图标）。
      * 在后台线程解码，避免主线程阻塞导致滚动卡顿。
      */
-    val customBitmap: Bitmap? by produceState<Bitmap?>(initialValue = null, key1 = customIconBytes) {
+    val customBitmap: Bitmap? by produceState(initialValue = null, key1 = customIconBytes) {
         value = if (customIconBytes != null) {
             withContext(Dispatchers.Default) {
                 runCatching {
@@ -162,7 +158,7 @@ fun EntryIcon(
         if (standardIconId != null && standardIconId != 0) {
             null
         } else {
-            TokenImage.values().firstOrNull { it.matchToken(primary, secondary) }?.resource
+            TokenImage.entries.firstOrNull { it.matchToken(primary, secondary) }?.resource
         }
     }
     tokenImageRes?.let {

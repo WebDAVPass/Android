@@ -53,6 +53,7 @@ import xzynine.WebDAVPass.Android.ui.Screen.isOnboardingCompleted
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.component.CategoryNavigationItem
+import kotlin.time.Duration.Companion.milliseconds
 
 class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -149,7 +150,7 @@ fun MainScreen() {
     // 无操作超时：任何触摸操作重置计时，无操作超过设定分钟数即锁定（每 30 秒检查一次）
     LaunchedEffect(Unit) {
         while (true) {
-            delay(30_000L)
+            delay(30_000L.milliseconds)
             val timeoutMinutes = tokenViewModel.lockTimeoutMinutes.value
             val timeoutMs = timeoutMinutes * 60_000L
             if (timeoutMs > 0L &&

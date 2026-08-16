@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
+import kotlin.time.Duration.Companion.milliseconds
 
 internal data class PasswordDataAccess(
     val isLibraryUnlocked: Boolean,
@@ -162,7 +163,7 @@ internal class PasswordPagingSubViewModel(
             // 搜索输入防抖：快速连续输入时只保留最后一次刷新。
             // delay 是可取消的挂起点，refreshJob?.cancel() 会在新一轮输入时中断未完成的等待。
             if (searchQuery.isNotBlank()) {
-                delay(SEARCH_DEBOUNCE_MS)
+                delay(SEARCH_DEBOUNCE_MS.milliseconds)
             }
             val access = accessProvider()
             if (!access.isReady()) {
@@ -278,11 +279,11 @@ internal class PasswordPagingSubViewModel(
         pagingMutex.withLock {
             // 计算预期的先前条目数（仅统计大小，开销远小于复制所有元素）
             val expectedPrevEntriesCount = allSections.take(prevCount).sumOf { it.items.size }
-            if (accumulatedEntries.size != expectedPrevEntriesCount) {
+            accumulatedEntries = if (accumulatedEntries.size != expectedPrevEntriesCount) {
                 // 出现并发变更：重建到当前 loadedSectionCount 的累积列表以保证一致性
-                accumulatedEntries = allSections.take(loadedSectionCount).flatMap { it.items }
+                allSections.take(loadedSectionCount).flatMap { it.items }
             } else {
-                accumulatedEntries = accumulatedEntries + gapEntries
+                accumulatedEntries + gapEntries
             }
             _passwordEntries.value = accumulatedEntries
             _passwordHasMore.value = loadedSectionCount < allSections.size
@@ -311,7 +312,7 @@ internal class PasswordPagingSubViewModel(
         if (_passwordGroupStack.value.lastOrNull() == groupStableId) {
             return
         }
-        _passwordGroupStack.value = _passwordGroupStack.value + groupStableId
+        _passwordGroupStack.value += groupStableId
         refreshPasswordEntries(searchQuery)
     }
 

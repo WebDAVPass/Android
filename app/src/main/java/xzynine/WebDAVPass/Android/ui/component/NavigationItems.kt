@@ -14,21 +14,19 @@ import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.icon.extended.ListView
 import top.yukonga.miuix.kmp.icon.extended.Recent
 import top.yukonga.miuix.kmp.icon.extended.Settings
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 
 /**
  * 分类导航项定义
  */
 enum class CategoryNavigationItem(
     val label: String,
-    val icon: ImageVector,
-    val listMode: PasswordListMode?
+    val icon: ImageVector
 ) {
-    ALL_PASSWORDS("全部密码", MiuixIcons.ListView, PasswordListMode.ALL_PASSWORDS),
-    TOKENS("动态令牌", MiuixIcons.Recent, null),
-    SECURITY("安全性", MiuixIcons.Lock, null),
-    RECENT_DELETED("最近删除", MiuixIcons.Delete, PasswordListMode.RECENT_DELETED),
-    SETTINGS("设置", MiuixIcons.Settings, null)
+    ALL_PASSWORDS("全部密码", MiuixIcons.ListView),
+    TOKENS("动态令牌", MiuixIcons.Recent),
+    SECURITY("安全性", MiuixIcons.Lock),
+    RECENT_DELETED("最近删除", MiuixIcons.Delete),
+    SETTINGS("设置", MiuixIcons.Settings)
 }
 
 /**
