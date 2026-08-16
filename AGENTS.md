@@ -13,7 +13,7 @@ Docs\项目简介.md
 - 凭据从 `local.properties` 读取：`KEY_ALIAS` / `KEY_PASSWORD` / `STORE_PASSWORD`，缺省回退同名环境变量。切勿提交真实凭据。
 
 
-- `version.properties` 修改仅限 major；非用户要求勿改，版本号由 CI 决定。
+- `version.properties` 由 update.yml 在每次 push 到 main 时自动递增回写（并跑 ktlintFormat、创建 `v{版本}` tag），勿手动修改。
 - 查当前值：`:app:printVersionName`
 
 ## 模块结构
@@ -27,4 +27,5 @@ Docs\项目简介.md
 
 - `RepositoriesMode.FAIL_ON_PROJECT_REPOS`：模块内禁止再声明 repository。
 - ABI splits 仅当任务名含 "Release" 时启用：`assembleRelease` 产出 armeabi-v7a/arm64-v8a/x86_64 + universal APK，`assembleDebug` 只产出 universal。
-- app 的 compileSdk 使用 AGP 9 新写法 `compileSdk { version = release(37) }`；minSdk 29 / targetSdk 36，源码/目标均为 Java 17。
+- app 的 compileSdk 使用 AGP 9 新写法 `compileSdk { version = release(37) }`；minSdk 29 / targetSdk 36，源码/目标均为 Java 21（miuix-nav 以 JVM 21 编译，调用方须同版本；CI 均用 JDK 21）。
+- 代码格式化：`./gradlew ktlintFormat`（ktlint 插件，仅覆盖本仓库模块，不含 webdav/checkupdates 子模块；.gitattributes 统一行尾：存储 LF、检出 CRLF）。

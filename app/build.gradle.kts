@@ -12,7 +12,7 @@ plugins {
 // 版本号不再由构建系统从 git 历史推导（已移除 buildSrc 的 JGit 逻辑），
 // 注入优先级：-PversionName/-PversionCode（gradle property）→ VERSION_NAME/VERSION_CODE（环境变量）
 // → version.properties 固定值（本地构建使用，不递增）。
-// version.properties 由发版流程（release.yml）维护写回，递增步长为
+// version.properties 由 update.yml（push 到 main 时）维护写回，递增步长为
 // 上次修改版本号 commit 到当前 HEAD 的提交数。
 fun loadFixedVersion(): Pair<String, Int> {
     val props = Properties()

@@ -1,0 +1,108 @@
+# 版本号更新：push 到 main 时按提交数递增版本号、跑 ktlintFormat 并回写，
+# 创建 v{版本号} tag 供 release.yml 发布使用。
+# 通过 GITHUB_TOKEN 提交/推送不会再次触发本工作流。
+name: 版本号更新
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: version-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  update-version:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          # 需完整历史计算提交增量，子模块一并检出
+          fetch-depth: 0
+          fetch-tags: true
+          submodules: true
+          persist-credentials: false
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: 计算发版版本号
+        id: version
+        run: |
+          set -euo pipefail
+          # 基准：上次修改 version.properties 的 commit；不存在时增量为 0
+          BASE=$(git log -1 --format=%H -- version.properties 2>/dev/null || true)
+          N=0
+          if [ -n "$BASE" ]; then
+            N=$(git rev-list --count "$BASE..HEAD")
+          fi
+          CUR_CODE=$(grep '^versionCode=' version.properties | cut -d= -f2)
+          CUR_NAME=$(grep '^versionName=' version.properties | cut -d= -f2)
+          MAJOR=${CUR_NAME%%.*}
+          MINOR=$(echo "$CUR_NAME" | cut -d. -f2)
+          VERSION="$MAJOR.$((MINOR + N)).$(date +%m%d%H%M)"
+          VERSION_CODE=$((CUR_CODE + N))
+          echo "::notice::计算出的发版版本: $VERSION (versionCode $VERSION_CODE, 提交增量 $N)"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "versioncode=$VERSION_CODE" >> "$GITHUB_OUTPUT"
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+
+      # 会改动文件的格式化任务，作为写回前的格式门禁；失败则中止不写分支
+      - name: 运行 ktlintFormat
+        run: ./gradlew ktlintFormat
+
+      # 仅替换两个值行；行尾由 .gitattributes（text eol=crlf）保证
+      - name: 回写 version.properties
+        run: |
+          sed -i "s/^versionCode=.*/versionCode=${{ steps.version.outputs.versioncode }}/" version.properties
+          sed -i "s/^versionName=.*/versionName=${{ steps.version.outputs.version }}/" version.properties
+
+      - name: 整理中间提交信息
+        id: summary
+        run: |
+          BASE="${{ steps.version.outputs.base }}"
+          : > /tmp/commit-summary.txt
+          if [ -n "$BASE" ]; then
+            git log --format='- %s' --no-merges "$BASE..HEAD" >> /tmp/commit-summary.txt || true
+          fi
+
+      - name: 提交并推送（version.properties + ktlintFormat 改动）
+        id: commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "::notice::无任何变更，跳过提交"
+            echo "committed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "CI:update${{ steps.version.outputs.version }}"
+            echo
+            cat /tmp/commit-summary.txt
+          } > /tmp/commit-msg.txt
+          git commit -F /tmp/commit-msg.txt
+          PUSH_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push "$PUSH_URL" HEAD:main
+          echo "committed=true" >> "$GITHUB_OUTPUT"
+
+      - name: 创建版本 tag
+        if: steps.commit.outputs.committed == 'true'
+        run: |
+          VERSION="v${{ steps.version.outputs.version }}"
+          git tag "$VERSION"
+          PUSH_URL="https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git"
+          git push "$PUSH_URL" "refs/tags/$VERSION"
+          echo "::notice::已创建 tag $VERSION"
