@@ -1,3 +1,6 @@
+import java.io.File
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
@@ -5,10 +8,6 @@ plugins {
     id("kotlin-parcelize")
     alias(libs.plugins.ksp)
 }
-
-        import java.io.File
-        import java.util.Properties
-
 
 // 版本号不再由构建系统从 git 历史推导（已移除 buildSrc 的 JGit 逻辑），
 // 注入优先级：-PversionName/-PversionCode（gradle property）→ VERSION_NAME/VERSION_CODE（环境变量）
@@ -23,20 +22,26 @@ fun loadFixedVersion(): Pair<String, Int> {
     }
     file.inputStream().use { props.load(it) }
 
-    val name = props.getProperty("versionName")
-        ?: error("versionName is missing in version.properties")
-    val code = props.getProperty("versionCode")?.toIntOrNull()
-        ?: error("versionCode is missing or not an Int in version.properties")
+    val name =
+        props.getProperty("versionName")
+            ?: error("versionName is missing in version.properties")
+    val code =
+        props.getProperty("versionCode")?.toIntOrNull()
+            ?: error("versionCode is missing or not an Int in version.properties")
     return name to code
 }
 
 val (fixedVersionName, fixedVersionCode) = loadFixedVersion()
-val injectedVersionName = providers.gradleProperty("versionName").orNull
-    ?: System.getenv("VERSION_NAME")
-    ?: fixedVersionName
-val injectedVersionCode = (providers.gradleProperty("versionCode").orNull
-    ?: System.getenv("VERSION_CODE")
-    ?: fixedVersionCode.toString()).toIntOrNull() ?: fixedVersionCode
+val injectedVersionName =
+    providers.gradleProperty("versionName").orNull
+        ?: System.getenv("VERSION_NAME")
+        ?: fixedVersionName
+val injectedVersionCode =
+    (
+        providers.gradleProperty("versionCode").orNull
+            ?: System.getenv("VERSION_CODE")
+            ?: fixedVersionCode.toString()
+    ).toIntOrNull() ?: fixedVersionCode
 
 android {
     namespace = "xzynine.WebDAVPass.Android"
@@ -81,11 +86,11 @@ android {
             isMinifyEnabled = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro"
+                "proguard-rules.pro",
             )
         }
     }
-    
+
     // 只在 release 构建时启用 ABI splits，debug 只生成 universal APK
     splits {
         abi {
@@ -96,7 +101,7 @@ android {
             isUniversalApk = true
         }
     }
-    
+
     // 配置资源打包选项，解决 META-INF/DEPENDENCIES 冲突问题
     packaging {
         resources {
@@ -114,13 +119,13 @@ android {
             jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
         }
     }
-    
+
     // Compose 配置
     buildFeatures {
         compose = true
         buildConfig = true
     }
-    
+
     // 配置 16KB 页面大小 LOAD 段对齐
     packaging {
         jniLibs {
@@ -132,7 +137,7 @@ android {
 dependencies {
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.biometric)
-        implementation(libs.material) // Material 组件库
+    implementation(libs.material) // Material 组件库
     implementation(libs.miuix.android) // Miuix UI 库
     implementation(libs.miuix.icons)
     implementation(libs.miuix.preference)
@@ -157,7 +162,7 @@ dependencies {
     implementation(project(":token-images"))
     // 检查更新模块
     implementation(project(":checkupdates"))
-    
+
     // CameraX 核心库
     implementation("androidx.camera:camera-core:1.3.3")
     implementation("androidx.camera:camera-camera2:1.3.3")
@@ -166,7 +171,7 @@ dependencies {
     // ZXing 二维码解析和生成库
     implementation("com.google.zxing:core:3.5.3")
     implementation("com.journeyapps:zxing-android-embedded:4.3.0")
-    
+
     // Compose 相关依赖
     implementation(libs.compose.ui)
     implementation(libs.compose.ui.graphics)
@@ -178,11 +183,11 @@ dependencies {
     implementation(libs.compose.runtime.livedata)
     // 导航库依赖（miuix-nav，navigationevent 由其传递引入）
     implementation(libs.miuix.nav)
-    
+
     // Coroutines 相关依赖
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
-    
+
     // Room 数据库相关依赖
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)
