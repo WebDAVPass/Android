@@ -33,11 +33,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 import xzylib.base.util.ToastUtils
+import top.yukonga.miuix.kmp.nav.core.rememberNavBackStack
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
-import xzynine.WebDAVPass.Android.ui.navigation.rememberNavigator
+import xzynine.WebDAVPass.Android.ui.navigation.replaceAll
 import xzynine.WebDAVPass.Android.theme.AppTheme
 import xzynine.WebDAVPass.Android.theme.SetupSystemBars
 import xzynine.WebDAVPass.Android.ui.Dialog.CloudLibraryDialog
@@ -182,38 +183,38 @@ fun MainScreen() {
             Route.Welcome
         }
     }
-    val navigator = rememberNavigator(startRoute)
+    val backStack = rememberNavBackStack<Route>(startRoute)
 
     // 横屏模式下导航项选择处理
-    val handleNavigationItemSelected = remember(tokenViewModel, navigator) {
+    val handleNavigationItemSelected = remember(tokenViewModel, backStack) {
         { item: CategoryNavigationItem ->
             selectedEntryId = null
             when (item) {
                 CategoryNavigationItem.ALL_PASSWORDS -> {
                     selectedNavIndex = 0
-                    navigator.replaceAll(listOf(Route.PasswordList(PasswordListMode.ALL_PASSWORDS)))
+                    backStack.replaceAll(listOf(Route.PasswordList(PasswordListMode.ALL_PASSWORDS)))
                 }
                 CategoryNavigationItem.TOKENS -> {
                     selectedNavIndex = 1
-                    navigator.replaceAll(listOf(Route.TokenList))
+                    backStack.replaceAll(listOf(Route.TokenList))
                 }
                 CategoryNavigationItem.SECURITY -> {
                     selectedNavIndex = 2
-                    navigator.replaceAll(listOf(Route.SecurityCheck))
+                    backStack.replaceAll(listOf(Route.SecurityCheck))
                 }
                 CategoryNavigationItem.RECENT_DELETED -> {
                     selectedNavIndex = 3
-                    navigator.replaceAll(listOf(Route.PasswordList(PasswordListMode.RECENT_DELETED)))
+                    backStack.replaceAll(listOf(Route.PasswordList(PasswordListMode.RECENT_DELETED)))
                 }
                 CategoryNavigationItem.SETTINGS -> {
                     selectedNavIndex = 4
-                    navigator.replaceAll(listOf(Route.Settings))
+                    backStack.replaceAll(listOf(Route.Settings))
                 }
             }
         }
     }
 
-    CompositionLocalProvider(LocalNavigator provides navigator) {
+    CompositionLocalProvider(LocalNavigator provides backStack) {
         // 全局触摸监听：任何触摸操作都重置无操作超时计时
         Box(
             modifier = Modifier
@@ -231,10 +232,10 @@ fun MainScreen() {
                         showOnboarding = false
                     }
                 )
-            } else if (isLandscapeWideScreen && navigator.current() !is Route.Welcome && navigator.current() !is Route.Locked) {
+            } else if (isLandscapeWideScreen && backStack.lastOrNull() !is Route.Welcome && backStack.lastOrNull() !is Route.Locked) {
                 // 横屏三栏布局（欢迎页/锁定页不使用三栏）
                 LandscapeMainNavigation(
-                    navigator = navigator,
+                    backStack = backStack,
                     tokenViewModel = tokenViewModel,
                     currentLibrary = currentLibrary,
                     selectedNavIndex = selectedNavIndex,
@@ -249,7 +250,7 @@ fun MainScreen() {
             } else {
                 // 竖屏单栏布局
                 PortraitMainNavigation(
-                    navigator = navigator,
+                    backStack = backStack,
                     tokenViewModel = tokenViewModel,
                     currentLibrary = currentLibrary,
                     showWelcome = showWelcomeState,

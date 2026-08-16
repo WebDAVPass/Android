@@ -150,7 +150,7 @@ fun SettingsScreen(
                             contentDescription = "填充器设置",
                         )
                     },
-                    onClick = { navigator.push(Route.GeneralSettings) },
+                    onClick = { navigator.add(Route.GeneralSettings) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -171,7 +171,7 @@ fun SettingsScreen(
                             contentDescription = "安全",
                         )
                     },
-                    onClick = { navigator.push(Route.SecuritySettings) },
+                    onClick = { navigator.add(Route.SecuritySettings) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -192,7 +192,7 @@ fun SettingsScreen(
                             contentDescription = "备份详情查看",
                         )
                     },
-                    onClick = { navigator.push(Route.BackupSettings) },
+                    onClick = { navigator.add(Route.BackupSettings) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -234,7 +234,7 @@ fun SettingsScreen(
                             contentDescription = "关于",
                         )
                     },
-                    onClick = { navigator.push(Route.About) },
+                    onClick = { navigator.add(Route.About) },
                     modifier = Modifier.fillMaxWidth()
                 )
             }

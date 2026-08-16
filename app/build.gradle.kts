@@ -95,12 +95,13 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        // miuix-nav（0.9.4-rc01）以 JVM 21 编译并大量使用 inline 函数，调用方必须同版本
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     kotlin {
         compilerOptions {
-            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+            jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
         }
     }
     
@@ -165,12 +166,8 @@ dependencies {
     implementation(libs.compose.runtime)
     implementation(libs.compose.foundation)
     implementation(libs.compose.runtime.livedata)
-    // 导航库依赖
-    implementation(libs.androidx.navigation3.runtime)
-    implementation(libs.miuix.navigation3.ui)
-    implementation(libs.androidx.navigationevent.compose)
-    implementation(libs.androidx.lifecycle.viewmodel.navigation3)
-    implementation(libs.dev.rikka.parcelablelist)
+    // 导航库依赖（miuix-nav，navigationevent 由其传递引入）
+    implementation(libs.miuix.nav)
     
     // Coroutines 相关依赖
     implementation(libs.kotlinx.coroutines.core)
