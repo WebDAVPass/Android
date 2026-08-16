@@ -86,19 +86,19 @@ jobs:
             -PversionName="${{ steps.version.outputs.version }}" \
             -PversionCode="${{ steps.version.outputs.versioncode }}"
 
-      - name: 发布 GitHub Release（打 tag + 附 APK，转正上一次 CI 预发布）
+      - name: 发布 GitHub Release（打 tag + 附 APK；上一次 CI 预发布转正，本次仍为预发布）
         if: ${{ !inputs.dry_run }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # 仅转正由本工作流（CI）创建的预发布，不动其他来源的预发布
+          # 仅将由本工作流（CI）创建的上一条预发布转正，不动其他来源的预发布
           PREV_TAG=$(gh release list --limit 50 --json tagName,isPrerelease,body \
             --jq '[.[] | select(.isPrerelease and ((.body // "") | contains("ci-automatic-release")))] | .[0].tagName // empty')
           if [ -n "$PREV_TAG" ] && [ "$PREV_TAG" != "v${{ steps.version.outputs.version }}" ]; then
             PREV_ID=$(gh release view "$PREV_TAG" --json id --jq .id)
             gh api -X PATCH "repos/${{ github.repository }}/releases/$PREV_ID" \
               -F prerelease=false -F make_latest=true > /dev/null
-            echo "::notice::已将上一次 CI 预发布 $PREV_TAG 转正为正式发布"
+            echo "::notice::已将上一次 CI 预发布 $PREV_TAG 转正为正式发布（本次创建新预发布）"
           fi
           # 用 API 创建轻量 tag（指向本次运行 SHA），避免依赖 checkout 持久化凭据
           gh api -X POST "repos/${{ github.repository }}/git/refs" \
