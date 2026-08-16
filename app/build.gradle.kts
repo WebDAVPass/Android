@@ -17,11 +17,15 @@ import java.util.Properties
 fun loadFixedVersion(): Pair<String, Int> {
     val props = Properties()
     val file = rootProject.file("version.properties")
-    if (file.exists()) {
-        file.inputStream().use { props.load(it) }
+    require(file.exists()) {
+        "Missing version.properties. Provide -PversionName/-PversionCode (or env VERSION_NAME/VERSION_CODE) when building in CI."
     }
-    val name = props.getProperty("versionName") ?: "1.298.08161522"
-    val code = props.getProperty("versionCode")?.toIntOrNull() ?: 9459522
+    file.inputStream().use { props.load(it) }
+
+    val name = props.getProperty("versionName")
+        ?: error("versionName is missing in version.properties")
+    val code = props.getProperty("versionCode")?.toIntOrNull()
+        ?: error("versionCode is missing or not an Int in version.properties")
     return name to code
 }
 
