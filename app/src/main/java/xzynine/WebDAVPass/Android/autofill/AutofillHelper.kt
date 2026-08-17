@@ -11,6 +11,7 @@ import android.service.autofill.Field
 import android.service.autofill.FillResponse
 import android.service.autofill.Presentations
 import android.util.Log
+import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import android.widget.RemoteViews
 import androidx.annotation.RequiresApi
@@ -151,17 +152,19 @@ object AutofillHelper {
                 setTextViewText(R.id.autofill_entry_text, title)
             }
 
-        val builder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
-            // API 35 起 RemoteViews 构造与 setValue 弃用，改用 Presentations + setField
-            Dataset.Builder(
-                Presentations.Builder()
-                    .setMenuPresentation(presentation)
-                    .build()
-            )
-        } else {
-            // API 29-34 无新 API 可用，只能保留弃用的 RemoteViews 构造
-            Dataset.Builder(presentation)
-        }
+        val builder =
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+                // API 35 起 RemoteViews 构造与 setValue 弃用，改用 Presentations + setField
+                Dataset.Builder(
+                    Presentations
+                        .Builder()
+                        .setMenuPresentation(presentation)
+                        .build(),
+                )
+            } else {
+                // API 29-34 无新 API 可用，只能保留弃用的 RemoteViews 构造
+                Dataset.Builder(presentation)
+            }
         builder.setId(entry.id.toString())
 
         parseResult.usernameId?.let { id ->
@@ -182,14 +185,16 @@ object AutofillHelper {
     /**
      * API 35 起 [Dataset.Builder.setValue] 弃用，改用 [Dataset.Builder.setField] + [Field]，旧版本回退。
      */
-    private fun Dataset.Builder.setValueCompat(id: AutofillId, value: AutofillValue): Dataset.Builder {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
+    private fun Dataset.Builder.setValueCompat(
+        id: AutofillId,
+        value: AutofillValue,
+    ): Dataset.Builder =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.VANILLA_ICE_CREAM) {
             setField(id, Field.Builder().setValue(value).build())
         } else {
             // API 29-34 无替代 API，只能保留弃用的 setValue
             setValue(id, value)
         }
-    }
 
     fun buildFillResponse(
         context: Context,

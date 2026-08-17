@@ -475,7 +475,7 @@ private fun InlineUnlockPanelContent(
             authMode = authMode,
             libraryFileName =
                 targetLibrary.localPath
-                    ?.let { path -> runCatching { File(path).name }.getOrNull() },
+                    .let { path -> runCatching { File(path).name }.getOrNull() },
             onSuccess = { authCipher ->
                 if (authCipher != null) {
                     coroutineScope.launch {
@@ -501,7 +501,7 @@ private fun InlineUnlockPanelContent(
                 if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
                     val fileName =
                         targetLibrary.localPath
-                            ?.let { path -> runCatching { File(path).name }.getOrNull() }
+                            .let { path -> runCatching { File(path).name }.getOrNull() }
                             .orEmpty()
                     val intent =
                         tokenViewModel.autoUnlockViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(

@@ -38,6 +38,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.InputField
 import top.yukonga.miuix.kmp.basic.SearchBar
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Add
 import top.yukonga.miuix.kmp.icon.extended.AddFolder
@@ -281,64 +282,129 @@ fun RowScope.PasswordListTopBarActions(
     onCreateGroup: () -> Unit,
 ) {
     if (isSelectionMode) {
-        IconButton(
-            onClick = {
-                onSelectAll()
-            },
-        ) {
-            Icon(
-                imageVector = MiuixIcons.SelectAll,
-                contentDescription = "全选",
-            )
+        TooltipBox(text = "全选") {
+            IconButton(
+                onClick = {
+                    onSelectAll()
+                },
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.SelectAll,
+                    contentDescription = "全选",
+                )
+            }
         }
-        IconButton(
-            onClick = {
-                onInvertSelection()
-            },
-        ) {
-            Icon(
-                imageVector = Icons.Rounded.Flip,
-                contentDescription = "反选",
-            )
+        TooltipBox(text = "反选") {
+            IconButton(
+                onClick = {
+                    onInvertSelection()
+                },
+            ) {
+                Icon(
+                    imageVector = Icons.Rounded.Flip,
+                    contentDescription = "反选",
+                )
+            }
         }
         if (enableRecycleBinActions) {
-            IconButton(
-                onClick = {
-                    if (selectedTargets.isNotEmpty()) {
-                        onRestoreSelected()
-                    }
-                },
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Undo,
-                    contentDescription = "恢复",
-                )
+            TooltipBox(text = "恢复") {
+                IconButton(
+                    onClick = {
+                        if (selectedTargets.isNotEmpty()) {
+                            onRestoreSelected()
+                        }
+                    },
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Undo,
+                        contentDescription = "恢复",
+                    )
+                }
             }
-            IconButton(
-                onClick = {
-                    if (selectedTargets.isNotEmpty()) {
-                        onRequestPermanentDelete()
-                    }
-                },
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Delete,
-                    contentDescription = "永久删除",
-                )
+            TooltipBox(text = "永久删除") {
+                IconButton(
+                    onClick = {
+                        if (selectedTargets.isNotEmpty()) {
+                            onRequestPermanentDelete()
+                        }
+                    },
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Delete,
+                        contentDescription = "永久删除",
+                    )
+                }
             }
         } else if (allowWriteActions) {
-            IconButton(
-                onClick = {
-                    if (selectedTargets.isNotEmpty()) {
-                        onRequestDelete()
-                    }
-                },
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Delete,
-                    contentDescription = "删除",
-                )
+            TooltipBox(text = "删除") {
+                IconButton(
+                    onClick = {
+                        if (selectedTargets.isNotEmpty()) {
+                            onRequestDelete()
+                        }
+                    },
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Delete,
+                        contentDescription = "删除",
+                    )
+                }
             }
+            TooltipBox(text = "更多操作") {
+                WindowIconDropdownMenu(
+                    entries =
+                        listOf(
+                            DropdownEntry(
+                                items =
+                                    listOf(
+                                        DropdownItem(
+                                            text = "固化为品牌图标",
+                                            onClick = { onSolidifyBrandIcons() },
+                                        ),
+                                    ),
+                            ),
+                            DropdownEntry(
+                                items =
+                                    listOf(
+                                        DropdownItem(
+                                            text = "合并条目",
+                                            onClick = { onMergeSelection() },
+                                        ),
+                                    ),
+                            ),
+                            DropdownEntry(
+                                items =
+                                    listOf(
+                                        DropdownItem(
+                                            text = "移动",
+                                            onClick = {
+                                                if (selectedTargets.isNotEmpty()) {
+                                                    onMoveSelection()
+                                                }
+                                            },
+                                        ),
+                                        DropdownItem(
+                                            text = "复制",
+                                            onClick = {
+                                                if (selectedTargets.isNotEmpty()) {
+                                                    onCopySelection()
+                                                }
+                                            },
+                                        ),
+                                    ),
+                            ),
+                        ),
+                    collapseOnSelection = true,
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.MoreCircle,
+                        contentDescription = "更多操作",
+                    )
+                }
+            }
+        }
+    } else {
+        TooltipBox(text = "排序与过滤") {
             WindowIconDropdownMenu(
                 entries =
                     listOf(
@@ -346,8 +412,29 @@ fun RowScope.PasswordListTopBarActions(
                             items =
                                 listOf(
                                     DropdownItem(
-                                        text = "固化为品牌图标",
-                                        onClick = { onSolidifyBrandIcons() },
+                                        text = "默认",
+                                        selected = sortMode == PasswordSortMode.DEFAULT,
+                                        onClick = { onSortModeChange(PasswordSortMode.DEFAULT) },
+                                    ),
+                                    DropdownItem(
+                                        text = "标题",
+                                        selected = sortMode == PasswordSortMode.TITLE,
+                                        onClick = { onSortModeChange(PasswordSortMode.TITLE) },
+                                    ),
+                                    DropdownItem(
+                                        text = "账号",
+                                        selected = sortMode == PasswordSortMode.ACCOUNT,
+                                        onClick = { onSortModeChange(PasswordSortMode.ACCOUNT) },
+                                    ),
+                                    DropdownItem(
+                                        text = "修改时间",
+                                        selected = sortMode == PasswordSortMode.MODIFIED_TIME,
+                                        onClick = { onSortModeChange(PasswordSortMode.MODIFIED_TIME) },
+                                    ),
+                                    DropdownItem(
+                                        text = "创建时间",
+                                        selected = sortMode == PasswordSortMode.CREATED_TIME,
+                                        onClick = { onSortModeChange(PasswordSortMode.CREATED_TIME) },
                                     ),
                                 ),
                         ),
@@ -355,8 +442,14 @@ fun RowScope.PasswordListTopBarActions(
                             items =
                                 listOf(
                                     DropdownItem(
-                                        text = "合并条目",
-                                        onClick = { onMergeSelection() },
+                                        text = "升序",
+                                        selected = sortAscending,
+                                        onClick = { onSortAscendingChange(true) },
+                                    ),
+                                    DropdownItem(
+                                        text = "降序",
+                                        selected = !sortAscending,
+                                        onClick = { onSortAscendingChange(false) },
                                     ),
                                 ),
                         ),
@@ -364,20 +457,31 @@ fun RowScope.PasswordListTopBarActions(
                             items =
                                 listOf(
                                     DropdownItem(
-                                        text = "移动",
-                                        onClick = {
-                                            if (selectedTargets.isNotEmpty()) {
-                                                onMoveSelection()
-                                            }
-                                        },
+                                        text = "隐藏过期条目",
+                                        selected = hideExpired,
+                                        onClick = { onHideExpiredChange(!hideExpired) },
                                     ),
+                                ),
+                        ),
+                    ),
+                collapseOnSelection = false,
+            ) {
+                Icon(
+                    imageVector = MiuixIcons.Sort,
+                    contentDescription = "排序与过滤",
+                )
+            }
+        }
+        TooltipBox(text = "更多操作") {
+            WindowIconDropdownMenu(
+                entries =
+                    listOf(
+                        DropdownEntry(
+                            items =
+                                listOf(
                                     DropdownItem(
-                                        text = "复制",
-                                        onClick = {
-                                            if (selectedTargets.isNotEmpty()) {
-                                                onCopySelection()
-                                            }
-                                        },
+                                        text = "检测重复条目",
+                                        onClick = { onScanDuplicates() },
                                     ),
                                 ),
                         ),
@@ -390,113 +494,30 @@ fun RowScope.PasswordListTopBarActions(
                 )
             }
         }
-    } else {
-        WindowIconDropdownMenu(
-            entries =
-                listOf(
-                    DropdownEntry(
-                        items =
-                            listOf(
-                                DropdownItem(
-                                    text = "默认",
-                                    selected = sortMode == PasswordSortMode.DEFAULT,
-                                    onClick = { onSortModeChange(PasswordSortMode.DEFAULT) },
-                                ),
-                                DropdownItem(
-                                    text = "标题",
-                                    selected = sortMode == PasswordSortMode.TITLE,
-                                    onClick = { onSortModeChange(PasswordSortMode.TITLE) },
-                                ),
-                                DropdownItem(
-                                    text = "账号",
-                                    selected = sortMode == PasswordSortMode.ACCOUNT,
-                                    onClick = { onSortModeChange(PasswordSortMode.ACCOUNT) },
-                                ),
-                                DropdownItem(
-                                    text = "修改时间",
-                                    selected = sortMode == PasswordSortMode.MODIFIED_TIME,
-                                    onClick = { onSortModeChange(PasswordSortMode.MODIFIED_TIME) },
-                                ),
-                                DropdownItem(
-                                    text = "创建时间",
-                                    selected = sortMode == PasswordSortMode.CREATED_TIME,
-                                    onClick = { onSortModeChange(PasswordSortMode.CREATED_TIME) },
-                                ),
-                            ),
-                    ),
-                    DropdownEntry(
-                        items =
-                            listOf(
-                                DropdownItem(
-                                    text = "升序",
-                                    selected = sortAscending,
-                                    onClick = { onSortAscendingChange(true) },
-                                ),
-                                DropdownItem(
-                                    text = "降序",
-                                    selected = !sortAscending,
-                                    onClick = { onSortAscendingChange(false) },
-                                ),
-                            ),
-                    ),
-                    DropdownEntry(
-                        items =
-                            listOf(
-                                DropdownItem(
-                                    text = "隐藏过期条目",
-                                    selected = hideExpired,
-                                    onClick = { onHideExpiredChange(!hideExpired) },
-                                ),
-                            ),
-                    ),
-                ),
-            collapseOnSelection = false,
-        ) {
-            Icon(
-                imageVector = MiuixIcons.Sort,
-                contentDescription = "排序与过滤",
-            )
-        }
-        WindowIconDropdownMenu(
-            entries =
-                listOf(
-                    DropdownEntry(
-                        items =
-                            listOf(
-                                DropdownItem(
-                                    text = "检测重复条目",
-                                    onClick = { onScanDuplicates() },
-                                ),
-                            ),
-                    ),
-                ),
-            collapseOnSelection = true,
-        ) {
-            Icon(
-                imageVector = MiuixIcons.MoreCircle,
-                contentDescription = "更多操作",
-            )
-        }
         if (enableGroupNavigation) {
-            IconButton(
-                onClick = {
-                    onCreateEntry()
-                },
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Add,
-                    contentDescription = "新建条目",
-                )
+            TooltipBox(text = "新建条目") {
+                IconButton(
+                    onClick = {
+                        onCreateEntry()
+                    },
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Add,
+                        contentDescription = "新建条目",
+                    )
+                }
             }
-            IconButton(
-                onClick = {
-                    onCreateGroup()
-                },
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.AddFolder,
-                    contentDescription = "新建分组",
-                )
+            TooltipBox(text = "新建分组") {
+                IconButton(
+                    onClick = {
+                        onCreateGroup()
+                    },
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.AddFolder,
+                        contentDescription = "新建分组",
+                    )
+                }
             }
         }
     }

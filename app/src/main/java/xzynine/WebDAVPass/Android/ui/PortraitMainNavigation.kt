@@ -17,6 +17,7 @@ import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Scan
@@ -147,15 +148,17 @@ fun PortraitMainNavigation(
                         )
                     },
                     floatingActionButton = {
-                        FloatingActionButton(
-                            onClick = {
-                                showScanBottomSheet.value = true
-                            },
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Scan,
-                                contentDescription = "扫描二维码",
-                            )
+                        TooltipBox(text = "扫描二维码") {
+                            FloatingActionButton(
+                                onClick = {
+                                    showScanBottomSheet.value = true
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Scan,
+                                    contentDescription = "扫描二维码",
+                                )
+                            }
                         }
                     },
                     floatingActionButtonPosition = FabPosition.End,

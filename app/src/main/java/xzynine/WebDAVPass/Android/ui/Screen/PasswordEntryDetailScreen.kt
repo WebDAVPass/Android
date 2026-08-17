@@ -21,6 +21,7 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -221,39 +222,47 @@ fun PasswordEntryDetailScreen(
     val detailActions: @Composable () -> Unit = {
         if (selectedEntry != null) {
             if (isEditing) {
-                IconButton(
-                    onClick = {
-                        selectedEntry?.let { syncEditFields(it) }
-                        isEditing = false
-                    },
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Close,
-                        contentDescription = "取消编辑",
-                    )
+                TooltipBox(text = "取消编辑") {
+                    IconButton(
+                        onClick = {
+                            selectedEntry?.let { syncEditFields(it) }
+                            isEditing = false
+                        },
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Close,
+                            contentDescription = "取消编辑",
+                        )
+                    }
                 }
-                IconButton(onClick = { saveEntry() }) {
-                    Icon(
-                        imageVector = MiuixIcons.Ok,
-                        contentDescription = "保存",
-                    )
+                TooltipBox(text = "保存") {
+                    IconButton(onClick = { saveEntry() }) {
+                        Icon(
+                            imageVector = MiuixIcons.Ok,
+                            contentDescription = "保存",
+                        )
+                    }
                 }
             } else {
-                IconButton(
-                    onClick = {
-                        showDeleteDialog.value = true
-                    },
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Delete,
-                        contentDescription = "删除",
-                    )
+                TooltipBox(text = "删除") {
+                    IconButton(
+                        onClick = {
+                            showDeleteDialog.value = true
+                        },
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Delete,
+                            contentDescription = "删除",
+                        )
+                    }
                 }
-                IconButton(onClick = { isEditing = true }) {
-                    Icon(
-                        imageVector = MiuixIcons.Edit,
-                        contentDescription = "编辑",
-                    )
+                TooltipBox(text = "编辑") {
+                    IconButton(onClick = { isEditing = true }) {
+                        Icon(
+                            imageVector = MiuixIcons.Edit,
+                            contentDescription = "编辑",
+                        )
+                    }
                 }
             }
         }

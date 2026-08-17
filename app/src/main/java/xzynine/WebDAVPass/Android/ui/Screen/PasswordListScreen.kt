@@ -28,6 +28,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -479,26 +480,30 @@ fun PasswordListScreen(
                     title = if (isSelectionMode.value) "已选 ${selectedTargets.size} 项" else title,
                     navigationIcon = {
                         if (isSelectionMode.value) {
-                            IconButton(
-                                onClick = {
-                                    clearSelectionMode()
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Close,
-                                    contentDescription = "取消选择",
-                                )
+                            TooltipBox(text = "取消选择") {
+                                IconButton(
+                                    onClick = {
+                                        clearSelectionMode()
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Close,
+                                        contentDescription = "取消选择",
+                                    )
+                                }
                             }
                         } else if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Back,
-                                    contentDescription = "返回上一级",
-                                )
+                            TooltipBox(text = "返回上一级") {
+                                IconButton(
+                                    onClick = {
+                                        tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Back,
+                                        contentDescription = "返回上一级",
+                                    )
+                                }
                             }
                         }
                     },
@@ -535,26 +540,30 @@ fun PasswordListScreen(
                     title = if (isSelectionMode.value) "已选 ${selectedTargets.size} 项" else title,
                     navigationIcon = {
                         if (isSelectionMode.value) {
-                            IconButton(
-                                onClick = {
-                                    clearSelectionMode()
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Close,
-                                    contentDescription = "取消选择",
-                                )
+                            TooltipBox(text = "取消选择") {
+                                IconButton(
+                                    onClick = {
+                                        clearSelectionMode()
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Close,
+                                        contentDescription = "取消选择",
+                                    )
+                                }
                             }
                         } else if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Back,
-                                    contentDescription = "返回上一级",
-                                )
+                            TooltipBox(text = "返回上一级") {
+                                IconButton(
+                                    onClick = {
+                                        tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Back,
+                                        contentDescription = "返回上一级",
+                                    )
+                                }
                             }
                         } else {
                             IconButton(

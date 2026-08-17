@@ -8,9 +8,7 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.VideoFile
@@ -47,6 +44,8 @@ import github.xzynine.webdav.WebDavFileKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import top.yukonga.miuix.kmp.basic.BreadcrumbBar
+import top.yukonga.miuix.kmp.basic.BreadcrumbItem
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
@@ -57,6 +56,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.File
@@ -767,37 +767,24 @@ private fun BrowseView(
     onSelectCurrentDirectory: () -> Unit,
 ) {
     // 面包屑层级
-    val segments =
+    val crumbs =
         remember(currentDirectory) {
-            currentDirectory.split('/').filter { it.isNotBlank() }
+            buildList {
+                add(BreadcrumbItem(path = "/", text = "根目录"))
+                currentDirectory.trim('/').split('/').filter { it.isNotBlank() }.forEach { segment ->
+                    add(BreadcrumbItem(path = segment, text = segment))
+                }
+            }
         }
 
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        BreadcrumbText(
-            text = "/",
-            active = segments.isEmpty(),
-            onClick = { onJumpTo("") },
-        )
-        segments.forEachIndexed { index, segment ->
-            Text(
-                text = "›",
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-            val target = segments.take(index + 1).joinToString("/")
-            BreadcrumbText(
-                text = segment,
-                active = index == segments.lastIndex,
-                onClick = { onJumpTo(target) },
-            )
-        }
-    }
+    BreadcrumbBar(
+        modifier = Modifier.fillMaxWidth(),
+        items = crumbs,
+        highlightIndex = crumbs.lastIndex,
+        onItemClick = { index ->
+            onJumpTo(crumbs.take(index + 1).joinToString("/") { it.path })
+        },
+    )
 
     // 工具行：排序 + 更多
     Row(
@@ -815,64 +802,68 @@ private fun BrowseView(
             }
         val dirOptions = listOf("升序", "降序")
         val dirIdx = if (sortDescending) 1 else 0
-        WindowIconDropdownMenu(
-            entries =
-                listOf(
-                    DropdownEntry(
-                        items =
-                            sortOptions.mapIndexed { index, option ->
-                                DropdownItem(
-                                    text = option,
-                                    selected = index == sortFieldIdx,
-                                    onClick = {
-                                        onSortFieldChange(
-                                            when (index) {
-                                                1 -> BrowserSortField.SIZE
-                                                2 -> BrowserSortField.TIME
-                                                3 -> BrowserSortField.EXTENSION
-                                                else -> BrowserSortField.NAME
-                                            },
-                                        )
-                                    },
-                                )
-                            },
+        TooltipBox(text = "排序") {
+            WindowIconDropdownMenu(
+                entries =
+                    listOf(
+                        DropdownEntry(
+                            items =
+                                sortOptions.mapIndexed { index, option ->
+                                    DropdownItem(
+                                        text = option,
+                                        selected = index == sortFieldIdx,
+                                        onClick = {
+                                            onSortFieldChange(
+                                                when (index) {
+                                                    1 -> BrowserSortField.SIZE
+                                                    2 -> BrowserSortField.TIME
+                                                    3 -> BrowserSortField.EXTENSION
+                                                    else -> BrowserSortField.NAME
+                                                },
+                                            )
+                                        },
+                                    )
+                                },
+                        ),
+                        DropdownEntry(
+                            items =
+                                dirOptions.mapIndexed { index, option ->
+                                    DropdownItem(
+                                        text = option,
+                                        selected = index == dirIdx,
+                                        onClick = { onSortDescendingChange(index == 1) },
+                                    )
+                                },
+                        ),
                     ),
-                    DropdownEntry(
-                        items =
-                            dirOptions.mapIndexed { index, option ->
-                                DropdownItem(
-                                    text = option,
-                                    selected = index == dirIdx,
-                                    onClick = { onSortDescendingChange(index == 1) },
-                                )
-                            },
-                    ),
-                ),
-        ) {
-            Icon(imageVector = MiuixIcons.Tune, contentDescription = "排序")
+            ) {
+                Icon(imageVector = MiuixIcons.Tune, contentDescription = "排序")
+            }
         }
 
-        WindowIconDropdownMenu(
-            entry =
-                DropdownEntry(
-                    items =
-                        listOf(
-                            DropdownItem(
-                                text = "跳转路径",
-                                onClick = onPathDialog,
+        TooltipBox(text = "更多") {
+            WindowIconDropdownMenu(
+                entry =
+                    DropdownEntry(
+                        items =
+                            listOf(
+                                DropdownItem(
+                                    text = "跳转路径",
+                                    onClick = onPathDialog,
+                                ),
+                                DropdownItem(
+                                    text = "新建文件夹",
+                                    onClick = onCreateFolderDialog,
+                                ),
+                                DropdownItem(
+                                    text = "上传文件",
+                                    onClick = onUpload,
+                                ),
                             ),
-                            DropdownItem(
-                                text = "新建文件夹",
-                                onClick = onCreateFolderDialog,
-                            ),
-                            DropdownItem(
-                                text = "上传文件",
-                                onClick = onUpload,
-                            ),
-                        ),
-                ),
-        ) {
-            Icon(imageVector = MiuixIcons.More, contentDescription = "更多")
+                    ),
+            ) {
+                Icon(imageVector = MiuixIcons.More, contentDescription = "更多")
+            }
         }
     }
 
@@ -922,32 +913,6 @@ private fun BrowseView(
 
 /**
  * 面包屑文本（当前层级高亮）
- */
-@Composable
-private fun BreadcrumbText(
-    text: String,
-    active: Boolean,
-    onClick: () -> Unit,
-) {
-    Text(
-        text = text,
-        modifier =
-            Modifier
-                .clickable(onClick = onClick)
-                .padding(horizontal = 6.dp, vertical = 4.dp),
-        color =
-            if (active) {
-                MiuixTheme.colorScheme.primary
-            } else {
-                MiuixTheme.colorScheme.onSurfaceVariantSummary
-            },
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-/**
- * 状态提示卡（加载中/失败/空目录）
  */
 @Composable
 private fun StatusCard(message: String) {

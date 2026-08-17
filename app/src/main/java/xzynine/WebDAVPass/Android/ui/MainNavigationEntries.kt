@@ -71,7 +71,7 @@ fun LibraryLockGuard(
  * 内部的 reified entry<Route.X>() 才能绑定到各调用处的具体路由类型。
  * 因此虽无函数类型参数也必须保持 inline，编译器会提示性能收益有限，此为必要设计。
  */
-inline fun NavEntryBuilder.addCommonMainEntries(
+fun NavEntryBuilder.addCommonMainEntries(
     backStack: NavBackStack,
     tokenViewModel: TokenViewModel,
     currentLibrary: LibraryContext?,

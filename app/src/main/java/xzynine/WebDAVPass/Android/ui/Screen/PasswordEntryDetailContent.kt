@@ -246,7 +246,7 @@ fun PasswordEntryDetailContent(
                                 modifier = Modifier.padding(top = 8.dp),
                             )
 
-                            if (showQrCode && selectedToken != null) {
+                            if (showQrCode) {
                                 Text(
                                     text = "扫描二维码添加到其他设备:",
                                     fontSize = 14.sp,

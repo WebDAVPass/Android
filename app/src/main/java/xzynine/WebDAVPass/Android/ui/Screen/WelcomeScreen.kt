@@ -40,6 +40,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.AddFolder
@@ -256,27 +257,31 @@ fun WelcomeScreen(
                 navigationIcon = {},
                 actions = {
                     if (isSelectionMode.value) {
-                        IconButton(
-                            onClick = {
-                                if (selectedHistoryIds.isNotEmpty()) {
-                                    showDeleteDialog.value = true
-                                }
-                            },
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Delete,
-                                contentDescription = "删除",
-                            )
+                        TooltipBox(text = "删除") {
+                            IconButton(
+                                onClick = {
+                                    if (selectedHistoryIds.isNotEmpty()) {
+                                        showDeleteDialog.value = true
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Delete,
+                                    contentDescription = "删除",
+                                )
+                            }
                         }
-                        IconButton(
-                            onClick = {
-                                clearSelectionMode()
-                            },
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Close,
-                                contentDescription = "取消选择",
-                            )
+                        TooltipBox(text = "取消选择") {
+                            IconButton(
+                                onClick = {
+                                    clearSelectionMode()
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Close,
+                                    contentDescription = "取消选择",
+                                )
+                            }
                         }
                     }
                 },

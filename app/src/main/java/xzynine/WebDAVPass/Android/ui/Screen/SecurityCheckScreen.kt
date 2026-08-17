@@ -203,14 +203,14 @@ private fun SecurityIssueRow(
     ) {
         Icon(
             imageVector =
-                if (item.expiryTime != null && item.expiryTime!! < System.currentTimeMillis()) {
+                if ((item.expiryTime != null) && (item.expiryTime < System.currentTimeMillis())) {
                     MiuixIcons.Delete
                 } else {
                     MiuixIcons.Lock
                 },
             contentDescription = null,
             tint =
-                if (item.expiryTime != null && item.expiryTime!! < System.currentTimeMillis()) {
+                if ((item.expiryTime != null) && (item.expiryTime < System.currentTimeMillis())) {
                     MiuixTheme.colorScheme.error
                 } else {
                     MiuixTheme.colorScheme.onSurfaceSecondary
@@ -228,7 +228,7 @@ private fun SecurityIssueRow(
                         if (item.account.isNotBlank()) {
                             append(item.account)
                         }
-                        if (item.expiryTime != null && item.expiryTime!! > 0L) {
+                        if ((item.expiryTime != null) && (item.expiryTime > 0L)) {
                             if (isNotEmpty()) append(" · ")
                             append("过期时间 ${LocalTimeFormatter.formatLocalDateTime(item.expiryTime)}")
                         }

@@ -195,7 +195,7 @@ fun WebDavConfigContent(
 
                 val testPassword =
                     if (password.isEmpty() && isExistingConfig) {
-                        existingConfig!!.password
+                        existingConfig.password
                     } else {
                         password
                     }
@@ -296,7 +296,7 @@ fun WebDavConfigContent(
 
                 val finalPassword =
                     if (password.isEmpty() && isExistingConfig) {
-                        existingConfig!!.password
+                        existingConfig.password
                     } else {
                         password
                     }
@@ -316,7 +316,7 @@ fun WebDavConfigContent(
 
                 val config =
                     if (isExistingConfig) {
-                        existingConfig!!.copy(
+                        existingConfig.copy(
                             url = webdavUrl,
                             username = username,
                             password = finalPassword,
