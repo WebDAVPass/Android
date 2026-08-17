@@ -60,6 +60,7 @@ import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.resolveDisplayName
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
+import androidx.core.net.toUri
 
 /** 密钥文件大小上限（1 MiB），与 CreateMasterPasswordDialog 保持一致。 */
 private const val MAX_KEY_FILE_BYTES = 1024 * 1024
@@ -800,7 +801,7 @@ private suspend fun loadKeyFileFromUri(
 ): Pair<String, ByteArray>? {
     return withContext(kotlinx.coroutines.Dispatchers.IO) {
         runCatching {
-            val uri = Uri.parse(uriString)
+            val uri = uriString.toUri()
             val name = uri.resolveDisplayName(context, fallbackIfEmpty = "keyfile")
             context.contentResolver.openInputStream(uri)?.use { input ->
                 val buffer = java.io.ByteArrayOutputStream(8 * 1024)

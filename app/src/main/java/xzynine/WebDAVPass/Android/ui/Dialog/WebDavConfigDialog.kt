@@ -63,7 +63,6 @@ fun WebDavConfigContent(
     var listing by remember { mutableStateOf<List<String>>(emptyList()) }
     var isTesting by remember { mutableStateOf(false) }
     // 密码默认隐藏，并且不可解除隐藏
-    val passwordVisible = false
     var urlError by remember { mutableStateOf<String?>(null) }
     val isExistingConfig = existingConfig != null
     val coroutineScope = rememberCoroutineScope()

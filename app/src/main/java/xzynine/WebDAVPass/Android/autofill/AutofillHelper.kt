@@ -14,12 +14,10 @@ import android.util.Log
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import android.widget.RemoteViews
-import androidx.annotation.RequiresApi
 import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.model.RegisterInfo
 import xzynine.WebDAVPass.Android.model.SearchInfo
 
-@RequiresApi(api = Build.VERSION_CODES.O)
 object AutofillHelper {
     private const val TAG = "AutofillHelper"
 
@@ -141,9 +139,7 @@ object AutofillHelper {
         val title =
             if (entry.title.isNotEmpty() && entry.username.isNotEmpty()) {
                 "${entry.title} (${entry.username})"
-            } else if (entry.title.isNotEmpty()) {
-                entry.title
-            } else {
+            } else entry.title.ifEmpty {
                 entry.username
             }
 
@@ -200,26 +196,23 @@ object AutofillHelper {
         context: Context,
         entries: List<AutofillEntryInfo>,
         parseResult: StructureParser.Result,
-        autofillComponent: AutofillComponent?,
     ): FillResponse? {
         if (entries.isEmpty()) return null
 
         val builder = FillResponse.Builder()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            parseResult.webDomain?.let { domain ->
-                val header =
-                    RemoteViews(context.packageName, R.layout.item_autofill_web_domain).apply {
-                        setTextViewText(R.id.autofill_web_domain_text, domain)
-                    }
-                builder.setHeader(header)
-            } ?: parseResult.applicationId?.let { appId ->
-                val header =
-                    RemoteViews(context.packageName, R.layout.item_autofill_app_id).apply {
-                        setTextViewText(R.id.autofill_app_id_text, appId)
-                    }
-                builder.setHeader(header)
-            }
+        parseResult.webDomain?.let { domain ->
+            val header =
+                RemoteViews(context.packageName, R.layout.item_autofill_web_domain).apply {
+                    setTextViewText(R.id.autofill_web_domain_text, domain)
+                }
+            builder.setHeader(header)
+        } ?: parseResult.applicationId?.let { appId ->
+            val header =
+                RemoteViews(context.packageName, R.layout.item_autofill_app_id).apply {
+                    setTextViewText(R.id.autofill_app_id_text, appId)
+                }
+            builder.setHeader(header)
         }
 
         entries.forEach { entry ->

@@ -176,21 +176,6 @@ fun PasswordListScreen(
         }
     }
 
-    fun toggleSelection(item: PasswordEntry) {
-        if (!allowWriteActions) {
-            return
-        }
-        isSelectionMode.value = true
-        if (selectedTargets.containsKey(item.entryId)) {
-            selectedTargets.remove(item.entryId)
-        } else {
-            selectedTargets[item.entryId] = item.isFolderPlaceholder
-        }
-        if (selectedTargets.isEmpty()) {
-            isSelectionMode.value = false
-        }
-    }
-
     fun setSelection(
         item: PasswordEntry,
         checked: Boolean,
@@ -531,8 +516,7 @@ fun PasswordListScreen(
                             onCopySelection = { openGroupPicker(isMove = false) },
                             onScanDuplicates = { scanDuplicateEntries() },
                             onCreateEntry = { showCreateEntryDialog.value = true },
-                            onCreateGroup = { showCreateGroupDialog.value = true },
-                        )
+                        ) { showCreateGroupDialog.value = true }
                     },
                 )
             } else {
@@ -600,8 +584,7 @@ fun PasswordListScreen(
                             onCopySelection = { openGroupPicker(isMove = false) },
                             onScanDuplicates = { scanDuplicateEntries() },
                             onCreateEntry = { showCreateEntryDialog.value = true },
-                            onCreateGroup = { showCreateGroupDialog.value = true },
-                        )
+                        ) { showCreateGroupDialog.value = true }
                     },
                 )
             }

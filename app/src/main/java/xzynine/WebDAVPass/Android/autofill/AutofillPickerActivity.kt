@@ -138,7 +138,6 @@ class AutofillPickerActivity : AppCompatActivity() {
                         context = this@AutofillPickerActivity,
                         entries = autofillEntries,
                         parseResult = parseResult,
-                        autofillComponent = autofillComponent,
                     )
 
                 if (response != null) {

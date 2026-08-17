@@ -69,6 +69,7 @@ import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.TokenQRCodeDecoder
 import java.security.NoSuchAlgorithmException
 import java.util.concurrent.Executors
+import androidx.core.net.toUri
 
 /**
  * 扫描二维码界面
@@ -138,7 +139,7 @@ fun ScanTokenScreen(
                             }
 
                         try {
-                            val uriStr = Uri.parse(tokenString)
+                            val uriStr = tokenString.toUri()
                             val token = OtpTokenFactory.createFromUri(uriStr)
                             coroutineScope.launch(Dispatchers.Main) {
                                 val added = tokenViewModel.addToken(token)
@@ -274,7 +275,7 @@ fun ScanTokenScreen(
                                                     imageProxy,
                                                     tokenQRCodeDecoder,
                                                     tokenViewModel,
-                                                    onTokenFound = { tokenString ->
+                                                    onTokenFound = { _ ->
                                                         // 标记已找到令牌
                                                         foundToken.value = true
 
@@ -397,7 +398,7 @@ fun ScanTokenScreen(
 
                         coroutineScope.launch {
                             try {
-                                val token = OtpTokenFactory.createFromUri(Uri.parse(raw))
+                                val token = OtpTokenFactory.createFromUri(raw.toUri())
                                 val added = tokenViewModel.addToken(token)
                                 if (added) {
                                     ToastUtils.showShortToast(context, "令牌添加成功")
@@ -488,7 +489,7 @@ private fun processImageProxy(
 
                     try {
                         // 解析URI对象
-                        val uri = Uri.parse(tokenString)
+                        val uri = tokenString.toUri()
 
                         // 从URI创建令牌 - 这里会执行令牌规则验证
                         val token = OtpTokenFactory.createFromUri(uri)

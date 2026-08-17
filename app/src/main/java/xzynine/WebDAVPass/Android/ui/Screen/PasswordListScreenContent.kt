@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -55,6 +54,7 @@ import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import kotlin.time.Duration.Companion.milliseconds
 
 @Composable
 fun PasswordListScreenContent(
@@ -228,7 +228,7 @@ fun PasswordListScreenContent(
                         indexEnsureJob?.cancel()
                         indexEnsureJob =
                             coroutineScope.launch {
-                                kotlinx.coroutines.delay(120L)
+                                kotlinx.coroutines.delay(120L.milliseconds)
 
                                 // 后台确保目标分组被加载（SubViewModel 已将重计算移动到 IO 调度器）
                                 val loaded = tokenViewModel.passwordViewModel.ensurePasswordIndexLoaded(targetKey)
@@ -256,7 +256,7 @@ fun PasswordListScreenContent(
 }
 
 @Composable
-fun RowScope.PasswordListTopBarActions(
+fun PasswordListTopBarActions(
     isSelectionMode: Boolean,
     selectedTargets: Map<Long, Boolean>,
     enableRecycleBinActions: Boolean,
