@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Row
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.window.WindowDialog
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -280,22 +283,33 @@ private fun BlocklistDialog(
     onDismiss: () -> Unit,
     onConfirm: () -> Unit,
 ) {
-    AlertDialog(
+    WindowDialog(
+        title = title,
+        show = true,
         onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onConfirm) { androidx.compose.material3.Text("保存") }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { androidx.compose.material3.Text("取消") }
-        },
-        title = { androidx.compose.material3.Text(title) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = onTextChange,
-                placeholder = { androidx.compose.material3.Text("使用逗号分隔多个条目") },
-                modifier = Modifier.fillMaxWidth(),
+    ) {
+        TextField(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp),
+            value = text,
+            maxLines = 1,
+            onValueChange = onTextChange,
+            label = "使用逗号分隔多个条目",
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(
+                text = "取消",
+                onClick = onDismiss,
+                modifier = Modifier.weight(1f),
             )
-        },
-    )
+            TextButton(
+                text = "保存",
+                onClick = onConfirm,
+                colors = ButtonDefaults.textButtonColorsPrimary(),
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
 }
