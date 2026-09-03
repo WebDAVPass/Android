@@ -104,17 +104,17 @@ object AutofillHelper {
                 AssistStructure::class.java,
             )
         structure ?: return null
-        val inline =
+        val compatInlineSuggestionsRequest =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 BundleCompat.getParcelable(
                     extras ?: Bundle.EMPTY,
                     EXTRA_INLINE_SUGGESTIONS_REQUEST,
                     android.view.inputmethod.InlineSuggestionsRequest::class.java,
-                )
+                )?.let { CompatInlineSuggestionsRequest(it) }
             } else {
                 null
             }
-        return AutofillComponent(structure, inline?.let { CompatInlineSuggestionsRequest(it) })
+        return AutofillComponent(structure, compatInlineSuggestionsRequest)
     }
 
     fun Bundle.addAutofillComponent(autofillComponent: AutofillComponent?): Bundle {
@@ -137,17 +137,17 @@ object AutofillHelper {
                 AssistStructure::class.java,
             )
         structure ?: return null
-        val inline =
+        val compatInlineSuggestionsRequest =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 BundleCompat.getParcelable(
                     this,
                     EXTRA_INLINE_SUGGESTIONS_REQUEST,
                     android.view.inputmethod.InlineSuggestionsRequest::class.java,
-                )
+                )?.let { CompatInlineSuggestionsRequest(it) }
             } else {
                 null
             }
-        return AutofillComponent(structure, inline?.let { CompatInlineSuggestionsRequest(it) })
+        return AutofillComponent(structure, compatInlineSuggestionsRequest)
     }
 
     // endregion

@@ -307,20 +307,31 @@ class KeeAutofillService : AutofillService() {
                     }
 
                     // 认证响应
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        try {
-                            responseBuilder.setAuthentication(
-                                autofillIds,
-                                intentSender,
-                                Presentations
-                                    .Builder()
-                                    .apply {
-                                        inlinePresentation?.let { setInlinePresentation(it) }
-                                        setDialogPresentation(remoteViewsUnlock)
-                                    }.build(),
-                            )
-                        } catch (e: Exception) {
-                            config.logger.e(TAG, "Unable to use new setAuthentication method.", e)
+                    when {
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU -> {
+                            try {
+                                responseBuilder.setAuthentication(
+                                    autofillIds,
+                                    intentSender,
+                                    Presentations
+                                        .Builder()
+                                        .apply {
+                                            inlinePresentation?.let { setInlinePresentation(it) }
+                                            setDialogPresentation(remoteViewsUnlock)
+                                        }.build(),
+                                )
+                            } catch (e: Exception) {
+                                config.logger.e(TAG, "Unable to use new setAuthentication method.", e)
+                                @Suppress("DEPRECATION")
+                                responseBuilder.setAuthentication(
+                                    autofillIds,
+                                    intentSender,
+                                    remoteViewsUnlock,
+                                    inlinePresentation,
+                                )
+                            }
+                        }
+                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R -> {
                             @Suppress("DEPRECATION")
                             responseBuilder.setAuthentication(
                                 autofillIds,
@@ -329,14 +340,14 @@ class KeeAutofillService : AutofillService() {
                                 inlinePresentation,
                             )
                         }
-                    } else {
-                        @Suppress("DEPRECATION")
-                        responseBuilder.setAuthentication(
-                            autofillIds,
-                            intentSender,
-                            remoteViewsUnlock,
-                            inlinePresentation,
-                        )
+                        else -> {
+                            @Suppress("DEPRECATION")
+                            responseBuilder.setAuthentication(
+                                autofillIds,
+                                intentSender,
+                                remoteViewsUnlock,
+                            )
+                        }
                     }
 
                     success = true
