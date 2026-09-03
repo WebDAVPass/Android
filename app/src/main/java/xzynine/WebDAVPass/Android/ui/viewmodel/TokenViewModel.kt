@@ -94,6 +94,18 @@ class TokenViewModel(
     val webDavConfigViewModel: WebDavConfigViewModel = WebDavConfigViewModel(context)
     val passwordViewModel: PasswordViewModel = PasswordViewModel(context)
 
+    /**
+     * 自动填充检索专用：读取数据库中全部条目（含字段详情），
+     * 以便按包名/域名/自定义字段（如 AndroidApp1=androidapp://包名）匹配。
+     * 普通列表为性能考虑不加载字段详情，自动填充需要详情，故独立读取。
+     */
+    suspend fun loadAllPasswordEntriesWithDetails(): List<PasswordEntry> {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return emptyList()
+        val masterPassword = libraryViewModel.getMasterPasswordInternal() ?: return emptyList()
+        if (!libraryViewModel.isLibraryUnlocked.value) return emptyList()
+        return kdbxTokenRepository.loadPasswordEntries(localPath, masterPassword, includeFieldDetails = true)
+    }
+
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())
     val tokens: StateFlow<List<OtpToken>> = _tokens.asStateFlow()
 

@@ -22,6 +22,12 @@ data class AutofillEntry(
     val password: String = "",
     val url: String = "",
     val otpToken: String? = null,
+    /**
+     * 所有非机密字段的值（标题、账号、网站、附加字段等），用于自动填充时按包名/域名匹配。
+     * 由宿主在映射时收集，库层 [xzynine.WebDAVPass.Autofill.bridge.AutofillEntryProvider] 的匹配逻辑消费。
+     * 不含密码与动态令牌。
+     */
+    val searchableValues: List<String> = emptyList(),
     /** 信用卡信息（可选，当前 app 一般不提供）。 */
     val creditCard: CreditCard? = null,
 )

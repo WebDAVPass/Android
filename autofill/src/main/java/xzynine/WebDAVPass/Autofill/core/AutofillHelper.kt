@@ -73,6 +73,7 @@ object AutofillHelper {
     private const val EXTRA_INLINE_SUGGESTIONS_REQUEST = "xzynine.WebDAVPass.Autofill.INLINE_SUGGESTIONS_REQUEST"
     private const val EXTRA_SPECIAL_MODE = "xzynine.WebDAVPass.Autofill.SPECIAL_MODE"
     private const val EXTRA_SEARCH_INFO = "xzynine.WebDAVPass.Autofill.SEARCH_INFO"
+    private const val EXTRA_PARSE_RESULT = "xzynine.WebDAVPass.Autofill.PARSE_RESULT"
     private const val EXTRA_REGISTER_INFO = "xzynine.WebDAVPass.Autofill.REGISTER_INFO"
 
     /** 选择 / 注册模式标识（经 PendingIntent 传递给宿主界面）。 */
@@ -171,6 +172,13 @@ object AutofillHelper {
 
     fun getAutofillComponentFromIntent(intent: Intent): AutofillComponent? = intent.retrieveAutofillComponent()
 
+    fun getParseResultFromIntent(intent: Intent): StructureParser.Result? =
+        BundleCompat.getParcelable(
+            intent.extras ?: Bundle.EMPTY,
+            EXTRA_PARSE_RESULT,
+            StructureParser.Result::class.java,
+        )
+
     // endregion
 
     // region PendingIntent 构造（指向宿主界面）
@@ -184,6 +192,7 @@ object AutofillHelper {
         searchInfo: AutofillSearchInfo?,
         autofillComponent: AutofillComponent?,
         uiTarget: AutofillUiTarget,
+        parseResult: StructureParser.Result? = null,
     ): PendingIntent? =
         try {
             val intent =
@@ -191,6 +200,7 @@ object AutofillHelper {
                     component = uiTarget.selectionActivity()
                     putExtra(EXTRA_SPECIAL_MODE, MODE_SELECTION)
                     searchInfo?.let { putExtra(EXTRA_SEARCH_INFO, it) }
+                    parseResult?.let { putExtra(EXTRA_PARSE_RESULT, it) }
                     addAutofillComponent(autofillComponent)
                 }
             val flags =
@@ -207,13 +217,19 @@ object AutofillHelper {
 
     private fun getPendingIntentForSelectionLaunch(
         context: Context,
+        searchInfo: AutofillSearchInfo?,
+        autofillComponent: AutofillComponent?,
         uiTarget: AutofillUiTarget,
+        parseResult: StructureParser.Result? = null,
     ): PendingIntent? =
         try {
             val intent =
                 Intent().apply {
                     component = uiTarget.selectionActivity()
                     putExtra(EXTRA_SPECIAL_MODE, MODE_SELECTION)
+                    searchInfo?.let { putExtra(EXTRA_SEARCH_INFO, it) }
+                    parseResult?.let { putExtra(EXTRA_PARSE_RESULT, it) }
+                    addAutofillComponent(autofillComponent)
                 }
             val flags =
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -273,6 +289,16 @@ object AutofillHelper {
     ): FillResponse? {
         if (entries.isEmpty()) return null
 
+        // 内联建议点击后会拉起选择界面，需要把搜索信息与已解析结果一并带过去，
+        // 否则选择界面会因缺少 searchInfo 直接取消、或在 MIUI 上重读 AssistStructure 抛 SecurityException。
+        val searchInfo =
+            AutofillSearchInfo(
+                applicationId = parseResult.applicationId,
+                webDomain = parseResult.webDomain,
+                webScheme = parseResult.webScheme,
+                manualSelection = true,
+            )
+
         val responseBuilder = FillResponse.Builder()
 
         // 头部：网站域名或应用包名
@@ -320,6 +346,9 @@ object AutofillHelper {
                             entry,
                             uiTarget,
                             appIconRes,
+                            searchInfo,
+                            autofillComponent,
+                            parseResult,
                         )
                 }
                 responseBuilder.addDataset(
@@ -329,6 +358,8 @@ object AutofillHelper {
                         struct = parseResult,
                         inlinePresentation = inlinePresentation,
                         appIconRes = appIconRes,
+                        searchInfo = searchInfo,
+                        autofillComponent = autofillComponent,
                     ),
                 )
             } catch (e: Exception) {
@@ -443,6 +474,8 @@ object AutofillHelper {
         struct: StructureParser.Result,
         inlinePresentation: InlinePresentation?,
         appIconRes: Int,
+        searchInfo: AutofillSearchInfo?,
+        autofillComponent: AutofillComponent?,
     ): Dataset {
         val title = makeEntryTitle(entry)
         val remoteViews =
@@ -583,6 +616,9 @@ object AutofillHelper {
         entry: AutofillEntry,
         uiTarget: AutofillUiTarget,
         appIconRes: Int,
+        searchInfo: AutofillSearchInfo?,
+        autofillComponent: AutofillComponent?,
+        parseResult: StructureParser.Result?,
     ): InlinePresentation? {
         compat.inlineSuggestionsRequest?.let { req ->
             val specs = req.inlinePresentationSpecs
@@ -593,7 +629,14 @@ object AutofillHelper {
                 if (!UiVersions.getVersions(imeStyle).contains(UiVersions.INLINE_UI_VERSION_1)) {
                     return null
                 }
-                val pendingIntent = getPendingIntentForSelectionLaunch(context, uiTarget) ?: return null
+                val pendingIntent =
+                    getPendingIntentForSelectionLaunch(
+                        context,
+                        searchInfo,
+                        autofillComponent,
+                        uiTarget,
+                        parseResult,
+                    ) ?: return null
                 return InlinePresentation(
                     InlineSuggestionUi
                         .newContentBuilder(pendingIntent)
@@ -667,7 +710,7 @@ object AutofillHelper {
             )
         val view = RemoteViews(context.packageName, R.layout.item_autofill_select_entry)
         val pendingIntent =
-            getPendingIntentForSelection(context, searchInfo, autofillComponent, uiTarget)
+            getPendingIntentForSelection(context, searchInfo, autofillComponent, uiTarget, parseResult)
                 ?: return
 
         var inlinePresentation: InlinePresentation? = null

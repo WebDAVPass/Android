@@ -52,7 +52,12 @@ class AutofillPickerActivity : AppCompatActivity() {
             cancelAndFinish()
             return
         }
-        val parseResult = StructureParser(autofillComponent.assistStructure).parse(saveValue = false)
+        // 优先使用服务侧已解析的 Result（通过 Intent 传递），避免在选择 Activity 进程中重新读取
+        // AssistStructure——MIUI 在 Activity 进程重读结构会抛 SecurityException 导致解析失败。
+        val parseResult =
+            AutofillHelper.getParseResultFromIntent(intent)
+                ?: runCatching { StructureParser(autofillComponent.assistStructure).parse(saveValue = false) }
+                    .getOrNull()
         if (parseResult == null || !parseResult.isValid()) {
             cancelAndFinish()
             return

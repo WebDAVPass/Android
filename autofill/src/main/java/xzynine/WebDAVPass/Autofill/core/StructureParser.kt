@@ -26,6 +26,8 @@ package xzynine.WebDAVPass.Autofill.core
 
 import android.app.assist.AssistStructure
 import android.os.Build
+import android.os.Parcel
+import android.os.Parcelable
 import android.text.InputType
 import android.util.Log
 import android.view.View
@@ -66,13 +68,20 @@ class StructureParser(
                     usernameValueCandidate = null
                     mainLoop@ for (i in 0 until structure.windowNodeCount) {
                         val windowNode = structure.getWindowNodeAt(i)
-                        applicationId = windowNode.title.toString().split("/")[0]
-                        Log.d(TAG, "Autofill applicationId: $applicationId")
+                        val windowAppId = windowNode.title.toString().split("/")[0]
+                        Log.d(TAG, "Autofill applicationId: $windowAppId")
 
-                        if (applicationId?.contains(APPLICATION_ID_POPUP_WINDOW) == false) {
-                            if (parseViewNode(windowNode.rootViewNode)) {
-                                break@mainLoop
-                            }
+                        // 弹窗窗口（PopupWindow:xxx）不是真实应用包名：跳过其中的字段解析，
+                        // 且不得覆盖 applicationId，否则会把弹窗名误当作包名，
+                        // 导致被「黑名单」误拦截（即便黑名单为空）。
+                        if (windowAppId?.contains(APPLICATION_ID_POPUP_WINDOW) == true) {
+                            continue
+                        }
+                        if (applicationId == null) {
+                            applicationId = windowAppId
+                        }
+                        if (parseViewNode(windowNode.rootViewNode)) {
+                            break@mainLoop
                         }
                     }
                     // 若未显式找到 username 字段，则把候选字段（通常为密码框前的文本输入框）作为 username。
@@ -537,7 +546,7 @@ class StructureParser(
     }
 
     @RequiresApi(api = Build.VERSION_CODES.O)
-    class Result {
+    class Result : Parcelable {
         var isWebView: Boolean = false
         var applicationId: String? = null
         var webDomain: String? = null
@@ -637,6 +646,82 @@ class StructureParser(
             set(value) {
                 if (allowSaveValues) field = value
             }
+
+        // region Parcelable：避免在选择 Activity 中重新解析 AssistStructure（MIUI 在 Activity 进程重读结构会抛 SecurityException）
+        constructor()
+
+        constructor(parcel: Parcel) {
+            // 先开启可写，使下方 value 的自定义 setter 能正确存储反序列化得到的值
+            allowSaveValues = true
+            isWebView = parcel.readByte() != 0.toByte()
+            applicationId = parcel.readString()
+            webDomain = parcel.readString()
+            webScheme = parcel.readString()
+            // 信用卡过期选项数组仅用于信用卡选择分支，选择/保存流程不依赖，重建时置空
+            creditCardExpirationYearOptions = null
+            creditCardExpirationMonthOptions = null
+            creditCardExpirationDayOptions = null
+            usernameId = parcel.readParcelable(AutofillId::class.java.classLoader)
+            passwordId = parcel.readParcelable(AutofillId::class.java.classLoader)
+            creditCardHolderId = parcel.readParcelable(AutofillId::class.java.classLoader)
+            creditCardNumberId = parcel.readParcelable(AutofillId::class.java.classLoader)
+            creditCardExpirationDateId = parcel.readParcelable(AutofillId::class.java.classLoader)
+            creditCardExpirationYearId = parcel.readParcelable(AutofillId::class.java.classLoader)
+            creditCardExpirationMonthId = parcel.readParcelable(AutofillId::class.java.classLoader)
+            creditCardExpirationDayId = parcel.readParcelable(AutofillId::class.java.classLoader)
+            cardVerificationValueId = parcel.readParcelable(AutofillId::class.java.classLoader)
+            otpTokenId = parcel.readParcelable(AutofillId::class.java.classLoader)
+            usernameValue = parcel.readParcelable(AutofillValue::class.java.classLoader)
+            passwordValue = parcel.readParcelable(AutofillValue::class.java.classLoader)
+            creditCardHolder = parcel.readParcelable(AutofillValue::class.java.classLoader)
+            creditCardNumber = parcel.readParcelable(AutofillValue::class.java.classLoader)
+            creditCardExpirationValueMillis = parcel.readValue(Long::class.java.classLoader) as? Long
+            creditCardExpirationYearValue = parcel.readInt()
+            creditCardExpirationMonthValue = parcel.readInt()
+            creditCardExpirationDayValue = parcel.readInt()
+            cardVerificationValue = parcel.readParcelable(AutofillValue::class.java.classLoader)
+            otpTokenValue = parcel.readParcelable(AutofillValue::class.java.classLoader)
+        }
+
+        override fun writeToParcel(
+            parcel: Parcel,
+            flags: Int,
+        ) {
+            parcel.writeByte(if (isWebView) 1 else 0)
+            parcel.writeString(applicationId)
+            parcel.writeString(webDomain)
+            parcel.writeString(webScheme)
+            // 信用卡过期选项数组不写入 Parcel（重建为 null，见读取端）
+            parcel.writeParcelable(usernameId, flags)
+            parcel.writeParcelable(passwordId, flags)
+            parcel.writeParcelable(creditCardHolderId, flags)
+            parcel.writeParcelable(creditCardNumberId, flags)
+            parcel.writeParcelable(creditCardExpirationDateId, flags)
+            parcel.writeParcelable(creditCardExpirationYearId, flags)
+            parcel.writeParcelable(creditCardExpirationMonthId, flags)
+            parcel.writeParcelable(creditCardExpirationDayId, flags)
+            parcel.writeParcelable(cardVerificationValueId, flags)
+            parcel.writeParcelable(otpTokenId, flags)
+            parcel.writeParcelable(usernameValue, flags)
+            parcel.writeParcelable(passwordValue, flags)
+            parcel.writeParcelable(creditCardHolder, flags)
+            parcel.writeParcelable(creditCardNumber, flags)
+            parcel.writeValue(creditCardExpirationValueMillis)
+            parcel.writeInt(creditCardExpirationYearValue)
+            parcel.writeInt(creditCardExpirationMonthValue)
+            parcel.writeInt(creditCardExpirationDayValue)
+            parcel.writeParcelable(cardVerificationValue, flags)
+            parcel.writeParcelable(otpTokenValue, flags)
+        }
+
+        override fun describeContents(): Int = 0
+
+        companion object CREATOR : Parcelable.Creator<Result> {
+            override fun createFromParcel(parcel: Parcel): Result = Result(parcel)
+
+            override fun newArray(size: Int): Array<Result?> = arrayOfNulls(size)
+        }
+        // endregion
     }
 
     companion object {

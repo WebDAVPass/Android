@@ -33,6 +33,8 @@ import android.graphics.BlendMode
 import android.graphics.drawable.Icon
 import android.os.Build
 import android.os.CancellationSignal
+import android.os.Handler
+import android.os.Looper
 import android.provider.Settings
 import android.service.autofill.AutofillService
 import android.service.autofill.FillCallback
@@ -47,6 +49,7 @@ import android.util.Log
 import android.view.autofill.AutofillId
 import android.view.autofill.AutofillManager
 import android.widget.RemoteViews
+import android.widget.Toast
 import androidx.annotation.RequiresApi
 import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.v1.InlineSuggestionUi
@@ -78,6 +81,25 @@ class KeeAutofillService : AutofillService() {
 
     override fun onDisconnected() {
         Log.d(TAG, "onDisconnected")
+    }
+
+    /**
+     * 当请求的应用/网站命中自动填充黑名单时，除 onFailure 外额外弹 toast 提示用户，
+     * 避免仅静默日志导致用户不知为何未触发填充。
+     */
+    private fun showBlockedToast(
+        applicationId: String?,
+        webDomain: String?,
+    ) {
+        val target = applicationId ?: webDomain ?: "该应用"
+        Handler(Looper.getMainLooper()).post {
+            Toast
+                .makeText(
+                    this,
+                    "「$target」在自动填充黑名单中，已跳过填充",
+                    Toast.LENGTH_SHORT,
+                ).show()
+        }
     }
 
     override fun onDestroy() {
@@ -131,6 +153,7 @@ class KeeAutofillService : AutofillService() {
             return
         }
         if (!AutofillBlocklist.allowedFor(parseResult.applicationId, parseResult.webDomain, prefs)) {
+            showBlockedToast(parseResult.applicationId, parseResult.webDomain)
             callback.onFailure("应用或网站在自动填充黑名单中")
             return
         }
@@ -204,6 +227,7 @@ class KeeAutofillService : AutofillService() {
                             searchInfo,
                             autofillComponent,
                             config.uiTarget,
+                            parseResult,
                         )?.intentSender
                 if (intentSender != null) {
                     val responseBuilder = FillResponse.Builder()
