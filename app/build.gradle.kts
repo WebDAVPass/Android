@@ -158,6 +158,8 @@ dependencies {
     implementation(project(":icon-pack"))
     // 导入base模块
     implementation(project(":base"))
+    // 自动填充独立库模块（桥接接口由本 app 注入）
+    implementation(project(":autofill"))
     implementation("com.google.code.gson:gson:2.10.1") // Gson JSON解析库
     // 接入令牌图标系统模块
     implementation(project(":token-images"))

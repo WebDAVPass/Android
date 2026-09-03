@@ -26,6 +26,8 @@ rootProject.name = "WebDAVPass"
 
 include(":app")
 include(":base")
+// 自动填充独立库模块（移植自 KeePassDX，零 app 依赖）
+include(":autofill")
 include(":crypto")
 include(":database")
 include(":icon-pack", ":icon-pack:classic", ":icon-pack:material")
