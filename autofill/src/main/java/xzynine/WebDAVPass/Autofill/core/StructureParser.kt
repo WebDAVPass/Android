@@ -75,8 +75,9 @@ class StructureParser(
                             }
                         }
                     }
-                    // 若未显式找到 username 字段，则把密码前的候选字段作为 username
-                    if (usernameId == null && passwordId != null && usernameIdCandidate != null) {
+                    // 若未显式找到 username 字段，则把候选字段（通常为密码框前的文本输入框）作为 username。
+                    // 不再要求必须存在密码框，以兼容仅含账号/用户名、无密码框的分步登录页（如部分应用）。
+                    if (usernameId == null && usernameIdCandidate != null) {
                         usernameId = usernameIdCandidate
                         usernameValue = usernameValueCandidate
                     }
@@ -569,7 +570,8 @@ class StructureParser(
         var cardVerificationValueId: AutofillId? = null
         var otpTokenId: AutofillId? = null
 
-        fun isValid(): Boolean = passwordId != null || creditCardNumberId != null || otpTokenId != null
+        fun isValid(): Boolean =
+            usernameId != null || passwordId != null || creditCardNumberId != null || otpTokenId != null
 
         fun allAutofillIds(): Array<AutofillId> {
             val all = mutableListOf<AutofillId>()
