@@ -55,11 +55,12 @@ class AppAutofillEntryProvider(
 
     private fun PasswordEntry.toAutofillEntry(): AutofillEntry? {
         if (isFolderGroup) return null
+        // 按字段名匹配用户名，不限定 valueType：含 @ 的邮箱型用户名会被 detectValueType 判为
+        // EMAIL 类型，若强约束 TEXT 会将其丢弃（KeePassDX 直接使用原始 username 字符串，无此限制）。
         val username =
             keyValues
                 .firstOrNull {
-                    it.valueType == RemainingValueType.TEXT &&
-                        (it.fieldName.equals("username", true) || it.fieldName.equals("user", true) || it.fieldName.equals("email", true))
+                    it.fieldName.equals("username", true) || it.fieldName.equals("user", true) || it.fieldName.equals("email", true)
                 }?.rawValue ?: ""
         val password =
             keyValues.firstOrNull { it.valueType == RemainingValueType.PASSWORD }?.rawValue ?: ""

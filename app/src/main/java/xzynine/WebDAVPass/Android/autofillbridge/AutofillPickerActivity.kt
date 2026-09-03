@@ -52,12 +52,14 @@ class AutofillPickerActivity : AppCompatActivity() {
             cancelAndFinish()
             return
         }
-        // 优先使用服务侧已解析的 Result（通过 Intent 传递），避免在选择 Activity 进程中重新读取
-        // AssistStructure——MIUI 在 Activity 进程重读结构会抛 SecurityException 导致解析失败。
+        // 与 KeePassDX 一致：优先在当前 Activity 进程重新解析 AssistStructure，
+        // 以获得与本次填充会话绑定、可正确回填的 AutofillId。
+        // 仅当重读抛异常（如 MIUI 在 Activity 进程重读结构会抛 SecurityException）时，
+        // 才回退到服务侧经 Intent 跨进程传递的已解析 Result。
         val parseResult =
-            AutofillHelper.getParseResultFromIntent(intent)
-                ?: runCatching { StructureParser(autofillComponent.assistStructure).parse(saveValue = false) }
-                    .getOrNull()
+            runCatching { StructureParser(autofillComponent.assistStructure).parse(saveValue = false) }
+                .getOrNull()
+                ?: AutofillHelper.getParseResultFromIntent(intent)
         if (parseResult == null || !parseResult.isValid()) {
             cancelAndFinish()
             return
