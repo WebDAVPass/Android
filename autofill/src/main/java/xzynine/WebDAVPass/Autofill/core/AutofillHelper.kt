@@ -675,9 +675,11 @@ object AutofillHelper {
             autofillComponent.compatInlineSuggestionsRequest
                 ?.inlineSuggestionsRequest
                 ?.let { req ->
-                    val spec = req.inlinePresentationSpecs[0]
-                    inlinePresentation =
-                        buildInlinePresentationForManualSelection(context, spec, pendingIntent, appIconRes)
+                    val specs = req.inlinePresentationSpecs
+                    if (specs.isNotEmpty()) {
+                        inlinePresentation =
+                            buildInlinePresentationForManualSelection(context, specs[0], pendingIntent, appIconRes)
+                    }
                 }
         }
 
@@ -706,8 +708,9 @@ object AutofillHelper {
 
         parseResult.allAutofillIds().forEach { id ->
             datasetBuilder.addValueToDatasetBuilder(id, null)
-            datasetBuilder.setAuthentication(pendingIntent.intentSender)
         }
+        // 认证意图对所有字段相同，仅在循环外设置一次
+        datasetBuilder.setAuthentication(pendingIntent.intentSender)
         responseBuilder.addDataset(datasetBuilder.build())
     }
 

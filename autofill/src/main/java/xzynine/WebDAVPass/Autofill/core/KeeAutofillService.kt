@@ -54,6 +54,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
@@ -96,7 +97,12 @@ class KeeAutofillService : AutofillService() {
             return
         }
         val logger = config.logger
-        cancellationSignal.setOnCancelListener { logger.w(TAG, "Cancel autofill.") }
+        var fillJob: Job? = null
+        cancellationSignal.setOnCancelListener {
+            logger.w(TAG, "Cancel autofill.")
+            // 系统取消请求时真正取消本次检索协程，避免对已过期 callback 继续构建响应
+            fillJob?.cancel()
+        }
 
         if (request.flags and FillRequest.FLAG_COMPATIBILITY_MODE_REQUEST != 0) {
             Log.d(TAG, "Autofill requested in compatibility mode")
@@ -137,47 +143,48 @@ class KeeAutofillService : AutofillService() {
             }
         val autofillComponent = AutofillComponent(latestStructure, inlineSuggestionsRequest)
 
-        fillScope.launch {
-            var responded = false
-            try {
-                val result =
-                    withTimeoutOrNull(config.queryTimeoutMillis) {
-                        withContext(Dispatchers.IO) { config.entryProvider.search(searchInfo) }
-                    } ?: AutofillQueryResult.NotFound
+        fillJob =
+            fillScope.launch {
+                var responded = false
+                try {
+                    val result =
+                        withTimeoutOrNull(config.queryTimeoutMillis) {
+                            withContext(Dispatchers.IO) { config.entryProvider.search(searchInfo) }
+                        } ?: AutofillQueryResult.NotFound
 
-                when (result) {
-                    is AutofillQueryResult.Found -> {
-                        val response =
-                            AutofillHelper.buildResponse(
-                                context = this@KeeAutofillService,
-                                entries = result.entries,
-                                parseResult = parseResult,
-                                autofillComponent = autofillComponent,
-                                preferences = prefs,
-                                uiTarget = config.uiTarget,
-                                appIconRes = config.appIconRes,
-                            )
-                        if (response != null) {
-                            callback.onSuccess(response)
-                            responded = true
+                    when (result) {
+                        is AutofillQueryResult.Found -> {
+                            val response =
+                                AutofillHelper.buildResponse(
+                                    context = this@KeeAutofillService,
+                                    entries = result.entries,
+                                    parseResult = parseResult,
+                                    autofillComponent = autofillComponent,
+                                    preferences = prefs,
+                                    uiTarget = config.uiTarget,
+                                    appIconRes = config.appIconRes,
+                                )
+                            if (response != null) {
+                                callback.onSuccess(response)
+                                responded = true
+                            }
                         }
+                        else -> { /* NotFound / Unavailable：展示选择/解锁界面 */ }
                     }
-                    else -> { /* NotFound / Unavailable：展示选择/解锁界面 */ }
-                }
-                if (!responded) {
-                    showUIForEntrySelection(parseResult, searchInfo, autofillComponent, callback, config)
-                }
-            } catch (e: Exception) {
-                logger.e(TAG, "onFillRequest 处理失败，退回选择界面", e)
-                if (!responded) {
-                    try {
+                    if (!responded) {
                         showUIForEntrySelection(parseResult, searchInfo, autofillComponent, callback, config)
-                    } catch (e2: Exception) {
-                        callback.onFailure("自动填充失败")
+                    }
+                } catch (e: Exception) {
+                    logger.e(TAG, "onFillRequest 处理失败，退回选择界面", e)
+                    if (!responded) {
+                        try {
+                            showUIForEntrySelection(parseResult, searchInfo, autofillComponent, callback, config)
+                        } catch (e2: Exception) {
+                            callback.onFailure("自动填充失败")
+                        }
                     }
                 }
             }
-        }
     }
 
     private fun showUIForEntrySelection(
@@ -328,8 +335,8 @@ class KeeAutofillService : AutofillService() {
             return
         }
         val prefs = config.preferences
-        // 功能关闭或系统版本不支持时静默接受，避免每次表单提交都提示保存失败
-        if (!prefs.askToSaveData || Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
+        // 功能关闭时静默接受，避免每次表单提交都提示保存失败
+        if (!prefs.askToSaveData) {
             callback.onSuccess()
             return
         }

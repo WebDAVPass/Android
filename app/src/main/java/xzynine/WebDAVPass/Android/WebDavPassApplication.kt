@@ -31,6 +31,6 @@ class WebDavPassApplication : Application() {
             ),
         )
         // 异步加载自动填充偏好缓存（加载完成前回落默认：主开关/内联/手动选择开启、提示保存开启）
-        AppAutofillPreferences.load(this)
+        AppAutofillPreferences.loadAsync(this)
     }
 }

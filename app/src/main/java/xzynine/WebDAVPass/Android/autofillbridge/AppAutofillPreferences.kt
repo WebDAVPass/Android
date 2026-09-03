@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import xzynine.WebDAVPass.Android.data.AppDatabaseHolder
 import xzynine.WebDAVPass.Android.data.AppSetting
 import xzynine.WebDAVPass.Autofill.bridge.AutofillPreferences
@@ -41,9 +42,12 @@ object AppAutofillPreferences : AutofillPreferences {
 
     @Volatile private var webBlock: Set<String> = emptySet()
 
-    /** 从 app_settings 异步加载全部偏好（Application.onCreate 时调用）。 */
-    fun load(context: Context) {
-        scope.launch {
+    /**
+     * 从 app_settings 加载全部偏好（suspend，加载完成才返回）。
+     * 设置页进入时使用：调用方（如 LaunchedEffect）挂起等待，避免读到默认缓存值。
+     */
+    suspend fun load(context: Context) {
+        withContext(Dispatchers.IO) {
             runCatching {
                 val dao = AppDatabaseHolder.getInstance(context).appSettingsDao()
                 enabled = dao.getValue(KEY_ENABLED)?.value?.toBooleanStrictOrNull() ?: true
@@ -54,6 +58,11 @@ object AppAutofillPreferences : AutofillPreferences {
                 webBlock = parseSet(dao.getValue(KEY_WEB_BLOCK)?.value)
             }
         }
+    }
+
+    /** 非阻塞加载（Application.onCreate 使用，不阻塞主线程冷启动）。 */
+    fun loadAsync(context: Context) {
+        scope.launch { load(context) }
     }
 
     fun setEnabled(
