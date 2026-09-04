@@ -27,9 +27,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -233,7 +233,8 @@ class AutofillPickerActivity : AppCompatActivity() {
                 // 第三道防线：独立断言库已解锁，避免仅依赖 provider 单层校验；
                 // 即便 provider 的 isLibraryUnlocked 检查被误改，Picker 也不会在锁定时
                 // 构建/返回含条目明文的 FillResponse。
-                if (!TokenViewModel.getSharedInstance(applicationContext)
+                if (!TokenViewModel
+                        .getSharedInstance(applicationContext)
                         .libraryViewModel.isLibraryUnlocked.value
                 ) {
                     cancelAndFinish()

@@ -132,7 +132,15 @@ class StructureParser(
             if (node.autofillId != null) {
                 val hints = node.autofillHints
                 if (!hints.isNullOrEmpty()) {
-                    if (parseNodeByAutofillHint(node)) {
+                    // 带 hint 但未被识别时，回落到 html/inputType 兜底，
+                    // 避免"带了一个不认识的 hint 反而漏识别 inputType"导致表单识别失败
+                    if (!parseNodeByAutofillHint(node)) {
+                        if (parseNodeByHtmlAttributes(node)) {
+                            returnValue = true
+                        } else if (parseNodeByAndroidInput(node)) {
+                            returnValue = true
+                        }
+                    } else {
                         returnValue = true
                     }
                 } else if (parseNodeByHtmlAttributes(node)) {
@@ -159,6 +167,7 @@ class StructureParser(
 
     private fun parseNodeByAutofillHint(node: AssistStructure.ViewNode): Boolean {
         val autofillId = node.autofillId
+        var recognized = false
         node.autofillHints?.forEach {
             when {
                 it.contains("2faAppOTPCode", true) ||
@@ -167,6 +176,7 @@ class StructureParser(
                     Log.d(TAG, "Autofill OTP token")
                     result?.otpTokenId = autofillId
                     result?.otpTokenValue = node.autofillValue
+                    recognized = true
                 }
                 it.contains(View.AUTOFILL_HINT_USERNAME, true) ||
                     it.contains(View.AUTOFILL_HINT_EMAIL_ADDRESS, true) ||
@@ -181,6 +191,7 @@ class StructureParser(
                         usernameValueCandidate = node.autofillValue
                         Log.d(TAG, "Autofill username hint if password")
                     }
+                    recognized = true
                 }
                 it.contains(View.AUTOFILL_HINT_PHONE, true) -> {
                     if (usernameIdCandidate == null) {
@@ -188,6 +199,7 @@ class StructureParser(
                         usernameValueCandidate = node.autofillValue
                         Log.d(TAG, "Autofill phone")
                     }
+                    recognized = true
                 }
                 it.contains(View.AUTOFILL_HINT_PASSWORD, true) -> {
                     if (result?.passwordId != null && usernameIdCandidate != null) {
@@ -197,17 +209,20 @@ class StructureParser(
                     result?.passwordId = autofillId
                     result?.passwordValue = node.autofillValue
                     Log.d(TAG, "Autofill password hint")
+                    recognized = true
                 }
                 it.equals("cc-name", true) -> {
                     Log.d(TAG, "Autofill credit card name hint")
                     result?.creditCardHolderId = autofillId
                     result?.creditCardHolder = node.autofillValue
+                    recognized = true
                 }
                 it.contains(View.AUTOFILL_HINT_CREDIT_CARD_NUMBER, true) ||
                     it.equals("cc-number", true) -> {
                     Log.d(TAG, "Autofill credit card number hint")
                     result?.creditCardNumberId = autofillId
                     result?.creditCardNumber = node.autofillValue
+                    recognized = true
                 }
                 it.equals("cc-exp", true) -> {
                     Log.d(TAG, "Autofill credit card expiration date hint")
@@ -230,6 +245,7 @@ class StructureParser(
                             }
                         }
                     }
+                    recognized = true
                 }
                 it.contains(View.AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_DATE, true) -> {
                     Log.d(TAG, "Autofill credit card expiration date hint")
@@ -239,6 +255,7 @@ class StructureParser(
                             result?.creditCardExpirationValueMillis = value.dateValue
                         }
                     }
+                    recognized = true
                 }
                 it.contains(View.AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_YEAR, true) ||
                     it.equals("cc-exp-year", true) -> {
@@ -265,6 +282,7 @@ class StructureParser(
                         }
                         result?.creditCardExpirationYearValue = year % 100
                     }
+                    recognized = true
                 }
                 it.contains(View.AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_MONTH, true) ||
                     it.equals("cc-exp-month", true) -> {
@@ -287,6 +305,7 @@ class StructureParser(
                         }
                         result?.creditCardExpirationMonthValue = month
                     }
+                    recognized = true
                 }
                 it.contains(View.AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_DAY, true) ||
                     it.equals("cc-exp-day", true) -> {
@@ -313,12 +332,14 @@ class StructureParser(
                         }
                         result?.creditCardExpirationDayValue = day
                     }
+                    recognized = true
                 }
                 it.contains(View.AUTOFILL_HINT_CREDIT_CARD_SECURITY_CODE, true) ||
                     it.contains("cc-csc", true) -> {
                     Log.d(TAG, "Autofill card security code hint")
                     result?.cardVerificationValueId = autofillId
                     result?.cardVerificationValue = node.autofillValue
+                    recognized = true
                 }
                 it.equals("off", true) ||
                     it.equals("on", true) -> {
@@ -328,7 +349,7 @@ class StructureParser(
                 else -> Log.d(TAG, "Autofill unsupported hint $it")
             }
         }
-        return false
+        return recognized
     }
 
     private fun parseNodeByHtmlAttributes(node: AssistStructure.ViewNode): Boolean {
@@ -482,6 +503,12 @@ class StructureParser(
             }
             else -> {
                 Log.d(TAG, "Autofill unknown android text type: ${showHexInputType(inputType)}")
+                // 未知文本变体（如网页纯文本框 variation==0）也当作用户名候选，避免漏识别
+                if (result?.passwordId == null) {
+                    usernameIdCandidate = autofillId
+                    usernameValueCandidate = node.autofillValue
+                    Log.d(TAG, "Autofill username candidate (unknown text type): ${showHexInputType(inputType)}")
+                }
             }
         }
         return false
@@ -524,8 +551,11 @@ class StructureParser(
         autofillId: AutofillId?,
         inputType: Int,
     ): Boolean {
-        if (node.className == "android.widget.EditText") {
-            Log.d(TAG, "Autofill null android input type class: ${showHexInputType(inputType)}, get the EditText node class name!")
+        // WebView 内文本输入框 className 非 EditText，但其 inputType 常为 TYPE_NULL；
+        // 在 WebView 上下文中也当作用户名候选，避免漏识别
+        val isEditableText = node.className == "android.widget.EditText" || result?.isWebView == true
+        if (isEditableText) {
+            Log.d(TAG, "Autofill null android input type class: ${showHexInputType(inputType)}, editable node")
             if (result?.passwordId == null) {
                 usernameIdCandidate = autofillId
                 usernameValueCandidate = node.autofillValue
@@ -579,8 +609,7 @@ class StructureParser(
         var cardVerificationValueId: AutofillId? = null
         var otpTokenId: AutofillId? = null
 
-        fun isValid(): Boolean =
-            usernameId != null || passwordId != null || creditCardNumberId != null || otpTokenId != null
+        fun isValid(): Boolean = usernameId != null || passwordId != null || creditCardNumberId != null || otpTokenId != null
 
         fun allAutofillIds(): Array<AutofillId> {
             val all = mutableListOf<AutofillId>()

@@ -10,6 +10,8 @@
 
 package xzynine.WebDAVPass.Autofill.bridge
 
+import android.content.Context
+
 /**
  * 自动填充相关偏好设置。宿主 app 提供实现，库在每次填充/保存请求时同步读取。
  */
@@ -31,4 +33,11 @@ interface AutofillPreferences {
 
     /** 网站黑名单（域名子串匹配）。 */
     val webDomainBlocklist: Set<String>
+
+    /**
+     * 确保偏好已加载。库在 onFillRequest / onSaveRequest 读取前应调用，
+     * 避免在冷启动窗口期（异步加载未完成）以默认全开状态应答而忽略用户隐私设置。
+     * 实现应以内存缓存优先，仅在未就绪时同步加载一次。
+     */
+    fun ensureLoaded(context: Context)
 }

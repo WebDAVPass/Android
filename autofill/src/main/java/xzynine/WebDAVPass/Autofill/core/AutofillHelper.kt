@@ -106,11 +106,12 @@ object AutofillHelper {
         structure ?: return null
         val compatInlineSuggestionsRequest =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                BundleCompat.getParcelable(
-                    extras ?: Bundle.EMPTY,
-                    EXTRA_INLINE_SUGGESTIONS_REQUEST,
-                    android.view.inputmethod.InlineSuggestionsRequest::class.java,
-                )?.let { CompatInlineSuggestionsRequest(it) }
+                BundleCompat
+                    .getParcelable(
+                        extras ?: Bundle.EMPTY,
+                        EXTRA_INLINE_SUGGESTIONS_REQUEST,
+                        android.view.inputmethod.InlineSuggestionsRequest::class.java,
+                    )?.let { CompatInlineSuggestionsRequest(it) }
             } else {
                 null
             }
@@ -139,11 +140,12 @@ object AutofillHelper {
         structure ?: return null
         val compatInlineSuggestionsRequest =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                BundleCompat.getParcelable(
-                    this,
-                    EXTRA_INLINE_SUGGESTIONS_REQUEST,
-                    android.view.inputmethod.InlineSuggestionsRequest::class.java,
-                )?.let { CompatInlineSuggestionsRequest(it) }
+                BundleCompat
+                    .getParcelable(
+                        this,
+                        EXTRA_INLINE_SUGGESTIONS_REQUEST,
+                        android.view.inputmethod.InlineSuggestionsRequest::class.java,
+                    )?.let { CompatInlineSuggestionsRequest(it) }
             } else {
                 null
             }

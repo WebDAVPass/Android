@@ -15,6 +15,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import xzynine.WebDAVPass.Android.data.AppDatabaseHolder
 import xzynine.WebDAVPass.Android.data.AppSetting
@@ -42,6 +43,10 @@ object AppAutofillPreferences : AutofillPreferences {
 
     @Volatile private var webBlock: Set<String> = emptySet()
 
+    /** 偏好是否已加载完成；未就绪时服务侧应同步加载，避免冷启动窗口期以默认全开状态应答。 */
+    @Volatile var isReady: Boolean = false
+        private set
+
     /**
      * 从 app_settings 加载全部偏好（suspend，加载完成才返回）。
      * 设置页进入时使用：调用方（如 LaunchedEffect）挂起等待，避免读到默认缓存值。
@@ -58,11 +63,23 @@ object AppAutofillPreferences : AutofillPreferences {
                 webBlock = parseSet(dao.getValue(KEY_WEB_BLOCK)?.value)
             }
         }
+        isReady = true
     }
 
     /** 非阻塞加载（Application.onCreate 使用，不阻塞主线程冷启动）。 */
     fun loadAsync(context: Context) {
         scope.launch { load(context) }
+    }
+
+    /**
+     * 阻塞加载：若偏好尚未就绪，在调用线程同步加载（仅首次触发一次 Room 读）。
+     * 自动填充服务在 binder 线程调用，消除冷启动窗口期"默认全开"的隐私风险；
+     * 加载完成后后续调用直接走内存缓存。
+     */
+    override fun ensureLoaded(context: Context) {
+        if (!isReady) {
+            runBlocking { load(context) }
+        }
     }
 
     fun setEnabled(

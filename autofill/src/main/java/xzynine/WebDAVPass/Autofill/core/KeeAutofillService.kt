@@ -147,6 +147,8 @@ class KeeAutofillService : AutofillService() {
             )
 
         val prefs = config.preferences
+        // 确保偏好已加载：避免冷启动窗口期以默认全开状态应答，忽略用户隐私设置
+        prefs.ensureLoaded(applicationContext)
         if (!prefs.autofillSuggestionsEnabled) {
             // 主开关关闭：直接展示选择/解锁界面
             showUIForEntrySelection(parseResult, searchInfo, null, callback, config)
@@ -370,6 +372,8 @@ class KeeAutofillService : AutofillService() {
             return
         }
         val prefs = config.preferences
+        // 确保偏好已加载：避免冷启动窗口期以默认全开状态应答，忽略用户隐私设置
+        prefs.ensureLoaded(applicationContext)
         // 功能关闭时静默接受，避免每次表单提交都提示保存失败
         if (!prefs.askToSaveData) {
             callback.onSuccess()

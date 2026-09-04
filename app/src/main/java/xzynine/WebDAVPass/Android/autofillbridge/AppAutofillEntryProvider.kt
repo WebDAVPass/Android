@@ -8,7 +8,6 @@
 package xzynine.WebDAVPass.Android.autofillbridge
 
 import android.content.Context
-import kotlinx.coroutines.flow.first
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
