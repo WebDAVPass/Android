@@ -32,11 +32,6 @@ import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.data.SecurityIssuesInfo
 import xzynine.WebDAVPass.Android.data.TokenCode
-import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.CloudSyncViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.WebDavConfigViewModel
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import java.io.OutputStream
@@ -99,9 +94,9 @@ class TokenViewModel(
      * 以便按包名/域名/自定义字段（如 AndroidApp1=androidapp://包名）匹配。
      * 普通列表为性能考虑不加载字段详情，自动填充需要详情，故独立读取。
      */
-    suspend fun loadAllPasswordEntriesWithDetails(): List<PasswordEntry> {
+    fun loadAllPasswordEntriesWithDetails(): List<PasswordEntry> {
         val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return emptyList()
-        val masterPassword = libraryViewModel.getMasterPasswordInternal() ?: return emptyList()
+        val masterPassword = libraryViewModel.getMasterPasswordInternal()
         if (!libraryViewModel.isLibraryUnlocked.value) return emptyList()
         return kdbxTokenRepository.loadPasswordEntries(localPath, masterPassword, includeFieldDetails = true)
     }
