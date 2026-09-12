@@ -70,7 +70,10 @@ android {
     defaultConfig {
         applicationId = "xzynine.webdavpass"
         minSdk = 29
-        targetSdk = libs.versions.targetSdk.get().toInt()
+        targetSdk =
+            libs.versions.targetSdk
+                .get()
+                .toInt()
         // 版本号由 CI 注入或读取 version.properties 固定值
         versionCode = injectedVersionCode
         versionName = injectedVersionName

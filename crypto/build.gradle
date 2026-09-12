@@ -4,7 +4,7 @@ plugins {
 
 android {
     namespace 'com.kunzisoft.encrypt'
-    compileSdkVersion 36
+    compileSdkVersion 37
     // 16KB 页面大小适配：NDK r28 起默认按 16KB ELF 对齐编译，
     // 原 r21 只能产出 4KB 对齐的 libaes.so / libargon2.so，在 16KB 设备上无法加载。
     ndkVersion "29.0.14206865"

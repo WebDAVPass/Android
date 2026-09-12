@@ -385,6 +385,10 @@ class CloudSyncViewModel(
         val isUriPath = !localPath.isNullOrBlank() && localPath.startsWith("content://")
         return when (outcome.errorKind) {
             SyncFailureKind.PERMISSION -> "本地数据库访问权限已失效，请重新选择数据库文件"
+            // Android 17 起访问局域网 WebDAV 需要「本地网络」权限
+            SyncFailureKind.LOCAL_NETWORK ->
+                outcome.errorMessage?.takeIf { it.isNotBlank() }
+                    ?: "需要「本地网络」权限才能访问局域网中的 WebDAV 服务器"
             SyncFailureKind.NETWORK -> "网络异常，请检查网络连接后重试"
             SyncFailureKind.FILE_NOT_FOUND ->
                 when (outcome.absenceSource) {
