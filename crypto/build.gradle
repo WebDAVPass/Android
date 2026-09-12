@@ -4,15 +4,27 @@ plugins {
 
 android {
     namespace 'com.kunzisoft.encrypt'
-    compileSdkVersion 36
-    ndkVersion "21.4.7075529"
+    compileSdkVersion 37
+    // 16KB 页面大小适配：NDK r28 起默认按 16KB ELF 对齐编译，
+    // 原 r21 只能产出 4KB 对齐的 libaes.so / libargon2.so，在 16KB 设备上无法加载。
+    ndkVersion "29.0.14206865"
 
     defaultConfig {
-        minSdkVersion 19
+        // NDK r29 支持的最低 API 级别为 21（原 19 已被 NDK 移除）；
+        // 宿主 app 的 minSdk 为 29，此处下调无实际影响。
+        minSdkVersion 21
         targetSdkVersion 35
         multiDexEnabled true
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // 显式开启灵活页面大小（NDK r27 起支持、r28 起默认开启），
+        // 与 CMake 中的 -Wl,-z,max-page-size=16384 共同保证 LOAD 段 16KB 对齐。
+        externalNativeBuild {
+            cmake {
+                arguments "-DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON"
+            }
+        }
     }
 
     buildTypes {

@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -55,12 +56,11 @@ import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibraryContext
-import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.resolveDisplayName
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
-import androidx.core.net.toUri
 
 /** 密钥文件大小上限（1 MiB），与 CreateMasterPasswordDialog 保持一致。 */
 private const val MAX_KEY_FILE_BYTES = 1024 * 1024

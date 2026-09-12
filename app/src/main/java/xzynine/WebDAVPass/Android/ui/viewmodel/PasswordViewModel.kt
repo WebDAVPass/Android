@@ -1,4 +1,4 @@
-package xzynine.WebDAVPass.Android.ui.ViewModel
+package xzynine.WebDAVPass.Android.ui.viewmodel
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -15,9 +15,6 @@ import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
-import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordDataAccess
-import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordPagingSubViewModel
-import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
 
 /**
  * 密码视图模型

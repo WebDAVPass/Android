@@ -1,48 +1,56 @@
 [versions]
-agp = "9.3.1"
-kotlin = "2.4.10"
-coreKtx = "1.10.1"
+# ============================================================================
+# 与 E:\GitHub-code\Notify-Relay\Android\gradle\libs.versions.toml 保持同步。
+# 规则：同名 key 的取值必须完全一致（取两项目较高者，并在上游有更新时升到最新稳定版）。
+# 修改此文件时请同步修改另一个，避免两边再次漂移。
+# ============================================================================
+agp = "9.4.0"
+kotlin = "2.4.20"
+ksp = "2.3.12"
+coreKtx = "1.19.0"
 junit = "4.13.2"
-junitVersion = "1.1.5"
-espressoCore = "3.5.1"
-appcompat = "1.6.1"
-material = "1.10.0"
+junitVersion = "1.3.0"
+espressoCore = "3.7.0"
+appcompat = "1.8.0"
+material = "1.14.0"
+# miuix 0.9.4-rc01：两项目取高者；且 miuix-nav-android 仅在该版本发布
 miuix = "0.9.4-rc01"
-okhttp = "4.12.0"
-jsoup = "1.17.2"
-hutool = "5.8.27"
-gson = "2.10.1"
-semver = "2.0.0"
+okhttp = "5.5.0"
+jsoup = "1.23.2"
+hutool = "5.8.47"
+gson = "2.14.0"
+semver = "3.1.0"
 compileSdk = "37"
+targetSdk = "37"
 minSdk = "29"
 
-# Compose 相关版本
-composeUi = "1.8.1"
-composeMaterial = "1.8.1"
+# Compose 相关版本（与 Notify-Relay 统一：compose 1.12.1 / material3 1.4.0）
+composeUi = "1.12.1"
 composeMaterial3 = "1.4.0"
-activityCompose = "1.12.4"
-composeRuntime = "1.8.1"
-composeFoundation = "1.8.1"
-composeRuntimeLivedata = "1.8.1"
-kotlinxCoroutinesCore = "1.7.2"
-kotlinxCoroutinesAndroid = "1.7.2"
-kotlinxCoroutinesCompose = "1.7.2"
-
-# Lifecycle 相关版本
-lifecycle = "2.10.0"
-
-# Parcelable 列表支持
-parcelablelist = "2.0.1"
+activityCompose = "1.13.0"
+composeRuntime = "1.12.1"
+composeFoundation = "1.12.1"
+composeRuntimeLivedata = "1.12.1"
+# material-icons-extended 上游自 1.7.8 起停更，不随 compose 升级
+materialIconsExtended = "1.7.8"
+kotlinxCoroutinesCore = "1.11.0"
+kotlinxCoroutinesAndroid = "1.11.0"
 
 # Room 数据库相关版本
-room = "2.8.2"
-keepassJava2 = "2.2.4"
+room = "2.8.5"
 biometric = "1.1.0"
 ktlint = "14.2.0"
+autofill = "1.3.0"
+documentfile = "1.1.0"
+camera = "1.6.2"
+zxingCore = "3.5.4"
+zxingAndroidEmbedded = "4.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
 androidx-biometric = { group = "androidx.biometric", name = "biometric", version.ref = "biometric" }
+androidx-autofill = { group = "androidx.autofill", name = "autofill", version.ref = "autofill" }
+androidx-documentfile = { group = "androidx.documentfile", name = "documentfile", version.ref = "documentfile" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 androidx-junit = { group = "androidx.test.ext", name = "junit", version.ref = "junitVersion" }
 androidx-espresso-core = { group = "androidx.test.espresso", name = "espresso-core", version.ref = "espressoCore" }
@@ -60,7 +68,7 @@ compose-ui = { group = "androidx.compose.ui", name = "ui", version.ref = "compos
 compose-ui-graphics = { group = "androidx.compose.ui", name = "ui-graphics", version.ref = "composeUi" }
 compose-ui-tooling = { group = "androidx.compose.ui", name = "ui-tooling", version.ref = "composeUi" }
 compose-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-tooling-preview", version.ref = "composeUi" }
-compose-material = { group = "androidx.compose.material", name = "material", version.ref = "composeMaterial" }
+compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended", version.ref = "materialIconsExtended" }
 compose-material3 = { group = "androidx.compose.material3", name = "material3", version.ref = "composeMaterial3" }
 activity-compose = { group = "androidx.activity", name = "activity-compose", version.ref = "activityCompose" }
 compose-runtime = { group = "androidx.compose.runtime", name = "runtime", version.ref = "composeRuntime" }
@@ -72,28 +80,31 @@ miuix-preference = { module = "top.yukonga.miuix.kmp:miuix-preference", version.
 # Navigation 相关库
 miuix-nav = { module = "top.yukonga.miuix.kmp:miuix-nav-android", version.ref = "miuix" }
 
-# Parcelable 列表支持
-dev-rikka-parcelablelist = { module = "dev.rikka.rikkax.parcelablelist:parcelablelist", version.ref = "parcelablelist" }
 # Room 数据库相关库
 androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
 androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
 androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
-keepassjava2-kdbx = { group = "org.linguafranca.pwdb", name = "KeePassJava2-kdbx", version.ref = "keepassJava2" }
-keepassjava2-dom = { group = "org.linguafranca.pwdb", name = "KeePassJava2-dom", version.ref = "keepassJava2" }
 kotlinx-coroutines-core = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-core", version.ref = "kotlinxCoroutinesCore" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "kotlinxCoroutinesAndroid" }
-kotlinx-coroutines-compose = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-compose", version.ref = "kotlinxCoroutinesCompose" }
+
+# CameraX（二维码扫描）
+androidx-camera-core = { group = "androidx.camera", name = "camera-core", version.ref = "camera" }
+androidx-camera-camera2 = { group = "androidx.camera", name = "camera-camera2", version.ref = "camera" }
+androidx-camera-lifecycle = { group = "androidx.camera", name = "camera-lifecycle", version.ref = "camera" }
+androidx-camera-view = { group = "androidx.camera", name = "camera-view", version.ref = "camera" }
+# ZXing 二维码解析和生成库
+zxing-core = { group = "com.google.zxing", name = "core", version.ref = "zxingCore" }
+zxing-android-embedded = { group = "com.journeyapps", name = "zxing-android-embedded", version.ref = "zxingAndroidEmbedded" }
 
 [bundles]
 kotlinx-coroutines = ["kotlinx-coroutines-core", "kotlinx-coroutines-android"]
+camera = ["androidx-camera-core", "androidx-camera-camera2", "androidx-camera-lifecycle", "androidx-camera-view"]
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
-kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 android-library = { id = "com.android.library", version.ref = "agp" }
-ksp = { id = "com.google.devtools.ksp", version = "2.3.10" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlint" }
-

@@ -15,7 +15,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import kotlin.time.Duration.Companion.milliseconds
 
 internal data class PasswordDataAccess(

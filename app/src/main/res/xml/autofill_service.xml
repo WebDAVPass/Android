@@ -2,7 +2,7 @@
 <autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:description="@string/autofill_service_description"
-    android:settingsActivity="xzynine.WebDAVPass.Android.ui.Screen.SettingsScreen"
+    android:settingsActivity="xzynine.WebDAVPass.Android.ui.MainActivity"
     android:supportsInlineSuggestions="true"
     tools:ignore="UnusedAttribute">
     <compatibility-package
