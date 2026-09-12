@@ -70,7 +70,7 @@ android {
     defaultConfig {
         applicationId = "xzynine.webdavpass"
         minSdk = 29
-        targetSdk = 36
+        targetSdk = libs.versions.targetSdk.get().toInt()
         // 版本号由 CI 注入或读取 version.properties 固定值
         versionCode = injectedVersionCode
         versionName = injectedVersionName
@@ -150,9 +150,9 @@ dependencies {
     // 复用 WebDAV 库
     implementation(project(":webdav"))
     // content:// Uri 定位支持（WebDAV 文件浏览）
-    implementation("androidx.documentfile:documentfile:1.0.1")
-    // WebDAV 文件浏览图标支持
-    implementation("androidx.compose.material:material-icons-extended:1.7.8")
+    implementation(libs.androidx.documentfile)
+    // WebDAV 文件浏览图标支持（上游自 1.7.8 起停更，不随 compose 升级）
+    implementation(libs.compose.material.icons.extended)
     implementation(project(":crypto"))
     implementation(project(":database"))
     implementation(project(":icon-pack"))
@@ -160,20 +160,17 @@ dependencies {
     implementation(project(":base"))
     // 自动填充独立库模块（桥接接口由本 app 注入）
     implementation(project(":autofill"))
-    implementation("com.google.code.gson:gson:2.10.1") // Gson JSON解析库
+    implementation(libs.gson) // Gson JSON解析库
     // 接入令牌图标系统模块
     implementation(project(":token-images"))
     // 检查更新模块
     implementation(project(":checkupdates"))
 
     // CameraX 核心库
-    implementation("androidx.camera:camera-core:1.3.3")
-    implementation("androidx.camera:camera-camera2:1.3.3")
-    implementation("androidx.camera:camera-lifecycle:1.3.3")
-    implementation("androidx.camera:camera-view:1.3.3")
+    implementation(libs.bundles.camera)
     // ZXing 二维码解析和生成库
-    implementation("com.google.zxing:core:3.5.3")
-    implementation("com.journeyapps:zxing-android-embedded:4.3.0")
+    implementation(libs.zxing.core)
+    implementation(libs.zxing.android.embedded)
 
     // Compose 相关依赖
     implementation(libs.compose.ui)
