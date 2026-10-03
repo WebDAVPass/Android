@@ -21,6 +21,12 @@ import xzynine.WebDAVPass.Android.data.AppDatabaseHolder
 import xzynine.WebDAVPass.Android.data.AppSetting
 import xzynine.WebDAVPass.Autofill.bridge.AutofillPreferences
 
+/**
+ * 自动填充偏好的宿主实现：内存缓存 + app_settings 持久化。
+ *
+ * 写入经 [SerialKeyWriter] 按键串行落库，保证「设置顺序 == 落库顺序」；
+ * 读取走内存缓存，由 [ensureLoaded] 保证冷启动期间不返回默认值。
+ */
 object AppAutofillPreferences : AutofillPreferences {
     private const val KEY_ENABLED = "autofill_enabled"
     private const val KEY_INLINE = "autofill_inline"
@@ -30,6 +36,9 @@ object AppAutofillPreferences : AutofillPreferences {
     private const val KEY_WEB_BLOCK = "autofill_web_blocklist"
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+/** 偏好落库写入器：同一键串行，保证「调用顺序 == 落库顺序」。 */
+    private val writer = SerialKeyWriter(scope)
 
     @Volatile private var enabled: Boolean = true
 
@@ -82,6 +91,7 @@ object AppAutofillPreferences : AutofillPreferences {
         }
     }
 
+    /** 设置自动填充主开关（关闭后仅展示选择/解锁界面）。 */
     fun setEnabled(
         context: Context,
         value: Boolean,
@@ -90,6 +100,7 @@ object AppAutofillPreferences : AutofillPreferences {
         persist(context, KEY_ENABLED, value)
     }
 
+    /** 设置是否在兼容键盘上显示内联建议。 */
     fun setInlineEnabled(
         context: Context,
         value: Boolean,
@@ -98,6 +109,7 @@ object AppAutofillPreferences : AutofillPreferences {
         persist(context, KEY_INLINE, value)
     }
 
+    /** 设置是否在候选列表中提供「手动选择」入口。 */
     fun setManualSelectionEnabled(
         context: Context,
         value: Boolean,
@@ -106,6 +118,7 @@ object AppAutofillPreferences : AutofillPreferences {
         persist(context, KEY_MANUAL, value)
     }
 
+    /** 设置表单提交后是否提示保存。 */
     fun setAskToSaveData(
         context: Context,
         value: Boolean,
@@ -114,6 +127,7 @@ object AppAutofillPreferences : AutofillPreferences {
         persist(context, KEY_ASK, value)
     }
 
+    /** 设置应用黑名单（元素只做 trim，大小写在匹配侧统一忽略）。 */
     fun setApplicationIdBlocklist(
         context: Context,
         set: Set<String>,
@@ -122,6 +136,7 @@ object AppAutofillPreferences : AutofillPreferences {
         persist(context, KEY_APP_BLOCK, set.joinToString(","))
     }
 
+    /** 设置网站黑名单（元素只做 trim，大小写在匹配侧统一忽略）。 */
     fun setWebDomainBlocklist(
         context: Context,
         set: Set<String>,
@@ -130,24 +145,36 @@ object AppAutofillPreferences : AutofillPreferences {
         persist(context, KEY_WEB_BLOCK, set.joinToString(","))
     }
 
+    /** 布尔偏好的落库入口（统一转为字符串存储）。 */
     private fun persist(
         context: Context,
         key: String,
         value: Boolean,
     ) = persist(context, key, value.toString())
 
+    /** 入队一次偏好写入；同键串行，落库顺序与调用顺序一致。 */
     private fun persist(
         context: Context,
         key: String,
         value: String,
     ) {
-        scope.launch {
-            runCatching {
-                AppDatabaseHolder.getInstance(context).appSettingsDao().put(AppSetting(key, value))
-            }
-        }
+        // 入队而非各自起协程：同一键的连续更新必须按调用顺序落库，
+        // 否则较旧的写入可能后到并覆盖新值（REPLACE 策略），重启后读回过期设置。
+        // 取 applicationContext，避免在队列中持有 Activity 等短生命周期 Context。
+        val appContext = context.applicationContext
+        writer.enqueue(key) { runCatching { doPersist(appContext, key, value) } }
     }
 
+    /** 真正写入 app_settings（仅在同键前序写入完成后调用）。 */
+    private suspend fun doPersist(
+        context: Context,
+        key: String,
+        value: String,
+    ) {
+        AppDatabaseHolder.getInstance(context).appSettingsDao().put(AppSetting(key, value))
+    }
+
+    /** 解析逗号分隔的集合型偏好：去空白、去空项。 */
     private fun parseSet(raw: String?): Set<String> =
         raw
             ?.split(",")

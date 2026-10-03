@@ -24,6 +24,13 @@ import xzynine.WebDAVPass.Autofill.model.AutofillSearchInfo
 class AppAutofillEntryProvider(
     private val context: Context,
 ) : AutofillEntryProvider {
+    /**
+     * 按表单检索可填充条目。
+     *
+     * 库未解锁时返回 [AutofillQueryResult.Unavailable]，由宿主选择界面引导解锁；
+     * 手动选择入口（[AutofillSearchInfo.manualSelection]）跳过域名/包名过滤，返回全部条目。
+     * 条目详情读取涉及文件 IO，已由 [TokenViewModel.loadAllPasswordEntriesWithDetails] 切到 IO 线程。
+     */
     override suspend fun search(searchInfo: AutofillSearchInfo): AutofillQueryResult {
         val tokenViewModel = TokenViewModel.getSharedInstance(context)
         // 库未解锁时返回 Unavailable，由宿主选择界面引导解锁
@@ -52,6 +59,12 @@ class AppAutofillEntryProvider(
         }.getOrDefault(AutofillQueryResult.NotFound)
     }
 
+    /**
+     * 将密码库条目映射为库的 [AutofillEntry]；文件夹分组返回 null（不可填充）。
+     *
+     * 收集全部非机密字段（标题 / 账号 / 网站 / 附加字段）作为 [AutofillEntry.searchableValues]，
+     * 供 [matches] 按域名 / 包名匹配；密码与动态令牌不参与匹配。
+     */
     private fun PasswordEntry.toAutofillEntry(): AutofillEntry? {
         if (isFolderGroup) return null
         // 按字段名匹配用户名，不限定 valueType：含 @ 的邮箱型用户名会被 detectValueType 判为
@@ -94,19 +107,18 @@ class AppAutofillEntryProvider(
         )
     }
 
+    /**
+     * 条目是否适用于当前表单：在任意非机密字段（标题/账号/网站/附加字段）中匹配域名或包名。
+     * 匹配规则见 [AutofillEntryMatcher]（网站按域名边界、应用按完整包名精确匹配，
+     * 避免 `bank.com` 命中 `ank.com`、`com.bank` 命中 `com.bank.secure`）。
+     */
     private fun matches(
         entry: AutofillEntry,
         searchInfo: AutofillSearchInfo,
-    ): Boolean {
-        val domain = searchInfo.webDomain
-        val appId = searchInfo.applicationId
-        val haystack = entry.searchableValues
-        // 在任意非机密字段（标题/账号/网站/附加字段）中按子串匹配包名或域名。
-        // 形如 androidapp://tv.danmaku.bili 的附加字段可天然命中请求中的 applicationId=tv.danmaku.bili。
-        return when {
-            !domain.isNullOrEmpty() -> haystack.any { it.contains(domain, true) }
-            !appId.isNullOrEmpty() -> haystack.any { it.contains(appId, true) }
-            else -> true
-        }
-    }
+    ): Boolean =
+        AutofillEntryMatcher.matches(
+            searchableValues = entry.searchableValues,
+            webDomain = searchInfo.webDomain,
+            applicationId = searchInfo.applicationId,
+        )
 }

@@ -14,7 +14,9 @@ import xzynine.WebDAVPass.Autofill.bridge.AutofillUiTarget
  * 选择/注册界面均在本 app 内，使用其完整类名构造显式 Intent。
  */
 class AppAutofillUiTarget : AutofillUiTarget {
+    /** 选择条目界面（[AutofillPickerActivity]）的显式 Intent 目标。 */
     override fun selectionActivity(): ComponentName = ComponentName("xzynine.webdavpass", AutofillPickerActivity::class.java.name)
 
+    /** 注册保存界面（[AutofillRegistrationActivity]）的显式 Intent 目标。 */
     override fun registrationActivity(): ComponentName = ComponentName("xzynine.webdavpass", AutofillRegistrationActivity::class.java.name)
 }

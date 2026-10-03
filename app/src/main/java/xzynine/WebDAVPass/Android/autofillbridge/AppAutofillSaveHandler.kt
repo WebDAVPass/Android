@@ -20,6 +20,13 @@ import xzynine.WebDAVPass.Autofill.model.AutofillRegisterInfo
 class AppAutofillSaveHandler(
     private val context: Context,
 ) : AutofillSaveHandler {
+    /**
+     * 把表单注册信息写入当前打开的密码库。
+     *
+     * 标题优先取网站域名，其次应用包名；网站域名同时写入 URL 字段。
+     *
+     * @return 写入成功返回 true，库锁定 / 写入异常返回 false
+     */
     override suspend fun save(registerInfo: AutofillRegisterInfo): Boolean {
         val tokenViewModel = TokenViewModel.getSharedInstance(context)
         val site =

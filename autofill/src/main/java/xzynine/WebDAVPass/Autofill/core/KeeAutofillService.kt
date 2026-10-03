@@ -55,6 +55,7 @@ import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import androidx.core.content.ContextCompat
 import androidx.core.net.toUri
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -69,16 +70,22 @@ import xzynine.WebDAVPass.Autofill.model.AutofillQueryResult
 import xzynine.WebDAVPass.Autofill.model.AutofillRegisterInfo
 import xzynine.WebDAVPass.Autofill.model.AutofillSearchInfo
 
+/**
+ * 自动填充服务：解析表单 → 检索条目 → 构建填充响应；
+ * 未命中或手动选择时以认证响应拉起宿主的选择 / 解锁界面。
+ */
 @RequiresApi(api = Build.VERSION_CODES.O)
 class KeeAutofillService : AutofillService() {
     // 填充检索在主线程回调，但数据源查询走 IO；统一用带 SupervisorJob 的作用域，
     // 在 onDestroy 时取消，避免泄露。
     private val fillScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
+    /** 系统连接自动填充服务。 */
     override fun onConnected() {
         Log.d(TAG, "onConnected")
     }
 
+    /** 系统断开自动填充服务。 */
     override fun onDisconnected() {
         Log.d(TAG, "onDisconnected")
     }
@@ -107,6 +114,13 @@ class KeeAutofillService : AutofillService() {
         super.onDestroy()
     }
 
+    /**
+     * 处理填充请求：解析结构 → 校验黑名单与开关 → 后台检索条目 → 构建响应；
+     * 未命中或异常时退回选择 / 解锁界面。
+     *
+     * 检索期间收到系统取消信号会取消 [fillJob] 并重抛 `CancellationException`，
+     * 保证不会对已失效的 [callback] 调用 `onSuccess` / `onFailure`。
+     */
     override fun onFillRequest(
         request: FillRequest,
         cancellationSignal: CancellationSignal,
@@ -199,6 +213,10 @@ class KeeAutofillService : AutofillService() {
                     if (!responded) {
                         showUIForEntrySelection(parseResult, searchInfo, autofillComponent, callback, config)
                     }
+                } catch (e: CancellationException) {
+                    // 请求已被系统取消（fillJob.cancel）：不得再对已失效的 callback
+                    // 调用 onSuccess / onFailure，直接把取消异常上抛给协程。
+                    throw e
                 } catch (e: Exception) {
                     logger.e(TAG, "onFillRequest 处理失败，退回选择界面", e)
                     if (!responded) {
@@ -212,6 +230,10 @@ class KeeAutofillService : AutofillService() {
             }
     }
 
+    /**
+     * 构建「选择条目」认证响应：无可填充字段时直接 `onFailure`，
+     * 否则以 PendingIntent + 解锁提示 RemoteViews 返回，由宿主界面完成解锁与选择。
+     */
     private fun showUIForEntrySelection(
         parseResult: StructureParser.Result,
         searchInfo: AutofillSearchInfo,
@@ -362,6 +384,10 @@ class KeeAutofillService : AutofillService() {
         }
     }
 
+    /**
+     * 处理保存请求：解析结构（含已填值）→ 黑名单校验 → 拉起宿主注册界面保存新条目。
+     * 提示保存关闭时静默接受，避免每次提交都提示保存失败。
+     */
     override fun onSaveRequest(
         request: SaveRequest,
         callback: SaveCallback,
@@ -425,6 +451,7 @@ class KeeAutofillService : AutofillService() {
     companion object {
         private val TAG = KeeAutofillService::class.java.name
 
+        /** 系统是否已启用任一自动填充服务（用于设置页展示状态）。 */
         fun Context.isCredentialProviderActivated(): Boolean =
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 ContextCompat
@@ -434,11 +461,14 @@ class KeeAutofillService : AutofillService() {
                 false
             }
 
+        /** 跳转系统「选择自动填充服务」页面；目标应用不可用时仅记录日志。 */
         fun Context.showAutofillDeviceSettings() {
             try {
                 startActivity(
                     Intent(Settings.ACTION_REQUEST_SET_AUTOFILL_SERVICE).apply {
-                        data = "package:${KeeAutofillService::class.java.canonicalName}".toUri()
+                        // 必须用宿主应用的 applicationId（Context.packageName），
+                        // 系统按调用方包名匹配自动填充服务；填服务类全限定名会匹配失败。
+                        data = "package:$packageName".toUri()
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                     },
                 )

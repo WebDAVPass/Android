@@ -51,6 +51,11 @@ class StructureParser(
     private var usernameIdCandidate: AutofillId? = null
     private var usernameValueCandidate: AutofillValue? = null
 
+    /**
+     * 解析并校验结果：无可填充字段时返回 null，供调用方直接走「无可填充」分支。
+     *
+     * @param saveValue 是否保留表单已填内容（注册/保存流程需要，填充流程不需要）
+     */
     fun parseOrNull(saveValue: Boolean = false): Result? {
         val result = parse(saveValue)
         if (result != null && result.isValid()) {
@@ -59,38 +64,49 @@ class StructureParser(
         return null
     }
 
+    /**
+     * 解析 AssistStructure，返回字段识别结果（未识别到任何可填充字段时 [Result.isValid] 为 false）。
+     *
+     * 解析期间实例已挂到字段 `result`，下游 `result?.xxx` 写入即刻生效。
+     *
+     * @param saveValue 是否保留表单已填内容（注册/保存流程需要，填充流程不需要）
+     */
     fun parse(saveValue: Boolean): Result? {
         try {
-            result =
-                Result().apply {
-                    allowSaveValues = saveValue
-                    usernameIdCandidate = null
-                    usernameValueCandidate = null
-                    mainLoop@ for (i in 0 until structure.windowNodeCount) {
-                        val windowNode = structure.getWindowNodeAt(i)
-                        val windowAppId = windowNode.title.toString().split("/")[0]
-                        Log.d(TAG, "Autofill applicationId: $windowAppId")
+            // 注意：必须先把实例挂到字段 result 上再解析。下游 parseViewNode 等全部通过
+            // result?.xxx 写入，若沿用 `result = Result().apply { … }`，apply 块内 result 仍为 null，
+            // 所有字段写入都会被静默丢弃（Result 只在 apply 返回后才赋值）。
+            val parsed = Result()
+            result = parsed
+            parsed.apply {
+                allowSaveValues = saveValue
+                usernameIdCandidate = null
+                usernameValueCandidate = null
+                mainLoop@ for (i in 0 until structure.windowNodeCount) {
+                    val windowNode = structure.getWindowNodeAt(i)
+                    val windowAppId = windowNode.title.toString().split("/")[0]
+                    Log.d(TAG, "Autofill applicationId: $windowAppId")
 
-                        // 弹窗窗口（PopupWindow:xxx）不是真实应用包名：跳过其中的字段解析，
-                        // 且不得覆盖 applicationId，否则会把弹窗名误当作包名，
-                        // 导致被「黑名单」误拦截（即便黑名单为空）。
-                        if (windowAppId?.contains(APPLICATION_ID_POPUP_WINDOW) == true) {
-                            continue
-                        }
-                        if (applicationId == null) {
-                            applicationId = windowAppId
-                        }
-                        if (parseViewNode(windowNode.rootViewNode)) {
-                            break@mainLoop
-                        }
+                    // 弹窗窗口（PopupWindow:xxx）不是真实应用包名：跳过其中的字段解析，
+                    // 且不得覆盖 applicationId，否则会把弹窗名误当作包名，
+                    // 导致被「黑名单」误拦截（即便黑名单为空）。
+                    if (windowAppId?.contains(APPLICATION_ID_POPUP_WINDOW) == true) {
+                        continue
                     }
-                    // 若未显式找到 username 字段，则把候选字段（通常为密码框前的文本输入框）作为 username。
-                    // 不再要求必须存在密码框，以兼容仅含账号/用户名、无密码框的分步登录页（如部分应用）。
-                    if (usernameId == null && usernameIdCandidate != null) {
-                        usernameId = usernameIdCandidate
-                        usernameValue = usernameValueCandidate
+                    if (applicationId == null) {
+                        applicationId = windowAppId
+                    }
+                    if (parseViewNode(windowNode.rootViewNode)) {
+                        break@mainLoop
                     }
                 }
+                // 若未显式找到 username 字段，则把候选字段（通常为密码框前的文本输入框）作为 username。
+                // 不再要求必须存在密码框，以兼容仅含账号/用户名、无密码框的分步登录页（如部分应用）。
+                if (usernameId == null && usernameIdCandidate != null) {
+                    usernameId = usernameIdCandidate
+                    usernameValue = usernameValueCandidate
+                }
+            }
             return result
         } catch (e: Exception) {
             Log.e(TAG, "Autofill error", e)
@@ -98,6 +114,11 @@ class StructureParser(
         }
     }
 
+    /**
+     * 递归解析视图节点：记录域名 / scheme，按「autofillHint → html 属性 → inputType」三策略识别字段。
+     *
+     * @return 是否已识别到可填充字段（域名非空时用于提前结束递归）
+     */
     private fun parseViewNode(node: AssistStructure.ViewNode): Boolean {
         // WebView 过滤
         if (node.className?.contains("webview", ignoreCase = true) == true) {
@@ -133,15 +154,14 @@ class StructureParser(
                 val hints = node.autofillHints
                 if (!hints.isNullOrEmpty()) {
                     // 带 hint 但未被识别时，回落到 html/inputType 兜底，
-                    // 避免"带了一个不认识的 hint 反而漏识别 inputType"导致表单识别失败
-                    if (!parseNodeByAutofillHint(node)) {
-                        if (parseNodeByHtmlAttributes(node)) {
-                            returnValue = true
-                        } else if (parseNodeByAndroidInput(node)) {
-                            returnValue = true
-                        }
-                    } else {
-                        returnValue = true
+                    // 避免"带了一个不认识的 hint 反而漏识别 inputType"导致表单识别失败。
+                    // 例外：已声明为信用卡字段的节点（cc-exp / cc-number 等）不参与兜底，
+                    // 否则兜底会把「卡号 / 有效期」输入框当成用户名候选，导致在卡片表单里给出错误建议。
+                    when {
+                        parseNodeByAutofillHint(node) -> returnValue = true
+                        nodeIsCreditCardField(node) -> Unit
+                        parseNodeByHtmlAttributes(node) -> returnValue = true
+                        parseNodeByAndroidInput(node) -> returnValue = true
                     }
                 } else if (parseNodeByHtmlAttributes(node)) {
                     returnValue = true
@@ -165,6 +185,22 @@ class StructureParser(
         return returnValue
     }
 
+    /**
+     * 节点是否声明为信用卡相关字段（cc-number / cc-exp / creditCardExpirationMonth 等）。
+     * 用于阻止 HTML / inputType 兜底把卡片字段误识别为用户名。
+     */
+    private fun nodeIsCreditCardField(node: AssistStructure.ViewNode): Boolean =
+        node.autofillHints?.any { hint ->
+            // "cc-" 为 HTML autocomplete 短写法，"creditCard" 为 View.AUTOFILL_HINT_* 常量的公共前缀
+            hint.contains(HINT_PREFIX_CC, ignoreCase = true) ||
+                hint.contains(HINT_PREFIX_CREDIT_CARD, ignoreCase = true)
+        } == true
+
+    /**
+     * 策略一：按 autofillHint 识别字段（username / password / OTP / 信用卡各字段）。
+     *
+     * @return 是否识别到已知 hint；`cc-exp` 有文本但解析失败时返回 false，交由兜底策略
+     */
     private fun parseNodeByAutofillHint(node: AssistStructure.ViewNode): Boolean {
         val autofillId = node.autofillId
         var recognized = false
@@ -227,25 +263,21 @@ class StructureParser(
                 it.equals("cc-exp", true) -> {
                     Log.d(TAG, "Autofill credit card expiration date hint")
                     result?.creditCardExpirationDateId = autofillId
+                    var parsedExpiration = true
                     node.autofillValue?.let { value ->
-                        if (value.isText && value.textValue.length == 7) {
-                            value.textValue.let { date ->
-                                try {
-                                    val yy = date.substring(2, 4).toInt()
-                                    val mm = date.substring(5, 7).toInt()
-                                    result?.creditCardExpirationValueMillis =
-                                        LocalDate
-                                            .of(2000 + yy, mm, 1)
-                                            .atStartOfDay(ZoneId.systemDefault())
-                                            .toInstant()
-                                            .toEpochMilli()
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Unable to retrieve expiration", e)
-                                }
+                        if (value.isText) {
+                            val millis = parseCreditCardExpirationMillis(value.textValue)
+                            if (millis != null) {
+                                result?.creditCardExpirationValueMillis = millis
+                            } else {
+                                // 有文本但无法解析：不再声称已识别，交由 HTML / inputType 兜底策略
+                                // （兜底不会把信用卡字段误当成用户名，见 nodeIsCreditCardField）
+                                Log.w(TAG, "Unable to parse credit card expiration: ${value.textValue}")
+                                parsedExpiration = false
                             }
                         }
                     }
-                    recognized = true
+                    recognized = parsedExpiration
                 }
                 it.contains(View.AUTOFILL_HINT_CREDIT_CARD_EXPIRATION_DATE, true) -> {
                     Log.d(TAG, "Autofill credit card expiration date hint")
@@ -352,6 +384,7 @@ class StructureParser(
         return recognized
     }
 
+    /** 策略二：按 HTML 属性（id / name / type）识别字段，主要服务于 WebView 表单。 */
     private fun parseNodeByHtmlAttributes(node: AssistStructure.ViewNode): Boolean {
         val autofillId = node.autofillId
         val nodHtml = node.htmlInfo
@@ -419,6 +452,7 @@ class StructureParser(
         return false
     }
 
+    /** 判断 inputType 的变体是否命中给定类型之一。 */
     private fun inputIsVariationType(
         inputType: Int,
         vararg type: Int,
@@ -431,8 +465,10 @@ class StructureParser(
         return false
     }
 
+    /** 日志用：把 inputType 格式化为十六进制。 */
     private fun showHexInputType(inputType: Int): String = "0x${"%08x".format(inputType)}"
 
+    /** 策略三：按文本类 inputType 的变体识别用户名 / 密码字段。 */
     private fun manageTypeText(
         node: AssistStructure.ViewNode,
         autofillId: AutofillId?,
@@ -514,6 +550,7 @@ class StructureParser(
         return false
     }
 
+    /** 策略三：按数字类 inputType 的变体识别用户名 / 密码字段。 */
     private fun manageTypeNumber(
         node: AssistStructure.ViewNode,
         autofillId: AutofillId?,
@@ -546,6 +583,7 @@ class StructureParser(
         return false
     }
 
+    /** 策略三：TYPE_NULL 节点（常见于 WebView 内的文本框）按用户名候选处理。 */
     private fun manageTypeNull(
         node: AssistStructure.ViewNode,
         autofillId: AutofillId?,
@@ -564,6 +602,7 @@ class StructureParser(
         return false
     }
 
+    /** 策略三入口：按 inputType 的类别分派到文本 / 数字 / 空类型的处理。 */
     private fun parseNodeByAndroidInput(node: AssistStructure.ViewNode): Boolean {
         val autofillId = node.autofillId
         val inputType = node.inputType
@@ -609,8 +648,10 @@ class StructureParser(
         var cardVerificationValueId: AutofillId? = null
         var otpTokenId: AutofillId? = null
 
+        /** 是否识别到至少一个可填充字段。 */
         fun isValid(): Boolean = usernameId != null || passwordId != null || creditCardNumberId != null || otpTokenId != null
 
+        /** 认证响应需要注册的字段 id 集合（选择界面回填范围）。 */
         fun allAutofillIds(): Array<AutofillId> {
             val all = mutableListOf<AutofillId>()
             usernameId?.let { all.add(it) }
@@ -757,5 +798,35 @@ class StructureParser(
         private val TAG = StructureParser::class.java.name
 
         const val APPLICATION_ID_POPUP_WINDOW = "PopupWindow:"
+
+        /** HTML autocomplete 的信用卡短前缀（cc-number / cc-exp …）。 */
+        private const val HINT_PREFIX_CC = "cc-"
+
+        /** View.AUTOFILL_HINT_* 信用卡系列常量的公共前缀（creditCardNumber / creditCardExpirationDate …）。 */
+        private const val HINT_PREFIX_CREDIT_CARD = "creditCard"
+
+        /** 信用卡有效期文本：月份 + 2 位或 4 位年份，分隔符为 / - . 或空格，可省略。 */
+        private val EXPIRATION_REGEX = Regex("""\s*(\d{1,2})\s*[/\-. ]?\s*(\d{2}|\d{4})\s*""")
+
+        /**
+         * 解析信用卡有效期文本（`cc-exp` hint 的常见格式）为 epoch millis（当月 1 日零点）。
+         *
+         * 兼容 `MM/YY`、`MM/YYYY`、`MMYY`、`MM-YY`、`MM.YY` 等写法；
+         * 无法解析（格式不符 / 月份不在 1..12 / 非法日期）时返回 null，由调用方决定兜底策略。
+         */
+        internal fun parseCreditCardExpirationMillis(text: CharSequence): Long? {
+            val match = EXPIRATION_REGEX.matchEntire(text) ?: return null
+            val month = match.groupValues[1].toIntOrNull() ?: return null
+            val year = match.groupValues[2].toIntOrNull() ?: return null
+            if (month !in 1..12) return null
+            val fullYear = if (year < 100) 2000 + year else year
+            return runCatching {
+                LocalDate
+                    .of(fullYear, month, 1)
+                    .atStartOfDay(ZoneId.systemDefault())
+                    .toInstant()
+                    .toEpochMilli()
+            }.getOrNull()
+        }
     }
 }

@@ -84,6 +84,10 @@ object AutofillHelper {
 
     // region AutofillComponent 在 Intent / Bundle 间的传递
 
+    /**
+     * 把 [AutofillComponent]（AssistStructure + 内联建议请求）写入 Intent extras。
+     * 入参为 null 时不写入任何 extra。
+     */
     fun Intent.addAutofillComponent(autofillComponent: AutofillComponent?): Intent {
         autofillComponent?.let {
             putExtra(EXTRA_BASE_STRUCTURE, autofillComponent.assistStructure)
@@ -96,6 +100,7 @@ object AutofillHelper {
         return this
     }
 
+    /** 从 Intent extras 还原 [AutofillComponent]；结构缺失（非本库写入的 Intent）时返回 null。 */
     fun Intent.retrieveAutofillComponent(): AutofillComponent? {
         val structure =
             BundleCompat.getParcelable(
@@ -118,6 +123,7 @@ object AutofillHelper {
         return AutofillComponent(structure, compatInlineSuggestionsRequest)
     }
 
+    /** 把 [AutofillComponent] 写入 Bundle（用于认证返回 Intent 的 extras 传递）。 */
     fun Bundle.addAutofillComponent(autofillComponent: AutofillComponent?): Bundle {
         autofillComponent?.let {
             putParcelable(EXTRA_BASE_STRUCTURE, autofillComponent.assistStructure)
@@ -130,6 +136,7 @@ object AutofillHelper {
         return this
     }
 
+    /** 从 Bundle 还原 [AutofillComponent]；结构缺失时返回 null。 */
     fun Bundle.retrieveAutofillComponent(): AutofillComponent? {
         val structure =
             BundleCompat.getParcelable(
@@ -156,8 +163,10 @@ object AutofillHelper {
 
     // region 宿主界面读取（selection / registration）
 
+    /** 读取宿主界面的启动模式（[MODE_SELECTION] / [MODE_REGISTRATION]）；普通填充请求返回 null。 */
     fun getSpecialModeFromIntent(intent: Intent): String? = intent.getStringExtra(EXTRA_SPECIAL_MODE)
 
+    /** 读取表单检索上下文（域名 / 包名）；非本库写入的 Intent 返回 null。 */
     fun getSearchInfoFromIntent(intent: Intent): AutofillSearchInfo? =
         BundleCompat.getParcelable(
             intent.extras ?: Bundle.EMPTY,
@@ -165,6 +174,7 @@ object AutofillHelper {
             AutofillSearchInfo::class.java,
         )
 
+    /** 读取注册信息（用户名 / 密码，保存流程用）；非注册 Intent 返回 null。 */
     fun getRegisterInfoFromIntent(intent: Intent): AutofillRegisterInfo? =
         BundleCompat.getParcelable(
             intent.extras ?: Bundle.EMPTY,
@@ -172,8 +182,13 @@ object AutofillHelper {
             AutofillRegisterInfo::class.java,
         )
 
+    /** 读取 [AutofillComponent]，宿主选择/注册界面据此重新解析表单。 */
     fun getAutofillComponentFromIntent(intent: Intent): AutofillComponent? = intent.retrieveAutofillComponent()
 
+    /**
+     * 读取服务侧已解析的表单结果。
+     * 宿主在当前 Activity 进程重读 AssistStructure 失败时（如 MIUI 抛 SecurityException）回退使用。
+     */
     fun getParseResultFromIntent(intent: Intent): StructureParser.Result? =
         BundleCompat.getParcelable(
             intent.extras ?: Bundle.EMPTY,
@@ -217,6 +232,7 @@ object AutofillHelper {
             null
         }
 
+    /** 内联建议点击用的选择 PendingIntent（可携带已解析结果，避免宿主重读 AssistStructure 失败）。 */
     private fun getPendingIntentForSelectionLaunch(
         context: Context,
         searchInfo: AutofillSearchInfo?,
@@ -344,7 +360,10 @@ object AutofillHelper {
                         buildInlinePresentationForEntry(
                             context,
                             autofillComponent.compatInlineSuggestionsRequest,
-                            numberInlineSuggestions--,
+                            // 必须前置递减：buildInlinePresentationForEntry 内部以
+                            // positionItem <= max - 1 判断是否仍在建议数量内，
+                            // 传后置递减的旧值会让首个条目被判超限，键盘上少显示一条建议。
+                            --numberInlineSuggestions,
                             entry,
                             uiTarget,
                             appIconRes,
@@ -446,6 +465,7 @@ object AutofillHelper {
 
     // region 数据集与内联建议
 
+    /** 展示用标题：标题 + 用户名，其次回退到网站或用户名。 */
     private fun makeEntryTitle(entry: AutofillEntry): String =
         when {
             entry.title.isNotEmpty() && entry.username.isNotEmpty() -> "${entry.title} (${entry.username})"
@@ -455,6 +475,7 @@ object AutofillHelper {
             else -> ""
         }
 
+    /** 写入字段值：API 35 起改用 [Field]，低版本走已弃用的 `setValue`。 */
     private fun Dataset.Builder.addValueToDatasetBuilder(
         id: AutofillId,
         autofillValue: AutofillValue?,
@@ -470,6 +491,7 @@ object AutofillHelper {
         return this
     }
 
+    /** 为单条库条目构建 Dataset：用户名 / 密码 / 信用卡各字段 / OTP，并按需附带内联建议。 */
     private fun buildDatasetForEntry(
         context: Context,
         entry: AutofillEntry,
@@ -609,6 +631,12 @@ object AutofillHelper {
         return datasetBuilder.build()
     }
 
+    /**
+     * 构建单条内联建议（键盘候选条）。
+     *
+     * @param positionItem 剩余建议条数的**递减后**序号（0 起）：需满足 `0 <= positionItem <= max - 1`，
+     *   调用方必须前置递减传入，否则首个条目会被判为超限而少显示一条建议
+     */
     @SuppressLint("RestrictedApi")
     @RequiresApi(Build.VERSION_CODES.R)
     private fun buildInlinePresentationForEntry(
@@ -663,6 +691,7 @@ object AutofillHelper {
         return null
     }
 
+    /** 「手动选择」入口的内联建议（点击后拉起宿主选择界面）。 */
     @RequiresApi(Build.VERSION_CODES.R)
     @SuppressLint("RestrictedApi")
     private fun buildInlinePresentationForManualSelection(
@@ -695,6 +724,7 @@ object AutofillHelper {
         )
     }
 
+    /** 追加「手动选择」数据集：点击后拉起宿主选择界面（兼容键盘上同时给出内联入口）。 */
     private fun addManualSelectionDataset(
         context: Context,
         parseResult: StructureParser.Result,

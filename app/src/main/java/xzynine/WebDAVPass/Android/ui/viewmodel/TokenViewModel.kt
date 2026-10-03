@@ -93,12 +93,18 @@ class TokenViewModel(
      * 自动填充检索专用：读取数据库中全部条目（含字段详情），
      * 以便按包名/域名/自定义字段（如 AndroidApp1=androidapp://包名）匹配。
      * 普通列表为性能考虑不加载字段详情，自动填充需要详情，故独立读取。
+     *
+     * KdbxTokenRepository 内部为同步 withDatabase（文件读取 + 解密 + 全量解析，无 IO 调度），
+     * 故本函数挂起并切到 [Dispatchers.IO]，避免调用方（如选择 Activity）阻塞主线程触发 ANR；
+     * 外层的 withTimeoutOrNull 也只有在本函数挂起后才能及时取消。
      */
-    fun loadAllPasswordEntriesWithDetails(): List<PasswordEntry> {
+    suspend fun loadAllPasswordEntriesWithDetails(): List<PasswordEntry> {
         val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return emptyList()
         val masterPassword = libraryViewModel.getMasterPasswordInternal()
         if (!libraryViewModel.isLibraryUnlocked.value) return emptyList()
-        return kdbxTokenRepository.loadPasswordEntries(localPath, masterPassword, includeFieldDetails = true)
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.loadPasswordEntries(localPath, masterPassword, includeFieldDetails = true)
+        }
     }
 
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())

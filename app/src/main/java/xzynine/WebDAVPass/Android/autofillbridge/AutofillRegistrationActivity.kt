@@ -56,6 +56,10 @@ import xzynine.WebDAVPass.Autofill.AutofillBridge
 import xzynine.WebDAVPass.Autofill.core.AutofillHelper
 import xzynine.WebDAVPass.Autofill.model.AutofillRegisterInfo
 
+/**
+ * 自动填充「注册保存」界面：由库的 [xzynine.WebDAVPass.Autofill.core.KeeAutofillService] 在表单提交时拉起，
+ * 预览表单值 → 解锁密码库 → 选择目标分组 → 创建新条目。
+ */
 class AutofillRegistrationActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "AutofillRegistrationActivity"
@@ -81,6 +85,7 @@ class AutofillRegistrationActivity : AppCompatActivity() {
         }
     }
 
+    /** 取消并关闭界面（未写入条目）。 */
     private fun cancelAndFinish() {
         setResult(Activity.RESULT_CANCELED)
         finish()
@@ -117,6 +122,7 @@ private fun RegistrationContent(
             ?: registerInfo.searchInfo.applicationId
             ?: "自动填充"
 
+    /** 关闭界面并回传结果：保存成功回 RESULT_OK，否则取消。 */
     fun finishWithResult(ok: Boolean) {
         activity.setResult(if (ok) Activity.RESULT_OK else Activity.RESULT_CANCELED)
         activity.finish()

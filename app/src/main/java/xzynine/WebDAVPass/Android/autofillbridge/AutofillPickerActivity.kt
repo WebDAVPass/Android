@@ -61,6 +61,10 @@ import xzynine.WebDAVPass.Autofill.core.StructureParser
 import xzynine.WebDAVPass.Autofill.model.AutofillQueryResult
 import xzynine.WebDAVPass.Autofill.model.AutofillSearchInfo
 
+/**
+ * 自动填充「选择条目」界面：由库的 [xzynine.WebDAVPass.Autofill.core.KeeAutofillService] 在检索未命中 /
+ * 手动选择时通过认证流程拉起，负责解锁密码库、列出条目并回填 [android.view.autofill.AutofillManager.EXTRA_AUTHENTICATION_RESULT]。
+ */
 class AutofillPickerActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "AutofillPickerActivity"
@@ -168,6 +172,7 @@ class AutofillPickerActivity : AppCompatActivity() {
         }
     }
 
+    /** 库锁定时展示主密码输入区，解锁成功后由 [PickerContent] 自动切到检索分支。 */
     @Composable
     private fun UnlockSection(
         masterPassword: String,
@@ -218,6 +223,10 @@ class AutofillPickerActivity : AppCompatActivity() {
         }
     }
 
+    /**
+     * 检索条目并构建认证返回结果：独立断言库已解锁（第三道防线），
+     * 检索带超时保护，成功则回传 [FillResponse]，其余情况回传 RESULT_CANCELED。
+     */
     private fun loadEntriesAndRespond(
         searchInfo: AutofillSearchInfo,
         parseResult: StructureParser.Result,
@@ -276,6 +285,7 @@ class AutofillPickerActivity : AppCompatActivity() {
         }
     }
 
+    /** 取消并关闭界面（不携带任何条目数据）。 */
     private fun cancelAndFinish() {
         setResult(Activity.RESULT_CANCELED)
         finish()
