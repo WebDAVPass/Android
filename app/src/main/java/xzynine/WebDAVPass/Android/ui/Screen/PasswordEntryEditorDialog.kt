@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -21,8 +23,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
-import com.kunzisoft.keepass.database.element.template.Template
-import com.kunzisoft.keepass.database.element.template.TemplateEngine
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.CardDefaults
@@ -31,9 +31,9 @@ import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Close
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Ok
@@ -42,11 +42,8 @@ import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
-import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
-import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
-import xzynine.WebDAVPass.Android.ui.Dialog.TemplatePickerDialog
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 
 /** 附件导入大小上限（与仓库 SMALL_BINARY_SIZE 一致），防止无界读入内存导致 OOM。 */
@@ -56,6 +53,9 @@ private const val MAX_ATTACHMENT_BYTES = 1024 * 1024
  * 条目编辑对话框（用于新增）。
  *
  * 支持标题/账号/密码/网站/备注、自定义字段、附件、过期时间与图标。
+ *
+ * 表单内容整体可滚动：miuix `WindowDialog` 的内容容器不带滚动，
+ * 超出可用高度后尾部子项（含底部操作行）会被测量为 0 高度而"消失"。
  */
 @Composable
 fun PasswordEntryEditorDialog(
@@ -66,6 +66,7 @@ fun PasswordEntryEditorDialog(
     onConfirm: (PasswordEntryEditDraft) -> Unit,
 ) {
     val context = LocalContext.current
+    val formScrollState = rememberScrollState()
 
     var entryTitle by remember { mutableStateOf(initialDraft.title) }
     var entryUsername by remember { mutableStateOf(initialDraft.username) }
@@ -80,7 +81,6 @@ fun PasswordEntryEditorDialog(
     var customIconUuid by remember { mutableStateOf(initialDraft.customIconUuid) }
     var newCustomIconBytes by remember { mutableStateOf<ByteArray?>(initialDraft.newCustomIconBytes) }
     var showIconPicker by remember { mutableStateOf(false) }
-    var showTemplatePicker by remember { mutableStateOf(false) }
 
     LaunchedEffect(show.value) {
         if (show.value) {
@@ -97,7 +97,8 @@ fun PasswordEntryEditorDialog(
             customIconUuid = initialDraft.customIconUuid
             newCustomIconBytes = initialDraft.newCustomIconBytes
             showIconPicker = false
-            showTemplatePicker = false
+            // 每次打开回到表单顶部，避免沿用上一次的滚动位置
+            formScrollState.scrollTo(0)
         }
     }
 
@@ -142,7 +143,13 @@ fun PasswordEntryEditorDialog(
         show = show.value,
         onDismissRequest = onDismiss,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(formScrollState),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
             TextField(
                 value = entryTitle,
                 onValueChange = { entryTitle = it },
@@ -214,25 +221,6 @@ fun PasswordEntryEditorDialog(
             }
 
             SmallTitle(text = "自定义字段")
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { showTemplatePicker = true },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Edit,
-                    contentDescription = "从模板添加",
-                    tint = MiuixTheme.colorScheme.primary,
-                )
-                Text(
-                    text = "  从模板添加字段",
-                    fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-            }
             CustomFieldsEditor(fields = customFields) { customFields = it }
 
             ExpiryTimeEditor(value = expiryTime) { expiryTime = it }
@@ -301,15 +289,11 @@ fun PasswordEntryEditorDialog(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                IconButton(
+                TextButton(
+                    text = "取消",
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Close,
-                        contentDescription = "取消",
-                    )
-                }
+                )
                 Button(
                     onClick = {
                         onConfirm(
@@ -339,7 +323,11 @@ fun PasswordEntryEditorDialog(
                 ) {
                     Icon(
                         imageVector = MiuixIcons.Ok,
-                        contentDescription = "保存",
+                        contentDescription = null,
+                    )
+                    Text(
+                        text = "保存",
+                        modifier = Modifier.padding(start = 6.dp),
                     )
                 }
             }
@@ -362,68 +350,4 @@ fun PasswordEntryEditorDialog(
             },
         )
     }
-
-    if (showTemplatePicker) {
-        TemplatePickerDialog(
-            show = showTemplatePicker,
-            onDismiss = { showTemplatePicker = false },
-            onPick = { template ->
-                showTemplatePicker = false
-                if (template != null) {
-                    customFields =
-                        customFields.toMutableList().apply {
-                            applyTemplateFields(template)
-                        }
-                }
-            },
-        )
-    }
 }
-
-/**
- * 将模板字段集应用到当前自定义字段列表。
- *
- * 字段名使用 [TemplateEngine.addTemplateDecorator] 装饰（如 [SSID]），
- * 保证其他支持模板的应用（如 KeePassDX）可识别；已存在的同名字段跳过。
- *
- * 字段类型按模板属性保留（如 DATETIME → DATE_TIME），受保护的 TEXT 映射为 PASSWORD；
- * 逐字段去重，避免同一模板内重复标签进入列表。
- */
-fun MutableList<EditableFieldDraft>.applyTemplateFields(template: Template) {
-    val existingNames = this.map { it.name }.toMutableSet()
-    template.sections.forEach { section ->
-        section.attributes.forEach { attribute ->
-            val decoratedName = TemplateEngine.addTemplateDecorator(attribute.label)
-            if (decoratedName !in existingNames) {
-                existingNames.add(decoratedName)
-                add(
-                    EditableFieldDraft(
-                        name = decoratedName,
-                        value = attribute.options.default,
-                        isProtected = attribute.protected,
-                        valueType = mapTemplateAttributeType(attribute.type, attribute.protected),
-                    ),
-                )
-            }
-        }
-    }
-}
-
-/**
- * 将模板属性类型映射为列表展示用的 [RemainingValueType]。
- */
-fun mapTemplateAttributeType(
-    type: com.kunzisoft.keepass.database.element.template.TemplateAttributeType,
-    protected: Boolean,
-): RemainingValueType =
-    when (type) {
-        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.DATETIME ->
-            RemainingValueType.DATE_TIME
-        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.TEXT ->
-            if (protected) RemainingValueType.PASSWORD else RemainingValueType.TEXT
-        // LIST 与 DIVIDER 暂无对应的展示类型，回退为 TEXT
-        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.LIST,
-        com.kunzisoft.keepass.database.element.template.TemplateAttributeType.DIVIDER,
-        ->
-            RemainingValueType.TEXT
-    }

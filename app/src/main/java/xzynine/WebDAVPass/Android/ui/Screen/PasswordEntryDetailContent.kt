@@ -601,10 +601,29 @@ fun PasswordEntryDetailContent(
                 SmallTitle(text = "自定义字段")
             }
             item {
-                CustomFieldsEditor(
-                    fields = editCustomFields,
-                    onFieldsChange = { onEditCustomFieldsChange(it) },
-                )
+                // 编辑器本身是平铺结构，详情页用与相邻分区一致的卡片壳包裹
+                Card(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .border(
+                                width = 0.5.dp,
+                                color = cardBorderColor,
+                                shape = RoundedCornerShape(cornerRadius),
+                            ),
+                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
+                    cornerRadius = cornerRadius,
+                    pressFeedbackType = PressFeedbackType.None,
+                    showIndication = false,
+                    onClick = {},
+                ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        CustomFieldsEditor(
+                            fields = editCustomFields,
+                            onFieldsChange = { onEditCustomFieldsChange(it) },
+                        )
+                    }
+                }
             }
         }
 

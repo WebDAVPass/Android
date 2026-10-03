@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -15,8 +16,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -27,9 +26,7 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
-import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 
 /**
@@ -139,127 +136,107 @@ private fun millisToUtcDateMillis(millis: Long): Long {
 
 /**
  * 自定义字段编辑器（详情页与列表页创建对话框共用）。
+ *
+ * 不做卡片包裹：字段与标题/账号/密码等主输入框同级平铺，每个字段压成一行
+ * （字段名 | 值 | 受保护 | 删除），避免多层嵌套带来的额外高度。
+ * 详情页需要卡片视觉时由调用方用同样的 Card 包裹（见 PasswordEntryDetailContent）。
  */
 @Composable
 fun CustomFieldsEditor(
     fields: List<EditableFieldDraft>,
+    modifier: Modifier = Modifier,
     onFieldsChange: (List<EditableFieldDraft>) -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-        cornerRadius = 12.dp,
-        pressFeedbackType = PressFeedbackType.None,
-        showIndication = false,
-        onClick = {},
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            fields.forEachIndexed { index, field ->
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                ) {
-                    TextField(
-                        value = field.name,
-                        onValueChange = { name ->
-                            onFieldsChange(
-                                fields.toMutableList().apply {
-                                    this[index] = field.copy(name = name)
-                                },
-                            )
-                        },
-                        label = "字段名",
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    TextField(
-                        value = field.value,
-                        onValueChange = { value ->
-                            onFieldsChange(
-                                fields.toMutableList().apply {
-                                    this[index] = field.copy(value = value)
-                                },
-                            )
-                        },
-                        label = if (field.isProtected) "值（受保护）" else "值",
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        if (field.isProtected) {
-                            Icon(
-                                imageVector = MiuixIcons.Lock,
-                                contentDescription = "已保护",
-                                tint = MiuixTheme.colorScheme.primary,
-                                modifier = Modifier.padding(end = 4.dp),
-                            )
-                        }
-                        Text(
-                            text = "受保护",
-                            fontSize = 12.sp,
-                            color =
-                                if (field.isProtected) {
-                                    MiuixTheme.colorScheme.primary
-                                } else {
-                                    MiuixTheme.colorScheme.onSurfaceSecondary
-                                },
-                        )
-                        Switch(
-                            checked = field.isProtected,
-                            onCheckedChange = { checked ->
-                                onFieldsChange(
-                                    fields.toMutableList().apply {
-                                        this[index] = field.copy(isProtected = checked)
-                                    },
-                                )
-                            },
-                        )
-                        IconButton(
-                            onClick = {
-                                onFieldsChange(fields.filterIndexed { i, _ -> i != index })
-                            },
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Delete,
-                                contentDescription = "删除字段",
-                            )
-                        }
-                    }
-                }
-                if (index < fields.lastIndex) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 14.dp),
-                        thickness = 0.5.dp,
-                    )
-                }
-            }
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (fields.isEmpty()) {
+            Text(
+                text = "暂无自定义字段",
+                fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                modifier = Modifier.padding(start = 14.dp, top = 2.dp, bottom = 8.dp),
+            )
+        }
+        fields.forEachIndexed { index, field ->
             Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onFieldsChange(fields + EditableFieldDraft(name = "", value = "", isProtected = false))
-                        }.padding(horizontal = 14.dp, vertical = 12.dp),
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Icon(
-                    imageVector = MiuixIcons.Edit,
-                    contentDescription = "添加字段",
-                    tint = MiuixTheme.colorScheme.primary,
+                TextField(
+                    value = field.name,
+                    onValueChange = { name ->
+                        onFieldsChange(
+                            fields.toMutableList().apply {
+                                this[index] = field.copy(name = name)
+                            },
+                        )
+                    },
+                    label = "字段名",
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
                 )
-                Text(
-                    text = " 添加字段",
-                    fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 8.dp),
+                TextField(
+                    value = field.value,
+                    onValueChange = { value ->
+                        onFieldsChange(
+                            fields.toMutableList().apply {
+                                this[index] = field.copy(value = value)
+                            },
+                        )
+                    },
+                    label = if (field.isProtected) "值（受保护）" else "值",
+                    singleLine = true,
+                    modifier = Modifier.weight(1.5f),
+                )
+                Switch(
+                    checked = field.isProtected,
+                    onCheckedChange = { checked ->
+                        onFieldsChange(
+                            fields.toMutableList().apply {
+                                this[index] = field.copy(isProtected = checked)
+                            },
+                        )
+                    },
+                )
+                IconButton(
+                    onClick = {
+                        onFieldsChange(fields.filterIndexed { i, _ -> i != index })
+                    },
+                    modifier = Modifier.size(40.dp),
+                ) {
+                    Icon(
+                        imageVector = MiuixIcons.Delete,
+                        contentDescription = "删除字段",
+                    )
+                }
+            }
+            if (index < fields.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    thickness = 0.5.dp,
                 )
             }
+        }
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onFieldsChange(fields + EditableFieldDraft(name = "", value = "", isProtected = false))
+                    }.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = MiuixIcons.Edit,
+                contentDescription = "添加字段",
+                tint = MiuixTheme.colorScheme.primary,
+            )
+            Text(
+                text = " 添加字段",
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 8.dp),
+            )
         }
     }
 }
