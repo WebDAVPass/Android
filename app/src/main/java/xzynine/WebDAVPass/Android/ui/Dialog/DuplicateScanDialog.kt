@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -73,7 +75,14 @@ fun DuplicateScanDialog(
         show = show,
         onDismissRequest = onDismiss,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 组列表已用 heightIn 限高；外层滚动保证小屏/大字号下底部「关闭」不被压成 0 高度
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Text(
                 text = "无冲突组（账号/密码/网站完全一致）可直接合并；冲突组需逐项选择采用哪个条目的值。",
                 fontSize = 13.sp,

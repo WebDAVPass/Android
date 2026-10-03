@@ -18,7 +18,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -106,7 +108,14 @@ fun AppPickerDialog(
         show = show,
         onDismissRequest = onDismiss,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 应用网格已用 heightIn 限高；外层滚动保证搜索框弹出键盘时底部「取消」不被压成 0 高度
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             TextField(
                 value = query,
                 onValueChange = { query = it },

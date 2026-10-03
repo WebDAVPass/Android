@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -106,7 +108,15 @@ fun EntryMergeDialog(
         show = show,
         onDismissRequest = onDismiss,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 主条目列表随重复条目数量增长，整体可滚动以保证底部「取消 / 合并」始终可见
+        // （内层字段列表已用 heightIn 限高，滚动到边界后由外层接管）
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             SmallTitle(text = "保留主条目")
             Card {
                 entries.forEachIndexed { index, entry ->
