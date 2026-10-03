@@ -18,6 +18,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -42,6 +47,7 @@ import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzylib.base.util.ToastUtils
+import xzynine.WebDAVPass.Android.data.AppPackageField
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
@@ -54,6 +60,7 @@ import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import xzynine.WebDAVPass.Android.util.InstalledAppsProvider
 import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 import xzynine.WebDAVPass.Android.util.QrCodeUtil
 
@@ -75,6 +82,9 @@ fun PasswordEntryDetailContent(
     onEditPasswordChange: (String) -> Unit,
     editUrl: String,
     onEditUrlChange: (String) -> Unit,
+    editAppPackage: String,
+    onEditAppPackageChange: (String) -> Unit,
+    editCustomIconUuid: String?,
     editNotes: String,
     onEditNotesChange: (String) -> Unit,
     editTagsText: String,
@@ -87,6 +97,7 @@ fun PasswordEntryDetailContent(
     onEditExpiryTimeChange: (Long?) -> Unit,
     editIconStandardId: Int,
     editNewCustomIconBytes: ByteArray?,
+    onEditNewCustomIconBytesChange: (ByteArray?) -> Unit,
     showOtpSecret: Boolean,
     onShowOtpSecretChange: (Boolean) -> Unit,
     showQrCode: Boolean,
@@ -136,6 +147,9 @@ fun PasswordEntryDetailContent(
     val notesField = selectedEntry.keyValues.firstOrNull { it.fieldName.equals("Notes", ignoreCase = true) }
     val otpFields = selectedEntry.keyValues.filter { isOtpField(it) }
     val otpSecretField = otpFields.firstOrNull()
+    // 应用关联字段（AndroidApp / AndroidApp_N）：编辑态已由 editAppPackage 单独承载，
+    // 查看态在「应用」行展示，这里都要从附加信息中排除以免重复
+    val appIdField = selectedEntry.keyValues.firstOrNull { AppPackageField.isAppIdFieldName(it.fieldName) }
     val additionalFields =
         selectedEntry.keyValues
             .filterNot { item ->
@@ -143,6 +157,7 @@ fun PasswordEntryDetailContent(
                     item == passwordField ||
                     item == urlField ||
                     item == notesField ||
+                    item == appIdField ||
                     (selectedToken != null && isOtpField(item))
             }.filterNot { item ->
                 // Passkey 字段在下方独立区块展示
@@ -168,6 +183,22 @@ fun PasswordEntryDetailContent(
     val passwordValue = passwordField?.rawValue?.ifBlank { "--" } ?: "--"
     val urlValue = urlField?.rawValue?.ifBlank { "--" } ?: "--"
     val notesValue = notesField?.rawValue?.ifBlank { "--" } ?: "--"
+
+    // 应用关联：编辑态取编辑框内的包名，查看态取条目内的应用字段（归一化为裸包名）
+    val appPackage =
+        AppPackageField
+            .normalizeAppPackage(if (isEditing) editAppPackage else appIdField?.rawValue)
+            .takeIf { it.isNotEmpty() }
+    var appLabel by remember(appPackage) { mutableStateOf("") }
+    LaunchedEffect(appPackage) {
+        appLabel =
+            appPackage
+                ?.let { pkg ->
+                    withContext(Dispatchers.IO) {
+                        runCatching { InstalledAppsProvider.getApplicationLabel(context, pkg) }.getOrNull()
+                    }
+                }.orEmpty()
+    }
 
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -405,6 +436,35 @@ fun PasswordEntryDetailContent(
                             onClick = {
                                 if (urlValue != "--") {
                                     openUrl(context, urlValue)
+                                }
+                            },
+                        )
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        thickness = 0.5.dp,
+                    )
+
+                    // 应用（安装包名）：编辑态提供独立输入行与本机应用选择器；
+                    // 查看态仅在已关联应用时展示，点击尝试拉起该应用
+                    if (isEditing) {
+                        AppPackageFieldEditor(
+                            value = editAppPackage,
+                            onValueChange = { onEditAppPackageChange(it) },
+                            hasCustomIcon = editNewCustomIconBytes != null || editCustomIconUuid != null,
+                            onAppIconPicked = { onEditNewCustomIconBytesChange(it) },
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    } else if (appPackage != null) {
+                        Preference(
+                            type = PreferenceType.Arrow,
+                            title = "应用",
+                            summary = if (appLabel.isEmpty() || appLabel == appPackage) appPackage else "$appLabel · $appPackage",
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                if (!InstalledAppsProvider.launchApp(context, appPackage)) {
+                                    ToastUtils.showShortToast(context, "未安装该应用")
                                 }
                             },
                         )

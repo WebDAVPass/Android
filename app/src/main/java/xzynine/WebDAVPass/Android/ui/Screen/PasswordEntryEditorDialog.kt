@@ -41,6 +41,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzylib.base.util.ToastUtils
+import xzynine.WebDAVPass.Android.data.AppPackageField.normalizeAppPackage
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
@@ -52,7 +53,7 @@ private const val MAX_ATTACHMENT_BYTES = 1024 * 1024
 /**
  * 条目编辑对话框（用于新增）。
  *
- * 支持标题/账号/密码/网站/备注、自定义字段、附件、过期时间与图标。
+ * 支持标题/账号/密码/网站/应用（安装包名）/备注、自定义字段、附件、过期时间与图标。
  *
  * 表单内容整体可滚动：miuix `WindowDialog` 的内容容器不带滚动，
  * 超出可用高度后尾部子项（含底部操作行）会被测量为 0 高度而"消失"。
@@ -74,6 +75,7 @@ fun PasswordEntryEditorDialog(
     var entryUrl by remember { mutableStateOf(initialDraft.url) }
     var entryNotes by remember { mutableStateOf(initialDraft.notes) }
     var entryTagsText by remember { mutableStateOf(initialDraft.tags.joinToString(", ")) }
+    var entryAppPackage by remember { mutableStateOf(initialDraft.appPackageName) }
     var customFields by remember { mutableStateOf(initialDraft.customFields) }
     var attachments by remember { mutableStateOf(initialDraft.attachments.map { it.copy() }) }
     var expiryTime by remember { mutableStateOf(initialDraft.expiryTime) }
@@ -90,6 +92,7 @@ fun PasswordEntryEditorDialog(
             entryUrl = initialDraft.url
             entryNotes = initialDraft.notes
             entryTagsText = initialDraft.tags.joinToString(", ")
+            entryAppPackage = initialDraft.appPackageName
             customFields = initialDraft.customFields
             attachments = initialDraft.attachments.map { it.copy() }
             expiryTime = initialDraft.expiryTime
@@ -177,6 +180,14 @@ fun PasswordEntryEditorDialog(
                 label = "网站",
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
+            )
+            // 应用（安装包名）默认空白：可手工键入，也可从本机应用列表选择；
+            // 写入包名且条目尚无自定义图标时，自动把应用图标作为条目图标
+            AppPackageFieldEditor(
+                value = entryAppPackage,
+                onValueChange = { entryAppPackage = it },
+                hasCustomIcon = newCustomIconBytes != null,
+                onAppIconPicked = { newCustomIconBytes = it },
             )
             TextField(
                 value = entryNotes,
@@ -315,6 +326,7 @@ fun PasswordEntryEditorDialog(
                                 customIconUuid = customIconUuid,
                                 iconStandardId = iconStandardId,
                                 newCustomIconBytes = newCustomIconBytes,
+                                appPackageName = normalizeAppPackage(entryAppPackage),
                             ),
                         )
                     },

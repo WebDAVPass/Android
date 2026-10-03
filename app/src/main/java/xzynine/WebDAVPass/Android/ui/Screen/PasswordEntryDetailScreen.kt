@@ -30,12 +30,14 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import xzylib.base.util.ToastUtils
+import xzynine.WebDAVPass.Android.data.AppPackageField.normalizeAppPackage
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingValueType
+import xzynine.WebDAVPass.Android.data.splitAppPackageField
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryHistoryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
@@ -69,6 +71,7 @@ fun PasswordEntryDetailScreen(
     var editUrl by rememberSaveable(entryId) { mutableStateOf("") }
     var editNotes by rememberSaveable(entryId) { mutableStateOf("") }
     var editTagsText by rememberSaveable(entryId) { mutableStateOf("") }
+    var editAppPackage by rememberSaveable(entryId) { mutableStateOf("") }
 
     // 附件 / 自定义字段 / 过期时间 / 图标（编辑态）
     // 注意：附件含 ByteArray，不能用 rememberSaveable（无法序列化）
@@ -100,7 +103,8 @@ fun PasswordEntryDetailScreen(
         editAttachments = entry.attachments.map { EditableAttachmentDraft(name = it.name) }
         // 仅排除真正的标准字段（isStandard），保留同名但属于额外字段（extra）的合法字段，
         // 避免从其他工具迁移来的、命名为 Password 等的 extra 在保存时被静默删除。
-        editCustomFields =
+        // 应用关联字段（AndroidApp / AndroidApp_1 …）单独拆出到 editAppPackage，不进自定义字段列表
+        val appSplit =
             entry.keyValues
                 .filter { !it.isStandard }
                 .map {
@@ -112,7 +116,9 @@ fun PasswordEntryDetailScreen(
                         valueType = it.valueType,
                         isStandard = it.isStandard,
                     )
-                }
+                }.splitAppPackageField()
+        editCustomFields = appSplit.fields
+        editAppPackage = appSplit.packageName
         editExpiryTime = entry.expiryTime
         editIconStandardId = entry.standardIconId
         editCustomIconUuid = entry.customIconUuid
@@ -208,6 +214,7 @@ fun PasswordEntryDetailScreen(
                         customIconUuid = editCustomIconUuid,
                         iconStandardId = editIconStandardId,
                         newCustomIconBytes = editNewCustomIconBytes,
+                        appPackageName = normalizeAppPackage(editAppPackage),
                     ),
                 )
             if (updated) {
@@ -315,6 +322,9 @@ fun PasswordEntryDetailScreen(
             onEditPasswordChange = { editPassword = it },
             editUrl = editUrl,
             onEditUrlChange = { editUrl = it },
+            editAppPackage = editAppPackage,
+            onEditAppPackageChange = { editAppPackage = it },
+            editCustomIconUuid = editCustomIconUuid,
             editNotes = editNotes,
             onEditNotesChange = { editNotes = it },
             editTagsText = editTagsText,
@@ -327,6 +337,7 @@ fun PasswordEntryDetailScreen(
             onEditExpiryTimeChange = { editExpiryTime = it },
             editIconStandardId = editIconStandardId,
             editNewCustomIconBytes = editNewCustomIconBytes,
+            onEditNewCustomIconBytesChange = { editNewCustomIconBytes = it },
             showOtpSecret = showOtpSecret,
             onShowOtpSecretChange = { showOtpSecret = it },
             showQrCode = showQrCode,

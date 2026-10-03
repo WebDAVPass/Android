@@ -9,6 +9,11 @@
     <!-- 添加相机权限 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- 应用列表查询：条目「应用」字段需列出本机应用供选择，并读取应用图标作为条目图标；
+         自动填充服务侧也要按包名取应用名与图标，故在清单声明（非运行时权限） -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    <!-- MIUI/澎湃：在 QUERY_ALL_PACKAGES 之外还需在应用详情页显式授予「访问应用列表」 -->
+    <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS" />
     <!-- 声明相机硬件特性，但非必需 -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
