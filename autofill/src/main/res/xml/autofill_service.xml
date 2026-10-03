@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    自动填充服务的默认配置。
+    宿主 app 可通过在自身 res/xml 下放置同名文件进行覆盖（app 资源优先级高于库），
+    从而补充 settingsActivity 与 compatibility-package 列表。
+    此处刻意不声明 settingsActivity：库无法预知宿主的设置界面类名。
+-->
+<autofill-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/autofill_service_description"
+    android:supportsInlineSuggestions="true" />

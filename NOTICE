@@ -1,0 +1,49 @@
+WebDAVPass for Android
+======================
+
+本产品（WebDAVPass for Android，applicationId `xzynine.webdavpass`）
+整体以 GNU General Public License v3.0 或更高版本授权分发，完整许可条款见同级 LICENSE 文件。
+
+本产品包含源自以下开源项目的代码，依据 GPLv3 第 5 条保留原始版权声明与许可通知。
+
+
+一、KeePassDX
+------------
+  来源项目：KeePassDX（https://github.com/Kunzisoft/KeePassDX）
+  版权所有：Copyright 2019 Jeremy Jamet / Kunzisoft
+  许可项目：GNU General Public License v3.0 or later (GPL-3.0-or-later)
+  使用范围：本仓库 `autofill/` 模块（`:autofill`）的自动填充服务实现。
+           涉及文件：`KeeAutofillService.kt`、`StructureParser.kt`、
+           `AutofillHelper.kt`、`AutofillComponent.kt`、
+           `CompatInlineSuggestionsRequest.kt` 及配套 res 布局资源。
+  修改说明：在保留原有解析与填充逻辑的基础上做了以下修改——
+            1. 剥离对 KeePassDX 业务层（数据库、搜索、Magikeyboard、剪贴板通知等）
+               的直接依赖，改为由 `bridge/` 包下的桥接接口注入；
+            2. 适配 API 35（VanillaIceCream）起 `Dataset.Builder` 的
+               `Presentations` / `Field` 新写法；
+            3. 补充保存流程的空白密码校验、`FLAG_SECURE` 防截屏等处理；
+            4. 按 ktlint 规则重新格式化，注释译为中文。
+
+
+二、Keepass2Android
+------------------
+  来源项目：keepass2android（https://github.com/PhilippC/keepass2android）
+  版权所有：Copyright Philipp Crocoll
+  许可项目：GNU General Public License v3.0 or later (GPL-3.0-or-later)
+  使用范围：本仓库 `crypto/` 模块（`:crypto`，AES / Argon2 等加密算法与 JNI 实现）
+           与 `database/` 模块（`:database`，KDBX 数据库读写层，
+           包名 `com.kunzisoft.keepass.database`）。
+  修改说明：按本工程需要裁剪，包名与构建配置沿用上游，未改变算法语义。
+
+
+三、其他
+-------
+  本仓库另有 `:base`、`:icon-pack`（含 `:icon-pack:classic`、`:icon-pack:material`）、
+  `:token-images` 等辅助模块，以及以 git submodule 形式引入的 `:webdav`、`:checkupdates`。
+  各模块来源与维护约定见仓库 AGENTS.md；子模块代码在其各自仓库中维护。
+
+
+GPLv3 要求的源码提供
+--------------------
+  依据 GPLv3 第 6 条，本产品以源码形式公开发布，任何接收者均可从项目仓库
+  获取与所分发二进制完全对应的完整源代码，无需额外索取。

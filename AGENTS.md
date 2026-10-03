@@ -27,5 +27,7 @@ Docs\项目简介.md
 
 - `RepositoriesMode.FAIL_ON_PROJECT_REPOS`：模块内禁止再声明 repository。
 - ABI splits 仅当任务名含 "Release" 时启用：`assembleRelease` 产出 armeabi-v7a/arm64-v8a/x86_64 + universal APK，`assembleDebug` 只产出 universal。
-- app 的 compileSdk 使用 AGP 9 新写法 `compileSdk { version = release(37) }`；minSdk 29 / targetSdk 36，源码/目标均为 Java 21（miuix-nav 以 JVM 21 编译，调用方须同版本；CI 均用 JDK 21）。
-- 代码格式化：`./gradlew ktlintFormat`（ktlint 插件，仅覆盖本仓库模块，不含 webdav/checkupdates 子模块；.gitattributes 统一行尾：存储 LF、检出 CRLF）。
+- app 的 compileSdk 使用 AGP 9 新写法 `compileSdk { version = release(37) }`；minSdk 29 / targetSdk 37，源码/目标均为 Java 21（miuix-nav 以 JVM 21 编译，调用方须同版本；CI 均用 JDK 21）。
+- 16KB 页面大小：`crypto` 固定 NDK r29（`ndkVersion "29.0.14206865"`，r28 起默认 16KB 对齐）并在 `CMakeLists.txt` 追加 `-Wl,-z,max-page-size=16384`；app 侧 `packaging.jniLibs.useLegacyPackaging = false`。不要再降回 NDK r27 以下，否则 `libaes.so`/`libargon2.so` 会退回 4KB 对齐。
+- Android 17 本地网络权限：`webdav` 子模块清单声明 `ACCESS_LOCAL_NETWORK`，目标地址与授权判定见子模块 `LocalNetworkPermission`；宿主侧用 `ui/component/LocalNetworkPermissionGate.kt` 的 `rememberLocalNetworkPermissionGate()` 在访问局域网 WebDAV 前请求权限，同步失败类型为 `SyncFailureKind.LOCAL_NETWORK`。
+- 代码格式化：`./gradlew ktlintFormat`（ktlint 插件，仅覆盖本仓库模块，不含 webdav/checkupdates 子模块；.gitattributes 统一行尾：存储 LF、检出 CRLF不用手动处理）。

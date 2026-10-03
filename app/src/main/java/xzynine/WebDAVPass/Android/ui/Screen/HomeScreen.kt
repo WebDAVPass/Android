@@ -17,7 +17,7 @@ import androidx.compose.ui.unit.sp
 import top.yukonga.miuix.kmp.basic.*
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
+import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 /**

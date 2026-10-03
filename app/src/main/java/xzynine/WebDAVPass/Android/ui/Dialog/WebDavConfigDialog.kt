@@ -34,6 +34,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.WebDavConfig
+import xzynine.WebDAVPass.Android.ui.component.rememberLocalNetworkPermissionGate
 
 /**
  * WebDAV配置内容组件
@@ -45,6 +46,8 @@ fun WebDavConfigContent(
     existingConfig: WebDavConfig? = null,
 ) {
     val context = LocalContext.current
+    // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+    val localNetworkGate = rememberLocalNetworkPermissionGate()
     val originalUrl =
         existingConfig?.url?.let {
             if (it.endsWith("/WebDavPass/") || it.endsWith("/WebDavPass")) {
@@ -209,6 +212,12 @@ fun WebDavConfigContent(
 
                 coroutineScope.launch(Dispatchers.IO) {
                     try {
+                        if (!localNetworkGate.ensure(serverUrl)) {
+                            withContext(Dispatchers.Main) {
+                                isTesting = false
+                            }
+                            return@launch
+                        }
                         val webDav = WebDav(serverUrl, Authorization(username, testPassword))
                         val success = webDav.check()
 
@@ -244,7 +253,14 @@ fun WebDavConfigContent(
                 coroutineScope.launch(Dispatchers.IO) {
                     try {
                         listStatus = "正在加载 .kdbx 列表..."
-                        val webDav = WebDav(normalizeBaseUrl(serverUrl, remoteFolder), Authorization(username, password))
+                        val listUrl = normalizeBaseUrl(serverUrl, remoteFolder)
+                        if (!localNetworkGate.ensure(listUrl)) {
+                            withContext(Dispatchers.Main) {
+                                listStatus = "需要「本地网络」权限才能访问局域网服务器"
+                            }
+                            return@launch
+                        }
+                        val webDav = WebDav(listUrl, Authorization(username, password))
                         val files =
                             webDav
                                 .listFiles()

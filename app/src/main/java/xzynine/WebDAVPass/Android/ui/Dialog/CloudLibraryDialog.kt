@@ -39,6 +39,7 @@ import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import xzynine.WebDAVPass.Android.ui.component.WebDavBrowseMode
 import xzynine.WebDAVPass.Android.ui.component.WebDavFileBrowserDialog
+import xzynine.WebDAVPass.Android.ui.component.rememberLocalNetworkPermissionGate
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import java.net.URLEncoder
 
@@ -85,6 +86,8 @@ fun CloudLibraryDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+    val localNetworkGate = rememberLocalNetworkPermissionGate()
     val isImportMode = mode == CloudMode.IMPORT
     val isCreateMode = mode == CloudMode.CREATE
     val isBindMode = mode == CloudMode.BIND
@@ -219,6 +222,10 @@ fun CloudLibraryDialog(
                     val encoded = encodeRelativePath(path)
                     "$baseUrl$encoded"
                 }
+            // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+            if (!localNetworkGate.ensure(normalized)) {
+                return@withContext null
+            }
             val remote = WebDav(normalized, Authorization(user, pass))
             if (!remote.exists()) {
                 return@withContext null
@@ -266,6 +273,10 @@ fun CloudLibraryDialog(
                     "$baseUrl$encoded"
                 }
 
+            // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+            if (!localNetworkGate.ensure(normalized)) {
+                return@withContext null
+            }
             val remote = WebDav(normalized, Authorization(user, pass))
             val kdbxBytes = tokenViewModel.createEmptyKdbxBytes(masterPassword, keyFileData)
             remote.upload(kdbxBytes, "application/octet-stream")

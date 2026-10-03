@@ -1,0 +1,11 @@
+<resources>
+    <!-- 系统「自动填充服务」设置页中显示的服务名与说明 -->
+    <string name="autofill_service_label">WebDAVPass 自动填充</string>
+    <string name="autofill_service_description">Autofill service for WebDAVPass</string>
+
+    <!-- 填充提示文案 -->
+    <string name="autofill_sign_in_prompt">使用 WebDAVPass 登录</string>
+    <string name="autofill_select_entry">选择条目</string>
+    <string name="autofill_unlock">解锁密码库以填充</string>
+    <string name="autofill_loading">正在加载…</string>
+</resources>

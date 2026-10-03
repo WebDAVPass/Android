@@ -162,6 +162,8 @@ fun WebDavFileBrowserDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+    val localNetworkGate = rememberLocalNetworkPermissionGate()
 
     // 账号信息
     var serverUrl by remember { mutableStateOf(initialServerUrl) }
@@ -275,9 +277,14 @@ fun WebDavFileBrowserDialog(
         errorText = null
         message = null
         try {
+            val baseUrl = normalizeServerRootUrl(serverUrl)
+            val dirUrl = buildDirectoryUrl(baseUrl, relativeDirectory)
+            // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+            if (!localNetworkGate.ensure(dirUrl)) {
+                errorText = "需要「本地网络」权限才能访问局域网服务器"
+                return
+            }
             withContext(Dispatchers.IO) {
-                val baseUrl = normalizeServerRootUrl(serverUrl)
-                val dirUrl = buildDirectoryUrl(baseUrl, relativeDirectory)
                 logDebug("loadDirectory start, dir=$relativeDirectory")
                 val raw =
                     WebDav(dirUrl, Authorization(username, password))

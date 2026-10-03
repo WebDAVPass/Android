@@ -8,13 +8,16 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Scaffold
 import xzynine.WebDAVPass.Android.data.LibrarySourceType
 import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 import xzynine.WebDAVPass.Android.ui.component.WebDavSyncStatusSection
 import xzynine.WebDAVPass.Android.ui.component.WebDavSyncUiState
+import xzynine.WebDAVPass.Android.ui.component.rememberLocalNetworkPermissionGate
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 /**
@@ -31,6 +34,9 @@ fun BackupSettingsContent(
     val isRestoreInProgress = viewModel.cloudSyncViewModel.isRestoreInProgress.collectAsState()
     val restoreProgress = viewModel.cloudSyncViewModel.restoreProgress.collectAsState()
     val currentLibraryState by viewModel.libraryViewModel.currentLibrary.collectAsState()
+    val coroutineScope = rememberCoroutineScope()
+    // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+    val localNetworkGate = rememberLocalNetworkPermissionGate()
 
     /**
      * 当前库是否已具备云端同步所需信息。
@@ -73,8 +79,20 @@ fun BackupSettingsContent(
                         isCloudBound = isCurrentLibraryCloudBound,
                     ),
                 onCloudBindingClick = onCloudBindingClick,
-                onBackupClick = { viewModel.backupTokens(force = true) },
-                onRestoreClick = { viewModel.manualRestoreTokens() },
+                onBackupClick = {
+                    coroutineScope.launch {
+                        if (localNetworkGate.ensure(currentLibraryState?.remoteFilePath)) {
+                            viewModel.backupTokens(force = true)
+                        }
+                    }
+                },
+                onRestoreClick = {
+                    coroutineScope.launch {
+                        if (localNetworkGate.ensure(currentLibraryState?.remoteFilePath)) {
+                            viewModel.manualRestoreTokens()
+                        }
+                    }
+                },
             )
         }
     }

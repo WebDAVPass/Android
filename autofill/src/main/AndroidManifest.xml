@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+        自动填充服务的唯一声明处。
+        库只声明 Service，不声明任何 Activity：选择条目与保存注册的界面由宿主 app 提供，
+        通过 AutofillUiTarget 桥接接口返回其 ComponentName，避免库反向依赖 app。
+    -->
+    <application>
+        <service
+            android:name=".core.KeeAutofillService"
+            android:exported="true"
+            android:label="@string/autofill_service_label"
+            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.autofill.AutofillService" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.autofill"
+                android:resource="@xml/autofill_service" />
+        </service>
+    </application>
+
+</manifest>

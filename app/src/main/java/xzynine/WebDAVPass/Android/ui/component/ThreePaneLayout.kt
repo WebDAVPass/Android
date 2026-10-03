@@ -17,7 +17,7 @@ import top.yukonga.miuix.kmp.basic.VerticalDivider
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
+import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 /**

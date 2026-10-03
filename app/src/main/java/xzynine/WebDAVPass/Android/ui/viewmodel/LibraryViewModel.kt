@@ -1,6 +1,7 @@
-package xzynine.WebDAVPass.Android.ui.ViewModel
+package xzynine.WebDAVPass.Android.ui.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -547,7 +548,7 @@ class LibraryViewModel(
     ): String {
         val raw = repository.getLastUnlockErrorMessage().orEmpty()
         val isUriPath =
-            runCatching { android.net.Uri.parse(localPath) }
+            runCatching { Uri.parse(localPath) }
                 .getOrNull()
                 ?.scheme
                 ?.equals("content", ignoreCase = true) == true
