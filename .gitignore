@@ -31,3 +31,5 @@ icon-pack/build/
 icon-pack/classic/build/
 icon-pack/material/build/
 base/build/
+# CodeGraph local cache
+.codegraph/
