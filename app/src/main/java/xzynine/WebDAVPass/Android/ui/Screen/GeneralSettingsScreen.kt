@@ -4,9 +4,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -23,17 +21,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Scaffold
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.GridView
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.autofillbridge.AppAutofillPreferences
+import xzynine.WebDAVPass.Android.autofillbridge.parseBlocklist
+import xzynine.WebDAVPass.Android.ui.component.DialogActionRow
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
@@ -244,11 +242,7 @@ fun FillerSettingsContent(
             onConfirm = {
                 AppAutofillPreferences.setApplicationIdBlocklist(
                     context,
-                    blockEditText
-                        .split(",")
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                        .toSet(),
+                    parseBlocklist(blockEditText),
                 )
                 showAppBlockDialog = false
             },
@@ -263,11 +257,7 @@ fun FillerSettingsContent(
             onConfirm = {
                 AppAutofillPreferences.setWebDomainBlocklist(
                     context,
-                    blockEditText
-                        .split(",")
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                        .toSet(),
+                    parseBlocklist(blockEditText),
                 )
                 showWebBlockDialog = false
             },
@@ -298,18 +288,10 @@ private fun BlocklistDialog(
             onValueChange = onTextChange,
             label = "使用逗号分隔多个条目",
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            TextButton(
-                text = "取消",
-                onClick = onDismiss,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(
-                text = "保存",
-                onClick = onConfirm,
-                colors = ButtonDefaults.textButtonColorsPrimary(),
-                modifier = Modifier.weight(1f),
-            )
-        }
+        DialogActionRow(
+            onDismiss = onDismiss,
+            onConfirm = onConfirm,
+            confirmButtonText = "保存",
+        )
     }
 }

@@ -284,10 +284,4 @@ class AutofillPickerActivity : AppCompatActivity() {
             finish()
         }
     }
-
-    /** 取消并关闭界面（不携带任何条目数据）。 */
-    private fun cancelAndFinish() {
-        setResult(Activity.RESULT_CANCELED)
-        finish()
-    }
 }

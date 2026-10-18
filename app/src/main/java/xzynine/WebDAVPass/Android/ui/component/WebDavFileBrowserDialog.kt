@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import github.xzynine.webdav.Authorization
+import github.xzynine.webdav.LOCAL_NETWORK_DENIED_MESSAGE
 import github.xzynine.webdav.WebDav
 import github.xzynine.webdav.WebDavFileEntry
 import github.xzynine.webdav.WebDavFileFormat
@@ -47,14 +48,12 @@ import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.BreadcrumbBar
 import top.yukonga.miuix.kmp.basic.BreadcrumbItem
 import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.icon.MiuixIcons
@@ -70,7 +69,6 @@ import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import xzynine.WebDAVPass.Android.BuildConfig
-import java.net.URLEncoder
 import java.text.Collator
 
 /**
@@ -189,51 +187,6 @@ fun WebDavFileBrowserDialog(
     var showDeleteConfirm by remember { mutableStateOf(false) }
 
     /**
-     * 保证服务器根地址以 "/" 结尾
-     */
-    fun normalizeServerRootUrl(raw: String): String = if (raw.endsWith('/')) raw else "$raw/"
-
-    /**
-     * 规范化相对路径：去除首尾斜杠并合并重复斜杠
-     */
-    fun normalizeRelativePath(path: String): String = path.trim().trim('/').replace("//", "/")
-
-    /**
-     * 对相对路径逐段 URL 编码
-     */
-    fun encodeRelativePath(path: String): String =
-        normalizeRelativePath(path)
-            .split('/')
-            .filter { it.isNotBlank() }
-            .joinToString("/") {
-                URLEncoder.encode(it, Charsets.UTF_8.name()).replace("+", "%20")
-            }
-
-    /**
-     * 拼接文件完整地址（不带尾部斜杠）
-     */
-    fun buildFileUrl(
-        baseUrl: String,
-        relativePath: String,
-    ): String {
-        val root = normalizeServerRootUrl(baseUrl)
-        val rel = encodeRelativePath(relativePath)
-        return if (rel.isBlank()) root else "$root$rel"
-    }
-
-    /**
-     * 拼接目录完整地址（带尾部斜杠）
-     */
-    fun buildDirectoryUrl(
-        baseUrl: String,
-        relativeDirectory: String,
-    ): String {
-        val root = normalizeServerRootUrl(baseUrl)
-        val rel = encodeRelativePath(relativeDirectory)
-        return if (rel.isBlank()) root else "$root$rel/"
-    }
-
-    /**
      * 判断文件是否满足扩展名过滤
      */
     fun matchesFilter(entry: WebDavFileEntry): Boolean =
@@ -281,7 +234,7 @@ fun WebDavFileBrowserDialog(
             val dirUrl = buildDirectoryUrl(baseUrl, relativeDirectory)
             // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
             if (!localNetworkGate.ensure(dirUrl)) {
-                errorText = "需要「本地网络」权限才能访问局域网服务器"
+                errorText = LOCAL_NETWORK_DENIED_MESSAGE
                 return
             }
             withContext(Dispatchers.IO) {
@@ -438,7 +391,6 @@ fun WebDavFileBrowserDialog(
                 showDeleteConfirm && detailEntry != null ->
                     DeleteConfirmView(
                         entry = detailEntry!!,
-                        working = working,
                         onCancel = { showDeleteConfirm = false },
                         onConfirm = {
                             showDeleteConfirm = false
@@ -663,22 +615,11 @@ private fun PathJumpView(
         useLabelAsPlaceholder = true,
         singleLine = true,
     )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        TextButton(
-            text = "取消",
-            onClick = onCancel,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(
-            text = "跳转",
-            onClick = onConfirm,
-            modifier = Modifier.weight(1f),
-            colors = ButtonDefaults.textButtonColorsPrimary(),
-        )
-    }
+    DialogActionRow(
+        onDismiss = onCancel,
+        onConfirm = onConfirm,
+        confirmButtonText = "跳转",
+    )
 }
 
 /**
@@ -700,23 +641,16 @@ private fun CreateFolderView(
         useLabelAsPlaceholder = true,
         singleLine = true,
     )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        TextButton(
-            text = "取消",
-            onClick = onCancel,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(
-            text = "创建",
-            onClick = onConfirm,
-            enabled = newFolderName.isNotBlank() && !working,
-            modifier = Modifier.weight(1f),
-            colors = ButtonDefaults.textButtonColorsPrimary(),
-        )
-    }
+    DialogActionRow(
+        onDismiss = onCancel,
+        onConfirm = {
+            // 空名称或处理中不触发创建
+            if (newFolderName.isNotBlank() && !working) {
+                onConfirm()
+            }
+        },
+        confirmButtonText = "创建",
+    )
 }
 
 /**
@@ -725,28 +659,16 @@ private fun CreateFolderView(
 @Composable
 private fun DeleteConfirmView(
     entry: WebDavFileEntry,
-    working: Boolean,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     Text("确定删除「${entry.name}」？此操作不可恢复。")
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        TextButton(
-            text = "取消",
-            onClick = onCancel,
-            enabled = !working,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(
-            text = "删除",
-            onClick = onConfirm,
-            enabled = !working,
-            modifier = Modifier.weight(1f),
-        )
-    }
+    DialogActionRow(
+        onDismiss = onCancel,
+        onConfirm = onConfirm,
+        confirmButtonText = "删除",
+        isDestructive = true,
+    )
 }
 
 /**

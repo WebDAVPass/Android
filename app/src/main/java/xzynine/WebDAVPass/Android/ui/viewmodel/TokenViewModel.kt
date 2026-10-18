@@ -943,21 +943,7 @@ class TokenViewModel(
                 token
             }
 
-        val duplicate =
-            withContext(Dispatchers.IO) {
-                kdbxTokenRepository.isDuplicate(
-                    localPath,
-                    masterPassword,
-                    tokenWithId.secret,
-                    tokenWithId.algorithm,
-                    tokenWithId.digits,
-                    tokenWithId.period,
-                )
-            }
-        if (duplicate) {
-            return false
-        }
-
+        // 判重与写入由仓库层在同一次开库内完成
         val added =
             withContext(Dispatchers.IO) {
                 kdbxTokenRepository.addToken(localPath, masterPassword, tokenWithId)
@@ -983,7 +969,7 @@ class TokenViewModel(
         val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
         val masterPassword = libraryViewModel.getMasterPasswordInternal()
         return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.isDuplicate(
+            kdbxTokenRepository.isTokenDuplicate(
                 localPath,
                 masterPassword,
                 secret,

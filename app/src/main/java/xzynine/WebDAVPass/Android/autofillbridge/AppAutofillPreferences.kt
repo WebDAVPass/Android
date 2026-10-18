@@ -68,8 +68,8 @@ object AppAutofillPreferences : AutofillPreferences {
                 inline = dao.getValue(KEY_INLINE)?.value?.toBooleanStrictOrNull() ?: true
                 manual = dao.getValue(KEY_MANUAL)?.value?.toBooleanStrictOrNull() ?: true
                 askToSaveData = dao.getValue(KEY_ASK)?.value?.toBooleanStrictOrNull() ?: true
-                appBlock = parseSet(dao.getValue(KEY_APP_BLOCK)?.value)
-                webBlock = parseSet(dao.getValue(KEY_WEB_BLOCK)?.value)
+                appBlock = parseBlocklist(dao.getValue(KEY_APP_BLOCK)?.value)
+                webBlock = parseBlocklist(dao.getValue(KEY_WEB_BLOCK)?.value)
             }
         }
         isReady = true
@@ -174,15 +174,6 @@ object AppAutofillPreferences : AutofillPreferences {
         AppDatabaseHolder.getInstance(context).appSettingsDao().put(AppSetting(key, value))
     }
 
-    /** 解析逗号分隔的集合型偏好：去空白、去空项。 */
-    private fun parseSet(raw: String?): Set<String> =
-        raw
-            ?.split(",")
-            ?.map { it.trim() }
-            ?.filter { it.isNotEmpty() }
-            ?.toSet()
-            ?: emptySet()
-
     override val autofillSuggestionsEnabled: Boolean
         get() = enabled
 
@@ -198,3 +189,12 @@ object AppAutofillPreferences : AutofillPreferences {
     override val webDomainBlocklist: Set<String>
         get() = webBlock
 }
+
+/** 解析逗号分隔的集合型偏好：去空白、去空项。 */
+internal fun parseBlocklist(raw: String?): Set<String> =
+    raw
+        ?.split(",")
+        ?.map { it.trim() }
+        ?.filter { it.isNotEmpty() }
+        ?.toSet()
+        ?: emptySet()

@@ -25,20 +25,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.RadioButton
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.DuplicateEntryInfo
 import xzynine.WebDAVPass.Android.data.MergeFieldKeys
+import xzynine.WebDAVPass.Android.data.maskIfSensitive
+import xzynine.WebDAVPass.Android.ui.component.DialogActionRow
 import xzynine.WebDAVPass.Android.ui.component.MarqueeText
 
 /**
@@ -192,7 +192,7 @@ fun EntryMergeDialog(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = sourceEntry?.fieldDisplayName(key) ?: key,
+                                text = MergeFieldKeys.displayName(key),
                                 fontSize = 14.sp,
                                 color = MiuixTheme.colorScheme.onSurface,
                             )
@@ -261,26 +261,15 @@ fun EntryMergeDialog(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                TextButton(
-                    text = "取消",
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Button(
-                    onClick = {
-                        val masterId = masterEntryId.value ?: return@Button
+            DialogActionRow(
+                onDismiss = onDismiss,
+                onConfirm = {
+                    masterEntryId.value?.let { masterId ->
                         onConfirm(masterId, fieldSelections.toMap())
-                    },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = "合并")
-                }
-            }
+                    }
+                },
+                confirmButtonText = "合并",
+            )
         }
     }
 
@@ -288,7 +277,7 @@ fun EntryMergeDialog(
         val pickerKey = fieldPickerKey!!
         val pickedEntryId = fieldSelections[pickerKey] ?: masterEntryId.value ?: -1L
         FieldSourcePickerDialog(
-            title = "选择「${entries.firstOrNull { it.fieldValue(pickerKey).isNotBlank() }?.fieldDisplayName(pickerKey) ?: pickerKey}」的值",
+            title = "选择「${MergeFieldKeys.displayName(pickerKey)}」的值",
             fieldKey = pickerKey,
             entries = entries,
             selectedValue = entries.firstOrNull { it.entryId == pickedEntryId }?.fieldValue(pickerKey).orEmpty(),
@@ -314,10 +303,7 @@ private fun mergeValueDisplay(
     if (value.isEmpty()) {
         return "（空）"
     }
-    return when {
-        key == MergeFieldKeys.PASSWORD && !revealed -> "已设置"
-        else -> value
-    }
+    return maskIfSensitive(key, value, revealed)
 }
 
 /**

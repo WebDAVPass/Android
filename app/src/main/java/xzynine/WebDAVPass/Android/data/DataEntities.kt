@@ -3,6 +3,7 @@ package xzynine.WebDAVPass.Android.data
 import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import xzynine.WebDAVPass.Android.util.resolveBaseUrl
 
 /**
  * OTP令牌数据类
@@ -61,15 +62,7 @@ data class WebDavConfig(
      *
      * @return 以 "/" 结尾的完整基础地址
      */
-    fun resolveBaseUrl(): String {
-        val dir = directory?.trim()?.trim('/')
-        return if (dir.isNullOrBlank()) {
-            if (url.endsWith("/")) url else "$url/"
-        } else {
-            val base = if (url.endsWith("/")) url else "$url/"
-            "$base$dir/"
-        }
-    }
+    fun resolveBaseUrl(): String = url.resolveBaseUrl(directory)
 }
 
 /**

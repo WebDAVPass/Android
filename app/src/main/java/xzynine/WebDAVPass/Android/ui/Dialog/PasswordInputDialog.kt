@@ -2,10 +2,7 @@ package xzynine.WebDAVPass.Android.ui.Dialog
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -18,11 +15,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.window.WindowDialog
+import xzynine.WebDAVPass.Android.ui.component.DialogActionRow
 
 /**
  * 通用主密码输入对话框（用于合并库等需验证文件密码的场景）。
@@ -86,29 +83,17 @@ fun PasswordInputDialog(
             if (status.isNotBlank()) {
                 Text(text = status)
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                TextButton(
-                    text = "取消",
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Button(
-                    onClick = {
-                        if (password.isBlank()) {
-                            status = "请输入主密码"
-                        } else {
-                            onConfirm(password)
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(confirmButtonText)
-                }
-            }
+            DialogActionRow(
+                onDismiss = onDismiss,
+                onConfirm = {
+                    if (password.isBlank()) {
+                        status = "请输入主密码"
+                    } else {
+                        onConfirm(password)
+                    }
+                },
+                confirmButtonText = confirmButtonText,
+            )
         }
     }
 }

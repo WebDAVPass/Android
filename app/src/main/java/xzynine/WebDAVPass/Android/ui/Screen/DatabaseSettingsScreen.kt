@@ -52,6 +52,8 @@ import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import xzynine.WebDAVPass.Android.util.BoundedIo
+import xzynine.WebDAVPass.Android.util.FileSizeLimits
 import xzynine.WebDAVPass.Android.util.PasswordStrength
 import xzynine.WebDAVPass.Android.util.strengthLabel
 
@@ -177,19 +179,7 @@ fun DatabaseSettingsScreen(
             uri ?: return@rememberLauncherForActivityResult
             runCatching {
                 context.contentResolver.openInputStream(uri)?.use { input ->
-                    val buffer = java.io.ByteArrayOutputStream(8 * 1024)
-                    val chunk = ByteArray(8 * 1024)
-                    var total = 0
-                    while (true) {
-                        val read = input.read(chunk)
-                        if (read < 0) break
-                        total += read
-                        if (total > 1024 * 1024) {
-                            throw IllegalStateException("密钥文件过大")
-                        }
-                        buffer.write(chunk, 0, read)
-                    }
-                    val bytes = buffer.toByteArray()
+                    val bytes = BoundedIo.readBoundedBytes(input, FileSizeLimits.KEY_FILE_MAX_BYTES, "密钥文件过大")
                     if (bytes.isNotEmpty()) {
                         keyFileName = uri.lastPathSegment
                             ?.substringAfterLast('/')

@@ -39,9 +39,10 @@ import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import xzynine.WebDAVPass.Android.ui.component.WebDavBrowseMode
 import xzynine.WebDAVPass.Android.ui.component.WebDavFileBrowserDialog
+import xzynine.WebDAVPass.Android.ui.component.buildFileUrl
+import xzynine.WebDAVPass.Android.ui.component.normalizeServerRootUrl
 import xzynine.WebDAVPass.Android.ui.component.rememberLocalNetworkPermissionGate
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
-import java.net.URLEncoder
 
 /**
  * 云端库操作模式
@@ -155,10 +156,6 @@ fun CloudLibraryDialog(
             savedConfigs.distinctBy { it.url to it.username }
         }
 
-    fun normalizeServerRootUrl(raw: String): String = if (raw.endsWith('/')) raw else "$raw/"
-
-    fun normalizeRelativePath(path: String): String = path.trim().trim('/').replace("//", "/")
-
     /**
      * 提取服务器主机名用于账号命名
      */
@@ -200,14 +197,6 @@ fun CloudLibraryDialog(
         }
     }
 
-    fun encodeRelativePath(path: String): String =
-        normalizeRelativePath(path)
-            .split('/')
-            .filter { it.isNotBlank() }
-            .joinToString("/") {
-                URLEncoder.encode(it, Charsets.UTF_8.name()).replace("+", "%20")
-            }
-
     suspend fun importRemote(
         baseUrl: String,
         path: String,
@@ -219,8 +208,7 @@ fun CloudLibraryDialog(
                 if (path.startsWith("http://") || path.startsWith("https://")) {
                     path
                 } else {
-                    val encoded = encodeRelativePath(path)
-                    "$baseUrl$encoded"
+                    buildFileUrl(baseUrl, path)
                 }
             // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
             if (!localNetworkGate.ensure(normalized)) {
@@ -269,8 +257,7 @@ fun CloudLibraryDialog(
                 if (path.startsWith("http://") || path.startsWith("https://")) {
                     path
                 } else {
-                    val encoded = encodeRelativePath(path)
-                    "$baseUrl$encoded"
+                    buildFileUrl(baseUrl, path)
                 }
 
             // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
@@ -487,8 +474,7 @@ fun CloudLibraryDialog(
                                 if (normalizedPath.startsWith("http://") || normalizedPath.startsWith("https://")) {
                                     normalizedPath
                                 } else {
-                                    val encoded = encodeRelativePath(normalizedPath)
-                                    "$baseUrl$encoded"
+                                    buildFileUrl(baseUrl, normalizedPath)
                                 }
 
                             val current = initialLibraryContext

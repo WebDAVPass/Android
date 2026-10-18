@@ -96,7 +96,9 @@ data class EntryHistoryInfo(
 )
 
 /**
- * 值类型中文标签
+ * 值类型中文标签。
+ *
+ * 与 MergeFieldKeys.displayName 的 url 标签不同源（此处为「链接」，合并流程为「网站」），两处语义各自保留。
  */
 fun RemainingValueType.toDisplayName(): String =
     when (this) {

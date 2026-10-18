@@ -80,7 +80,7 @@ internal class PasswordPagingSubViewModel(
     val passwordHasMore: StateFlow<Boolean> = _passwordHasMore.asStateFlow()
 
     private val _isPageLoading = MutableStateFlow(false)
-    val isPageLoading: StateFlow<Boolean> = _isPageLoading.asStateFlow()
+    private val isPageLoading: StateFlow<Boolean> = _isPageLoading.asStateFlow()
 
     private var refreshJob: Job? = null
     private val pagingMutex = Mutex()
@@ -340,20 +340,6 @@ internal class PasswordPagingSubViewModel(
         }
 
         _passwordGroupStack.value = stack.dropLast(1)
-        refreshPasswordEntries(searchQuery)
-    }
-
-    fun resetPasswordGroupNavigation(searchQuery: String = "") {
-        if (listModeProvider() == PasswordListMode.RECENT_DELETED) {
-            refreshJob?.cancel()
-            refreshJob = null
-            _passwordGroupStack.value = emptyList()
-            refreshPasswordEntries(searchQuery)
-            return
-        }
-        refreshJob?.cancel()
-        refreshJob = null
-        _passwordGroupStack.value = emptyList()
         refreshPasswordEntries(searchQuery)
     }
 

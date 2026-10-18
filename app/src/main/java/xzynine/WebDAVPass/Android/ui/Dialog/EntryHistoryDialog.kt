@@ -1,13 +1,10 @@
 package xzynine.WebDAVPass.Android.ui.Dialog
 
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -22,13 +19,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
+import xzynine.WebDAVPass.Android.ui.component.DialogActionRow
 import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 
 /**
@@ -74,26 +71,14 @@ fun EntryHistoryDialog(
                     color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     modifier = Modifier.padding(bottom = 16.dp),
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                ) {
-                    TextButton(
-                        text = "取消",
-                        onClick = { pendingRestore = null },
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(modifier = Modifier.width(16.dp))
-                    Button(
-                        onClick = {
-                            pendingRestore = null
-                            onRestore(restore)
-                        },
-                        modifier = Modifier.weight(1f),
-                    ) {
-                        Text(text = "恢复此版本")
-                    }
-                }
+                DialogActionRow(
+                    onDismiss = { pendingRestore = null },
+                    onConfirm = {
+                        pendingRestore = null
+                        onRestore(restore)
+                    },
+                    confirmButtonText = "恢复此版本",
+                )
             } else if (histories.isEmpty()) {
                 Text(
                     text = "暂无历史记录",

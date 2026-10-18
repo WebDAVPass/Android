@@ -12,6 +12,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import xzylib.base.util.Logger
+import xzynine.WebDAVPass.Android.util.ensureTrailingSlash
 
 /**
  * 库上下文存储（数据库实现）
@@ -148,10 +149,10 @@ class LibraryContextStore(
         var sortCursor = lastSortNumber
 
         accounts.forEach { library ->
-            val baseUrl = normalizeBaseUrl(library.remoteBaseUrl!!)
+            val baseUrl = library.remoteBaseUrl!!.ensureTrailingSlash()
             val match =
                 existing.firstOrNull {
-                    normalizeBaseUrl(it.url) == baseUrl && it.username == library.username
+                    it.url.ensureTrailingSlash() == baseUrl && it.username == library.username
                 }
             if (match != null) {
                 val currentPlain = WebDavPasswordCipher.decrypt(match.password)
@@ -189,11 +190,6 @@ class LibraryContextStore(
             }
         }
     }
-
-    /**
-     * 保证服务器根地址以 "/" 结尾
-     */
-    private fun normalizeBaseUrl(raw: String): String = if (raw.endsWith("/")) raw else "$raw/"
 
     /**
      * 从数据库加载缓存

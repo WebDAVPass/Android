@@ -58,12 +58,11 @@ import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.ui.viewmodel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import xzynine.WebDAVPass.Android.util.BoundedIo
+import xzynine.WebDAVPass.Android.util.FileSizeLimits
 import xzynine.WebDAVPass.Android.util.resolveDisplayName
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
-
-/** 密钥文件大小上限（1 MiB），与 CreateMasterPasswordDialog 保持一致。 */
-private const val MAX_KEY_FILE_BYTES = 1024 * 1024
 
 /**
  * 内联解锁面板：主密码输入 + 密钥文件选择 + 凭据/生物识别解锁。
@@ -275,19 +274,7 @@ private fun InlineUnlockPanelContent(
                 inlineKeyFileData = null
                 runCatching {
                     context.contentResolver.openInputStream(uri)?.use { input ->
-                        val buffer = java.io.ByteArrayOutputStream(8 * 1024)
-                        val chunk = ByteArray(8 * 1024)
-                        var total = 0
-                        while (true) {
-                            val read = input.read(chunk)
-                            if (read < 0) break
-                            total += read
-                            if (total > MAX_KEY_FILE_BYTES) {
-                                throw IllegalStateException("密钥文件过大")
-                            }
-                            buffer.write(chunk, 0, read)
-                        }
-                        val bytes = buffer.toByteArray()
+                        val bytes = BoundedIo.readBoundedBytes(input, FileSizeLimits.KEY_FILE_MAX_BYTES, "密钥文件过大")
                         if (bytes.isNotEmpty()) {
                             inlineKeyFileName = uri.resolveDisplayName(context, fallbackIfEmpty = "未命名.kdbx")
                             inlineKeyFileData = bytes
@@ -804,17 +791,7 @@ private suspend fun loadKeyFileFromUri(
             val uri = uriString.toUri()
             val name = uri.resolveDisplayName(context, fallbackIfEmpty = "keyfile")
             context.contentResolver.openInputStream(uri)?.use { input ->
-                val buffer = java.io.ByteArrayOutputStream(8 * 1024)
-                val chunk = ByteArray(8 * 1024)
-                var total = 0
-                while (true) {
-                    val read = input.read(chunk)
-                    if (read < 0) break
-                    total += read
-                    if (total > 1024 * 1024) return@use null
-                    buffer.write(chunk, 0, read)
-                }
-                val bytes = buffer.toByteArray()
+                val bytes = BoundedIo.readBoundedBytes(input, FileSizeLimits.KEY_FILE_MAX_BYTES, "密钥文件过大")
                 if (bytes.isEmpty()) return@use null
                 name to bytes
             }

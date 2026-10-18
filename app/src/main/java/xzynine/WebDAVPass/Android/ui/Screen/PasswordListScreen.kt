@@ -2,11 +2,13 @@ package xzynine.WebDAVPass.Android.ui.Screen
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -467,6 +469,34 @@ fun PasswordListScreen(
         }
     }
 
+    // 顶栏动作区：嵌入模式 SmallTopAppBar 与独立模式 TopAppBar 共用同一份实参
+    val topBarActions: @Composable RowScope.() -> Unit = {
+        PasswordListTopBarActions(
+            isSelectionMode = isSelectionMode.value,
+            selectedTargets = selectedTargets,
+            enableRecycleBinActions = enableRecycleBinActions,
+            allowWriteActions = allowWriteActions,
+            enableGroupNavigation = enableGroupNavigation,
+            sortMode = sortMode,
+            onSortModeChange = { sortModeOrdinal = it.ordinal },
+            sortAscending = sortAscending,
+            onSortAscendingChange = { sortAscending = it },
+            hideExpired = hideExpired,
+            onHideExpiredChange = { hideExpired = it },
+            onSelectAll = { selectAllVisible() },
+            onInvertSelection = { invertSelection() },
+            onRestoreSelected = { restoreSelectedEntries() },
+            onRequestPermanentDelete = { showPermanentDeleteDialog.value = true },
+            onRequestDelete = { showDeleteDialog.value = true },
+            onSolidifyBrandIcons = { solidifySelectedBrandIcons() },
+            onMergeSelection = { openEntryMergeForSelection() },
+            onMoveSelection = { openGroupPicker(isMove = true) },
+            onCopySelection = { openGroupPicker(isMove = false) },
+            onScanDuplicates = { scanDuplicateEntries() },
+            onCreateEntry = { openCreateEntryFlow() },
+        ) { showCreateGroupDialog.value = true }
+    }
+
     // 嵌入模式与独立模式共用 Scaffold：保留顶栏功能区
     // 嵌入模式用紧凑 SmallTopAppBar（由 TopAppBar 自行处理状态栏 insets，缓解高度压缩）
     Scaffold(
@@ -504,32 +534,7 @@ fun PasswordListScreen(
                             }
                         }
                     },
-                    actions = {
-                        PasswordListTopBarActions(
-                            isSelectionMode = isSelectionMode.value,
-                            selectedTargets = selectedTargets,
-                            enableRecycleBinActions = enableRecycleBinActions,
-                            allowWriteActions = allowWriteActions,
-                            enableGroupNavigation = enableGroupNavigation,
-                            sortMode = sortMode,
-                            onSortModeChange = { sortModeOrdinal = it.ordinal },
-                            sortAscending = sortAscending,
-                            onSortAscendingChange = { sortAscending = it },
-                            hideExpired = hideExpired,
-                            onHideExpiredChange = { hideExpired = it },
-                            onSelectAll = { selectAllVisible() },
-                            onInvertSelection = { invertSelection() },
-                            onRestoreSelected = { restoreSelectedEntries() },
-                            onRequestPermanentDelete = { showPermanentDeleteDialog.value = true },
-                            onRequestDelete = { showDeleteDialog.value = true },
-                            onSolidifyBrandIcons = { solidifySelectedBrandIcons() },
-                            onMergeSelection = { openEntryMergeForSelection() },
-                            onMoveSelection = { openGroupPicker(isMove = true) },
-                            onCopySelection = { openGroupPicker(isMove = false) },
-                            onScanDuplicates = { scanDuplicateEntries() },
-                            onCreateEntry = { openCreateEntryFlow() },
-                        ) { showCreateGroupDialog.value = true }
-                    },
+                    actions = topBarActions,
                 )
             } else {
                 TopAppBar(
@@ -572,32 +577,7 @@ fun PasswordListScreen(
                             }
                         }
                     },
-                    actions = {
-                        PasswordListTopBarActions(
-                            isSelectionMode = isSelectionMode.value,
-                            selectedTargets = selectedTargets,
-                            enableRecycleBinActions = enableRecycleBinActions,
-                            allowWriteActions = allowWriteActions,
-                            enableGroupNavigation = enableGroupNavigation,
-                            sortMode = sortMode,
-                            onSortModeChange = { sortModeOrdinal = it.ordinal },
-                            sortAscending = sortAscending,
-                            onSortAscendingChange = { sortAscending = it },
-                            hideExpired = hideExpired,
-                            onHideExpiredChange = { hideExpired = it },
-                            onSelectAll = { selectAllVisible() },
-                            onInvertSelection = { invertSelection() },
-                            onRestoreSelected = { restoreSelectedEntries() },
-                            onRequestPermanentDelete = { showPermanentDeleteDialog.value = true },
-                            onRequestDelete = { showDeleteDialog.value = true },
-                            onSolidifyBrandIcons = { solidifySelectedBrandIcons() },
-                            onMergeSelection = { openEntryMergeForSelection() },
-                            onMoveSelection = { openGroupPicker(isMove = true) },
-                            onCopySelection = { openGroupPicker(isMove = false) },
-                            onScanDuplicates = { scanDuplicateEntries() },
-                            onCreateEntry = { openCreateEntryFlow() },
-                        ) { showCreateGroupDialog.value = true }
-                    },
+                    actions = topBarActions,
                 )
             }
         },
@@ -827,12 +807,9 @@ fun PasswordListScreen(
 
     if (showAutoMergeConfirm.value && autoMergeTarget != null) {
         val (masterId, sourceIds) = autoMergeTarget!!
-        ConfirmationDialog(
-            title = "确认合并",
-            summary = "将合并 ${sourceIds.size + 1} 条条目为 1 条，其余 ${sourceIds.size} 条将移入回收站（可恢复）。",
+        MergeConfirmDialog(
             show = showAutoMergeConfirm,
-            onDismiss = { showAutoMergeConfirm.value = false },
-            confirmButtonText = "合并",
+            summary = "将合并 ${sourceIds.size + 1} 条条目为 1 条，其余 ${sourceIds.size} 条将移入回收站（可恢复）。",
             onConfirm = { executeMerge(masterId, sourceIds, emptyMap()) },
         )
     }
@@ -840,15 +817,35 @@ fun PasswordListScreen(
     if (showMergeConfirm.value && mergeConfirmTarget != null) {
         val (masterId, selections) = mergeConfirmTarget!!
         val sourceIds = mergeDialogEntries.value.map { it.entryId }.filter { it != masterId }
-        ConfirmationDialog(
-            title = "确认合并",
-            summary = "将把 ${sourceIds.size} 条条目合并进所选主条目，并移入回收站（可恢复）。",
+        MergeConfirmDialog(
             show = showMergeConfirm,
-            onDismiss = { showMergeConfirm.value = false },
-            confirmButtonText = "合并",
+            summary = "将把 ${sourceIds.size} 条条目合并进所选主条目，并移入回收站（可恢复）。",
             onConfirm = { executeMerge(masterId, sourceIds, selections) },
         )
     }
+}
+
+/**
+ * 合并确认对话框：自动合并与逐项选择合并两处共用同一外壳（标题与确认按钮文案相同）。
+ *
+ * @param show 显示状态，取消与确认均通过该状态关闭
+ * @param summary 合并范围摘要
+ * @param onConfirm 确认回调
+ */
+@Composable
+private fun MergeConfirmDialog(
+    show: MutableState<Boolean>,
+    summary: String,
+    onConfirm: () -> Unit,
+) {
+    ConfirmationDialog(
+        title = "确认合并",
+        summary = summary,
+        show = show,
+        onDismiss = { show.value = false },
+        confirmButtonText = "合并",
+        onConfirm = onConfirm,
+    )
 }
 
 /**

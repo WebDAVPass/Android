@@ -7,17 +7,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import github.xzynine.webdav.LOCAL_NETWORK_DENIED_MESSAGE
 import github.xzynine.webdav.LocalNetworkPermission
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import xzylib.base.util.ToastUtils
-
-/**
- * 用户拒绝「本地网络」权限时的提示文案。
- */
-private const val LOCAL_NETWORK_DENIED_TIP: String =
-    "需要「本地网络」权限才能访问局域网中的 WebDAV 服务器"
 
 /**
  * Android 17（SDK 37）本地网络权限门。
@@ -48,7 +43,7 @@ class LocalNetworkPermissionGate internal constructor(
         val granted = requestPermission(LocalNetworkPermission.PERMISSION)
         if (!granted && showDeniedTip) {
             withContext(Dispatchers.Main) {
-                ToastUtils.showShortToast(context, LOCAL_NETWORK_DENIED_TIP)
+                ToastUtils.showShortToast(context, LOCAL_NETWORK_DENIED_MESSAGE)
             }
         }
         return granted

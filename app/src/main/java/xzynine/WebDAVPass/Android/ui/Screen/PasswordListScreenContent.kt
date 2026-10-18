@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -50,6 +49,7 @@ import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.ui.component.AlphabetIndexScrollbar
+import xzynine.WebDAVPass.Android.ui.component.CenteredEmptyState
 import xzynine.WebDAVPass.Android.ui.component.SelectableEntryCard
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
@@ -140,15 +140,7 @@ fun PasswordListScreenContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         if (groupedEntries.isEmpty()) {
-            Box(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text(text = if (searchQuery.isBlank()) emptyStateText else emptySearchStateText)
-            }
+            CenteredEmptyState(text = if (searchQuery.isBlank()) emptyStateText else emptySearchStateText)
         } else {
             Box(modifier = Modifier.fillMaxSize()) {
                 LazyColumn(

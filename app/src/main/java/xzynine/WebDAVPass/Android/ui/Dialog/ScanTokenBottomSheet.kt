@@ -51,7 +51,6 @@ import kotlinx.coroutines.DelicateCoroutinesApi
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
@@ -138,35 +137,22 @@ fun ScanTokenScreen(
                                 return@rememberLauncherForActivityResult
                             }
 
-                        try {
-                            val uriStr = tokenString.toUri()
-                            val token = OtpTokenFactory.createFromUri(uriStr)
-                            coroutineScope.launch(Dispatchers.Main) {
-                                val added = tokenViewModel.addToken(token)
-                                if (added) {
-                                    ToastUtils.showShortToast(context, "令牌添加成功")
-                                    onTokenScanned()
-                                } else {
-                                    pickedImageError = "该令牌已存在"
+                        coroutineScope.launch(Dispatchers.Main) {
+                            val added =
+                                addScannedToken(tokenViewModel, tokenString.toUri()) { message ->
+                                    pickedImageError = message
                                 }
+                            if (added) {
+                                ToastUtils.showShortToast(context, "令牌添加成功")
+                                onTokenScanned()
                             }
-                        } catch (e: Exception) {
-                            val errorMessage =
-                                when (e) {
-                                    is IllegalArgumentException -> e.message ?: "无效的令牌参数"
-                                    is NoSuchAlgorithmException -> "不支持的加密算法"
-                                    else -> "无效的二维码格式"
-                                }
-                            pickedImageError = errorMessage
                         }
                     } else {
                         pickedImageError =
-                            when (parseResult.errorType) {
-                                TokenQRCodeDecoder.ParseResult.ErrorType.CHECKSUM_ERROR -> "二维码校验和错误"
-                                TokenQRCodeDecoder.ParseResult.ErrorType.FORMAT_ERROR -> "二维码格式错误"
-                                TokenQRCodeDecoder.ParseResult.ErrorType.NOT_FOUND -> "未检测到二维码"
-                                else -> "二维码解析失败"
-                            }
+                            errorTypeToMessage(
+                                parseResult.errorType
+                                    ?: TokenQRCodeDecoder.ParseResult.ErrorType.UNKNOWN_ERROR,
+                            )
                     }
                 } catch (e: Exception) {
                     Logger.e("ImagePicker", "Error: ${e.message}", e)
@@ -397,24 +383,15 @@ fun ScanTokenScreen(
                         }
 
                         coroutineScope.launch {
-                            try {
-                                val token = OtpTokenFactory.createFromUri(raw.toUri())
-                                val added = tokenViewModel.addToken(token)
-                                if (added) {
-                                    ToastUtils.showShortToast(context, "令牌添加成功")
-                                    manualInputText = ""
-                                    showManualInput.value = false
-                                    onTokenScanned()
-                                } else {
-                                    pickedImageError = "该令牌已存在"
+                            val added =
+                                addScannedToken(tokenViewModel, raw.toUri()) { message ->
+                                    pickedImageError = message
                                 }
-                            } catch (e: Exception) {
-                                pickedImageError =
-                                    when (e) {
-                                        is IllegalArgumentException -> e.message ?: "无效的令牌参数"
-                                        is NoSuchAlgorithmException -> "不支持的加密算法"
-                                        else -> "无效的二维码格式"
-                                    }
+                            if (added) {
+                                ToastUtils.showShortToast(context, "令牌添加成功")
+                                manualInputText = ""
+                                showManualInput.value = false
+                                onTokenScanned()
                             }
                         }
                     },
@@ -487,101 +464,26 @@ private fun processImageProxy(
 
                     Logger.d("QRCodeScanner", "Found QR code: $tokenString")
 
-                    try {
-                        // 解析URI对象
-                        val uri = tokenString.toUri()
-
-                        // 从URI创建令牌 - 这里会执行令牌规则验证
-                        val token = OtpTokenFactory.createFromUri(uri)
-                        Logger.d("QRCodeScanner", "令牌规则验证通过，准备检查是否已存在")
-
-                        // 检查令牌是否已存在，使用同步方式避免重复处理
-                        val isExists =
-                            runBlocking {
-                                tokenViewModel.isTokenDuplicate(
-                                    token.secret,
-                                    token.algorithm,
-                                    token.digits,
-                                    token.period,
-                                )
+                    // 使用Dispatchers.Main协程作用域，确保UI操作在主线程执行
+                    GlobalScope.launch(Dispatchers.Main) {
+                        val added =
+                            addScannedToken(tokenViewModel, tokenString.toUri()) { message ->
+                                ToastUtils.showShortToast(context, message)
                             }
-
-                        if (isExists) {
-                            // 令牌已存在，直接截停，显示提示
-                            Logger.d("QRCodeScanner", "令牌已存在，跳过添加操作")
-                            // 使用主线程显示Toast
-                            Handler(context.mainLooper).post {
-                                ToastUtils.showShortToast(
-                                    context,
-                                    "该令牌已存在",
-                                )
-                            }
-                            return@use // 直接返回，不进入后续步骤
-                        }
-
-                        // 使用Dispatchers.Main协程作用域，确保UI操作在主线程执行
-                        GlobalScope.launch(Dispatchers.Main) {
-                            try {
-                                // 保存令牌
-                                val isAdded = tokenViewModel.addToken(token)
-
-                                if (isAdded) {
-                                    // 调用回调，通知父组件关闭扫描窗口
-                                    onTokenFound(tokenString)
-                                    // 不在这里清除URL，由父组件关闭扫描窗口时处理
-                                } else {
-                                    // 理论上不会走到这里，因为已经提前检查过了
-                                    Logger.d("QRCodeScanner", "Token addition failed unexpectedly")
-                                    ToastUtils.showShortToast(
-                                        context,
-                                        "添加令牌失败",
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                Logger.e("QRCodeScanner", "Error adding token: ${e.message}", e)
-                                ToastUtils.showShortToast(
-                                    context,
-                                    "添加令牌失败",
-                                )
-                            }
-                        }
-                    } catch (e: Exception) {
-                        val errorMsg =
-                            when (e) {
-                                is IllegalArgumentException -> {
-                                    // 令牌规则验证失败，显示具体错误信息
-                                    Logger.e("QRCodeScanner", "令牌规则验证失败: ${e.message}", e)
-                                    e.message ?: "无效的令牌参数"
-                                }
-                                is NoSuchAlgorithmException -> {
-                                    // 算法不支持
-                                    Logger.e("QRCodeScanner", "不支持的算法: ${e.message}", e)
-                                    "不支持的加密算法"
-                                }
-                                else -> {
-                                    // 其他错误
-                                    Logger.e("QRCodeScanner", "二维码处理失败: ${e.message}", e)
-                                    "无效的二维码格式"
-                                }
-                            }
-
-                        // 使用主线程显示Toast
-                        Handler(context.mainLooper).post {
-                            ToastUtils.showShortToast(
-                                context,
-                                errorMsg,
-                            )
+                        if (added) {
+                            // 调用回调，通知父组件关闭扫描窗口
+                            onTokenFound(tokenString)
+                            // 不在这里清除URL，由父组件关闭扫描窗口时处理
                         }
                     }
                 }
                 parseResult.errorType != null && parseResult.errorType != TokenQRCodeDecoder.ParseResult.ErrorType.NOT_FOUND -> {
                     // 解析失败，且不是"未找到二维码"类型，显示错误提示
                     val errorMessage =
-                        when (parseResult.errorType) {
-                            TokenQRCodeDecoder.ParseResult.ErrorType.CHECKSUM_ERROR -> "二维码校验和错误"
-                            TokenQRCodeDecoder.ParseResult.ErrorType.FORMAT_ERROR -> "二维码格式错误"
-                            TokenQRCodeDecoder.ParseResult.ErrorType.UNKNOWN_ERROR -> "二维码解析失败"
-                        }
+                        errorTypeToMessage(
+                            parseResult.errorType
+                                ?: TokenQRCodeDecoder.ParseResult.ErrorType.UNKNOWN_ERROR,
+                        )
                     // 添加更多调试信息，包括图像信息
                     Logger.e("QRCodeScanner", "$errorMessage: 图像尺寸=${image.width}x${image.height}，图像格式=${image.format}")
 
@@ -610,4 +512,54 @@ private fun processImageProxy(
             )
         }
     }
+}
+
+/**
+ * 二维码解析错误类型的提示文案。
+ */
+private fun errorTypeToMessage(type: TokenQRCodeDecoder.ParseResult.ErrorType): String =
+    when (type) {
+        TokenQRCodeDecoder.ParseResult.ErrorType.CHECKSUM_ERROR -> "二维码校验和错误"
+        TokenQRCodeDecoder.ParseResult.ErrorType.FORMAT_ERROR -> "二维码格式错误"
+        TokenQRCodeDecoder.ParseResult.ErrorType.NOT_FOUND -> "未检测到二维码"
+        else -> "二维码解析失败"
+    }
+
+/**
+ * 由扫描、上传图片或手动输入得到的 URI 添加令牌。
+ *
+ * @param onFailure 解析失败或令牌已存在时的提示文案回调
+ * @return 令牌已添加返回 true；令牌已存在或解析失败返回 false
+ */
+private suspend fun addScannedToken(
+    tokenViewModel: TokenViewModel,
+    uri: Uri,
+    onFailure: (String) -> Unit,
+): Boolean {
+    val token =
+        try {
+            OtpTokenFactory.createFromUri(uri)
+        } catch (e: Exception) {
+            Logger.e("ScanToken", "令牌解析失败: ${e.message}", e)
+            onFailure(
+                when (e) {
+                    is IllegalArgumentException -> e.message ?: "无效的令牌参数"
+                    is NoSuchAlgorithmException -> "不支持的加密算法"
+                    else -> "无效的二维码格式"
+                },
+            )
+            return false
+        }
+    val added =
+        try {
+            tokenViewModel.addToken(token)
+        } catch (e: Exception) {
+            Logger.e("ScanToken", "添加令牌失败: ${e.message}", e)
+            onFailure("添加令牌失败")
+            return false
+        }
+    if (!added) {
+        onFailure("该令牌已存在")
+    }
+    return added
 }
