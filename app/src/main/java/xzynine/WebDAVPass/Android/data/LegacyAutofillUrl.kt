@@ -10,14 +10,18 @@ import xzynine.WebDAVPass.Autofill.core.StructureParser
  * 哈希为页面地址的不可逆摘要：转换即清空网站字段，并把包名回填到「应用」关联字段。
  */
 object LegacyAutofillUrl {
-    /** 单条存量候选：待清空网站字段并回填「应用」关联字段的条目。 */
+    /** 单条存量候选：待修复的条目。 */
     data class Candidate(
         val entryId: Long,
         val title: String,
-        /** 命中的原始网站字段值（android:// 串或带 http(s) 前缀的形态）。 */
+        /** 命中的原始网站字段值；仅 [needsUrlClear] 为 true 时为 android:// 混淆来源，否则为空串。 */
         val originalUrl: String,
-        /** 从原值解析出的应用包名。 */
+        /** 目标应用包名：来自混淆来源解析或既有「应用」关联字段。 */
         val packageName: String,
+        /** true 表示网站字段被污染需清空；false 表示网站字段不动、仅回填图标。 */
+        val needsUrlClear: Boolean,
+        /** 条目是否已有自定义图标；false 时修复回填应用图标。 */
+        val hasCustomIcon: Boolean,
     )
 
     /**

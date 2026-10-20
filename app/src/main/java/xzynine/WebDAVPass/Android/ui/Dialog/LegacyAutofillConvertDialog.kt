@@ -54,7 +54,7 @@ fun LegacyAutofillConvertDialog(
     }
 
     WindowDialog(
-        title = "发现 ${candidates.size} 条旧版自动填充污染条目",
+        title = "发现 ${candidates.size} 条可修复条目",
         show = show,
         onDismissRequest = onDismiss,
     ) {
@@ -68,8 +68,8 @@ fun LegacyAutofillConvertDialog(
         ) {
             Text(
                 text =
-                    "网站字段为 android:// 混淆来源，哈希不可逆、无法还原网址；" +
-                        "转换将清空网站字段，并把包名回填到「应用」关联字段。",
+                    "修复旧版自动填充遗留：android:// 混淆网站字段无法还原网址，转换即清空" +
+                        "并回填「应用」关联字段；无自定义图标的条目回填应用图标。",
                 fontSize = 13.sp,
                 color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
@@ -102,7 +102,7 @@ fun LegacyAutofillConvertDialog(
 }
 
 /**
- * 单条候选行：勾选图标 + 标题 / 原网站字段值 / 回填目标包名。
+ * 单条候选行：勾选图标 + 标题 / 被污染网站字段值 / 修复内容。
  */
 @Composable
 private fun CandidateRow(
@@ -137,13 +137,20 @@ private fun CandidateRow(
                     fontSize = 14.sp,
                     color = MiuixTheme.colorScheme.onSurface,
                 )
+                if (candidate.needsUrlClear) {
+                    MarqueeText(
+                        text = candidate.originalUrl,
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
                 MarqueeText(
-                    text = candidate.originalUrl,
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
-                MarqueeText(
-                    text = "应用 → ${candidate.packageName}",
+                    text =
+                        buildList {
+                            if (candidate.needsUrlClear) add("网站 → 清空")
+                            add("应用 → ${candidate.packageName}")
+                            if (!candidate.hasCustomIcon) add("图标 → 应用图标")
+                        }.joinToString("；"),
                     fontSize = 12.sp,
                     color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )

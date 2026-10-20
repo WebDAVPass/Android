@@ -861,8 +861,8 @@ fun PasswordListScreen(
         ConfirmationDialog(
             title = "确认转换",
             summary =
-                "将把 ${legacyConvertTarget!!.size} 条条目的网站字段清空，" +
-                    "并把包名回填到「应用」关联字段；原版本保留在条目历史中。",
+                "将修复所选 ${legacyConvertTarget!!.size} 条条目：清空被污染的网站字段、" +
+                    "回填「应用」关联字段，并在无自定义图标时回填应用图标；原版本保留在条目历史中。",
             show = showLegacyConvertConfirm,
             onDismiss = { showLegacyConvertConfirm.value = false },
             confirmButtonText = "转换",
