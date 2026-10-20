@@ -37,6 +37,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.DuplicateEntryInfo
 import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
+import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
@@ -45,6 +46,7 @@ import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.DuplicateScanDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryMergeDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.TemplatePickerDialog
 import xzynine.WebDAVPass.Android.ui.component.buildBrandIconBytes
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
@@ -91,6 +93,7 @@ fun PasswordListScreen(
     val selectedTargets = remember { mutableStateMapOf<Long, Boolean>() }
 
     val showCreateEntryDialog = remember { mutableStateOf(false) }
+    val showCreateTemplatePicker = remember { mutableStateOf(false) }
     val showCreateGroupDialog = remember { mutableStateOf(false) }
     val showDeleteDialog = remember { mutableStateOf(false) }
     val showPermanentDeleteDialog = remember { mutableStateOf(false) }
@@ -117,6 +120,10 @@ fun PasswordListScreen(
     var createEntryUrl by remember { mutableStateOf("") }
     var createEntryNotes by remember { mutableStateOf("") }
 
+    /** 模板选择第一步的结果（字段与图标），创建或取消后清空。 */
+    var createEntryCustomFields by remember { mutableStateOf<List<EditableFieldDraft>>(emptyList()) }
+    var createEntryIconStandardId by remember { mutableStateOf(0) }
+
     var createGroupTitle by remember { mutableStateOf("") }
     var createGroupNotes by remember { mutableStateOf("") }
 
@@ -127,6 +134,11 @@ fun PasswordListScreen(
         showPermanentDeleteDialog.value = false
         showSolidifyDialog.value = false
         solidifyUpdates = emptyMap()
+    }
+
+    /** 新建条目：先弹出模板选择，选定模板（或「不使用模板」）后才打开条目编辑弹窗。 */
+    fun openCreateEntryFlow() {
+        showCreateTemplatePicker.value = true
     }
 
     fun restoreSelectedEntries() {
@@ -515,7 +527,7 @@ fun PasswordListScreen(
                             onMoveSelection = { openGroupPicker(isMove = true) },
                             onCopySelection = { openGroupPicker(isMove = false) },
                             onScanDuplicates = { scanDuplicateEntries() },
-                            onCreateEntry = { showCreateEntryDialog.value = true },
+                            onCreateEntry = { openCreateEntryFlow() },
                         ) { showCreateGroupDialog.value = true }
                     },
                 )
@@ -583,7 +595,7 @@ fun PasswordListScreen(
                             onMoveSelection = { openGroupPicker(isMove = true) },
                             onCopySelection = { openGroupPicker(isMove = false) },
                             onScanDuplicates = { scanDuplicateEntries() },
-                            onCreateEntry = { showCreateEntryDialog.value = true },
+                            onCreateEntry = { openCreateEntryFlow() },
                         ) { showCreateGroupDialog.value = true }
                     },
                 )
@@ -620,6 +632,25 @@ fun PasswordListScreen(
         )
     }
 
+    // 新建条目的第一步：先选模板，选定后再打开条目编辑弹窗并预填模板字段与图标
+    TemplatePickerDialog(
+        show = showCreateTemplatePicker.value,
+        onDismiss = {
+            showCreateTemplatePicker.value = false
+        },
+        onPick = { template ->
+            showCreateTemplatePicker.value = false
+            createEntryCustomFields =
+                template?.let { t ->
+                    mutableListOf<EditableFieldDraft>().apply {
+                        applyTemplateFields(t)
+                    }
+                } ?: emptyList()
+            createEntryIconStandardId = template?.icon?.standard?.id ?: 0
+            showCreateEntryDialog.value = true
+        },
+    )
+
     PasswordEntryEditorDialog(
         title = "新建条目",
         show = showCreateEntryDialog,
@@ -630,9 +661,13 @@ fun PasswordListScreen(
                 password = createEntryPassword,
                 url = createEntryUrl,
                 notes = createEntryNotes,
+                customFields = createEntryCustomFields,
+                iconStandardId = createEntryIconStandardId,
             ),
         onDismiss = {
             showCreateEntryDialog.value = false
+            createEntryCustomFields = emptyList()
+            createEntryIconStandardId = 0
         },
         onConfirm = { draft ->
             coroutineScope.launch {
@@ -650,6 +685,8 @@ fun PasswordListScreen(
                     createEntryPassword = ""
                     createEntryUrl = ""
                     createEntryNotes = ""
+                    createEntryCustomFields = emptyList()
+                    createEntryIconStandardId = 0
                 }
             }
         },

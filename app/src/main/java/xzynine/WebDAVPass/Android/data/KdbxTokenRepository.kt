@@ -331,6 +331,17 @@ class KdbxTokenRepository(
                 }
             val iconUuid = entry.icon.custom.uuid
             val customIconUuid = if (iconUuid == DatabaseVersioned.UUID_ZERO) null else iconUuid.toString()
+            // 应用关联字段（AndroidApp / AndroidApp_1 / AndroidApp1 …）单独拆出为 appPackageName，
+            // 不混在自定义字段草稿里，避免编辑界面出现重复输入行
+            val appSplit =
+                entryInfo.customFields
+                    .map { field ->
+                        EditableFieldDraft(
+                            name = field.name,
+                            value = field.protectedValue.stringValue,
+                            isProtected = field.protectedValue.isProtected,
+                        )
+                    }.splitAppPackageField()
             PasswordEntryEditDraft(
                 entryId = toStableId(entry),
                 parentGroupId = toStableParentGroupId(entry.parent),
@@ -339,19 +350,13 @@ class KdbxTokenRepository(
                 password = entryInfo.password,
                 url = entryInfo.url,
                 notes = entryInfo.notes,
-                customFields =
-                    entryInfo.customFields.map { field ->
-                        EditableFieldDraft(
-                            name = field.name,
-                            value = field.protectedValue.stringValue,
-                            isProtected = field.protectedValue.isProtected,
-                        )
-                    },
+                customFields = appSplit.fields,
                 attachments = attachments,
                 expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
                 customIconUuid = customIconUuid,
                 iconStandardId = entry.icon.standard.id,
                 tags = entry.tags.toList(),
+                appPackageName = appSplit.packageName,
             )
         }
     }
@@ -471,7 +476,7 @@ class KdbxTokenRepository(
                     url = draft.url
                     notes = draft.notes
                     tags = draft.tags.toTags()
-                    customFields = mergeCustomFields(db, entry, draft.customFields)
+                    customFields = mergeCustomFields(db, entry, draft.customFields, draft.appPackageName)
                     attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
                     applyExpiryAndIcon(this, db, draft)
                 }
@@ -503,7 +508,7 @@ class KdbxTokenRepository(
                     url = draft.url
                     notes = draft.notes
                     tags = draft.tags.toTags()
-                    customFields = mergeCustomFields(db, entry, draft.customFields)
+                    customFields = mergeCustomFields(db, entry, draft.customFields, draft.appPackageName)
                     attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
                     applyExpiryAndIcon(this, db, draft)
                 }
@@ -2625,11 +2630,19 @@ class KdbxTokenRepository(
      * - 去重：新建字段名（不区分大小写）若与已有字段（含被保留的原始字段）冲突，则跳过后续重复项。
      *
      * 同时透传 [EditableFieldDraft.isProtected]，避免受保护字段（如 OTP 种子）保存后丢失保护标志。
+     *
+     * 应用关联字段由 [PasswordEntryEditDraft.appPackageName] 独占管理：
+     * - 原始条目中未被界面草稿接管的 `AndroidApp` / `AndroidApp_1` / `AndroidApp1` 字段不再原样保留，
+     *   而是在最后按 `appPackageName` 重新写入（值为 `androidapp://<包名>`）；
+     * - `appPackageName` 为空时不写任何应用字段，等价于用户清空关联；
+     * - 沿用条目原有的应用字段名（缺省 `AndroidApp1`），避免字段名在多次保存间抖动；
+     * - 界面上仍以草稿形式存在的额外应用字段（如 KeePassDX 写入的 `AndroidApp_1`）照常写回，不受影响。
      */
     private fun mergeCustomFields(
         database: Database,
         entry: Entry,
         uiFields: List<EditableFieldDraft>,
+        appPackageName: String,
     ): MutableList<Field> {
         val originalExtras = entry.getExtraFields()
         val result = mutableListOf<Field>()
@@ -2644,15 +2657,36 @@ class KdbxTokenRepository(
                     result.add(Field(name, ProtectedString(draft.isProtected, draft.value)))
                 }
             } else if (draft == null) {
-                // 没有草稿对应的原始额外字段（如从其他工具迁移来的标准名字段），原样保留
-                if (usedLowerNames.add(orig.name.lowercase())) {
+                // 没有草稿对应的原始额外字段（如从其他工具迁移来的标准名字段），原样保留；
+                // 应用关联字段除外：它已从界面草稿中摘出，统一在末尾按 appPackageName 写回
+                if (!AppPackageField.isAppIdFieldName(orig.name) && usedLowerNames.add(orig.name.lowercase())) {
                     result.add(Field(orig.name, orig.protectedValue))
                 }
             }
             // draft != null 且 removed -> 用户显式删除，不加入 result
         }
 
-        // 2. 新增字段（originalName 为空、名字非空、未删除），不与已有字段重名
+        // 2. 应用关联字段，值为 androidapp://<包名>
+        val normalizedAppPackage = AppPackageField.normalizeAppPackage(appPackageName)
+        if (normalizedAppPackage.isNotEmpty()) {
+            // 沿用条目内原有的字段名（缺省用 keepass2android 槽位名 AndroidApp1）；
+            // 若条目内所有应用字段都仍以草稿形式存在（如只有 AndroidApp_1），则用缺省名，
+            // 交由既有的重名去重规则兜底
+            val appFieldName =
+                originalExtras
+                    .firstOrNull { orig ->
+                        AppPackageField.isAppIdFieldName(orig.name) &&
+                            uiFields.none { it.originalName == orig.name }
+                    }?.name
+                    ?: AppPackageField.APP_ID_NEW_FIELD_NAME
+            if (usedLowerNames.add(appFieldName.lowercase())) {
+                result.add(
+                    Field(appFieldName, ProtectedString(false, AppPackageField.toFieldValue(normalizedAppPackage))),
+                )
+            }
+        }
+
+        // 3. 新增字段（originalName 为空、名字非空、未删除），不与已有字段重名
         uiFields
             .filter { it.originalName == null && it.name.isNotBlank() && !it.removed }
             .forEach { draft ->

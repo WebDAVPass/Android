@@ -8,8 +8,10 @@
 package xzynine.WebDAVPass.Android.autofillbridge
 
 import android.content.Context
+import xzynine.WebDAVPass.Android.data.AppPackageField.normalizeAppPackage
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import xzynine.WebDAVPass.Android.util.InstalledAppsProvider
 import xzynine.WebDAVPass.Autofill.bridge.AutofillSaveHandler
 import xzynine.WebDAVPass.Autofill.model.AutofillRegisterInfo
 
@@ -24,6 +26,8 @@ class AppAutofillSaveHandler(
      * 把表单注册信息写入当前打开的密码库。
      *
      * 标题优先取网站域名，其次应用包名；网站域名同时写入 URL 字段。
+     * 表单来自应用时（[xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft.appPackageName]），
+     * 额外写入应用关联字段与该应用的图标：应用图标读不到时保持无图标，不影响保存。
      *
      * @return 写入成功返回 true，库锁定 / 写入异常返回 false
      */
@@ -33,6 +37,7 @@ class AppAutofillSaveHandler(
             registerInfo.searchInfo.webDomain
                 ?: registerInfo.searchInfo.applicationId
                 ?: "自动填充"
+        val applicationId = registerInfo.searchInfo.applicationId.orEmpty()
         val draft =
             PasswordEntryEditDraft(
                 parentGroupId = registerInfo.targetGroupId,
@@ -44,9 +49,21 @@ class AppAutofillSaveHandler(
                         ?.let { "https://$it" }
                         .orEmpty(),
                 notes = "",
+                appPackageName = normalizeAppPackage(applicationId),
             )
         return runCatching {
-            tokenViewModel.createPasswordEntry(draft) != null
+            val withAppIcon =
+                if (applicationId.isBlank()) {
+                    draft
+                } else {
+                    draft.copy(
+                        newCustomIconBytes =
+                            runCatching {
+                                InstalledAppsProvider.loadAppIconPngBytes(context, normalizeAppPackage(applicationId))
+                            }.getOrNull(),
+                    )
+                }
+            tokenViewModel.createPasswordEntry(withAppIcon) != null
         }.getOrDefault(false)
     }
 }

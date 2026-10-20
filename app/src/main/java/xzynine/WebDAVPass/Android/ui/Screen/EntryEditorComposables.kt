@@ -6,17 +6,20 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -27,10 +30,11 @@ import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
-import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
+import xzynine.WebDAVPass.Android.data.AppPackageField
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
+import xzynine.WebDAVPass.Android.ui.Dialog.AppPickerDialog
+import xzynine.WebDAVPass.Android.util.InstalledAppsProvider
 
 /**
  * 过期时间编辑器（详情页与列表页创建对话框共用）。
@@ -139,127 +143,210 @@ private fun millisToUtcDateMillis(millis: Long): Long {
 
 /**
  * 自定义字段编辑器（详情页与列表页创建对话框共用）。
+ *
+ * 不做卡片包裹：字段与标题/账号/密码等主输入框同级平铺，每个字段压成一行
+ * （字段名 | 值 | 受保护 | 删除），避免多层嵌套带来的额外高度。
+ * 详情页需要卡片视觉时由调用方用同样的 Card 包裹（见 PasswordEntryDetailContent）。
  */
 @Composable
 fun CustomFieldsEditor(
     fields: List<EditableFieldDraft>,
+    modifier: Modifier = Modifier,
     onFieldsChange: (List<EditableFieldDraft>) -> Unit,
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-        cornerRadius = 12.dp,
-        pressFeedbackType = PressFeedbackType.None,
-        showIndication = false,
-        onClick = {},
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            fields.forEachIndexed { index, field ->
-                Column(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
+    Column(modifier = modifier.fillMaxWidth()) {
+        if (fields.isEmpty()) {
+            Text(
+                text = "暂无自定义字段",
+                fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                modifier = Modifier.padding(start = 14.dp, top = 2.dp, bottom = 8.dp),
+            )
+        }
+        fields.forEachIndexed { index, field ->
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                TextField(
+                    value = field.name,
+                    onValueChange = { name ->
+                        onFieldsChange(
+                            fields.toMutableList().apply {
+                                this[index] = field.copy(name = name)
+                            },
+                        )
+                    },
+                    label = "字段名",
+                    singleLine = true,
+                    modifier = Modifier.weight(1f),
+                )
+                TextField(
+                    value = field.value,
+                    onValueChange = { value ->
+                        onFieldsChange(
+                            fields.toMutableList().apply {
+                                this[index] = field.copy(value = value)
+                            },
+                        )
+                    },
+                    label = if (field.isProtected) "值（受保护）" else "值",
+                    singleLine = true,
+                    modifier = Modifier.weight(1.5f),
+                )
+                Switch(
+                    checked = field.isProtected,
+                    onCheckedChange = { checked ->
+                        onFieldsChange(
+                            fields.toMutableList().apply {
+                                this[index] = field.copy(isProtected = checked)
+                            },
+                        )
+                    },
+                )
+                IconButton(
+                    onClick = {
+                        onFieldsChange(fields.filterIndexed { i, _ -> i != index })
+                    },
+                    modifier = Modifier.size(40.dp),
                 ) {
-                    TextField(
-                        value = field.name,
-                        onValueChange = { name ->
-                            onFieldsChange(
-                                fields.toMutableList().apply {
-                                    this[index] = field.copy(name = name)
-                                },
-                            )
-                        },
-                        label = "字段名",
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth(),
-                    )
-                    TextField(
-                        value = field.value,
-                        onValueChange = { value ->
-                            onFieldsChange(
-                                fields.toMutableList().apply {
-                                    this[index] = field.copy(value = value)
-                                },
-                            )
-                        },
-                        label = if (field.isProtected) "值（受保护）" else "值",
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                    )
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.End,
-                    ) {
-                        if (field.isProtected) {
-                            Icon(
-                                imageVector = MiuixIcons.Lock,
-                                contentDescription = "已保护",
-                                tint = MiuixTheme.colorScheme.primary,
-                                modifier = Modifier.padding(end = 4.dp),
-                            )
-                        }
-                        Text(
-                            text = "受保护",
-                            fontSize = 12.sp,
-                            color =
-                                if (field.isProtected) {
-                                    MiuixTheme.colorScheme.primary
-                                } else {
-                                    MiuixTheme.colorScheme.onSurfaceSecondary
-                                },
-                        )
-                        Switch(
-                            checked = field.isProtected,
-                            onCheckedChange = { checked ->
-                                onFieldsChange(
-                                    fields.toMutableList().apply {
-                                        this[index] = field.copy(isProtected = checked)
-                                    },
-                                )
-                            },
-                        )
-                        IconButton(
-                            onClick = {
-                                onFieldsChange(fields.filterIndexed { i, _ -> i != index })
-                            },
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Delete,
-                                contentDescription = "删除字段",
-                            )
-                        }
-                    }
-                }
-                if (index < fields.lastIndex) {
-                    HorizontalDivider(
-                        modifier = Modifier.padding(horizontal = 14.dp),
-                        thickness = 0.5.dp,
+                    Icon(
+                        imageVector = MiuixIcons.Delete,
+                        contentDescription = "删除字段",
                     )
                 }
             }
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            onFieldsChange(fields + EditableFieldDraft(name = "", value = "", isProtected = false))
-                        }.padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Edit,
-                    contentDescription = "添加字段",
-                    tint = MiuixTheme.colorScheme.primary,
-                )
-                Text(
-                    text = " 添加字段",
-                    fontSize = 14.sp,
-                    color = MiuixTheme.colorScheme.primary,
-                    modifier = Modifier.padding(start = 8.dp),
+            if (index < fields.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 14.dp),
+                    thickness = 0.5.dp,
                 )
             }
         }
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable {
+                        onFieldsChange(fields + EditableFieldDraft(name = "", value = "", isProtected = false))
+                    }.padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = MiuixIcons.Edit,
+                contentDescription = "添加字段",
+                tint = MiuixTheme.colorScheme.primary,
+            )
+            Text(
+                text = " 添加字段",
+                fontSize = 14.sp,
+                color = MiuixTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 8.dp),
+            )
+        }
     }
+}
+
+/**
+ * 条目「应用」字段编辑器（新建弹窗与详情页编辑器共用）。
+ *
+ * 固定提供一行空白可填的包名输入 + 应用选择器；写入的包名以 KDBX 自定义字段 `AndroidApp`
+ * （`androidapp://<包名>`）保存，与 KeePassDX / keepass2android 的应用字段同构，
+ * 供自动填充按包名匹配条目。
+ *
+ * 写入包名后，若条目当前没有自定义图标（[hasCustomIcon] 为 false），自动把该应用的图标
+ * 作为条目自定义图标回填（[onAppIconPicked]）；用户已选定的图标一律不被覆盖。
+ *
+ * @param value 当前包名（裸包名，界面态）
+ * @param onValueChange 包名变更回调（选择器选中或手工键入均走此回调）
+ * @param hasCustomIcon 条目是否已有自定义图标（已有则不再回填应用图标）
+ * @param onAppIconPicked 应用图标 PNG 字节回调，由调用方写入草稿
+ */
+@Composable
+fun AppPackageFieldEditor(
+    value: String,
+    onValueChange: (String) -> Unit,
+    hasCustomIcon: Boolean,
+    onAppIconPicked: (ByteArray) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val context = LocalContext.current
+    var showAppPicker by remember { mutableStateOf(false) }
+    val normalizedPackage = AppPackageField.normalizeAppPackage(value)
+
+    // 已写入包名且条目尚无自定义图标时，把应用图标回填为条目图标；
+    // 取图标失败（未安装 / 无图标）静默跳过，不影响包名本身的保存
+    LaunchedEffect(normalizedPackage, hasCustomIcon) {
+        if (hasCustomIcon || normalizedPackage.isEmpty()) return@LaunchedEffect
+        val bytes = InstalledAppsProvider.loadAppIconPngBytes(context, normalizedPackage)
+        if (bytes != null && bytes.isNotEmpty()) {
+            onAppIconPicked(bytes)
+        }
+    }
+
+    // 输入框下方展示已安装应用名，未安装时如实提示
+    var appLabel by remember(normalizedPackage) { mutableStateOf<String?>(null) }
+    LaunchedEffect(normalizedPackage) {
+        appLabel =
+            if (normalizedPackage.isEmpty()) {
+                null
+            } else {
+                withContext(Dispatchers.IO) {
+                    runCatching {
+                        InstalledAppsProvider.getApplicationLabel(context, normalizedPackage)
+                    }.getOrNull()
+                }
+            }
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            TextField(
+                value = value,
+                onValueChange = { onValueChange(it) },
+                label = "应用（包名）",
+                singleLine = true,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(
+                text = "选择",
+                onClick = { showAppPicker = true },
+            )
+            if (normalizedPackage.isNotEmpty()) {
+                TextButton(
+                    text = "清除",
+                    onClick = { onValueChange("") },
+                )
+            }
+        }
+        if (appLabel != null) {
+            Text(
+                // 未安装时应用名读取会回落到包名，此处显式区分「未安装」，避免看起来像重复文案
+                text =
+                    if (appLabel == normalizedPackage) {
+                        "$normalizedPackage · 未安装"
+                    } else {
+                        "$appLabel · $normalizedPackage"
+                    },
+                fontSize = 12.sp,
+                color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                modifier = Modifier.padding(start = 14.dp, bottom = 4.dp),
+            )
+        }
+    }
+
+    AppPickerDialog(
+        show = showAppPicker,
+        selectedPackageName = normalizedPackage,
+        onDismiss = { showAppPicker = false },
+        onPick = { app ->
+            showAppPicker = false
+            onValueChange(app.packageName)
+        },
+    )
 }
