@@ -56,6 +56,7 @@ import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.data.TokenCode
 import xzynine.WebDAVPass.Android.ui.component.CenteredEmptyState
+import xzynine.WebDAVPass.Android.ui.component.CenteredLoading
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzynine.WebDAVPass.Android.ui.component.OutlinedReadOnlyCard
 import xzynine.WebDAVPass.Android.ui.component.Preference
@@ -115,7 +116,7 @@ fun PasswordEntryDetailContent(
     coroutineScope: CoroutineScope,
 ) {
     if (!detailLoaded) {
-        CenteredEmptyState(text = "加载中...", modifier = modifier)
+        CenteredLoading(modifier = modifier)
         return
     }
 

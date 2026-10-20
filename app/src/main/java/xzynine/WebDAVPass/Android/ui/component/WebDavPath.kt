@@ -1,11 +1,12 @@
 package xzynine.WebDAVPass.Android.ui.component
 
+import xzynine.WebDAVPass.Android.util.ensureTrailingSlash
 import java.net.URLEncoder
 
 /**
  * 保证服务器根地址以 "/" 结尾。
  */
-internal fun normalizeServerRootUrl(raw: String): String = if (raw.endsWith('/')) raw else "$raw/"
+internal fun normalizeServerRootUrl(raw: String): String = raw.ensureTrailingSlash()
 
 /**
  * 规范化相对路径：去除首尾斜杠并合并重复斜杠。

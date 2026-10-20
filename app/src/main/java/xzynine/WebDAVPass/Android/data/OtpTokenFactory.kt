@@ -48,8 +48,9 @@ object OtpTokenFactory {
         val algorithm = otpElement.algorithm.name
         val digits = otpElement.digits
         val period = otpElement.period
-        // 计数器直接取库内值（不再做 -1 偏移），TOTP 不使用计数器
-        val counter = if (type == OtpTokenType.HOTP) otpElement.counter else 0L
+        // otpauth URI 的 counter 参数指向下一码，入库时减一，使首显码为当前有效码；TOTP 不使用计数器
+        val counterParam = uri.getQueryParameter("counter")?.toLongOrNull() ?: 0L
+        val counter = if (type == OtpTokenType.HOTP) counterParam - 1L else 0L
         // 图像路径与描述为 app 特有参数，database 侧不解析
         val image = uri.getQueryParameter("image")
         val description = uri.getQueryParameter("description")?.takeIf { it.isNotBlank() }

@@ -80,7 +80,6 @@ internal class PasswordPagingSubViewModel(
     val passwordHasMore: StateFlow<Boolean> = _passwordHasMore.asStateFlow()
 
     private val _isPageLoading = MutableStateFlow(false)
-    private val isPageLoading: StateFlow<Boolean> = _isPageLoading.asStateFlow()
 
     private var refreshJob: Job? = null
     private val pagingMutex = Mutex()
