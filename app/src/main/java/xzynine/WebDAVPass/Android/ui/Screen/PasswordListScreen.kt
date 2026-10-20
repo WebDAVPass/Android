@@ -89,6 +89,7 @@ fun PasswordListScreen(
     var sortModeOrdinal by rememberSaveable { mutableStateOf(PasswordSortMode.DEFAULT.ordinal) }
     var sortAscending by rememberSaveable { mutableStateOf(true) }
     var hideExpired by rememberSaveable { mutableStateOf(false) }
+    var onlyWithApp by rememberSaveable { mutableStateOf(false) }
     val sortMode = PasswordSortMode.entries.getOrElse(sortModeOrdinal) { PasswordSortMode.DEFAULT }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -441,7 +442,7 @@ fun PasswordListScreen(
     // 首次进入且搜索为空时跳过刷新（reloadInitialPasswordData 已完成加载）；
     // 后续任何搜索/排序/过滤变化均统一在此触发刷新
     val isFirstComposition = remember { mutableStateOf(true) }
-    LaunchedEffect(searchQuery, searchCaseSensitive, sortModeOrdinal, sortAscending, hideExpired) {
+    LaunchedEffect(searchQuery, searchCaseSensitive, sortModeOrdinal, sortAscending, hideExpired, onlyWithApp) {
         if (isFirstComposition.value && searchQuery.isBlank()) {
             isFirstComposition.value = false
             return@LaunchedEffect
@@ -453,6 +454,7 @@ fun PasswordListScreen(
             sortMode = sortMode,
             ascending = sortAscending,
             hideExpired = hideExpired,
+            onlyWithApp = onlyWithApp,
         )
     }
 
@@ -524,6 +526,8 @@ fun PasswordListScreen(
             onSortAscendingChange = { sortAscending = it },
             hideExpired = hideExpired,
             onHideExpiredChange = { hideExpired = it },
+            onlyWithApp = onlyWithApp,
+            onOnlyWithAppChange = { onlyWithApp = it },
             onSelectAll = { selectAllVisible() },
             onInvertSelection = { invertSelection() },
             onRestoreSelected = { restoreSelectedEntries() },

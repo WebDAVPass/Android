@@ -2063,6 +2063,15 @@ class KdbxTokenRepository(
                     ?: entry.username.takeIf { it.isNotBlank() }
                     ?: toStableId(entry).toString()
             val account = entry.username.takeIf { it.isNotBlank() } ?: ""
+            // 应用关联包名按字段名筛出后再读值，避免为无关受保护字段触发解密
+            val appPackageName =
+                entry
+                    .getExtraFields()
+                    .asSequence()
+                    .filter { AppPackageField.isAppIdFieldName(it.name) }
+                    .map { AppPackageField.normalizeAppPackage(it.protectedValue.stringValue) }
+                    .firstOrNull { it.isNotEmpty() }
+                    .orEmpty()
             val values =
                 if (includeFieldDetails) {
                     buildEntryKeyValues(entry)
@@ -2096,6 +2105,7 @@ class KdbxTokenRepository(
                     isExpired = entry.expires && entry.isCurrentlyExpires,
                     customIconUuid = customIconUuid,
                     tags = entry.tags.toList(),
+                    appPackageName = appPackageName,
                     creationTime = entry.creationTime.toMilliseconds(),
                     modifiedTime = entry.lastModificationTime.toMilliseconds(),
                     isFolderGroup = false,

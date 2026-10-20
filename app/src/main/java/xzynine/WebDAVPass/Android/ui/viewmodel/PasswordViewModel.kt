@@ -96,8 +96,9 @@ class PasswordViewModel(
         sortMode: PasswordSortMode? = null,
         ascending: Boolean? = null,
         hideExpired: Boolean? = null,
+        onlyWithApp: Boolean? = null,
     ) {
-        passwordSubViewModel.refreshPasswordEntries(searchQuery, caseSensitive, sortMode, ascending, hideExpired)
+        passwordSubViewModel.refreshPasswordEntries(searchQuery, caseSensitive, sortMode, ascending, hideExpired, onlyWithApp)
     }
 
     /**

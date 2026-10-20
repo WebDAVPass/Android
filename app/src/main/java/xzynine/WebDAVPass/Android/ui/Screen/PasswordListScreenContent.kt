@@ -260,6 +260,8 @@ fun PasswordListTopBarActions(
     onSortAscendingChange: (Boolean) -> Unit,
     hideExpired: Boolean,
     onHideExpiredChange: (Boolean) -> Unit,
+    onlyWithApp: Boolean,
+    onOnlyWithAppChange: (Boolean) -> Unit,
     onSelectAll: () -> Unit,
     onInvertSelection: () -> Unit,
     onRestoreSelected: () -> Unit,
@@ -453,6 +455,16 @@ fun PasswordListTopBarActions(
                                         text = "隐藏过期条目",
                                         selected = hideExpired,
                                         onClick = { onHideExpiredChange(!hideExpired) },
+                                    ),
+                                ),
+                        ),
+                        DropdownEntry(
+                            items =
+                                listOf(
+                                    DropdownItem(
+                                        text = "仅显示安卓应用条目",
+                                        selected = onlyWithApp,
+                                        onClick = { onOnlyWithAppChange(!onlyWithApp) },
                                     ),
                                 ),
                         ),
