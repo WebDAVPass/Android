@@ -23,4 +23,8 @@ data class AutofillRegisterInfo(
     val password: String? = null,
     /** 宿主注册界面选定要保存到的分组 id；库不关心语义，透传给保存处理。 */
     val targetGroupId: Long? = null,
-) : Parcelable
+) : Parcelable {
+    /** 站点标识：网站域名优先，其次应用包名，均无时回退固定文案。 */
+    val site: String
+        get() = searchInfo.webDomain ?: searchInfo.applicationId ?: "自动填充"
+}

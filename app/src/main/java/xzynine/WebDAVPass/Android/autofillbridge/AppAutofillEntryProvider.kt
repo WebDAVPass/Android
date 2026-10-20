@@ -49,7 +49,14 @@ class AppAutofillEntryProvider(
                     AutofillQueryResult.Found(mapped)
                 }
             } else {
-                val filtered = mapped.filter { matches(it, searchInfo) }
+                val filtered =
+                    mapped.filter {
+                        AutofillEntryMatcher.matches(
+                            searchableValues = it.searchableValues,
+                            webDomain = searchInfo.webDomain,
+                            applicationId = searchInfo.applicationId,
+                        )
+                    }
                 if (filtered.isEmpty()) {
                     AutofillQueryResult.NotFound
                 } else {
@@ -63,7 +70,7 @@ class AppAutofillEntryProvider(
      * 将密码库条目映射为库的 [AutofillEntry]；文件夹分组返回 null（不可填充）。
      *
      * 收集全部非机密字段（标题 / 账号 / 网站 / 附加字段）作为 [AutofillEntry.searchableValues]，
-     * 供 [matches] 按域名 / 包名匹配；密码与动态令牌不参与匹配。
+     * 供 [AutofillEntryMatcher.matches] 按域名 / 包名匹配；密码与动态令牌不参与匹配。
      */
     private fun PasswordEntry.toAutofillEntry(): AutofillEntry? {
         if (isFolderGroup) return null
@@ -106,19 +113,4 @@ class AppAutofillEntryProvider(
             searchableValues = searchableValues,
         )
     }
-
-    /**
-     * 条目是否适用于当前表单：在任意非机密字段（标题/账号/网站/附加字段）中匹配域名或包名。
-     * 匹配规则见 [AutofillEntryMatcher]（网站按域名边界、应用按完整包名精确匹配，
-     * 避免 `bank.com` 命中 `ank.com`、`com.bank` 命中 `com.bank.secure`）。
-     */
-    private fun matches(
-        entry: AutofillEntry,
-        searchInfo: AutofillSearchInfo,
-    ): Boolean =
-        AutofillEntryMatcher.matches(
-            searchableValues = entry.searchableValues,
-            webDomain = searchInfo.webDomain,
-            applicationId = searchInfo.applicationId,
-        )
 }

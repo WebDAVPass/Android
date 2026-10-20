@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import github.xzynine.webdav.FileAbsenceSource
+import github.xzynine.webdav.LOCAL_NETWORK_DENIED_MESSAGE
 import github.xzynine.webdav.SyncFailureKind
 import github.xzynine.webdav.SyncMergeCallback
 import github.xzynine.webdav.SyncOutcome
@@ -388,7 +389,7 @@ class CloudSyncViewModel(
             // Android 17 起访问局域网 WebDAV 需要「本地网络」权限
             SyncFailureKind.LOCAL_NETWORK ->
                 outcome.errorMessage?.takeIf { it.isNotBlank() }
-                    ?: "需要「本地网络」权限才能访问局域网中的 WebDAV 服务器"
+                    ?: LOCAL_NETWORK_DENIED_MESSAGE
             SyncFailureKind.NETWORK -> "网络异常，请检查网络连接后重试"
             SyncFailureKind.FILE_NOT_FOUND ->
                 when (outcome.absenceSource) {

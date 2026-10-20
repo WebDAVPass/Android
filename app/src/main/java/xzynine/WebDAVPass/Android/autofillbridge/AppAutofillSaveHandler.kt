@@ -33,10 +33,7 @@ class AppAutofillSaveHandler(
      */
     override suspend fun save(registerInfo: AutofillRegisterInfo): Boolean {
         val tokenViewModel = TokenViewModel.getSharedInstance(context)
-        val site =
-            registerInfo.searchInfo.webDomain
-                ?: registerInfo.searchInfo.applicationId
-                ?: "自动填充"
+        val site = registerInfo.site
         val applicationId = registerInfo.searchInfo.applicationId.orEmpty()
         val draft =
             PasswordEntryEditDraft(

@@ -42,7 +42,6 @@ import android.service.autofill.InlinePresentation
 import android.service.autofill.Presentations
 import android.util.Log
 import android.view.autofill.AutofillId
-import android.view.autofill.AutofillManager
 import android.view.autofill.AutofillValue
 import android.widget.RemoteViews
 import android.widget.inline.InlinePresentationSpec
@@ -50,12 +49,10 @@ import androidx.annotation.RequiresApi
 import androidx.autofill.inline.UiVersions
 import androidx.autofill.inline.v1.InlineSuggestionUi
 import androidx.core.os.BundleCompat
-import kotlinx.coroutines.withTimeoutOrNull
 import xzynine.WebDAVPass.Autofill.R
 import xzynine.WebDAVPass.Autofill.bridge.AutofillPreferences
 import xzynine.WebDAVPass.Autofill.bridge.AutofillUiTarget
 import xzynine.WebDAVPass.Autofill.model.AutofillEntry
-import xzynine.WebDAVPass.Autofill.model.AutofillQueryResult
 import xzynine.WebDAVPass.Autofill.model.AutofillRegisterInfo
 import xzynine.WebDAVPass.Autofill.model.AutofillSearchInfo
 import java.util.Random
@@ -202,7 +199,9 @@ object AutofillHelper {
 
     /**
      * 为「选择条目」创建拉起宿主选择界面的 PendingIntent。
-     * 该意图需系统回填 [AutofillManager.EXTRA_AUTHENTICATION_RESULT]，故使用 FLAG_MUTABLE。
+     * 该意图需系统回填 [android.view.autofill.AutofillManager.EXTRA_AUTHENTICATION_RESULT]，故使用 FLAG_MUTABLE。
+     *
+     * @param logTag 异常日志中区分调用来源的标识
      */
     fun getPendingIntentForSelection(
         context: Context,
@@ -210,6 +209,7 @@ object AutofillHelper {
         autofillComponent: AutofillComponent?,
         uiTarget: AutofillUiTarget,
         parseResult: StructureParser.Result? = null,
+        logTag: String = "selection",
     ): PendingIntent? =
         try {
             val intent =
@@ -228,36 +228,7 @@ object AutofillHelper {
                 }
             PendingIntent.getActivity(context, randomRequestCode(), intent, flags)
         } catch (e: RuntimeException) {
-            Log.e(TAG, "Unable to create pending intent for selection", e)
-            null
-        }
-
-    /** 内联建议点击用的选择 PendingIntent（可携带已解析结果，避免宿主重读 AssistStructure 失败）。 */
-    private fun getPendingIntentForSelectionLaunch(
-        context: Context,
-        searchInfo: AutofillSearchInfo?,
-        autofillComponent: AutofillComponent?,
-        uiTarget: AutofillUiTarget,
-        parseResult: StructureParser.Result? = null,
-    ): PendingIntent? =
-        try {
-            val intent =
-                Intent().apply {
-                    component = uiTarget.selectionActivity()
-                    putExtra(EXTRA_SPECIAL_MODE, MODE_SELECTION)
-                    searchInfo?.let { putExtra(EXTRA_SEARCH_INFO, it) }
-                    parseResult?.let { putExtra(EXTRA_PARSE_RESULT, it) }
-                    addAutofillComponent(autofillComponent)
-                }
-            val flags =
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    PendingIntent.FLAG_MUTABLE or PendingIntent.FLAG_CANCEL_CURRENT
-                } else {
-                    PendingIntent.FLAG_CANCEL_CURRENT
-                }
-            PendingIntent.getActivity(context, randomRequestCode(), intent, flags)
-        } catch (e: RuntimeException) {
-            Log.e(TAG, "Unable to create pending intent for selection launch", e)
+            Log.e(TAG, "Unable to create pending intent for $logTag", e)
             null
         }
 
@@ -398,67 +369,6 @@ object AutofillHelper {
             Log.e(TAG, "Unable to create Autofill response", e)
             null
         }
-    }
-
-    /**
-     * 构造认证返回 Intent（宿主选择界面查询到条目后回传）。
-     * 重新解析 AssistStructure，复用 [buildResponse]。
-     */
-    fun buildFillResponseIntent(
-        context: Context,
-        autofillComponent: AutofillComponent,
-        entries: List<AutofillEntry>,
-        preferences: AutofillPreferences,
-        uiTarget: AutofillUiTarget,
-        appIconRes: Int,
-    ): Intent? {
-        if (entries.isEmpty()) return null
-        StructureParser(autofillComponent.assistStructure).parseOrNull()?.let { result ->
-            val response =
-                buildResponse(
-                    context = context,
-                    entries = entries,
-                    parseResult = result,
-                    autofillComponent = autofillComponent,
-                    preferences = preferences,
-                    uiTarget = uiTarget,
-                    appIconRes = appIconRes,
-                )
-            return Intent().putExtra(AutofillManager.EXTRA_AUTHENTICATION_RESULT, response)
-        }
-        return null
-    }
-
-    /**
-     * 便捷方法：宿主选择界面在协程中调用，内部完成检索 + 响应构建。
-     * 检索复用桥接 [xzynine.WebDAVPass.Autofill.AutofillBridge]，超时按未命中处理。
-     */
-    suspend fun buildResponseForSelection(
-        context: Context,
-        autofillComponent: AutofillComponent,
-        searchInfo: AutofillSearchInfo,
-    ): Intent? {
-        val config =
-            xzynine.WebDAVPass.Autofill.AutofillBridge
-                .getConfig() ?: run {
-                Log.e(TAG, "AutofillBridge 未安装，无法构建选择响应")
-                return null
-            }
-        val result =
-            withTimeoutOrNull(config.queryTimeoutMillis) {
-                config.entryProvider.search(searchInfo)
-            } ?: AutofillQueryResult.NotFound
-        if (result is AutofillQueryResult.Found) {
-            return buildFillResponseIntent(
-                context = context,
-                autofillComponent = autofillComponent,
-                entries = result.entries,
-                preferences = config.preferences,
-                uiTarget = config.uiTarget,
-                appIconRes = config.appIconRes,
-            )
-        }
-        return null
     }
 
     // endregion
@@ -660,12 +570,13 @@ object AutofillHelper {
                     return null
                 }
                 val pendingIntent =
-                    getPendingIntentForSelectionLaunch(
+                    getPendingIntentForSelection(
                         context,
                         searchInfo,
                         autofillComponent,
                         uiTarget,
                         parseResult,
+                        logTag = "selection launch",
                     ) ?: return null
                 return InlinePresentation(
                     InlineSuggestionUi

@@ -38,6 +38,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.MergeFieldKeys
+import xzynine.WebDAVPass.Android.data.maskIfSensitive
 import xzynine.WebDAVPass.Android.ui.component.MarqueeText
 
 /**
@@ -220,12 +221,11 @@ fun DuplicateScanDialog(
  */
 @Composable
 private fun ConflictSummary(group: DuplicateGroupInfo) {
+    // 键集合即「自动合并」判定键，标签统一取自 MergeFieldKeys.displayName
     val conflictKeys =
-        listOf(
-            MergeFieldKeys.ACCOUNT to "账号",
-            MergeFieldKeys.PASSWORD to "密码",
-            MergeFieldKeys.URL to "网站",
-        )
+        MergeFieldKeys.AUTO_MERGE_KEYS.map { key ->
+            key to MergeFieldKeys.displayName(key)
+        }
     val lines =
         conflictKeys.mapNotNull { (key, label) ->
             val distinct =
@@ -239,10 +239,8 @@ private fun ConflictSummary(group: DuplicateGroupInfo) {
                     distinct.joinToString(" ／ ") { value ->
                         if (value.isEmpty()) {
                             "（空）"
-                        } else if (key == MergeFieldKeys.PASSWORD) {
-                            "已设置"
                         } else {
-                            value
+                            maskIfSensitive(key, value, revealed = false)
                         }
                     }
                 "${label}不同：$values"

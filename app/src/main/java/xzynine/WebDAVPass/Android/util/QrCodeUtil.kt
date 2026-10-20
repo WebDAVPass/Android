@@ -2,6 +2,7 @@ package xzynine.WebDAVPass.Android.util
 
 import android.graphics.Bitmap
 import android.graphics.Color
+import android.net.Uri
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
@@ -48,16 +49,17 @@ object QrCodeUtil {
         )
         builder.append("/")
 
-        if (token.issuer != null) {
-            builder.append(token.issuer)
+        // 路径段与查询值统一编码，避免 issuer/label 含空格、&、: 等字符时无法导入
+        if (!token.issuer.isNullOrEmpty()) {
+            builder.append(Uri.encode(token.issuer))
             builder.append(":")
         }
-        builder.append(token.label)
+        builder.append(Uri.encode(token.label))
 
         builder.append("?secret=")
-        builder.append(token.secret)
+        builder.append(Uri.encode(token.secret))
         builder.append("&algorithm=")
-        builder.append(token.algorithm)
+        builder.append(Uri.encode(token.algorithm))
         builder.append("&digits=")
         builder.append(token.digits)
 
@@ -69,9 +71,9 @@ object QrCodeUtil {
             builder.append(token.counter)
         }
 
-        if (token.issuer != null) {
+        if (!token.issuer.isNullOrEmpty()) {
             builder.append("&issuer=")
-            builder.append(token.issuer)
+            builder.append(Uri.encode(token.issuer))
         }
 
         return builder.toString()

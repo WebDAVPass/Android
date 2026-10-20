@@ -1,7 +1,5 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -15,7 +13,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
@@ -34,14 +31,15 @@ import xzynine.WebDAVPass.Android.data.AppPackageField.normalizeAppPackage
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
-import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.data.splitAppPackageField
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryHistoryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
+import xzynine.WebDAVPass.Android.ui.component.rememberAttachmentPicker
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import xzynine.WebDAVPass.Android.util.FileSizeLimits
 
 @Composable
 fun PasswordEntryDetailScreen(
@@ -154,45 +152,8 @@ fun PasswordEntryDetailScreen(
 
     // 附件导入：选择文件后增量读取字节加入编辑态附件列表（带硬性大小上限，避免 OOM）
     val attachmentPicker =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent(),
-        ) { uri ->
-            uri ?: return@rememberLauncherForActivityResult
-            // 先用声明大小预检（content provider 可能返回 -1，故仅作软提示，真正上限在增量读取处强制）
-            val declaredSize = DocumentFile.fromSingleUri(context, uri)?.length() ?: -1L
-            if (declaredSize > KdbxTokenRepository.MAX_ATTACHMENT_BYTES) {
-                ToastUtils.showShortToast(context, "附件过大（上限 ${KdbxTokenRepository.MAX_ATTACHMENT_BYTES / 1024 / 1024} MiB），已取消")
-                return@rememberLauncherForActivityResult
-            }
-            runCatching {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    // 增量读取并强制上限：超过则抛异常，拒绝进入内存
-                    val buffer = java.io.ByteArrayOutputStream(8 * 1024)
-                    val chunk = ByteArray(8 * 1024)
-                    var total = 0
-                    while (true) {
-                        val read = input.read(chunk)
-                        if (read < 0) break
-                        total += read
-                        if (total > KdbxTokenRepository.MAX_ATTACHMENT_BYTES) {
-                            throw IllegalStateException("附件过大")
-                        }
-                        buffer.write(chunk, 0, read)
-                    }
-                    val bytes = buffer.toByteArray()
-                    val name =
-                        uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-                            ?: "attachment_${System.currentTimeMillis()}"
-                    editAttachments = editAttachments +
-                        EditableAttachmentDraft(
-                            name = name,
-                            data = bytes,
-                            isNew = true,
-                        )
-                }
-            }.onFailure {
-                ToastUtils.showShortToast(context, "附件过大或读取失败，已取消")
-            }
+        rememberAttachmentPicker(context, FileSizeLimits.ATTACHMENT_MAX_BYTES) { name, data ->
+            editAttachments = editAttachments + EditableAttachmentDraft(name = name, data = data, isNew = true)
         }
 
     // 保存当前编辑内容（编辑态顶栏保存按钮共用）

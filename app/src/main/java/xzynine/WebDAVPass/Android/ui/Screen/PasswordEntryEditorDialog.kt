@@ -1,7 +1,5 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -22,33 +20,26 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.documentfile.provider.DocumentFile
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
-import top.yukonga.miuix.kmp.icon.extended.Ok
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import top.yukonga.miuix.kmp.window.WindowDialog
-import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.AppPackageField.normalizeAppPackage
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
+import xzynine.WebDAVPass.Android.ui.component.DialogActionRow
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
-
-/** 附件导入大小上限（与仓库 SMALL_BINARY_SIZE 一致），防止无界读入内存导致 OOM。 */
-private const val MAX_ATTACHMENT_BYTES = 1024 * 1024
+import xzynine.WebDAVPass.Android.ui.component.OutlinedReadOnlyCard
+import xzynine.WebDAVPass.Android.ui.component.rememberAttachmentPicker
+import xzynine.WebDAVPass.Android.util.FileSizeLimits
 
 /**
  * 条目编辑对话框（用于新增）。
@@ -106,39 +97,8 @@ fun PasswordEntryEditorDialog(
     }
 
     val attachmentPicker =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent(),
-        ) { uri ->
-            uri ?: return@rememberLauncherForActivityResult
-            val declaredSize = DocumentFile.fromSingleUri(context, uri)?.length() ?: -1L
-            if (declaredSize > MAX_ATTACHMENT_BYTES) {
-                ToastUtils.showShortToast(context, "附件过大（上限 ${MAX_ATTACHMENT_BYTES / 1024 / 1024} MiB），已取消")
-                return@rememberLauncherForActivityResult
-            }
-            runCatching {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    // 增量读取并强制上限：content provider 可能返回 -1 的声明大小，故真正限制在这里施加
-                    val buffer = java.io.ByteArrayOutputStream(8 * 1024)
-                    val chunk = ByteArray(8 * 1024)
-                    var total = 0
-                    while (true) {
-                        val read = input.read(chunk)
-                        if (read < 0) break
-                        total += read
-                        if (total > MAX_ATTACHMENT_BYTES) {
-                            throw IllegalStateException("附件过大")
-                        }
-                        buffer.write(chunk, 0, read)
-                    }
-                    val bytes = buffer.toByteArray()
-                    val name =
-                        uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-                            ?: "attachment_${System.currentTimeMillis()}"
-                    attachments = attachments + EditableAttachmentDraft(name = name, data = bytes, isNew = true)
-                }
-            }.onFailure {
-                ToastUtils.showShortToast(context, "附件过大或读取失败，已取消")
-            }
+        rememberAttachmentPicker(context, FileSizeLimits.ATTACHMENT_MAX_BYTES) { name, data ->
+            attachments = attachments + EditableAttachmentDraft(name = name, data = data, isNew = true)
         }
 
     WindowDialog(
@@ -237,14 +197,7 @@ fun PasswordEntryEditorDialog(
             ExpiryTimeEditor(value = expiryTime) { expiryTime = it }
 
             SmallTitle(text = "附件 (${attachments.count { !it.removed }})")
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-                cornerRadius = 12.dp,
-                pressFeedbackType = PressFeedbackType.None,
-                showIndication = false,
-                onClick = {},
-            ) {
+            OutlinedReadOnlyCard {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     attachments.filter { !it.removed }.forEachIndexed { index, att ->
                         Row(
@@ -296,53 +249,30 @@ fun PasswordEntryEditorDialog(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                TextButton(
-                    text = "取消",
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                )
-                Button(
-                    onClick = {
-                        onConfirm(
-                            initialDraft.copy(
-                                title = entryTitle.trim(),
-                                username = entryUsername.trim(),
-                                password = entryPassword,
-                                url = entryUrl.trim(),
-                                notes = entryNotes,
-                                tags =
-                                    entryTagsText
-                                        .split(',', ';', '，', '；')
-                                        .map { it.trim() }
-                                        .filter { it.isNotEmpty() }
-                                        .distinct(),
-                                customFields = customFields,
-                                attachments = attachments,
-                                expiryTime = expiryTime,
-                                customIconUuid = customIconUuid,
-                                iconStandardId = iconStandardId,
-                                newCustomIconBytes = newCustomIconBytes,
-                                appPackageName = normalizeAppPackage(entryAppPackage),
-                            ),
-                        )
-                    },
-                    enabled = entryTitle.isNotBlank(),
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Ok,
-                        contentDescription = null,
+            DialogActionRow(
+                onDismiss = onDismiss,
+                onConfirm = {
+                    onConfirm(
+                        initialDraft.copy(
+                            title = entryTitle.trim(),
+                            username = entryUsername.trim(),
+                            password = entryPassword,
+                            url = entryUrl.trim(),
+                            notes = entryNotes,
+                            tags = parseTagsText(entryTagsText),
+                            customFields = customFields,
+                            attachments = attachments,
+                            expiryTime = expiryTime,
+                            customIconUuid = customIconUuid,
+                            iconStandardId = iconStandardId,
+                            newCustomIconBytes = newCustomIconBytes,
+                            appPackageName = normalizeAppPackage(entryAppPackage),
+                        ),
                     )
-                    Text(
-                        text = "保存",
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
-                }
-            }
+                },
+                confirmButtonText = "保存",
+                confirmEnabled = entryTitle.isNotBlank(),
+            )
         }
     }
 

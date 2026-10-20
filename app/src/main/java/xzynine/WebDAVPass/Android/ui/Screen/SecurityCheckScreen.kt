@@ -22,21 +22,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Card
-import top.yukonga.miuix.kmp.basic.CardDefaults
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
-import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzynine.WebDAVPass.Android.data.SecurityIssueEntry
+import xzynine.WebDAVPass.Android.ui.component.OutlinedReadOnlyCard
+import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 import xzynine.WebDAVPass.Android.util.strengthLabel
@@ -74,19 +70,7 @@ fun SecurityCheckScreen(
     Scaffold(
         popupHost = {},
         topBar = {
-            TopAppBar(
-                title = "安全性检查",
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回",
-                        )
-                    }
-                },
-                actions = {},
-                defaultWindowInsetsPadding = true,
-            )
+            SettingsTopAppBar(title = "安全性检查", onNavigateBack = onNavigateBack)
         },
     ) {
         Column(
@@ -120,14 +104,7 @@ fun SecurityCheckScreen(
                         color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     )
                 } else {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-                        cornerRadius = 12.dp,
-                        pressFeedbackType = PressFeedbackType.None,
-                        showIndication = false,
-                        onClick = {},
-                    ) {
+                    OutlinedReadOnlyCard {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             expiredEntries.forEachIndexed { index, item ->
                                 SecurityIssueRow(
@@ -159,14 +136,7 @@ fun SecurityCheckScreen(
                         color = MiuixTheme.colorScheme.onSurfaceSecondary,
                     )
                 } else {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-                        cornerRadius = 12.dp,
-                        pressFeedbackType = PressFeedbackType.None,
-                        showIndication = false,
-                        onClick = {},
-                    ) {
+                    OutlinedReadOnlyCard {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             weakEntries.forEachIndexed { index, item ->
                                 SecurityIssueRow(

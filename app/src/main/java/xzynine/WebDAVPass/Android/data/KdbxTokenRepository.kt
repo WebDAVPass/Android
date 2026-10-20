@@ -24,10 +24,14 @@ import com.kunzisoft.keepass.otp.OtpEntryFields
 import com.kunzisoft.keepass.otp.OtpEntryFields.isOTP
 import com.kunzisoft.keepass.otp.OtpType
 import com.kunzisoft.keepass.otp.TokenCalculator
+import com.kunzisoft.keepass.utils.StringUtil
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import xzylib.base.util.Logger
+import xzynine.WebDAVPass.Android.util.BoundedIo
+import xzynine.WebDAVPass.Android.util.FileSizeLimits
 import xzynine.WebDAVPass.Android.util.PasswordStrength
+import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -53,10 +57,10 @@ class KdbxTokenRepository(
         private const val SMALL_BINARY_SIZE = 1024 * 1024
 
         /** 附件查看/读取上限：1 MiB，超过则拒绝返回以避免 OOM */
-        const val MAX_ATTACHMENT_BYTES = 1024 * 1024
+        const val MAX_ATTACHMENT_BYTES = FileSizeLimits.ATTACHMENT_MAX_BYTES
 
-        /** 附件导入（写库）上限：10 MiB */
-        const val MAX_ATTACHMENT_IMPORT_BYTES = 10 * 1024 * 1024
+        /** 附件超限时的拒绝读取提示。 */
+        private const val ATTACHMENT_OVERFLOW_MESSAGE = "附件过大（超过 ${MAX_ATTACHMENT_BYTES / 1024} KiB），已拒绝读取"
     }
 
     private val emptyChallengeResponseRetriever: (HardwareKey, ByteArray?) -> ByteArray = { _, _ ->
@@ -425,31 +429,6 @@ class KdbxTokenRepository(
             entry.addEntryToHistory(snapshotBeforeRestore)
             db.updateEntry(entry)
             true
-        }
-    }
-
-    /**
-     * 按稳定 ID 读取分组编辑草稿。
-     */
-    fun loadPasswordGroupDraft(
-        localPath: String,
-        masterPassword: String,
-        groupId: Long,
-    ): PasswordGroupEditDraft? {
-        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val group =
-                findGroupByStableId(db.rootGroup, groupId)
-                    ?: return@withDatabase null
-            if (group.parent == null) {
-                return@withDatabase null
-            }
-            val groupInfo = group.getGroupInfo()
-            PasswordGroupEditDraft(
-                groupId = toStableGroupId(group),
-                parentGroupId = toStableParentGroupId(group.parent),
-                title = groupInfo.title,
-                notes = groupInfo.notes ?: "",
-            )
         }
     }
 
@@ -935,48 +914,6 @@ class KdbxTokenRepository(
             group.setGroupInfo(groupInfo)
             db.addGroupTo(group, parent)
             toStableGroupId(group)
-        }
-    }
-
-    /**
-     * 更新分组。
-     */
-    fun updatePasswordGroup(
-        localPath: String,
-        masterPassword: String,
-        draft: PasswordGroupEditDraft,
-    ): Boolean {
-        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
-            val groupId = draft.groupId ?: return@withDatabase false
-            val group =
-                findGroupByStableId(db.rootGroup, groupId)
-                    ?: return@withDatabase false
-            if (group.parent == null || db.groupIsInRecycleBin(group)) {
-                return@withDatabase false
-            }
-
-            val groupInfo =
-                group.getGroupInfo().apply {
-                    title = draft.title
-                    notes = draft.notes
-                }
-            group.setGroupInfo(groupInfo)
-
-            val targetParent = resolveParentGroup(db, draft.parentGroupId) ?: return@withDatabase false
-            if (db.groupIsInRecycleBin(targetParent)) {
-                return@withDatabase false
-            }
-
-            val currentParent = group.parent
-            val currentParentId = toStableParentGroupId(currentParent)
-            val targetParentId = toStableParentGroupId(targetParent)
-            if (currentParent != null && currentParentId != targetParentId) {
-                db.removeGroupFrom(group, currentParent)
-                db.addGroupTo(group, targetParent)
-            }
-
-            db.updateGroup(group)
-            true
         }
     }
 
@@ -1499,7 +1436,6 @@ class KdbxTokenRepository(
     /**
      * 一次性加载一级密码条目及全局总计数。
      *
-     * 对比分别调用 [loadPasswordEntriesByTopLevel] 和 [countPasswordEntries]，
      * 此方法只打开一次数据库（或复用缓存），避免重复解密。
      *
      * @return Pair<顶级列表, 全局总条目数>
@@ -1559,17 +1495,6 @@ class KdbxTokenRepository(
             list to entries.size
         }
     }
-
-    /**
-     * 统计数据库中全部条目数量（不构建明细对象）。
-     */
-    fun countPasswordEntries(
-        localPath: String,
-        masterPassword: String,
-    ): Int =
-        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            collectEntriesOutsideRecycleBin(db, db.rootGroup).size
-        }
 
     /**
      * 统计回收站中条目数量。
@@ -1633,7 +1558,32 @@ class KdbxTokenRepository(
         }.getOrDefault(false)
     }
 
-    fun isDuplicate(
+    /**
+     * 令牌判重的唯一谓词：唯一 ID 一致，或密钥/算法/位数/周期一致。
+     */
+    private fun findExistingTokenEntry(
+        group: Group?,
+        uniqueId: String,
+        secret: String,
+        algorithm: String,
+        digits: Int,
+        period: Int,
+    ): Entry? =
+        collectEntries(group).firstOrNull { entry ->
+            val existing = toToken(entry) ?: return@firstOrNull false
+            existing.uniqueId == uniqueId ||
+                (
+                    existing.secret == secret &&
+                        existing.algorithm.equals(algorithm, ignoreCase = true) &&
+                        existing.digits == digits &&
+                        existing.period == period
+                )
+        }
+
+    /**
+     * 判断令牌是否已存在（唯一 ID 或密钥、算法、位数、周期一致均视为重复）。
+     */
+    fun isTokenDuplicate(
         localPath: String,
         masterPassword: String,
         secret: String,
@@ -1641,9 +1591,20 @@ class KdbxTokenRepository(
         digits: Int,
         period: Int,
     ): Boolean =
-        loadTokens(localPath, masterPassword)
-            .any { it.secret == secret && it.algorithm == algorithm && it.digits == digits && it.period == period }
+        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            findExistingTokenEntry(
+                db.rootGroup,
+                UniqueIdGenerator.generate(secret, algorithm, digits, period),
+                secret,
+                algorithm,
+                digits,
+                period,
+            ) != null
+        }
 
+    /**
+     * 新增令牌，已存在时返回 false；判重与写入在同一次开库内完成。
+     */
     fun addToken(
         localPath: String,
         masterPassword: String,
@@ -1651,10 +1612,15 @@ class KdbxTokenRepository(
     ): Boolean {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val existing =
-                collectEntries(db.rootGroup)
-                    .mapNotNull { toToken(it) }
-                    .any { it.uniqueId == token.uniqueId || (it.secret == token.secret && it.algorithm == token.algorithm && it.digits == token.digits && it.period == token.period) }
-            if (existing) {
+                findExistingTokenEntry(
+                    db.rootGroup,
+                    token.uniqueId,
+                    token.secret,
+                    token.algorithm,
+                    token.digits,
+                    token.period,
+                )
+            if (existing != null) {
                 return@withDatabase false
             }
 
@@ -2524,7 +2490,7 @@ class KdbxTokenRepository(
                             if (read <= 0) {
                                 "empty"
                             } else {
-                                bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+                                with(StringUtil) { bytes.copyOf(read).toHexString() }
                             }
                         }
                     }.getOrElse { "readError:${it.javaClass.simpleName}" }
@@ -2541,7 +2507,7 @@ class KdbxTokenRepository(
                             if (read <= 0) {
                                 "empty"
                             } else {
-                                bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+                                with(StringUtil) { bytes.copyOf(read).toHexString() }
                             }
                         } ?: "openNull"
                     }.getOrElse { "readError:${it.javaClass.simpleName}" }
@@ -2797,7 +2763,7 @@ class KdbxTokenRepository(
             val attachment = entry.getAttachments(pool).firstOrNull { it.name == name } ?: return@withDatabase null
             runCatching {
                 attachment.binaryData.getInputDataStream(db.binaryCache).use { input ->
-                    readBoundedBytes(input, MAX_ATTACHMENT_BYTES)
+                    BoundedIo.readBoundedBytes(input, MAX_ATTACHMENT_BYTES, ATTACHMENT_OVERFLOW_MESSAGE)
                 }
             }.getOrNull()
         }
@@ -2821,52 +2787,9 @@ class KdbxTokenRepository(
             val attachment = entry.getAttachments(pool).firstOrNull { it.name == name } ?: return@withDatabase false
             runCatching {
                 attachment.binaryData.getInputDataStream(db.binaryCache).use { input ->
-                    copyBounded(input, output, MAX_ATTACHMENT_BYTES)
+                    BoundedIo.copyBounded(input, output, MAX_ATTACHMENT_BYTES, ATTACHMENT_OVERFLOW_MESSAGE)
                 }
             }.isSuccess
-        }
-    }
-
-    /**
-     * 增量读取输入流，超过 [limit] 字节则抛出 [IllegalStateException] 以拒绝超大附件。
-     */
-    private fun readBoundedBytes(
-        input: InputStream,
-        limit: Int,
-    ): ByteArray {
-        val buffer = ByteArrayOutputStream(8 * 1024)
-        val chunk = ByteArray(8 * 1024)
-        var total = 0
-        while (true) {
-            val read = input.read(chunk)
-            if (read < 0) break
-            total += read
-            if (total > limit) {
-                throw IllegalStateException("附件过大（超过 ${limit / 1024} KiB），已拒绝读取")
-            }
-            buffer.write(chunk, 0, read)
-        }
-        return buffer.toByteArray()
-    }
-
-    /**
-     * 增量拷贝输入流到输出流，超过 [limit] 字节则抛出 [IllegalStateException] 以拒绝超大附件。
-     */
-    private fun copyBounded(
-        input: InputStream,
-        output: OutputStream,
-        limit: Int,
-    ) {
-        val chunk = ByteArray(8 * 1024)
-        var total = 0
-        while (true) {
-            val read = input.read(chunk)
-            if (read < 0) break
-            total += read
-            if (total > limit) {
-                throw IllegalStateException("附件过大（超过 ${limit / 1024} KiB），已拒绝读取")
-            }
-            output.write(chunk, 0, read)
         }
     }
 }

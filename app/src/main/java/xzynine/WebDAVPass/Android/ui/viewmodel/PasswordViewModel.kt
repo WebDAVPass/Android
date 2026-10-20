@@ -156,24 +156,10 @@ class PasswordViewModel(
     }
 
     /**
-     * 重置密码分组导航到根分组。
-     */
-    fun resetPasswordGroupNavigation(searchQuery: String = "") {
-        passwordSubViewModel.resetPasswordGroupNavigation(searchQuery)
-    }
-
-    /**
      * 仅重置密码分组栈，不触发刷新。
      */
     fun resetPasswordGroupStackOnly() {
         passwordSubViewModel.resetPasswordGroupStackOnly()
-    }
-
-    /**
-     * 兼容旧调用名。
-     */
-    fun refreshRemainingKeyValues() {
-        refreshPasswordEntries()
     }
 
     /**
@@ -284,23 +270,6 @@ class PasswordViewModel(
         }
         return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
             kdbxTokenRepository.restoreEntryFromHistory(path, pwd, entryId, historyIndex)
-        }
-    }
-
-    /**
-     * 按稳定 ID 读取分组编辑草稿。
-     */
-    suspend fun loadPasswordGroupDraft(
-        groupId: Long,
-        isLibraryUnlocked: Boolean,
-        localPath: String?,
-        masterPassword: String,
-    ): PasswordGroupEditDraft? {
-        if (groupId >= 0) {
-            return null
-        }
-        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
-            kdbxTokenRepository.loadPasswordGroupDraft(path, pwd, groupId)
         }
     }
 
@@ -428,19 +397,6 @@ class PasswordViewModel(
     ): Long? =
         withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
             kdbxTokenRepository.createPasswordGroup(path, pwd, draft)
-        }
-
-    /**
-     * 更新密码分组。
-     */
-    suspend fun updatePasswordGroup(
-        draft: PasswordGroupEditDraft,
-        isLibraryUnlocked: Boolean,
-        localPath: String?,
-        masterPassword: String,
-    ): Boolean =
-        withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
-            kdbxTokenRepository.updatePasswordGroup(path, pwd, draft)
         }
 
     /**

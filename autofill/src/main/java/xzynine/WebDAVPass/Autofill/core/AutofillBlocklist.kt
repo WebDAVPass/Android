@@ -19,8 +19,6 @@ import xzynine.WebDAVPass.Autofill.bridge.AutofillPreferences
  * 而写入侧只做 trim，用户输入 `Example.COM`、`com.Bank.Secure` 也能命中运行时的小写值。
  */
 object AutofillBlocklist {
-    private const val APPLICATION_ID_POPUP_WINDOW = "PopupWindow:"
-
     /**
      * 判断应用 / 网站是否允许自动填充：应用包名、网站域名均未命中黑名单，且非弹窗窗口。
      *
@@ -34,7 +32,7 @@ object AutofillBlocklist {
         preferences: AutofillPreferences,
     ): Boolean =
         allowedFor(applicationId, preferences.applicationIdBlocklist) &&
-            applicationId?.contains(APPLICATION_ID_POPUP_WINDOW) != true &&
+            applicationId?.contains(StructureParser.APPLICATION_ID_POPUP_WINDOW) != true &&
             allowedFor(webDomain, preferences.webDomainBlocklist)
 
     /** 单个元素的子串匹配（忽略大小写）；元素或黑名单为空时放行。 */

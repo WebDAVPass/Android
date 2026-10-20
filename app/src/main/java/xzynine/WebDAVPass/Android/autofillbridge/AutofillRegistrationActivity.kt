@@ -84,12 +84,6 @@ class AutofillRegistrationActivity : AppCompatActivity() {
             }
         }
     }
-
-    /** 取消并关闭界面（未写入条目）。 */
-    private fun cancelAndFinish() {
-        setResult(Activity.RESULT_CANCELED)
-        finish()
-    }
 }
 
 /**
@@ -117,10 +111,7 @@ private fun RegistrationContent(
     var pickerGroups by remember { mutableStateOf<List<GroupNodeInfo>>(emptyList()) }
     var selectedGroupId by remember { mutableStateOf<Long?>(null) }
 
-    val site =
-        registerInfo.searchInfo.webDomain
-            ?: registerInfo.searchInfo.applicationId
-            ?: "自动填充"
+    val site = registerInfo.site
 
     /** 关闭界面并回传结果：保存成功回 RESULT_OK，否则取消。 */
     fun finishWithResult(ok: Boolean) {

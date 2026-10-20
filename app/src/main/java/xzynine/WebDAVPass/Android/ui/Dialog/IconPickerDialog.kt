@@ -28,19 +28,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.kunzisoft.keepass.icon.IconPack
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
+import xzylib.base.util.ToastUtils
+import xzynine.WebDAVPass.Android.ui.component.DialogActionRow
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 import xzynine.WebDAVPass.Android.ui.component.buildBrandIconBytes
-import java.io.ByteArrayOutputStream
-
-/**
- * 自定义图标最大字节数（与 KeePassDX 上限一致）。
- */
-private const val MAX_ICON_BYTES = 512 * 1024
+import xzynine.WebDAVPass.Android.util.BoundedIo
+import xzynine.WebDAVPass.Android.util.FileSizeLimits
 
 /**
  * 图标选择对话框。
@@ -91,26 +87,14 @@ fun IconPickerDialog(
             uri ?: return@rememberLauncherForActivityResult
             runCatching {
                 context.contentResolver.openInputStream(uri)?.use { input ->
-                    val buffer = ByteArrayOutputStream(8 * 1024)
-                    val chunk = ByteArray(8 * 1024)
-                    var total = 0
-                    while (true) {
-                        val read = input.read(chunk)
-                        if (read < 0) break
-                        total += read
-                        if (total > MAX_ICON_BYTES) {
-                            throw IllegalStateException("图标过大")
-                        }
-                        buffer.write(chunk, 0, read)
-                    }
-                    val bytes = buffer.toByteArray()
+                    val bytes = BoundedIo.readBoundedBytes(input, FileSizeLimits.ICON_MAX_BYTES, "图标过大")
                     if (bytes.isNotEmpty()) {
                         selectedStandardId = null
                         customBytes = bytes
                     }
                 }
             }.onFailure {
-                Toast.makeText(context, "图标读取失败：${it.message ?: "未知错误"}", Toast.LENGTH_SHORT).show()
+                ToastUtils.showShortToast(context, "图标读取失败：${it.message ?: "未知错误"}")
             }
         }
 
@@ -193,18 +177,11 @@ fun IconPickerDialog(
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                TextButton(text = "取消", onClick = onDismiss, modifier = Modifier.weight(1f))
-                Button(
-                    onClick = { onPick(selectedStandardId, customBytes) },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("确定")
-                }
-            }
+            DialogActionRow(
+                onDismiss = onDismiss,
+                onConfirm = { onPick(selectedStandardId, customBytes) },
+                confirmButtonText = "确定",
+            )
         }
     }
 }
