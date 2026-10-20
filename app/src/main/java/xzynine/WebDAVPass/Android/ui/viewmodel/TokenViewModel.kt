@@ -25,6 +25,7 @@ import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
+import xzynine.WebDAVPass.Android.data.LegacyAutofillUrl
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.PasswordEntry
@@ -574,6 +575,34 @@ class TokenViewModel(
                 masterEntryId,
                 sourceEntryIds,
                 fieldSelections,
+                libraryViewModel.isLibraryUnlocked.value,
+                libraryViewModel.currentLibrary.value?.localPath,
+                libraryViewModel.getMasterPasswordInternal(),
+            )
+        if (count > 0) {
+            onPasswordWriteSuccess()
+        }
+        return count
+    }
+
+    /**
+     * 检测存量候选：网站字段被旧版自动填充写成 android:// 混淆来源的条目（不含回收站）。
+     */
+    suspend fun detectLegacyAutofillUrlEntries(entryIds: List<Long>): List<LegacyAutofillUrl.Candidate> =
+        passwordViewModel.detectLegacyAutofillUrlEntries(
+            entryIds,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal(),
+        )
+
+    /**
+     * 批量转换存量候选：清空网站字段并把包名回填到「应用」关联字段。
+     */
+    suspend fun convertLegacyAutofillUrlEntries(entryIds: List<Long>): Int {
+        val count =
+            passwordViewModel.convertLegacyAutofillUrlEntries(
+                entryIds,
                 libraryViewModel.isLibraryUnlocked.value,
                 libraryViewModel.currentLibrary.value?.localPath,
                 libraryViewModel.getMasterPasswordInternal(),

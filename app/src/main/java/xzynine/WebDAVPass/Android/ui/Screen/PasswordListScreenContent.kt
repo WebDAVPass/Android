@@ -270,6 +270,7 @@ fun PasswordListTopBarActions(
     onMoveSelection: () -> Unit,
     onCopySelection: () -> Unit,
     onScanDuplicates: () -> Unit,
+    onConvertLegacyAutofill: () -> Unit,
     onCreateEntry: () -> Unit,
     onCreateGroup: () -> Unit,
 ) {
@@ -474,6 +475,15 @@ fun PasswordListTopBarActions(
                                     DropdownItem(
                                         text = "检测重复条目",
                                         onClick = { onScanDuplicates() },
+                                    ),
+                                ),
+                        ),
+                        DropdownEntry(
+                            items =
+                                listOf(
+                                    DropdownItem(
+                                        text = "修复旧版自动填充字段",
+                                        onClick = { onConvertLegacyAutofill() },
                                     ),
                                 ),
                         ),

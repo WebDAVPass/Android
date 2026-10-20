@@ -743,6 +743,76 @@ class KdbxTokenRepository(
     }
 
     /**
+     * 检测存量候选：网站字段被旧版自动填充写成 android:// 混淆来源的条目（不含回收站）。
+     */
+    fun detectLegacyAutofillUrlEntries(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+    ): List<LegacyAutofillUrl.Candidate> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            entryIds.mapNotNull { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@mapNotNull null
+                val info = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+                val packageName = LegacyAutofillUrl.parseLegacyUrl(info.url) ?: return@mapNotNull null
+                LegacyAutofillUrl.Candidate(
+                    entryId = toStableId(entry),
+                    title = info.title,
+                    originalUrl = info.url,
+                    packageName = packageName,
+                )
+            }
+        }
+    }
+
+    /**
+     * 批量转换存量候选：当前版本先入历史，清空网站字段；
+     * 应用关联字段无同包名时按槽位回填 androidapp://<包名>，已有同包名仅清空网站字段。
+     *
+     * @return 成功转换的条目数
+     */
+    fun convertLegacyAutofillUrlEntries(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+    ): Int {
+        if (entryIds.isEmpty()) {
+            return 0
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            var converted = 0
+            for (entryId in entryIds) {
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: continue
+                val info = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+                val packageName = LegacyAutofillUrl.parseLegacyUrl(info.url) ?: continue
+                entry.addEntryToHistory(Entry(entry, copyHistory = false))
+                info.url = ""
+                val hasSamePackage =
+                    info.customFields.any { field ->
+                        AppPackageField.isAppIdFieldName(field.name) &&
+                            AppPackageField
+                                .normalizeAppPackage(field.protectedValue.stringValue)
+                                .equals(packageName, ignoreCase = true)
+                    }
+                if (!hasSamePackage) {
+                    val slotName = LegacyAutofillUrl.nextAppFieldSlotName(info.customFields.map { it.name })
+                    if (slotName != null) {
+                        info.customFields.add(
+                            Field(slotName, ProtectedString(false, AppPackageField.toFieldValue(packageName))),
+                        )
+                    }
+                }
+                entry.setEntryInfo(db, info)
+                converted++
+            }
+            converted
+        }
+    }
+
+    /**
      * 构建单条目合并摘要。
      */
     private fun buildDuplicateEntryInfo(

@@ -41,6 +41,7 @@ import xzynine.WebDAVPass.Android.data.DuplicateEntryInfo
 import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
+import xzynine.WebDAVPass.Android.data.LegacyAutofillUrl
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
@@ -48,6 +49,7 @@ import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.DuplicateScanDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryMergeDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.LegacyAutofillConvertDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.TemplatePickerDialog
 import xzynine.WebDAVPass.Android.ui.component.buildBrandIconBytes
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordFolderIndexLabel
@@ -115,6 +117,11 @@ fun PasswordListScreen(
     var autoMergeTarget by remember { mutableStateOf<Pair<Long, List<Long>>?>(null) }
     val showMergeConfirm = remember { mutableStateOf(false) }
     var mergeConfirmTarget by remember { mutableStateOf<Pair<Long, Map<String, Long>>?>(null) }
+
+    val legacyCandidates = remember { mutableStateOf<List<LegacyAutofillUrl.Candidate>>(emptyList()) }
+    val showLegacyConvertDialog = remember { mutableStateOf(false) }
+    val showLegacyConvertConfirm = remember { mutableStateOf(false) }
+    var legacyConvertTarget by remember { mutableStateOf<List<Long>?>(null) }
 
     var createEntryTitle by remember { mutableStateOf("") }
     var createEntryUsername by remember { mutableStateOf("") }
@@ -281,6 +288,40 @@ fun PasswordListScreen(
             if (groups.isEmpty()) {
                 showDuplicateScanDialog.value = false
             }
+        }
+    }
+
+    /** 扫描当前视图，检测旧版自动填充污染条目。 */
+    fun scanLegacyAutofillEntries() {
+        coroutineScope.launch {
+            val entryIds = visibleEntryIds()
+            if (entryIds.isEmpty()) {
+                ToastUtils.showShortToast(context, "当前视图无条目")
+                return@launch
+            }
+            val candidates = tokenViewModel.detectLegacyAutofillUrlEntries(entryIds)
+            if (candidates.isEmpty()) {
+                ToastUtils.showShortToast(context, "未发现可转换条目")
+                return@launch
+            }
+            legacyCandidates.value = candidates
+            showLegacyConvertDialog.value = true
+        }
+    }
+
+    /** 执行存量转换并关闭对话框链。 */
+    fun executeLegacyAutofillConvert(entryIds: List<Long>) {
+        coroutineScope.launch {
+            val count = tokenViewModel.convertLegacyAutofillUrlEntries(entryIds)
+            if (count > 0) {
+                ToastUtils.showShortToast(context, "已转换 $count 条条目")
+            } else {
+                ToastUtils.showShortToast(context, "转换失败")
+            }
+            legacyCandidates.value = emptyList()
+            legacyConvertTarget = null
+            showLegacyConvertDialog.value = false
+            showLegacyConvertConfirm.value = false
         }
     }
 
@@ -493,6 +534,7 @@ fun PasswordListScreen(
             onMoveSelection = { openGroupPicker(isMove = true) },
             onCopySelection = { openGroupPicker(isMove = false) },
             onScanDuplicates = { scanDuplicateEntries() },
+            onConvertLegacyAutofill = { scanLegacyAutofillEntries() },
             onCreateEntry = { openCreateEntryFlow() },
         ) { showCreateGroupDialog.value = true }
     }
@@ -792,6 +834,35 @@ fun PasswordListScreen(
             onDismiss = { showDuplicateScanDialog.value = false },
             onAutoMerge = { group, masterId -> requestAutoMerge(group, masterId) },
             onManualMerge = { group, masterId -> openManualMergeForGroup(group, masterId) },
+        )
+    }
+
+    if (legacyCandidates.value.isNotEmpty() && showLegacyConvertDialog.value) {
+        LegacyAutofillConvertDialog(
+            candidates = legacyCandidates.value,
+            show = showLegacyConvertDialog.value,
+            onDismiss = {
+                showLegacyConvertDialog.value = false
+                legacyCandidates.value = emptyList()
+            },
+            onConvert = { selectedIds ->
+                legacyConvertTarget = selectedIds
+                showLegacyConvertDialog.value = false
+                showLegacyConvertConfirm.value = true
+            },
+        )
+    }
+
+    if (showLegacyConvertConfirm.value && legacyConvertTarget != null) {
+        ConfirmationDialog(
+            title = "确认转换",
+            summary =
+                "将把 ${legacyConvertTarget!!.size} 条条目的网站字段清空，" +
+                    "并把包名回填到「应用」关联字段；原版本保留在条目历史中。",
+            show = showLegacyConvertConfirm,
+            onDismiss = { showLegacyConvertConfirm.value = false },
+            confirmButtonText = "转换",
+            onConfirm = { executeLegacyAutofillConvert(legacyConvertTarget!!) },
         )
     }
 
