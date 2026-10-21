@@ -133,8 +133,18 @@ class StructureParser(
 
         node.webDomain?.let { webDomain ->
             if (webDomain.isNotEmpty()) {
-                result?.webDomain = webDomain
-                Log.d(TAG, "Autofill domain: $webDomain")
+                // android://<哈希>@<包名> 为 WebView 在非浏览器应用内上报的混淆站点来源，
+                // 哈希不可逆：不写入 webDomain，仅取包名补齐应用来源。
+                val hashedPackage = hashedWebDomainPackage(webDomain)
+                if (hashedPackage != null) {
+                    if (result?.applicationId.isNullOrBlank()) {
+                        result?.applicationId = hashedPackage
+                    }
+                    Log.d(TAG, "Autofill hashed web domain: $webDomain")
+                } else {
+                    result?.webDomain = webDomain
+                    Log.d(TAG, "Autofill domain: $webDomain")
+                }
             }
         }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
@@ -798,6 +808,21 @@ class StructureParser(
         private val TAG = StructureParser::class.java.name
 
         const val APPLICATION_ID_POPUP_WINDOW = "PopupWindow:"
+
+        /** android:// 混淆站点来源整串匹配：android://<十六进制哈希>@<包名>。 */
+        private val HASHED_WEB_DOMAIN_REGEX = Regex("^android://([0-9a-fA-F]{8,})@([^\\s@]+)$")
+
+        /**
+         * 解析 android:// 混淆站点来源，返回 @ 后的宿主应用包名；非该格式返回 null。
+         * 宿主侧存量识别复用本函数，保证新旧两处对同一格式的判定一致。
+         */
+        fun hashedWebDomainPackage(raw: String?): String? {
+            val value = raw?.trim().orEmpty()
+            if (value.isEmpty()) {
+                return null
+            }
+            return HASHED_WEB_DOMAIN_REGEX.matchEntire(value)?.groupValues?.get(2)
+        }
 
         /** HTML autocomplete 的信用卡短前缀（cc-number / cc-exp …）。 */
         private const val HINT_PREFIX_CC = "cc-"

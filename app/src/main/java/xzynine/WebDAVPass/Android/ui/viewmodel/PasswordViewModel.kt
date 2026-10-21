@@ -12,6 +12,7 @@ import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
+import xzynine.WebDAVPass.Android.data.LegacyAutofillUrl
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
@@ -95,8 +96,9 @@ class PasswordViewModel(
         sortMode: PasswordSortMode? = null,
         ascending: Boolean? = null,
         hideExpired: Boolean? = null,
+        onlyWithApp: Boolean? = null,
     ) {
-        passwordSubViewModel.refreshPasswordEntries(searchQuery, caseSensitive, sortMode, ascending, hideExpired)
+        passwordSubViewModel.refreshPasswordEntries(searchQuery, caseSensitive, sortMode, ascending, hideExpired, onlyWithApp)
     }
 
     /**
@@ -383,6 +385,40 @@ class PasswordViewModel(
         }
         return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = 0) { path, pwd ->
             kdbxTokenRepository.mergeEntryGroup(path, pwd, masterEntryId, sourceEntryIds, fieldSelections)
+        }
+    }
+
+    /**
+     * 检测存量候选：网站字段被旧版自动填充写成 android:// 混淆来源的条目（不含回收站）。
+     */
+    suspend fun detectLegacyAutofillUrlEntries(
+        entryIds: List<Long>,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String,
+    ): List<LegacyAutofillUrl.Candidate> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = emptyList()) { path, pwd ->
+            kdbxTokenRepository.detectLegacyAutofillUrlEntries(path, pwd, entryIds)
+        }
+    }
+
+    /**
+     * 批量转换存量候选：清空网站字段并把包名回填到「应用」关联字段。
+     */
+    suspend fun convertLegacyAutofillUrlEntries(
+        entryIds: List<Long>,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String,
+    ): Int {
+        if (entryIds.isEmpty()) {
+            return 0
+        }
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = 0) { path, pwd ->
+            kdbxTokenRepository.convertLegacyAutofillUrlEntries(path, pwd, entryIds)
         }
     }
 

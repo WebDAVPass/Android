@@ -8,6 +8,8 @@
 package xzynine.WebDAVPass.Android.autofillbridge
 
 import android.content.Context
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import xzynine.WebDAVPass.Android.data.AppPackageField.normalizeAppPackage
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
@@ -25,20 +27,28 @@ class AppAutofillSaveHandler(
     /**
      * 把表单注册信息写入当前打开的密码库。
      *
-     * 标题优先取网站域名，其次应用包名；网站域名同时写入 URL 字段。
-     * 表单来自应用时（[xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft.appPackageName]），
-     * 额外写入应用关联字段与该应用的图标：应用图标读不到时保持无图标，不影响保存。
+     * 标题：有网站域名的表单取域名；无网站域名的应用表单取应用显示名，读不到时回落包名。
+     * 网站域名同时写入 URL 字段；android:// 混淆来源已在服务侧转换为应用来源，不会进入 URL。
+     * 应用表单额外写入应用关联字段与该应用的图标：应用图标读不到时保持无图标，不影响保存。
      *
      * @return 写入成功返回 true，库锁定 / 写入异常返回 false
      */
     override suspend fun save(registerInfo: AutofillRegisterInfo): Boolean {
         val tokenViewModel = TokenViewModel.getSharedInstance(context)
-        val site = registerInfo.site
-        val applicationId = registerInfo.searchInfo.applicationId.orEmpty()
+        val applicationId = normalizeAppPackage(registerInfo.searchInfo.applicationId)
+        val title =
+            if (registerInfo.searchInfo.webDomain.isNullOrBlank() && applicationId.isNotEmpty()) {
+                withContext(Dispatchers.IO) {
+                    runCatching { InstalledAppsProvider.getApplicationLabel(context, applicationId) }
+                        .getOrDefault(applicationId)
+                }.ifBlank { applicationId }
+            } else {
+                registerInfo.site
+            }
         val draft =
             PasswordEntryEditDraft(
                 parentGroupId = registerInfo.targetGroupId,
-                title = site,
+                title = title,
                 username = registerInfo.username.orEmpty(),
                 password = registerInfo.password.orEmpty(),
                 url =
@@ -46,7 +56,7 @@ class AppAutofillSaveHandler(
                         ?.let { "https://$it" }
                         .orEmpty(),
                 notes = "",
-                appPackageName = normalizeAppPackage(applicationId),
+                appPackageName = applicationId,
             )
         return runCatching {
             val withAppIcon =
@@ -56,7 +66,7 @@ class AppAutofillSaveHandler(
                     draft.copy(
                         newCustomIconBytes =
                             runCatching {
-                                InstalledAppsProvider.loadAppIconPngBytes(context, normalizeAppPackage(applicationId))
+                                InstalledAppsProvider.loadAppIconPngBytes(context, applicationId)
                             }.getOrNull(),
                     )
                 }

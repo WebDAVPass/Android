@@ -360,7 +360,8 @@ class DatabaseKDBXMerger(
     ): GroupKDBX? {
         var parent = node.parent
         while (parent != null && deletedObjects.containsNode(parent)) {
-            parent = node.parent
+            // 逐级上溯，父分组同样在墓碑集合中时终止于第一个未删除祖先
+            parent = parent.parent
         }
         return parent
     }
@@ -624,7 +625,7 @@ class DatabaseKDBXMerger(
                     // Update the current group location to the verified one
                     database.removeGroupFrom(group, group.parent)
                     database.addGroupTo(group, parentGroupToMerge)
-                } else if (group.lastModificationTime.isAfter(group.lastModificationTime)) {
+                } else if (group.lastModificationTime.isAfter(groupToMerge.lastModificationTime)) {
                     // Don't touch the location
                 } else if (group.lastModificationTime.isEquals(groupToMerge.lastModificationTime)) {
                     // If it's the same modification time, simply move group to the right location

@@ -260,6 +260,8 @@ fun PasswordListTopBarActions(
     onSortAscendingChange: (Boolean) -> Unit,
     hideExpired: Boolean,
     onHideExpiredChange: (Boolean) -> Unit,
+    onlyWithApp: Boolean,
+    onOnlyWithAppChange: (Boolean) -> Unit,
     onSelectAll: () -> Unit,
     onInvertSelection: () -> Unit,
     onRestoreSelected: () -> Unit,
@@ -270,6 +272,7 @@ fun PasswordListTopBarActions(
     onMoveSelection: () -> Unit,
     onCopySelection: () -> Unit,
     onScanDuplicates: () -> Unit,
+    onConvertLegacyAutofill: () -> Unit,
     onCreateEntry: () -> Unit,
     onCreateGroup: () -> Unit,
 ) {
@@ -455,6 +458,16 @@ fun PasswordListTopBarActions(
                                     ),
                                 ),
                         ),
+                        DropdownEntry(
+                            items =
+                                listOf(
+                                    DropdownItem(
+                                        text = "仅显示安卓应用条目",
+                                        selected = onlyWithApp,
+                                        onClick = { onOnlyWithAppChange(!onlyWithApp) },
+                                    ),
+                                ),
+                        ),
                     ),
                 collapseOnSelection = false,
             ) {
@@ -474,6 +487,15 @@ fun PasswordListTopBarActions(
                                     DropdownItem(
                                         text = "检测重复条目",
                                         onClick = { onScanDuplicates() },
+                                    ),
+                                ),
+                        ),
+                        DropdownEntry(
+                            items =
+                                listOf(
+                                    DropdownItem(
+                                        text = "修复旧版自动填充字段",
+                                        onClick = { onConvertLegacyAutofill() },
                                     ),
                                 ),
                         ),

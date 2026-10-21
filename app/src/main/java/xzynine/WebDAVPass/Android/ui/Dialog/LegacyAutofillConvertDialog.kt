@@ -1,0 +1,160 @@
+package xzynine.WebDAVPass.Android.ui.Dialog
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.rounded.CheckCircle
+import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import top.yukonga.miuix.kmp.basic.Button
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.window.WindowDialog
+import xzynine.WebDAVPass.Android.data.LegacyAutofillUrl
+import xzynine.WebDAVPass.Android.ui.component.MarqueeText
+
+/**
+ * 旧版自动填充污染条目转换对话框。
+ *
+ * 提示、候选行与底部按钮位于同一滚动列内，随内容整体滚动；
+ * 候选行可勾选（默认全选），「转换」交由调用方弹出最终确认后批量执行。
+ */
+@Composable
+fun LegacyAutofillConvertDialog(
+    candidates: List<LegacyAutofillUrl.Candidate>,
+    show: Boolean,
+    onDismiss: () -> Unit,
+    onConvert: (selectedEntryIds: List<Long>) -> Unit,
+) {
+    val selectedIds = remember { mutableStateMapOf<Long, Boolean>() }
+
+    LaunchedEffect(show, candidates) {
+        if (show) {
+            selectedIds.clear()
+            candidates.forEach { candidate -> selectedIds[candidate.entryId] = true }
+        }
+    }
+
+    WindowDialog(
+        title = "发现 ${candidates.size} 条可修复条目",
+        show = show,
+        onDismissRequest = onDismiss,
+    ) {
+        // 提示、候选行与底部按钮同列滚动
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                text =
+                    "修复旧版自动填充遗留：android:// 混淆网站字段无法还原网址，转换即清空" +
+                        "并回填「应用」关联字段；无自定义图标的条目回填应用图标。",
+                fontSize = 13.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
+            candidates.forEach { candidate ->
+                CandidateRow(
+                    candidate = candidate,
+                    checked = selectedIds[candidate.entryId] ?: false,
+                    onToggle = { selectedIds[candidate.entryId] = !(selectedIds[candidate.entryId] ?: false) },
+                )
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+            ) {
+                TextButton(
+                    text = "关闭",
+                    onClick = onDismiss,
+                )
+                val selectedCount = selectedIds.count { it.value }
+                Button(
+                    onClick = { onConvert(selectedIds.filter { it.value }.keys.toList()) },
+                    enabled = selectedCount > 0,
+                    modifier = Modifier.padding(start = 12.dp),
+                ) {
+                    Text(text = "转换 $selectedCount 条")
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 单条候选行：勾选图标 + 标题 / 被污染网站字段值 / 修复内容。
+ */
+@Composable
+private fun CandidateRow(
+    candidate: LegacyAutofillUrl.Candidate,
+    checked: Boolean,
+    onToggle: () -> Unit,
+) {
+    Card {
+        Row(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onToggle)
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector =
+                    if (checked) Icons.Rounded.CheckCircle else Icons.Rounded.RadioButtonUnchecked,
+                contentDescription = if (checked) "已选中" else "未选中",
+                tint =
+                    if (checked) {
+                        MiuixTheme.colorScheme.primary
+                    } else {
+                        MiuixTheme.colorScheme.onSurfaceVariantSummary
+                    },
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column {
+                MarqueeText(
+                    text = candidate.title.ifBlank { "未命名" },
+                    fontSize = 14.sp,
+                    color = MiuixTheme.colorScheme.onSurface,
+                )
+                if (candidate.needsUrlClear) {
+                    MarqueeText(
+                        text = candidate.originalUrl,
+                        fontSize = 12.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    )
+                }
+                MarqueeText(
+                    text =
+                        buildList {
+                            if (candidate.needsUrlClear) add("网站 → 清空")
+                            add("应用 → ${candidate.packageName}")
+                            if (!candidate.hasCustomIcon) add("图标 → 应用图标")
+                        }.joinToString("；"),
+                    fontSize = 12.sp,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                )
+            }
+        }
+    }
+}

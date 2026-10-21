@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.channelFlow
 import xzylib.base.util.Logger
 import xzynine.WebDAVPass.Android.util.BoundedIo
 import xzynine.WebDAVPass.Android.util.FileSizeLimits
+import xzynine.WebDAVPass.Android.util.InstalledAppsProvider
 import xzynine.WebDAVPass.Android.util.PasswordStrength
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import java.io.ByteArrayInputStream
@@ -741,6 +742,118 @@ class KdbxTokenRepository(
             mergedCount
         }
     }
+
+    /**
+     * 检测存量候选（不含回收站）：
+     * - 网站字段被旧版自动填充写成 android:// 混淆来源的条目；
+     * - 「应用」关联字段有值但尚无自定义图标的条目（含此前已转换、未回填图标的历史存量）。
+     */
+    fun detectLegacyAutofillUrlEntries(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+    ): List<LegacyAutofillUrl.Candidate> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            entryIds.mapNotNull { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@mapNotNull null
+                val info = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+                val urlPackage = LegacyAutofillUrl.parseLegacyUrl(info.url)
+                val hasCustomIcon = entry.icon.custom.uuid != DatabaseVersioned.UUID_ZERO
+                val packageName = urlPackage ?: firstAppPackageName(info.customFields)
+                if (packageName == null || (urlPackage == null && hasCustomIcon)) {
+                    return@mapNotNull null
+                }
+                LegacyAutofillUrl.Candidate(
+                    entryId = toStableId(entry),
+                    title = info.title,
+                    originalUrl = if (urlPackage != null) info.url else "",
+                    packageName = packageName,
+                    needsUrlClear = urlPackage != null,
+                    hasCustomIcon = hasCustomIcon,
+                )
+            }
+        }
+    }
+
+    /**
+     * 批量转换存量候选：当前版本先入历史；
+     * android:// 污染条目清空网站字段，应用关联字段无同包名时按槽位回填 androidapp://<包名>；
+     * 无自定义图标的候选按包名回填应用图标，读不到时保持原图标；无实际变更的条目不写入。
+     *
+     * @return 成功转换的条目数
+     */
+    fun convertLegacyAutofillUrlEntries(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+    ): Int {
+        if (entryIds.isEmpty()) {
+            return 0
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            var converted = 0
+            for (entryId in entryIds) {
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: continue
+                val info = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+                val urlPackage = LegacyAutofillUrl.parseLegacyUrl(info.url)
+                val packageName = urlPackage ?: firstAppPackageName(info.customFields) ?: continue
+                var changed = false
+                if (urlPackage != null) {
+                    info.url = ""
+                    changed = true
+                    val hasSamePackage =
+                        info.customFields.any { field ->
+                            AppPackageField.isAppIdFieldName(field.name) &&
+                                AppPackageField
+                                    .normalizeAppPackage(field.protectedValue.stringValue)
+                                    .equals(packageName, ignoreCase = true)
+                        }
+                    if (!hasSamePackage) {
+                        val slotName = LegacyAutofillUrl.nextAppFieldSlotName(info.customFields.map { it.name })
+                        if (slotName != null) {
+                            info.customFields.add(
+                                Field(slotName, ProtectedString(false, AppPackageField.toFieldValue(packageName))),
+                            )
+                        }
+                    }
+                }
+                if (entry.icon.custom.uuid == DatabaseVersioned.UUID_ZERO) {
+                    InstalledAppsProvider.loadAppIconPngBytesSync(appContext, packageName)?.let { iconBytes ->
+                        db.buildNewCustomIcon { customIcon, binary ->
+                            if (customIcon != null && binary != null) {
+                                binary.getOutputDataStream(db.binaryCache).use { output ->
+                                    output.write(iconBytes)
+                                }
+                                info.icon = IconImage(customIcon)
+                                changed = true
+                            }
+                        }
+                    }
+                }
+                if (!changed) {
+                    continue
+                }
+                entry.addEntryToHistory(Entry(entry, copyHistory = false))
+                entry.setEntryInfo(db, info)
+                converted++
+            }
+            converted
+        }
+    }
+
+    /**
+     * 取自定义字段中首个取值非空的应用关联包名；无则返回 null。
+     * 按字段名先筛再读值，避免为无关受保护字段触发解密。
+     */
+    private fun firstAppPackageName(customFields: List<Field>): String? =
+        customFields
+            .asSequence()
+            .filter { AppPackageField.isAppIdFieldName(it.name) }
+            .map { AppPackageField.normalizeAppPackage(it.protectedValue.stringValue) }
+            .firstOrNull { it.isNotEmpty() }
 
     /**
      * 构建单条目合并摘要。
@@ -1993,6 +2106,7 @@ class KdbxTokenRepository(
                     ?: entry.username.takeIf { it.isNotBlank() }
                     ?: toStableId(entry).toString()
             val account = entry.username.takeIf { it.isNotBlank() } ?: ""
+            val appPackageName = firstAppPackageName(entry.getExtraFields()).orEmpty()
             val values =
                 if (includeFieldDetails) {
                     buildEntryKeyValues(entry)
@@ -2026,6 +2140,7 @@ class KdbxTokenRepository(
                     isExpired = entry.expires && entry.isCurrentlyExpires,
                     customIconUuid = customIconUuid,
                     tags = entry.tags.toList(),
+                    appPackageName = appPackageName,
                     creationTime = entry.creationTime.toMilliseconds(),
                     modifiedTime = entry.lastModificationTime.toMilliseconds(),
                     isFolderGroup = false,

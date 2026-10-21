@@ -197,31 +197,42 @@ object InstalledAppsProvider {
         packageName: String,
     ): ByteArray? =
         withContext(Dispatchers.IO) {
-            val drawable =
-                try {
-                    context.packageManager.getApplicationIcon(packageName)
-                } catch (e: Exception) {
-                    Logger.w(TAG, "读取应用图标失败: $packageName", e)
-                    null
-                } ?: return@withContext null
-
-            val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: APP_ICON_SIZE_PX
-            val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: APP_ICON_SIZE_PX
-            val scale = min(APP_ICON_SIZE_PX.toFloat() / width, APP_ICON_SIZE_PX.toFloat() / height)
-            val drawWidth = (width * scale).roundToInt().coerceAtLeast(1)
-            val drawHeight = (height * scale).roundToInt().coerceAtLeast(1)
-            val left = (APP_ICON_SIZE_PX - drawWidth) / 2
-            val top = (APP_ICON_SIZE_PX - drawHeight) / 2
-            val bitmap = Bitmap.createBitmap(APP_ICON_SIZE_PX, APP_ICON_SIZE_PX, Bitmap.Config.ARGB_8888)
-            val canvas = Canvas(bitmap)
-            drawable.bounds = android.graphics.Rect(left, top, left + drawWidth, top + drawHeight)
-            drawable.draw(canvas)
-
-            ByteArrayOutputStream().use { out ->
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
-                out.toByteArray()
-            }
+            loadAppIconPngBytesSync(context, packageName)
         }
+
+    /**
+     * 同步读取应用图标并编码为 PNG 字节，失败返回 null。
+     * 供已在 IO 线程执行的批量写入流程直接调用（如存量转换的图标回填）。
+     */
+    fun loadAppIconPngBytesSync(
+        context: Context,
+        packageName: String,
+    ): ByteArray? {
+        val drawable =
+            try {
+                context.packageManager.getApplicationIcon(packageName)
+            } catch (e: Exception) {
+                Logger.w(TAG, "读取应用图标失败: $packageName", e)
+                null
+            } ?: return null
+
+        val width = drawable.intrinsicWidth.takeIf { it > 0 } ?: APP_ICON_SIZE_PX
+        val height = drawable.intrinsicHeight.takeIf { it > 0 } ?: APP_ICON_SIZE_PX
+        val scale = min(APP_ICON_SIZE_PX.toFloat() / width, APP_ICON_SIZE_PX.toFloat() / height)
+        val drawWidth = (width * scale).roundToInt().coerceAtLeast(1)
+        val drawHeight = (height * scale).roundToInt().coerceAtLeast(1)
+        val left = (APP_ICON_SIZE_PX - drawWidth) / 2
+        val top = (APP_ICON_SIZE_PX - drawHeight) / 2
+        val bitmap = Bitmap.createBitmap(APP_ICON_SIZE_PX, APP_ICON_SIZE_PX, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        drawable.bounds = android.graphics.Rect(left, top, left + drawWidth, top + drawHeight)
+        drawable.draw(canvas)
+
+        return ByteArrayOutputStream().use { out ->
+            bitmap.compress(Bitmap.CompressFormat.PNG, 100, out)
+            out.toByteArray()
+        }
+    }
 
     /**
      * 尝试拉起指定包名的应用；无启动入口或启动失败返回 false。
