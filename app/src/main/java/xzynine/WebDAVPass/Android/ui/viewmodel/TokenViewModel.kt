@@ -58,6 +58,9 @@ class TokenViewModel(
         /** 截屏防护临时关闭后的自动恢复时长 */
         private const val SECURE_RECOVERY_DELAY_MS = 5 * 60_000L
 
+        /** 写入后备份防抖窗口：窗口内连续修改只触发一次云端同步 */
+        private const val BACKUP_DEBOUNCE_MS = 1_500L
+
         @Volatile
         private var SHARED_VIEW_MODEL: TokenViewModel? = null
 
@@ -83,6 +86,7 @@ class TokenViewModel(
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
     private var tokenRefreshJob: Job? = null
     private var secureRestoreJob: Job? = null
+    private var backupDebounceJob: Job? = null
 
     val libraryViewModel: LibraryViewModel = LibraryViewModel(context)
     val autoUnlockViewModel: AutoUnlockViewModel = AutoUnlockViewModel(context)
@@ -274,7 +278,11 @@ class TokenViewModel(
             if (loaded) {
                 if (libraryViewModel.shouldAutoSyncCurrentLibrary()) {
                     Logger.d(SYNC_LOG_TAG, "解锁成功，触发自动恢复")
-                    cloudSyncViewModel.autoRestoreTokens(libraryViewModel, kdbxTokenRepository) {
+                    cloudSyncViewModel.autoRestoreTokens(
+                        libraryViewModel,
+                        kdbxTokenRepository,
+                        libraryViewModel.getMasterPasswordInternal(),
+                    ) {
                         loadTokensInternal()
                     }
                 }
@@ -817,6 +825,7 @@ class TokenViewModel(
                     }
                 }
             }
+            onPasswordWriteSuccess()
         }
         return ok
     }
@@ -891,7 +900,20 @@ class TokenViewModel(
         }
         passwordViewModel.refreshPasswordEntries()
         passwordViewModel.refreshRecentDeletedCount()
-        backupTokens()
+        scheduleBackupTokens()
+    }
+
+    /**
+     * 防抖触发备份：窗口内连续写入只执行一次云端同步。
+     * 进程中断丢失的窗口由自动恢复的「本地未同步修改改走合并上传」路径补偿。
+     */
+    private fun scheduleBackupTokens() {
+        backupDebounceJob?.cancel()
+        backupDebounceJob =
+            viewModelScope.launch {
+                delay(BACKUP_DEBOUNCE_MS.milliseconds)
+                backupTokens()
+            }
     }
 
     /**
@@ -981,7 +1003,7 @@ class TokenViewModel(
             viewModelScope.launch {
                 loadTokensInternal()
             }
-            backupTokens()
+            scheduleBackupTokens()
         }
         return added
     }

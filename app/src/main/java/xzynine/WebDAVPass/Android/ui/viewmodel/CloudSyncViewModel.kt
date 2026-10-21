@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import xzylib.base.util.Logger
+import xzynine.WebDAVPass.Android.data.DatabaseManager
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.LibraryContext
 
@@ -64,6 +65,7 @@ class CloudSyncViewModel(
     fun autoRestoreTokens(
         libraryViewModel: LibraryViewModel,
         repository: KdbxTokenRepository,
+        masterPassword: String,
         onReloadTokens: suspend () -> Boolean,
     ) {
         viewModelScope.launch {
@@ -79,17 +81,31 @@ class CloudSyncViewModel(
                     _isRestoreInProgress.value = true
                     _restoreProgress.value = 0
                     _backupStatus.value = "正在尝试自动恢复..."
-                    libraryViewModel.updateCloudSyncState(status = SYNC_STATUS_SYNCING)
 
                     val cloudLibrary = libraryViewModel.getCurrentCloudLibrary()
-                    if (cloudLibrary != null) {
+                    if (cloudLibrary == null) {
+                        _backupStatus.value = "未绑定云端 .kdbx，已跳过自动恢复"
+                        return@withLock
+                    }
+
+                    // 本地存在未同步修改时改走上传合并，避免远端旧数据直接覆盖本地变更
+                    val localChanged =
+                        syncEngine.isLocalChangedSinceSync(
+                            cloudLibrary.localPath,
+                            cloudLibrary.lastSyncAt,
+                        )
+                    if (localChanged) {
+                        Logger.d(SYNC_LOG_TAG, "自动恢复检测到本地未同步修改，改走上传合并")
+                        _backupStatus.value = "检测到本地未同步修改，正在合并上传..."
+                        libraryViewModel.updateCloudSyncState(status = SYNC_STATUS_SYNCING)
                         val success =
-                            downloadCurrentCloudLibrary(
+                            uploadCurrentCloudLibrary(
                                 cloudLibrary,
                                 libraryViewModel,
                                 repository,
+                                masterPassword,
                             )
-                        Logger.d(SYNC_LOG_TAG, "自动恢复下载结果=$success")
+                        Logger.d(SYNC_LOG_TAG, "自动恢复合并上传结果=$success")
                         if (success) {
                             onReloadTokens()
                         }
@@ -102,7 +118,23 @@ class CloudSyncViewModel(
                         return@withLock
                     }
 
-                    _backupStatus.value = "未绑定云端 .kdbx，已跳过自动恢复"
+                    libraryViewModel.updateCloudSyncState(status = SYNC_STATUS_SYNCING)
+                    val success =
+                        downloadCurrentCloudLibrary(
+                            cloudLibrary,
+                            libraryViewModel,
+                            repository,
+                        )
+                    Logger.d(SYNC_LOG_TAG, "自动恢复下载结果=$success")
+                    if (success) {
+                        onReloadTokens()
+                    }
+                    _backupStatus.value =
+                        if (success) {
+                            "云端库自动同步完成"
+                        } else {
+                            "云端库自动同步失败：${libraryViewModel.currentCloudSyncError()}"
+                        }
                 } catch (ex: Exception) {
                     Logger.e(SYNC_LOG_TAG, "自动恢复失败: ${ex.message}", ex)
                     val message = resolveSyncFailureMessage("自动恢复", null, syncEngine.buildFailureOutcome(SyncFailureKind.of(ex), ex.message))
@@ -270,6 +302,10 @@ class CloudSyncViewModel(
             )
         return when {
             outcome.isSuccess -> {
+                if (outcome.localBytesReplaced) {
+                    // 远端字节已直接落盘，失效内存缓存避免读到旧实例与后续写回回滚
+                    DatabaseManager.invalidateCacheKeepKeyFile()
+                }
                 libraryViewModel.updateCloudSyncState(
                     status = SYNC_STATUS_SUCCESS,
                     errorMessage = null,
@@ -340,6 +376,10 @@ class CloudSyncViewModel(
             )
         return when (outcome.result) {
             SyncResult.SUCCESS, SyncResult.MERGED -> {
+                if (outcome.localBytesReplaced) {
+                    // 远端字节已直接落盘，失效内存缓存避免读到旧实例与后续写回回滚
+                    DatabaseManager.invalidateCacheKeepKeyFile()
+                }
                 libraryViewModel.updateCloudSyncState(
                     status =
                         if (outcome.result == SyncResult.MERGED) {
@@ -359,7 +399,7 @@ class CloudSyncViewModel(
                 libraryViewModel.updateCloudSyncState(
                     status = SYNC_STATUS_CONFLICT,
                     errorMessage = "自动合并失败，请先手动恢复后再同步",
-                    remoteModifiedAt = outcome.remoteModifiedAt,
+                    // 不记录本次观测到的远端修改时间，保持旧基线使下次同步仍按远端已变更强制合并
                 )
                 false
             }
