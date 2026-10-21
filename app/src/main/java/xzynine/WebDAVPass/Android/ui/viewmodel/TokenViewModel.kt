@@ -58,6 +58,9 @@ class TokenViewModel(
         /** 截屏防护临时关闭后的自动恢复时长 */
         private const val SECURE_RECOVERY_DELAY_MS = 5 * 60_000L
 
+        /** 写入后备份防抖窗口：窗口内连续修改只触发一次云端同步 */
+        private const val BACKUP_DEBOUNCE_MS = 1_500L
+
         @Volatile
         private var SHARED_VIEW_MODEL: TokenViewModel? = null
 
@@ -83,6 +86,7 @@ class TokenViewModel(
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
     private var tokenRefreshJob: Job? = null
     private var secureRestoreJob: Job? = null
+    private var backupDebounceJob: Job? = null
 
     val libraryViewModel: LibraryViewModel = LibraryViewModel(context)
     val autoUnlockViewModel: AutoUnlockViewModel = AutoUnlockViewModel(context)
@@ -274,7 +278,11 @@ class TokenViewModel(
             if (loaded) {
                 if (libraryViewModel.shouldAutoSyncCurrentLibrary()) {
                     Logger.d(SYNC_LOG_TAG, "解锁成功，触发自动恢复")
-                    cloudSyncViewModel.autoRestoreTokens(libraryViewModel, kdbxTokenRepository) {
+                    cloudSyncViewModel.autoRestoreTokens(
+                        libraryViewModel,
+                        kdbxTokenRepository,
+                        libraryViewModel.getMasterPasswordInternal(),
+                    ) {
                         loadTokensInternal()
                     }
                 }
@@ -817,6 +825,7 @@ class TokenViewModel(
                     }
                 }
             }
+            onPasswordWriteSuccess()
         }
         return ok
     }
@@ -891,7 +900,38 @@ class TokenViewModel(
         }
         passwordViewModel.refreshPasswordEntries()
         passwordViewModel.refreshRecentDeletedCount()
-        backupTokens()
+        scheduleBackupTokens()
+    }
+
+    /**
+     * 防抖触发备份：窗口内连续写入只执行一次云端同步。
+     * 到期时库已锁定则跳过；ViewModel 销毁取消任务时，未同步修改仍以
+     * 「本地修改时间晚于上次同步时间」持久保留，由下次解锁的自动恢复合并上传。
+     */
+    private fun scheduleBackupTokens() {
+        backupDebounceJob?.cancel()
+        backupDebounceJob =
+            viewModelScope.launch {
+                delay(BACKUP_DEBOUNCE_MS.milliseconds)
+                if (!libraryViewModel.isLibraryUnlocked.value) {
+                    Logger.d(SYNC_LOG_TAG, "备份防抖到期时库已锁定，跳过，待下次解锁补传")
+                    return@launch
+                }
+                backupTokens()
+            }
+    }
+
+    /**
+     * 锁定前补发未执行的防抖备份：同步读取主密码后立即发起同步，
+     * 避免锁定清空密码后防抖任务以空密码失败。
+     */
+    fun flushPendingBackup() {
+        val pending = backupDebounceJob?.isActive == true
+        backupDebounceJob?.cancel()
+        if (pending) {
+            Logger.d(SYNC_LOG_TAG, "锁定前补发未执行的备份")
+            backupTokens()
+        }
     }
 
     /**
@@ -981,7 +1021,7 @@ class TokenViewModel(
             viewModelScope.launch {
                 loadTokensInternal()
             }
-            backupTokens()
+            scheduleBackupTokens()
         }
         return added
     }
