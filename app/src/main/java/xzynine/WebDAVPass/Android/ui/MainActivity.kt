@@ -140,6 +140,7 @@ fun MainScreen() {
                             tokenViewModel.lockOnBackground.value &&
                             System.currentTimeMillis() - backgroundAt >= BACKGROUND_LOCK_THRESHOLD_MS
                         ) {
+                            tokenViewModel.flushPendingBackup()
                             tokenViewModel.libraryViewModel.lockCurrentLibrary()
                         }
                         // 回到前台重新开始无操作计时
@@ -164,6 +165,7 @@ fun MainScreen() {
             if (timeoutMs > 0L &&
                 System.currentTimeMillis() - lastActivityAt.get() >= timeoutMs
             ) {
+                tokenViewModel.flushPendingBackup()
                 tokenViewModel.libraryViewModel.lockCurrentLibrary()
                 // 锁定后重新计时，避免解锁页停留期间反复触发
                 lastActivityAt.set(System.currentTimeMillis())

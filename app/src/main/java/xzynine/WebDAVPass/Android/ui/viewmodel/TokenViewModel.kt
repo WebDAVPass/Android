@@ -905,15 +905,33 @@ class TokenViewModel(
 
     /**
      * 防抖触发备份：窗口内连续写入只执行一次云端同步。
-     * 进程中断丢失的窗口由自动恢复的「本地未同步修改改走合并上传」路径补偿。
+     * 到期时库已锁定则跳过；ViewModel 销毁取消任务时，未同步修改仍以
+     * 「本地修改时间晚于上次同步时间」持久保留，由下次解锁的自动恢复合并上传。
      */
     private fun scheduleBackupTokens() {
         backupDebounceJob?.cancel()
         backupDebounceJob =
             viewModelScope.launch {
                 delay(BACKUP_DEBOUNCE_MS.milliseconds)
+                if (!libraryViewModel.isLibraryUnlocked.value) {
+                    Logger.d(SYNC_LOG_TAG, "备份防抖到期时库已锁定，跳过，待下次解锁补传")
+                    return@launch
+                }
                 backupTokens()
             }
+    }
+
+    /**
+     * 锁定前补发未执行的防抖备份：同步读取主密码后立即发起同步，
+     * 避免锁定清空密码后防抖任务以空密码失败。
+     */
+    fun flushPendingBackup() {
+        val pending = backupDebounceJob?.isActive == true
+        backupDebounceJob?.cancel()
+        if (pending) {
+            Logger.d(SYNC_LOG_TAG, "锁定前补发未执行的备份")
+            backupTokens()
+        }
     }
 
     /**
