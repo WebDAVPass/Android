@@ -20,9 +20,10 @@ KeePass 密码/2FA 令牌管理器（WebDAV 云同步），Jetpack Compose + Miu
 
 ```sh
 ./gradlew assembleDebug          # 构建 universal debug APK，需密钥库，见「仓库关键事实」
+./gradlew check                  # 聚合验证：文档门禁（verifyDocs）与各模块 check
 ./gradlew ktlintFormat           # 代码格式化，仅本仓库模块，不含 webdav/checkupdates 子模块
 ./gradlew :app:printVersionName  # 查当前版本名
-npm install                      # 安装文档门禁依赖
+npm install                      # 安装文档门禁依赖（verifyDocs 前置）
 npm run verify-all               # 文档系统全部门禁
 npm run test:docs                # 快速文档门禁
 ```
