@@ -16,8 +16,30 @@ permissions:
   contents: read
 
 jobs:
+  # 文档系统门禁：Node 拉取 npm 依赖后运行 verify-all，先于构建失败即中止
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: 安装文档门禁依赖
+        run: npm ci --no-audit --no-fund
+
+      - name: 运行文档门禁
+        run: npm run verify-all
+
   lint:
     runs-on: ubuntu-latest
+    needs: docs
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
