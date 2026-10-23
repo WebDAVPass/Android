@@ -10,6 +10,7 @@ import { createHash } from 'node:crypto'
 import { basename } from 'node:path'
 import { AGENT_NOTE_CLASSES } from './agent-note-tree.ts'
 import { docSystem } from './doc-system.config.ts'
+import { splitLines } from './repo-files.ts'
 
 /** 冻结内容清单中的版本化字段。 */
 export interface ArchiveManifest {
@@ -97,7 +98,7 @@ interface Triplet {
 
 function pairMeta(content: string): Map<string, string> | undefined {
   const entries = new Map<string, string>()
-  for (const line of content.split('\n')) {
+  for (const line of splitLines(content)) {
     if (line === '' || line.startsWith('#')) continue
     const match = /^([^:#]+\.md): ([0-9a-f]{40})$/.exec(line)
     if (match?.[1] === undefined || match[2] === undefined) return undefined
@@ -108,7 +109,7 @@ function pairMeta(content: string): Map<string, string> | undefined {
 
 function validateMetadata(path: string, content: Buffer, sourceBase: string): { errors: string[]; date: string | undefined } {
   const errors: string[] = []
-  const lines = content.toString('utf8').split('\n')
+  const lines = splitLines(content.toString('utf8'))
   const status = lines.findIndex(line => line.startsWith('Status:'))
   if (lines[status] !== 'Status: implemented') errors.push(`${path}: requires \`Status: implemented\``)
   const archived = /^Archived: (\d{4}-\d{2}-\d{2})$/.exec(lines[status + 1] ?? '')?.[1]

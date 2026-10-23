@@ -11,6 +11,19 @@ export interface RepoFile {
   real: string
 }
 
+/**
+ * 按行切分文本，兼容 LF 与 CRLF。
+ *
+ * 仓库存储 LF、各平台检出为 CRLF（见 .gitattributes），门禁读到的源文件可能是任一种。
+ * 按 '\n' 直接切分会给每行末尾留下 '\r'，使逐行精确比较与行首正则全部失配。
+ *
+ * @param source - 待切分的文本。
+ * @returns 不含行尾符的逐行数组。
+ */
+export function splitLines(source: string): string[] {
+  return source.split(/\r?\n/)
+}
+
 /** 规范化之前的一条遍历器匹配。 */
 interface GlobMatch {
   /** 相对仓库的斜杠路径。 */
@@ -47,7 +60,9 @@ function segmentMatches(pattern: string, name: string): boolean {
     else if (character === '?') expression += '.'
     else expression += character.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
   }
-  return new RegExp(`^${expression}$`).test(name)
+  // 段名比较忽略大小写：目录名存在大小写变体（如 Docs），模式是手工维护的；
+  // 逐字节比较会让整棵子树在大小写不敏感的文件系统上被静默跳过。
+  return new RegExp(`^${expression}$`, 'i').test(name)
 }
 
 /**
