@@ -34,12 +34,9 @@ import github.xzynine.checkupdata.version.VersionRule
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.Download
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzylib.base.util.ToastUtils
@@ -49,6 +46,7 @@ import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.OpenSourceDrawer
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
+import xzynine.WebDAVPass.Android.ui.component.SettingsTopAppBar
 
 /**
  * 关于页面。
@@ -72,19 +70,7 @@ fun AboutScreen(
     Scaffold(
         popupHost = { },
         topBar = {
-            TopAppBar(
-                title = "关于",
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = MiuixIcons.Back,
-                            contentDescription = "返回",
-                        )
-                    }
-                },
-                actions = {},
-                defaultWindowInsetsPadding = true,
-            )
+            SettingsTopAppBar(title = "关于", onNavigateBack = onNavigateBack)
         },
     ) {
         Column(

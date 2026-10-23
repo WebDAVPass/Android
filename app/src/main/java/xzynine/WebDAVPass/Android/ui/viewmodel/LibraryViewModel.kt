@@ -1,6 +1,7 @@
-package xzynine.WebDAVPass.Android.ui.ViewModel
+package xzynine.WebDAVPass.Android.ui.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
@@ -85,6 +86,23 @@ class LibraryViewModel(
             } else {
                 null
             }
+        resetInterruptedSyncStatus()
+    }
+
+    /**
+     * 上次同步中断（进程被杀/退后台冻结）遗留的 syncing 状态重置为失败，避免状态长期悬挂
+     */
+    private fun resetInterruptedSyncStatus() {
+        val current = _currentLibrary.value ?: return
+        if (current.lastSyncStatus == SYNC_STATUS_SYNCING) {
+            Logger.w(SYNC_LOG_TAG, "检测到遗留的同步中状态，重置为失败: ${current.localPath}")
+            persistCurrentLibraryMetadata(
+                current.copy(
+                    lastSyncStatus = SYNC_STATUS_FAILED,
+                    lastSyncError = "上次同步未完成，请重新同步",
+                ),
+            )
+        }
     }
 
     /**
@@ -547,7 +565,7 @@ class LibraryViewModel(
     ): String {
         val raw = repository.getLastUnlockErrorMessage().orEmpty()
         val isUriPath =
-            runCatching { android.net.Uri.parse(localPath) }
+            runCatching { Uri.parse(localPath) }
                 .getOrNull()
                 ?.scheme
                 ?.equals("content", ignoreCase = true) == true

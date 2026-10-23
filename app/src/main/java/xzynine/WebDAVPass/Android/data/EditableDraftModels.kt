@@ -74,6 +74,14 @@ data class PasswordEntryEditDraft(
     val iconStandardId: Int = 0,
     val newCustomIconBytes: ByteArray? = null,
     val tags: List<String> = emptyList(),
+    /**
+     * 条目关联的应用包名（裸包名，界面态）。
+     *
+     * 保存时写入 KDBX 自定义字段 [AppPackageField.APP_ID_FIELD_NAME]，值为
+     * `androidapp://<包名>`，与 KeePassDX / keepass2android 同构；为空表示不关联应用。
+     * 该字段在编辑界面上有独立输入行，不混在 [customFields] 里。
+     */
+    val appPackageName: String = "",
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -91,7 +99,8 @@ data class PasswordEntryEditDraft(
             customIconUuid == other.customIconUuid &&
             iconStandardId == other.iconStandardId &&
             newCustomIconBytes.contentEquals(other.newCustomIconBytes) &&
-            tags == other.tags
+            tags == other.tags &&
+            appPackageName == other.appPackageName
     }
 
     override fun hashCode(): Int {
@@ -109,6 +118,7 @@ data class PasswordEntryEditDraft(
         result = 31 * result + iconStandardId
         result = 31 * result + (newCustomIconBytes?.contentHashCode() ?: 0)
         result = 31 * result + tags.hashCode()
+        result = 31 * result + appPackageName.hashCode()
         return result
     }
 }

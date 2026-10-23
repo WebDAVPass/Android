@@ -39,8 +39,10 @@ import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import xzynine.WebDAVPass.Android.ui.component.WebDavBrowseMode
 import xzynine.WebDAVPass.Android.ui.component.WebDavFileBrowserDialog
+import xzynine.WebDAVPass.Android.ui.component.buildFileUrl
+import xzynine.WebDAVPass.Android.ui.component.normalizeServerRootUrl
+import xzynine.WebDAVPass.Android.ui.component.rememberLocalNetworkPermissionGate
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
-import java.net.URLEncoder
 
 /**
  * 云端库操作模式
@@ -85,6 +87,8 @@ fun CloudLibraryDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+    val localNetworkGate = rememberLocalNetworkPermissionGate()
     val isImportMode = mode == CloudMode.IMPORT
     val isCreateMode = mode == CloudMode.CREATE
     val isBindMode = mode == CloudMode.BIND
@@ -152,10 +156,6 @@ fun CloudLibraryDialog(
             savedConfigs.distinctBy { it.url to it.username }
         }
 
-    fun normalizeServerRootUrl(raw: String): String = if (raw.endsWith('/')) raw else "$raw/"
-
-    fun normalizeRelativePath(path: String): String = path.trim().trim('/').replace("//", "/")
-
     /**
      * 提取服务器主机名用于账号命名
      */
@@ -197,14 +197,6 @@ fun CloudLibraryDialog(
         }
     }
 
-    fun encodeRelativePath(path: String): String =
-        normalizeRelativePath(path)
-            .split('/')
-            .filter { it.isNotBlank() }
-            .joinToString("/") {
-                URLEncoder.encode(it, Charsets.UTF_8.name()).replace("+", "%20")
-            }
-
     suspend fun importRemote(
         baseUrl: String,
         path: String,
@@ -216,9 +208,12 @@ fun CloudLibraryDialog(
                 if (path.startsWith("http://") || path.startsWith("https://")) {
                     path
                 } else {
-                    val encoded = encodeRelativePath(path)
-                    "$baseUrl$encoded"
+                    buildFileUrl(baseUrl, path)
                 }
+            // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+            if (!localNetworkGate.ensure(normalized)) {
+                return@withContext null
+            }
             val remote = WebDav(normalized, Authorization(user, pass))
             if (!remote.exists()) {
                 return@withContext null
@@ -262,10 +257,13 @@ fun CloudLibraryDialog(
                 if (path.startsWith("http://") || path.startsWith("https://")) {
                     path
                 } else {
-                    val encoded = encodeRelativePath(path)
-                    "$baseUrl$encoded"
+                    buildFileUrl(baseUrl, path)
                 }
 
+            // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+            if (!localNetworkGate.ensure(normalized)) {
+                return@withContext null
+            }
             val remote = WebDav(normalized, Authorization(user, pass))
             val kdbxBytes = tokenViewModel.createEmptyKdbxBytes(masterPassword, keyFileData)
             remote.upload(kdbxBytes, "application/octet-stream")
@@ -476,8 +474,7 @@ fun CloudLibraryDialog(
                                 if (normalizedPath.startsWith("http://") || normalizedPath.startsWith("https://")) {
                                     normalizedPath
                                 } else {
-                                    val encoded = encodeRelativePath(normalizedPath)
-                                    "$baseUrl$encoded"
+                                    buildFileUrl(baseUrl, normalizedPath)
                                 }
 
                             val current = initialLibraryContext

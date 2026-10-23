@@ -24,10 +24,15 @@ import com.kunzisoft.keepass.otp.OtpEntryFields
 import com.kunzisoft.keepass.otp.OtpEntryFields.isOTP
 import com.kunzisoft.keepass.otp.OtpType
 import com.kunzisoft.keepass.otp.TokenCalculator
+import com.kunzisoft.keepass.utils.StringUtil
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import xzylib.base.util.Logger
+import xzynine.WebDAVPass.Android.util.BoundedIo
+import xzynine.WebDAVPass.Android.util.FileSizeLimits
+import xzynine.WebDAVPass.Android.util.InstalledAppsProvider
 import xzynine.WebDAVPass.Android.util.PasswordStrength
+import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
@@ -53,10 +58,10 @@ class KdbxTokenRepository(
         private const val SMALL_BINARY_SIZE = 1024 * 1024
 
         /** 附件查看/读取上限：1 MiB，超过则拒绝返回以避免 OOM */
-        const val MAX_ATTACHMENT_BYTES = 1024 * 1024
+        const val MAX_ATTACHMENT_BYTES = FileSizeLimits.ATTACHMENT_MAX_BYTES
 
-        /** 附件导入（写库）上限：10 MiB */
-        const val MAX_ATTACHMENT_IMPORT_BYTES = 10 * 1024 * 1024
+        /** 附件超限时的拒绝读取提示。 */
+        private const val ATTACHMENT_OVERFLOW_MESSAGE = "附件过大（超过 ${MAX_ATTACHMENT_BYTES / 1024} KiB），已拒绝读取"
     }
 
     private val emptyChallengeResponseRetriever: (HardwareKey, ByteArray?) -> ByteArray = { _, _ ->
@@ -331,6 +336,17 @@ class KdbxTokenRepository(
                 }
             val iconUuid = entry.icon.custom.uuid
             val customIconUuid = if (iconUuid == DatabaseVersioned.UUID_ZERO) null else iconUuid.toString()
+            // 应用关联字段（AndroidApp / AndroidApp_1 / AndroidApp1 …）单独拆出为 appPackageName，
+            // 不混在自定义字段草稿里，避免编辑界面出现重复输入行
+            val appSplit =
+                entryInfo.customFields
+                    .map { field ->
+                        EditableFieldDraft(
+                            name = field.name,
+                            value = field.protectedValue.stringValue,
+                            isProtected = field.protectedValue.isProtected,
+                        )
+                    }.splitAppPackageField()
             PasswordEntryEditDraft(
                 entryId = toStableId(entry),
                 parentGroupId = toStableParentGroupId(entry.parent),
@@ -339,19 +355,13 @@ class KdbxTokenRepository(
                 password = entryInfo.password,
                 url = entryInfo.url,
                 notes = entryInfo.notes,
-                customFields =
-                    entryInfo.customFields.map { field ->
-                        EditableFieldDraft(
-                            name = field.name,
-                            value = field.protectedValue.stringValue,
-                            isProtected = field.protectedValue.isProtected,
-                        )
-                    },
+                customFields = appSplit.fields,
                 attachments = attachments,
                 expiryTime = if (entry.expires) entry.expiryTime.toMilliseconds() else null,
                 customIconUuid = customIconUuid,
                 iconStandardId = entry.icon.standard.id,
                 tags = entry.tags.toList(),
+                appPackageName = appSplit.packageName,
             )
         }
     }
@@ -424,31 +434,6 @@ class KdbxTokenRepository(
     }
 
     /**
-     * 按稳定 ID 读取分组编辑草稿。
-     */
-    fun loadPasswordGroupDraft(
-        localPath: String,
-        masterPassword: String,
-        groupId: Long,
-    ): PasswordGroupEditDraft? {
-        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            val group =
-                findGroupByStableId(db.rootGroup, groupId)
-                    ?: return@withDatabase null
-            if (group.parent == null) {
-                return@withDatabase null
-            }
-            val groupInfo = group.getGroupInfo()
-            PasswordGroupEditDraft(
-                groupId = toStableGroupId(group),
-                parentGroupId = toStableParentGroupId(group.parent),
-                title = groupInfo.title,
-                notes = groupInfo.notes ?: "",
-            )
-        }
-    }
-
-    /**
      * 新建条目并返回稳定 ID。
      */
     fun createPasswordEntry(
@@ -471,7 +456,7 @@ class KdbxTokenRepository(
                     url = draft.url
                     notes = draft.notes
                     tags = draft.tags.toTags()
-                    customFields = mergeCustomFields(db, entry, draft.customFields)
+                    customFields = mergeCustomFields(db, entry, draft.customFields, draft.appPackageName)
                     attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
                     applyExpiryAndIcon(this, db, draft)
                 }
@@ -503,7 +488,7 @@ class KdbxTokenRepository(
                     url = draft.url
                     notes = draft.notes
                     tags = draft.tags.toTags()
-                    customFields = mergeCustomFields(db, entry, draft.customFields)
+                    customFields = mergeCustomFields(db, entry, draft.customFields, draft.appPackageName)
                     attachments = buildEntryInfoAttachments(db, entry, draft).toMutableList()
                     applyExpiryAndIcon(this, db, draft)
                 }
@@ -759,6 +744,118 @@ class KdbxTokenRepository(
     }
 
     /**
+     * 检测存量候选（不含回收站）：
+     * - 网站字段被旧版自动填充写成 android:// 混淆来源的条目；
+     * - 「应用」关联字段有值但尚无自定义图标的条目（含此前已转换、未回填图标的历史存量）。
+     */
+    fun detectLegacyAutofillUrlEntries(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+    ): List<LegacyAutofillUrl.Candidate> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            entryIds.mapNotNull { entryId ->
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: return@mapNotNull null
+                val info = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+                val urlPackage = LegacyAutofillUrl.parseLegacyUrl(info.url)
+                val hasCustomIcon = entry.icon.custom.uuid != DatabaseVersioned.UUID_ZERO
+                val packageName = urlPackage ?: firstAppPackageName(info.customFields)
+                if (packageName == null || (urlPackage == null && hasCustomIcon)) {
+                    return@mapNotNull null
+                }
+                LegacyAutofillUrl.Candidate(
+                    entryId = toStableId(entry),
+                    title = info.title,
+                    originalUrl = if (urlPackage != null) info.url else "",
+                    packageName = packageName,
+                    needsUrlClear = urlPackage != null,
+                    hasCustomIcon = hasCustomIcon,
+                )
+            }
+        }
+    }
+
+    /**
+     * 批量转换存量候选：当前版本先入历史；
+     * android:// 污染条目清空网站字段，应用关联字段无同包名时按槽位回填 androidapp://<包名>；
+     * 无自定义图标的候选按包名回填应用图标，读不到时保持原图标；无实际变更的条目不写入。
+     *
+     * @return 成功转换的条目数
+     */
+    fun convertLegacyAutofillUrlEntries(
+        localPath: String,
+        masterPassword: String,
+        entryIds: List<Long>,
+    ): Int {
+        if (entryIds.isEmpty()) {
+            return 0
+        }
+        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
+            var converted = 0
+            for (entryId in entryIds) {
+                val entry = findEntryByStableId(db, entryId, includeRecycleBin = false) ?: continue
+                val info = entry.getEntryInfo(db, raw = true, removeTemplateConfiguration = false)
+                val urlPackage = LegacyAutofillUrl.parseLegacyUrl(info.url)
+                val packageName = urlPackage ?: firstAppPackageName(info.customFields) ?: continue
+                var changed = false
+                if (urlPackage != null) {
+                    info.url = ""
+                    changed = true
+                    val hasSamePackage =
+                        info.customFields.any { field ->
+                            AppPackageField.isAppIdFieldName(field.name) &&
+                                AppPackageField
+                                    .normalizeAppPackage(field.protectedValue.stringValue)
+                                    .equals(packageName, ignoreCase = true)
+                        }
+                    if (!hasSamePackage) {
+                        val slotName = LegacyAutofillUrl.nextAppFieldSlotName(info.customFields.map { it.name })
+                        if (slotName != null) {
+                            info.customFields.add(
+                                Field(slotName, ProtectedString(false, AppPackageField.toFieldValue(packageName))),
+                            )
+                        }
+                    }
+                }
+                if (entry.icon.custom.uuid == DatabaseVersioned.UUID_ZERO) {
+                    InstalledAppsProvider.loadAppIconPngBytesSync(appContext, packageName)?.let { iconBytes ->
+                        db.buildNewCustomIcon { customIcon, binary ->
+                            if (customIcon != null && binary != null) {
+                                binary.getOutputDataStream(db.binaryCache).use { output ->
+                                    output.write(iconBytes)
+                                }
+                                info.icon = IconImage(customIcon)
+                                changed = true
+                            }
+                        }
+                    }
+                }
+                if (!changed) {
+                    continue
+                }
+                entry.addEntryToHistory(Entry(entry, copyHistory = false))
+                entry.setEntryInfo(db, info)
+                converted++
+            }
+            converted
+        }
+    }
+
+    /**
+     * 取自定义字段中首个取值非空的应用关联包名；无则返回 null。
+     * 按字段名先筛再读值，避免为无关受保护字段触发解密。
+     */
+    private fun firstAppPackageName(customFields: List<Field>): String? =
+        customFields
+            .asSequence()
+            .filter { AppPackageField.isAppIdFieldName(it.name) }
+            .map { AppPackageField.normalizeAppPackage(it.protectedValue.stringValue) }
+            .firstOrNull { it.isNotEmpty() }
+
+    /**
      * 构建单条目合并摘要。
      */
     private fun buildDuplicateEntryInfo(
@@ -930,48 +1027,6 @@ class KdbxTokenRepository(
             group.setGroupInfo(groupInfo)
             db.addGroupTo(group, parent)
             toStableGroupId(group)
-        }
-    }
-
-    /**
-     * 更新分组。
-     */
-    fun updatePasswordGroup(
-        localPath: String,
-        masterPassword: String,
-        draft: PasswordGroupEditDraft,
-    ): Boolean {
-        return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
-            val groupId = draft.groupId ?: return@withDatabase false
-            val group =
-                findGroupByStableId(db.rootGroup, groupId)
-                    ?: return@withDatabase false
-            if (group.parent == null || db.groupIsInRecycleBin(group)) {
-                return@withDatabase false
-            }
-
-            val groupInfo =
-                group.getGroupInfo().apply {
-                    title = draft.title
-                    notes = draft.notes
-                }
-            group.setGroupInfo(groupInfo)
-
-            val targetParent = resolveParentGroup(db, draft.parentGroupId) ?: return@withDatabase false
-            if (db.groupIsInRecycleBin(targetParent)) {
-                return@withDatabase false
-            }
-
-            val currentParent = group.parent
-            val currentParentId = toStableParentGroupId(currentParent)
-            val targetParentId = toStableParentGroupId(targetParent)
-            if (currentParent != null && currentParentId != targetParentId) {
-                db.removeGroupFrom(group, currentParent)
-                db.addGroupTo(group, targetParent)
-            }
-
-            db.updateGroup(group)
-            true
         }
     }
 
@@ -1494,7 +1549,6 @@ class KdbxTokenRepository(
     /**
      * 一次性加载一级密码条目及全局总计数。
      *
-     * 对比分别调用 [loadPasswordEntriesByTopLevel] 和 [countPasswordEntries]，
      * 此方法只打开一次数据库（或复用缓存），避免重复解密。
      *
      * @return Pair<顶级列表, 全局总条目数>
@@ -1554,17 +1608,6 @@ class KdbxTokenRepository(
             list to entries.size
         }
     }
-
-    /**
-     * 统计数据库中全部条目数量（不构建明细对象）。
-     */
-    fun countPasswordEntries(
-        localPath: String,
-        masterPassword: String,
-    ): Int =
-        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
-            collectEntriesOutsideRecycleBin(db, db.rootGroup).size
-        }
 
     /**
      * 统计回收站中条目数量。
@@ -1628,7 +1671,32 @@ class KdbxTokenRepository(
         }.getOrDefault(false)
     }
 
-    fun isDuplicate(
+    /**
+     * 令牌判重的唯一谓词：唯一 ID 一致，或密钥/算法/位数/周期一致。
+     */
+    private fun findExistingTokenEntry(
+        group: Group?,
+        uniqueId: String,
+        secret: String,
+        algorithm: String,
+        digits: Int,
+        period: Int,
+    ): Entry? =
+        collectEntries(group).firstOrNull { entry ->
+            val existing = toToken(entry) ?: return@firstOrNull false
+            existing.uniqueId == uniqueId ||
+                (
+                    existing.secret == secret &&
+                        existing.algorithm.equals(algorithm, ignoreCase = true) &&
+                        existing.digits == digits &&
+                        existing.period == period
+                )
+        }
+
+    /**
+     * 判断令牌是否已存在（唯一 ID 或密钥、算法、位数、周期一致均视为重复）。
+     */
+    fun isTokenDuplicate(
         localPath: String,
         masterPassword: String,
         secret: String,
@@ -1636,28 +1704,46 @@ class KdbxTokenRepository(
         digits: Int,
         period: Int,
     ): Boolean =
-        loadTokens(localPath, masterPassword)
-            .any { it.secret == secret && it.algorithm == algorithm && it.digits == digits && it.period == period }
+        withDatabase(localPath, masterPassword, saveAfter = false) { db ->
+            findExistingTokenEntry(
+                db.rootGroup,
+                UniqueIdGenerator.generate(secret, algorithm, digits, period),
+                secret,
+                algorithm,
+                digits,
+                period,
+            ) != null
+        }
 
+    /**
+     * 新增令牌，返回新条目 ID；令牌已存在或写库失败时返回 null。
+     *
+     * 判重与写入在同一次开库内完成，调用方无需再查重。
+     */
     fun addToken(
         localPath: String,
         masterPassword: String,
         token: OtpToken,
-    ): Boolean {
+    ): Long? {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val existing =
-                collectEntries(db.rootGroup)
-                    .mapNotNull { toToken(it) }
-                    .any { it.uniqueId == token.uniqueId || (it.secret == token.secret && it.algorithm == token.algorithm && it.digits == token.digits && it.period == token.period) }
-            if (existing) {
-                return@withDatabase false
+                findExistingTokenEntry(
+                    db.rootGroup,
+                    token.uniqueId,
+                    token.secret,
+                    token.algorithm,
+                    token.digits,
+                    token.period,
+                )
+            if (existing != null) {
+                return@withDatabase null
             }
 
-            val root = db.rootGroup ?: return@withDatabase false
-            val entry = db.createEntry() ?: return@withDatabase false
+            val root = db.rootGroup ?: return@withDatabase null
+            val entry = db.createEntry() ?: return@withDatabase null
             applyTokenToEntry(db, entry, token)
             db.addEntryTo(entry, root)
-            true
+            toStableId(entry)
         }
     }
 
@@ -2022,6 +2108,7 @@ class KdbxTokenRepository(
                     ?: entry.username.takeIf { it.isNotBlank() }
                     ?: toStableId(entry).toString()
             val account = entry.username.takeIf { it.isNotBlank() } ?: ""
+            val appPackageName = firstAppPackageName(entry.getExtraFields()).orEmpty()
             val values =
                 if (includeFieldDetails) {
                     buildEntryKeyValues(entry)
@@ -2055,6 +2142,7 @@ class KdbxTokenRepository(
                     isExpired = entry.expires && entry.isCurrentlyExpires,
                     customIconUuid = customIconUuid,
                     tags = entry.tags.toList(),
+                    appPackageName = appPackageName,
                     creationTime = entry.creationTime.toMilliseconds(),
                     modifiedTime = entry.lastModificationTime.toMilliseconds(),
                     isFolderGroup = false,
@@ -2519,7 +2607,7 @@ class KdbxTokenRepository(
                             if (read <= 0) {
                                 "empty"
                             } else {
-                                bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+                                with(StringUtil) { bytes.copyOf(read).toHexString() }
                             }
                         }
                     }.getOrElse { "readError:${it.javaClass.simpleName}" }
@@ -2536,7 +2624,7 @@ class KdbxTokenRepository(
                             if (read <= 0) {
                                 "empty"
                             } else {
-                                bytes.take(read).joinToString(separator = "") { b -> "%02X".format(b) }
+                                with(StringUtil) { bytes.copyOf(read).toHexString() }
                             }
                         } ?: "openNull"
                     }.getOrElse { "readError:${it.javaClass.simpleName}" }
@@ -2625,11 +2713,19 @@ class KdbxTokenRepository(
      * - 去重：新建字段名（不区分大小写）若与已有字段（含被保留的原始字段）冲突，则跳过后续重复项。
      *
      * 同时透传 [EditableFieldDraft.isProtected]，避免受保护字段（如 OTP 种子）保存后丢失保护标志。
+     *
+     * 应用关联字段由 [PasswordEntryEditDraft.appPackageName] 独占管理：
+     * - 原始条目中未被界面草稿接管的 `AndroidApp` / `AndroidApp_1` / `AndroidApp1` 字段不再原样保留，
+     *   而是在最后按 `appPackageName` 重新写入（值为 `androidapp://<包名>`）；
+     * - `appPackageName` 为空时不写任何应用字段，等价于用户清空关联；
+     * - 沿用条目原有的应用字段名（缺省 `AndroidApp1`），避免字段名在多次保存间抖动；
+     * - 界面上仍以草稿形式存在的额外应用字段（如 KeePassDX 写入的 `AndroidApp_1`）照常写回，不受影响。
      */
     private fun mergeCustomFields(
         database: Database,
         entry: Entry,
         uiFields: List<EditableFieldDraft>,
+        appPackageName: String,
     ): MutableList<Field> {
         val originalExtras = entry.getExtraFields()
         val result = mutableListOf<Field>()
@@ -2644,15 +2740,36 @@ class KdbxTokenRepository(
                     result.add(Field(name, ProtectedString(draft.isProtected, draft.value)))
                 }
             } else if (draft == null) {
-                // 没有草稿对应的原始额外字段（如从其他工具迁移来的标准名字段），原样保留
-                if (usedLowerNames.add(orig.name.lowercase())) {
+                // 没有草稿对应的原始额外字段（如从其他工具迁移来的标准名字段），原样保留；
+                // 应用关联字段除外：它已从界面草稿中摘出，统一在末尾按 appPackageName 写回
+                if (!AppPackageField.isAppIdFieldName(orig.name) && usedLowerNames.add(orig.name.lowercase())) {
                     result.add(Field(orig.name, orig.protectedValue))
                 }
             }
             // draft != null 且 removed -> 用户显式删除，不加入 result
         }
 
-        // 2. 新增字段（originalName 为空、名字非空、未删除），不与已有字段重名
+        // 2. 应用关联字段，值为 androidapp://<包名>
+        val normalizedAppPackage = AppPackageField.normalizeAppPackage(appPackageName)
+        if (normalizedAppPackage.isNotEmpty()) {
+            // 沿用条目内原有的字段名（缺省用 keepass2android 槽位名 AndroidApp1）；
+            // 若条目内所有应用字段都仍以草稿形式存在（如只有 AndroidApp_1），则用缺省名，
+            // 交由既有的重名去重规则兜底
+            val appFieldName =
+                originalExtras
+                    .firstOrNull { orig ->
+                        AppPackageField.isAppIdFieldName(orig.name) &&
+                            uiFields.none { it.originalName == orig.name }
+                    }?.name
+                    ?: AppPackageField.APP_ID_NEW_FIELD_NAME
+            if (usedLowerNames.add(appFieldName.lowercase())) {
+                result.add(
+                    Field(appFieldName, ProtectedString(false, AppPackageField.toFieldValue(normalizedAppPackage))),
+                )
+            }
+        }
+
+        // 3. 新增字段（originalName 为空、名字非空、未删除），不与已有字段重名
         uiFields
             .filter { it.originalName == null && it.name.isNotBlank() && !it.removed }
             .forEach { draft ->
@@ -2763,7 +2880,7 @@ class KdbxTokenRepository(
             val attachment = entry.getAttachments(pool).firstOrNull { it.name == name } ?: return@withDatabase null
             runCatching {
                 attachment.binaryData.getInputDataStream(db.binaryCache).use { input ->
-                    readBoundedBytes(input, MAX_ATTACHMENT_BYTES)
+                    BoundedIo.readBoundedBytes(input, MAX_ATTACHMENT_BYTES, ATTACHMENT_OVERFLOW_MESSAGE)
                 }
             }.getOrNull()
         }
@@ -2787,52 +2904,9 @@ class KdbxTokenRepository(
             val attachment = entry.getAttachments(pool).firstOrNull { it.name == name } ?: return@withDatabase false
             runCatching {
                 attachment.binaryData.getInputDataStream(db.binaryCache).use { input ->
-                    copyBounded(input, output, MAX_ATTACHMENT_BYTES)
+                    BoundedIo.copyBounded(input, output, MAX_ATTACHMENT_BYTES, ATTACHMENT_OVERFLOW_MESSAGE)
                 }
             }.isSuccess
-        }
-    }
-
-    /**
-     * 增量读取输入流，超过 [limit] 字节则抛出 [IllegalStateException] 以拒绝超大附件。
-     */
-    private fun readBoundedBytes(
-        input: InputStream,
-        limit: Int,
-    ): ByteArray {
-        val buffer = ByteArrayOutputStream(8 * 1024)
-        val chunk = ByteArray(8 * 1024)
-        var total = 0
-        while (true) {
-            val read = input.read(chunk)
-            if (read < 0) break
-            total += read
-            if (total > limit) {
-                throw IllegalStateException("附件过大（超过 ${limit / 1024} KiB），已拒绝读取")
-            }
-            buffer.write(chunk, 0, read)
-        }
-        return buffer.toByteArray()
-    }
-
-    /**
-     * 增量拷贝输入流到输出流，超过 [limit] 字节则抛出 [IllegalStateException] 以拒绝超大附件。
-     */
-    private fun copyBounded(
-        input: InputStream,
-        output: OutputStream,
-        limit: Int,
-    ) {
-        val chunk = ByteArray(8 * 1024)
-        var total = 0
-        while (true) {
-            val read = input.read(chunk)
-            if (read < 0) break
-            total += read
-            if (total > limit) {
-                throw IllegalStateException("附件过大（超过 ${limit / 1024} KiB），已拒绝读取")
-            }
-            output.write(chunk, 0, read)
         }
     }
 }

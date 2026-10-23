@@ -47,11 +47,12 @@ import xzynine.WebDAVPass.Android.ui.Dialog.CloudMode
 import xzynine.WebDAVPass.Android.ui.Dialog.ScanTokenScreen
 import xzynine.WebDAVPass.Android.ui.Screen.OnboardingScreen
 import xzynine.WebDAVPass.Android.ui.Screen.isOnboardingCompleted
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.component.CategoryNavigationItem
 import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
+import xzynine.WebDAVPass.Android.ui.navigation.push
 import xzynine.WebDAVPass.Android.ui.navigation.replaceAll
+import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -140,6 +141,7 @@ fun MainScreen() {
                             tokenViewModel.lockOnBackground.value &&
                             System.currentTimeMillis() - backgroundAt >= BACKGROUND_LOCK_THRESHOLD_MS
                         ) {
+                            tokenViewModel.flushPendingBackup()
                             tokenViewModel.libraryViewModel.lockCurrentLibrary()
                         }
                         // 回到前台重新开始无操作计时
@@ -164,6 +166,7 @@ fun MainScreen() {
             if (timeoutMs > 0L &&
                 System.currentTimeMillis() - lastActivityAt.get() >= timeoutMs
             ) {
+                tokenViewModel.flushPendingBackup()
                 tokenViewModel.libraryViewModel.lockCurrentLibrary()
                 // 锁定后重新计时，避免解锁页停留期间反复触发
                 lastActivityAt.set(System.currentTimeMillis())
@@ -362,8 +365,10 @@ fun MainScreen() {
                 ) {
                     ScanTokenScreen(
                         tokenViewModel = tokenViewModel,
-                        onTokenScanned = {
+                        onTokenScanned = { entryId ->
+                            // 关闭扫码面板并直接进入新条目详情页，由用户完成对码
                             showScanBottomSheet.value = false
+                            backStack.push(Route.PasswordEntryDetail(entryId))
                         },
                         onDismiss = {
                             showScanBottomSheet.value = false

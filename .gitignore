@@ -17,6 +17,9 @@ PublicHub
 # 系统文件
 .DS_Store
 
+# 文档门禁依赖
+node_modules/
+
 # 构建输出
 /captures
 .externalNativeBuild
@@ -31,3 +34,5 @@ icon-pack/build/
 icon-pack/classic/build/
 icon-pack/material/build/
 base/build/
+# CodeGraph local cache
+.codegraph/

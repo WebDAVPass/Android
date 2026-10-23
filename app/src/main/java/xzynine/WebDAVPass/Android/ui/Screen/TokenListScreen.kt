@@ -1,9 +1,5 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
-import android.content.ClipData
-import android.content.ClipboardManager
-import android.content.Context
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -15,15 +11,13 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.CircularProgressIndicator
 import top.yukonga.miuix.kmp.basic.HorizontalDivider
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzylib.base.util.ToastUtils
+import xzynine.WebDAVPass.Android.ui.component.CenteredEmptyState
+import xzynine.WebDAVPass.Android.ui.component.CenteredLoading
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
@@ -50,22 +44,9 @@ fun TokenListScreen(
     }
 
     if (isLoading) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            CircularProgressIndicator()
-        }
+        CenteredLoading()
     } else if (tokens.isEmpty()) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = "暂无令牌，请添加新的2FA令牌",
-                color = MiuixTheme.colorScheme.onSurface,
-            )
-        }
+        CenteredEmptyState(text = "暂无令牌，请添加新的2FA令牌")
     } else {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -87,9 +68,7 @@ fun TokenListScreen(
                     standardIconId = iconEntry?.standardIconId,
                     onClick = {
                         tokenCode?.let { code ->
-                            val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clipData = ClipData.newPlainText("2FA Token", code.code)
-                            clipboardManager.setPrimaryClip(clipData)
+                            copySensitiveToClipboard(context, "2FA Token", code.code)
                             ToastUtils.showShortToast(context, "已复制到剪贴板")
                         }
                     },

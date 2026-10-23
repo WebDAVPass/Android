@@ -10,7 +10,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -34,13 +36,12 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Lock
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
+import xzynine.WebDAVPass.Android.ui.component.DialogActionRow
+import xzynine.WebDAVPass.Android.util.BoundedIo
+import xzynine.WebDAVPass.Android.util.FileSizeLimits
 import xzynine.WebDAVPass.Android.util.PasswordStrength
 import xzynine.WebDAVPass.Android.util.resolveDisplayName
 import xzynine.WebDAVPass.Android.util.strengthLabel
-import java.io.ByteArrayOutputStream
-
-/** 密钥文件大小上限（1 MiB）。 */
-private const val MAX_KEY_FILE_BYTES = 1024 * 1024
 
 /**
  * 创建模式
@@ -97,19 +98,7 @@ fun CreateMasterPasswordDialog(
                     )
                 }
                 context.contentResolver.openInputStream(uri)?.use { input ->
-                    val buffer = ByteArrayOutputStream(8 * 1024)
-                    val chunk = ByteArray(8 * 1024)
-                    var total = 0
-                    while (true) {
-                        val read = input.read(chunk)
-                        if (read < 0) break
-                        total += read
-                        if (total > MAX_KEY_FILE_BYTES) {
-                            throw IllegalStateException("密钥文件过大")
-                        }
-                        buffer.write(chunk, 0, read)
-                    }
-                    val bytes = buffer.toByteArray()
+                    val bytes = BoundedIo.readBoundedBytes(input, FileSizeLimits.KEY_FILE_MAX_BYTES, "密钥文件过大")
                     if (bytes.isNotEmpty()) {
                         keyFileName = uri.resolveDisplayName(context, fallbackIfEmpty = "keyfile")
                         keyFileData = bytes
@@ -128,11 +117,14 @@ fun CreateMasterPasswordDialog(
         onDismissRequest = onDismiss,
         defaultWindowInsetsPadding = true,
     ) {
+        // 内容整体可滚动：弱密码提示较长且弹窗容器不滚动，
+        // 否则键盘弹出或提示出现时底部「取消 / 继续」会被压成 0 高度
         Column(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
+                    .padding(16.dp)
+                    .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             TextField(
@@ -229,31 +221,22 @@ fun CreateMasterPasswordDialog(
                 Text(status)
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("取消")
-                }
-                Button(
-                    onClick = {
-                        when {
-                            password.isBlank() -> status = "请输入主密码"
-                            password != confirmPassword -> status = "两次主密码不一致"
-                            // 未选择密钥文件时，弱密码需二次确认
-                            keyFileData == null && passwordIsWeak && !weakPasswordAcknowledged -> {
-                                weakPasswordAcknowledged = true
-                                status = "主密码强度较低（${passwordStrengthBits.toInt()} bits），建议增加长度或组合大小写/数字/符号；再次点击「继续」可强制使用。"
-                            }
-                            else -> onConfirm(password, keyFileData, keyFileUri)
+            DialogActionRow(
+                onDismiss = onDismiss,
+                onConfirm = {
+                    when {
+                        password.isBlank() -> status = "请输入主密码"
+                        password != confirmPassword -> status = "两次主密码不一致"
+                        // 未选择密钥文件时，弱密码需二次确认
+                        keyFileData == null && passwordIsWeak && !weakPasswordAcknowledged -> {
+                            weakPasswordAcknowledged = true
+                            status = "主密码强度较低（${passwordStrengthBits.toInt()} bits），建议增加长度或组合大小写/数字/符号；再次点击「继续」可强制使用。"
                         }
-                    },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(if (keyFileData == null && passwordIsWeak && weakPasswordAcknowledged) "确认使用弱密码" else "继续")
-                }
-            }
+                        else -> onConfirm(password, keyFileData, keyFileUri)
+                    }
+                },
+                confirmButtonText = if (keyFileData == null && passwordIsWeak && weakPasswordAcknowledged) "确认使用弱密码" else "继续",
+            )
         }
     }
 }

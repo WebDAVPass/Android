@@ -1,4 +1,4 @@
-package xzynine.WebDAVPass.Android.ui.ViewModel
+package xzynine.WebDAVPass.Android.ui.viewmodel
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -12,12 +12,10 @@ import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
+import xzynine.WebDAVPass.Android.data.LegacyAutofillUrl
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
-import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordDataAccess
-import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordPagingSubViewModel
-import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
 
 /**
  * 密码视图模型
@@ -98,8 +96,9 @@ class PasswordViewModel(
         sortMode: PasswordSortMode? = null,
         ascending: Boolean? = null,
         hideExpired: Boolean? = null,
+        onlyWithApp: Boolean? = null,
     ) {
-        passwordSubViewModel.refreshPasswordEntries(searchQuery, caseSensitive, sortMode, ascending, hideExpired)
+        passwordSubViewModel.refreshPasswordEntries(searchQuery, caseSensitive, sortMode, ascending, hideExpired, onlyWithApp)
     }
 
     /**
@@ -159,24 +158,10 @@ class PasswordViewModel(
     }
 
     /**
-     * 重置密码分组导航到根分组。
-     */
-    fun resetPasswordGroupNavigation(searchQuery: String = "") {
-        passwordSubViewModel.resetPasswordGroupNavigation(searchQuery)
-    }
-
-    /**
      * 仅重置密码分组栈，不触发刷新。
      */
     fun resetPasswordGroupStackOnly() {
         passwordSubViewModel.resetPasswordGroupStackOnly()
-    }
-
-    /**
-     * 兼容旧调用名。
-     */
-    fun refreshRemainingKeyValues() {
-        refreshPasswordEntries()
     }
 
     /**
@@ -287,23 +272,6 @@ class PasswordViewModel(
         }
         return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
             kdbxTokenRepository.restoreEntryFromHistory(path, pwd, entryId, historyIndex)
-        }
-    }
-
-    /**
-     * 按稳定 ID 读取分组编辑草稿。
-     */
-    suspend fun loadPasswordGroupDraft(
-        groupId: Long,
-        isLibraryUnlocked: Boolean,
-        localPath: String?,
-        masterPassword: String,
-    ): PasswordGroupEditDraft? {
-        if (groupId >= 0) {
-            return null
-        }
-        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
-            kdbxTokenRepository.loadPasswordGroupDraft(path, pwd, groupId)
         }
     }
 
@@ -421,6 +389,40 @@ class PasswordViewModel(
     }
 
     /**
+     * 检测存量候选：网站字段被旧版自动填充写成 android:// 混淆来源的条目（不含回收站）。
+     */
+    suspend fun detectLegacyAutofillUrlEntries(
+        entryIds: List<Long>,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String,
+    ): List<LegacyAutofillUrl.Candidate> {
+        if (entryIds.isEmpty()) {
+            return emptyList()
+        }
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = emptyList()) { path, pwd ->
+            kdbxTokenRepository.detectLegacyAutofillUrlEntries(path, pwd, entryIds)
+        }
+    }
+
+    /**
+     * 批量转换存量候选：清空网站字段并把包名回填到「应用」关联字段。
+     */
+    suspend fun convertLegacyAutofillUrlEntries(
+        entryIds: List<Long>,
+        isLibraryUnlocked: Boolean,
+        localPath: String?,
+        masterPassword: String,
+    ): Int {
+        if (entryIds.isEmpty()) {
+            return 0
+        }
+        return withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = 0) { path, pwd ->
+            kdbxTokenRepository.convertLegacyAutofillUrlEntries(path, pwd, entryIds)
+        }
+    }
+
+    /**
      * 新建密码分组并返回稳定 ID。
      */
     suspend fun createPasswordGroup(
@@ -431,19 +433,6 @@ class PasswordViewModel(
     ): Long? =
         withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = null) { path, pwd ->
             kdbxTokenRepository.createPasswordGroup(path, pwd, draft)
-        }
-
-    /**
-     * 更新密码分组。
-     */
-    suspend fun updatePasswordGroup(
-        draft: PasswordGroupEditDraft,
-        isLibraryUnlocked: Boolean,
-        localPath: String?,
-        masterPassword: String,
-    ): Boolean =
-        withAccess(isLibraryUnlocked, localPath, masterPassword, fallback = false) { path, pwd ->
-            kdbxTokenRepository.updatePasswordGroup(path, pwd, draft)
         }
 
     /**

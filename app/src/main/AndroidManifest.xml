@@ -9,6 +9,11 @@
     <!-- 添加相机权限 -->
     <uses-permission android:name="android.permission.CAMERA" />
     <uses-permission android:name="android.permission.USE_BIOMETRIC" />
+    <!-- 应用列表查询：条目「应用」字段需列出本机应用供选择，并读取应用图标作为条目图标；
+         自动填充服务侧也要按包名取应用名与图标，故在清单声明（非运行时权限） -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    <!-- MIUI/澎湃：在 QUERY_ALL_PACKAGES 之外还需在应用详情页显式授予「访问应用列表」 -->
+    <uses-permission android:name="com.android.permission.GET_INSTALLED_APPS" />
     <!-- 声明相机硬件特性，但非必需 -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />
 
@@ -21,6 +26,7 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:name=".WebDavPassApplication"
         android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar">
         <activity
             android:name=".ui.MainActivity"
@@ -40,22 +46,17 @@
                 android:resource="@xml/file_paths" />
         </provider>
 
-    <!-- 注册自动填充服务 -->
-        <service
-            android:name=".autofill.KeeAutofillService"
-            android:exported="true"
-            android:label="@string/app_name"
-            android:permission="android.permission.BIND_AUTOFILL_SERVICE">
-            <intent-filter>
-                <action android:name="android.service.autofill.AutofillService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.autofill"
-                android:resource="@xml/autofill_service" />
-        </service>
+    <!-- 自动填充服务由 :autofill 库在其清单中声明（.core.KeeAutofillService），
+         此处仅声明宿主侧的界面与配置覆盖 -->
 
         <activity
-            android:name=".autofill.AutofillPickerActivity"
+            android:name=".autofillbridge.AutofillPickerActivity"
+            android:exported="false"
+            android:theme="@style/Theme.MaterialComponents.DayNight.Dialog"
+            android:excludeFromRecents="true" />
+
+        <activity
+            android:name=".autofillbridge.AutofillRegistrationActivity"
             android:exported="false"
             android:theme="@style/Theme.MaterialComponents.DayNight.Dialog"
             android:excludeFromRecents="true" />

@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import androidx.fragment.app.FragmentActivity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -55,14 +56,13 @@ import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.R
 import xzynine.WebDAVPass.Android.biometric.BiometricKeyStoreManager
 import xzynine.WebDAVPass.Android.data.LibraryContext
-import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
+import xzynine.WebDAVPass.Android.ui.viewmodel.AutoUnlockViewModel
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import xzynine.WebDAVPass.Android.util.BoundedIo
+import xzynine.WebDAVPass.Android.util.FileSizeLimits
 import xzynine.WebDAVPass.Android.util.resolveDisplayName
 import java.io.File
 import kotlin.time.Duration.Companion.milliseconds
-
-/** 密钥文件大小上限（1 MiB），与 CreateMasterPasswordDialog 保持一致。 */
-private const val MAX_KEY_FILE_BYTES = 1024 * 1024
 
 /**
  * 内联解锁面板：主密码输入 + 密钥文件选择 + 凭据/生物识别解锁。
@@ -274,19 +274,7 @@ private fun InlineUnlockPanelContent(
                 inlineKeyFileData = null
                 runCatching {
                     context.contentResolver.openInputStream(uri)?.use { input ->
-                        val buffer = java.io.ByteArrayOutputStream(8 * 1024)
-                        val chunk = ByteArray(8 * 1024)
-                        var total = 0
-                        while (true) {
-                            val read = input.read(chunk)
-                            if (read < 0) break
-                            total += read
-                            if (total > MAX_KEY_FILE_BYTES) {
-                                throw IllegalStateException("密钥文件过大")
-                            }
-                            buffer.write(chunk, 0, read)
-                        }
-                        val bytes = buffer.toByteArray()
+                        val bytes = BoundedIo.readBoundedBytes(input, FileSizeLimits.KEY_FILE_MAX_BYTES, "密钥文件过大")
                         if (bytes.isNotEmpty()) {
                             inlineKeyFileName = uri.resolveDisplayName(context, fallbackIfEmpty = "未命名.kdbx")
                             inlineKeyFileData = bytes
@@ -475,7 +463,7 @@ private fun InlineUnlockPanelContent(
             authMode = authMode,
             libraryFileName =
                 targetLibrary.localPath
-                    ?.let { path -> runCatching { File(path).name }.getOrNull() },
+                    .let { path -> runCatching { File(path).name }.getOrNull() },
             onSuccess = { authCipher ->
                 if (authCipher != null) {
                     coroutineScope.launch {
@@ -501,7 +489,7 @@ private fun InlineUnlockPanelContent(
                 if (errorCode == BiometricKeyStoreManager.ERROR_REQUIRE_DEVICE_CREDENTIAL) {
                     val fileName =
                         targetLibrary.localPath
-                            ?.let { path -> runCatching { File(path).name }.getOrNull() }
+                            .let { path -> runCatching { File(path).name }.getOrNull() }
                             .orEmpty()
                     val intent =
                         tokenViewModel.autoUnlockViewModel.biometricKeyStoreManager.createDeviceCredentialIntent(
@@ -800,20 +788,10 @@ private suspend fun loadKeyFileFromUri(
 ): Pair<String, ByteArray>? {
     return withContext(kotlinx.coroutines.Dispatchers.IO) {
         runCatching {
-            val uri = Uri.parse(uriString)
+            val uri = uriString.toUri()
             val name = uri.resolveDisplayName(context, fallbackIfEmpty = "keyfile")
             context.contentResolver.openInputStream(uri)?.use { input ->
-                val buffer = java.io.ByteArrayOutputStream(8 * 1024)
-                val chunk = ByteArray(8 * 1024)
-                var total = 0
-                while (true) {
-                    val read = input.read(chunk)
-                    if (read < 0) break
-                    total += read
-                    if (total > 1024 * 1024) return@use null
-                    buffer.write(chunk, 0, read)
-                }
-                val bytes = buffer.toByteArray()
+                val bytes = BoundedIo.readBoundedBytes(input, FileSizeLimits.KEY_FILE_MAX_BYTES, "密钥文件过大")
                 if (bytes.isEmpty()) return@use null
                 name to bytes
             }

@@ -1,13 +1,10 @@
 package xzynine.WebDAVPass.Android.util
 
+import com.kunzisoft.keepass.otp.OtpElement
+import com.kunzisoft.keepass.otp.TokenCalculator
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.OtpTokenType
 import xzynine.WebDAVPass.Android.data.TokenCode
-import java.nio.ByteBuffer
-import java.security.InvalidKeyException
-import java.security.NoSuchAlgorithmException
-import javax.crypto.Mac
-import javax.crypto.spec.SecretKeySpec
 
 /**
  * TOTP/HOTP 令牌代码生成工具类
@@ -40,95 +37,38 @@ class TokenCodeUtil {
     }
 
     /**
-     * 生成 HOTP 代码
+     * 生成指定计数器的令牌代码，异常时返回空串
      */
     private fun getHOTP(
         otpToken: OtpToken,
         counter: Long,
-    ): String {
-        // 编码计数器为网络字节序
-        val bb = ByteBuffer.allocate(8)
-        bb.putLong(counter)
-
-        // 创建位数除数
-        var div = 1
-        for (i in otpToken.digits downTo 1) div *= 10
-
-        // 创建 HMAC
+    ): String =
         try {
-            val mac = Mac.getInstance("Hmac${otpToken.algorithm}")
-            mac.init(SecretKeySpec(Base32String.decode(otpToken.secret), "Hmac${otpToken.algorithm}"))
+            // 令牌密钥以 Base32 文本存储，转为字节后交由 database 模块计算
+            val secret = OtpElement().apply { setBase32Secret(otpToken.secret) }.secret
+            val period = otpToken.period.coerceAtLeast(1)
+            val algorithm = toHashAlgorithm(otpToken.algorithm)
 
-            // 执行哈希计算
-            val digest = mac.doFinal(bb.array())
-
-            // 动态截断
-            var binary: Int
-            val off = digest[digest.size - 1].toInt() and 0xf
-            binary = digest[off].toInt() and 0x7f shl 0x18
-            binary = binary or (digest[off + 1].toInt() and 0xff shl 0x10)
-            binary = binary or (digest[off + 2].toInt() and 0xff shl 0x08)
-            binary = binary or (digest[off + 3].toInt() and 0xff)
-            var hotp = ""
-
-            // Steam 特殊处理
-            if (otpToken.issuer == "Steam") {
-                for (i in 0 until otpToken.digits) {
-                    hotp += STEAMCHARS[binary % STEAMCHARS.size]
-                    binary /= STEAMCHARS.size
-                }
-            } else {
-                binary %= div
-
-                // 零填充
-                hotp = binary.toString()
-                while (hotp.length != otpToken.digits) hotp = "0$hotp"
+            when {
+                secret == null || secret.isEmpty() -> ""
+                // Steam 令牌使用专用字符集
+                otpToken.issuer == "Steam" ->
+                    TokenCalculator.TOTP_Steam(secret, period, otpToken.digits, algorithm)
+                else ->
+                    TokenCalculator.HOTP(secret, counter, otpToken.digits, algorithm)
             }
-            return hotp
-        } catch (e: InvalidKeyException) {
+        } catch (e: Exception) {
             e.printStackTrace()
-        } catch (e: NoSuchAlgorithmException) {
-            e.printStackTrace()
-        } catch (e: IllegalArgumentException) {
-            // 捕获 Base32 解码异常
-            e.printStackTrace()
-        } catch (e: ArrayIndexOutOfBoundsException) {
-            // 捕获数组越界异常
-            e.printStackTrace()
+            ""
         }
-        return ""
-    }
 
-    companion object {
-        // Steam 令牌字符集
-        private val STEAMCHARS =
-            charArrayOf(
-                '2',
-                '3',
-                '4',
-                '5',
-                '6',
-                '7',
-                '8',
-                '9',
-                'B',
-                'C',
-                'D',
-                'F',
-                'G',
-                'H',
-                'J',
-                'K',
-                'M',
-                'N',
-                'P',
-                'Q',
-                'R',
-                'T',
-                'V',
-                'W',
-                'X',
-                'Y',
-            )
-    }
+    /**
+     * 算法名转哈希算法，未知名称回退 SHA1
+     */
+    private fun toHashAlgorithm(algorithm: String): TokenCalculator.HashAlgorithm =
+        try {
+            TokenCalculator.HashAlgorithm.valueOf(algorithm.uppercase())
+        } catch (e: IllegalArgumentException) {
+            TokenCalculator.HashAlgorithm.SHA1
+        }
 }

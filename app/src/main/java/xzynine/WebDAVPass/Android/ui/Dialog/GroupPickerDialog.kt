@@ -4,11 +4,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.Composable
@@ -22,15 +20,14 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Button
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Folder
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
+import xzynine.WebDAVPass.Android.ui.component.DialogActionRow
 
 /**
  * 分组选择对话框（用于移动/复制的目标分组选择）。
@@ -64,36 +61,12 @@ fun GroupPickerDialog(
         onDismissRequest = onDismiss,
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { selectedGroupId = null }
-                        .padding(horizontal = 14.dp, vertical = 12.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Icon(
-                    imageVector = MiuixIcons.Folder,
-                    contentDescription = null,
-                    tint =
-                        if (selectedGroupId == null) {
-                            MiuixTheme.colorScheme.primary
-                        } else {
-                            MiuixTheme.colorScheme.onSurfaceSecondary
-                        },
-                )
-                Text(
-                    text = " 根目录",
-                    fontSize = 14.sp,
-                    fontWeight = if (selectedGroupId == null) FontWeight.Medium else FontWeight.Normal,
-                    color =
-                        if (selectedGroupId == null) {
-                            MiuixTheme.colorScheme.primary
-                        } else {
-                            MiuixTheme.colorScheme.onSurface
-                        },
-                )
-            }
+            GroupPickerRow(
+                label = " 根目录",
+                indentDp = 0,
+                selected = selectedGroupId == null,
+                onClick = { selectedGroupId = null },
+            )
 
             LazyColumn(
                 modifier =
@@ -102,62 +75,68 @@ fun GroupPickerDialog(
                         .heightIn(max = 360.dp),
             ) {
                 items(groups, key = { it.groupId }) { group ->
-                    Row(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { selectedGroupId = group.groupId }
-                                .padding(
-                                    // 深层分组缩进设上限（coerceAtMost(6)），避免极深嵌套时文本被挤出屏幕
-                                    start = 14.dp + (group.depth.coerceAtMost(6) * 20).dp,
-                                    end = 14.dp,
-                                    top = 12.dp,
-                                    bottom = 12.dp,
-                                ),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Icon(
-                            imageVector = MiuixIcons.Folder,
-                            contentDescription = null,
-                            tint =
-                                if (selectedGroupId == group.groupId) {
-                                    MiuixTheme.colorScheme.primary
-                                } else {
-                                    MiuixTheme.colorScheme.onSurfaceSecondary
-                                },
-                        )
-                        Text(
-                            text = "  " + group.title.ifBlank { "未命名分组" },
-                            fontSize = 14.sp,
-                            fontWeight = if (selectedGroupId == group.groupId) FontWeight.Medium else FontWeight.Normal,
-                            color =
-                                if (selectedGroupId == group.groupId) {
-                                    MiuixTheme.colorScheme.primary
-                                } else {
-                                    MiuixTheme.colorScheme.onSurface
-                                },
-                        )
-                    }
+                    // 深层分组缩进设上限（coerceAtMost(6)），避免极深嵌套时文本被挤出屏幕
+                    GroupPickerRow(
+                        label = "  " + group.title.ifBlank { "未命名分组" },
+                        indentDp = group.depth.coerceAtMost(6) * 20,
+                        selected = selectedGroupId == group.groupId,
+                        onClick = { selectedGroupId = group.groupId },
+                    )
                 }
             }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                TextButton(
-                    text = "取消",
-                    onClick = onDismiss,
-                    modifier = Modifier.weight(1f),
-                )
-                Spacer(modifier = Modifier.width(16.dp))
-                Button(
-                    onClick = { onPick(selectedGroupId) },
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text("确定")
-                }
-            }
+            DialogActionRow(
+                onDismiss = onDismiss,
+                onConfirm = { onPick(selectedGroupId) },
+                confirmButtonText = "确定",
+            )
         }
+    }
+}
+
+/**
+ * 分组选择行：图标 + 名称，按 [indentDp] 缩进，选中时使用主题色；[label] 自带与图标之间的前缀空格。
+ */
+@Composable
+private fun GroupPickerRow(
+    label: String,
+    indentDp: Int,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .clickable(onClick = onClick)
+                .padding(
+                    start = 14.dp + indentDp.dp,
+                    end = 14.dp,
+                    top = 12.dp,
+                    bottom = 12.dp,
+                ),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(
+            imageVector = MiuixIcons.Folder,
+            contentDescription = null,
+            tint =
+                if (selected) {
+                    MiuixTheme.colorScheme.primary
+                } else {
+                    MiuixTheme.colorScheme.onSurfaceSecondary
+                },
+        )
+        Text(
+            text = label,
+            fontSize = 14.sp,
+            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+            color =
+                if (selected) {
+                    MiuixTheme.colorScheme.primary
+                } else {
+                    MiuixTheme.colorScheme.onSurface
+                },
+        )
     }
 }

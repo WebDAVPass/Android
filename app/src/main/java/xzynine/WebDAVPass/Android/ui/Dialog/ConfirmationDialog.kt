@@ -1,19 +1,9 @@
 package xzynine.WebDAVPass.Android.ui.Dialog
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.MutableState
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
-import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.window.WindowDialog
+import xzynine.WebDAVPass.Android.ui.component.DialogActionRow
 
 /**
  * 通用确认对话框
@@ -43,33 +33,12 @@ fun ConfirmationDialog(
         show = show.value,
         onDismissRequest = onDismiss,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-        ) {
-            TextButton(
-                text = dismissButtonText,
-                onClick = onDismiss,
-                modifier = Modifier.weight(1f),
-            )
-
-            Spacer(modifier = Modifier.width(16.dp))
-
-            if (isDestructive) {
-                TextButton(
-                    text = confirmButtonText,
-                    onClick = onConfirm,
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.textButtonColorsPrimary(),
-                )
-            } else {
-                Button(
-                    onClick = onConfirm,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Text(text = confirmButtonText)
-                }
-            }
-        }
+        DialogActionRow(
+            onDismiss = onDismiss,
+            onConfirm = onConfirm,
+            confirmButtonText = confirmButtonText,
+            dismissButtonText = dismissButtonText,
+            isDestructive = isDestructive,
+        )
     }
 }

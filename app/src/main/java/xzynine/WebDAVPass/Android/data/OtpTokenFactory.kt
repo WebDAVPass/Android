@@ -1,9 +1,10 @@
 package xzynine.WebDAVPass.Android.data
 
 import android.net.Uri
+import com.kunzisoft.keepass.otp.OtpEntryFields
+import com.kunzisoft.keepass.otp.OtpType
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
-import java.util.*
-import javax.crypto.Mac
+import com.kunzisoft.keepass.otp.OtpTokenType as KeepassOtpTokenType
 
 /**
  * OTP令牌工厂，用于从URI创建OtpToken对象
@@ -21,90 +22,52 @@ object OtpTokenFactory {
             throw IllegalArgumentException("URI必须以otpauth开头")
         }
 
-        // 确定令牌类型
-        val type =
-            when (uri.authority) {
-                "totp" -> OtpTokenType.TOTP
-                "hotp" -> OtpTokenType.HOTP
-                else -> throw IllegalArgumentException("URI必须包含totp或hotp类型")
-            }
+        // 解析交由 database 模块实现
+        val otpElement =
+            OtpEntryFields.parseOTPUri(uri.toString())
+                ?: throw IllegalArgumentException("URI必须包含totp或hotp类型")
 
-        // 获取路径
-        var path = uri.path
-        if (path == null) {
-            throw IllegalArgumentException("令牌路径为空")
+        // 密钥缺失或格式非法时无法生成代码
+        val secretBytes = otpElement.secret
+        if (secretBytes == null || secretBytes.isEmpty()) {
+            throw IllegalArgumentException("密钥不能为空")
         }
 
-        // 移除路径开头的'/'
-        while (!path.isNullOrEmpty() && path.startsWith('/')) {
-            path = path.substring(1)
-        }
-
-        if (path.isEmpty()) {
-            throw IllegalArgumentException("令牌路径为空")
-        }
-
-        // 解析issuer和label
-        val i = path.indexOf(':')
-        val issuerExt = if (i < 0) "" else path.substring(0, i)
-        val issuerInt = uri.getQueryParameter("issuer")
-
-        val issuer = if (issuerInt != null && issuerInt.isNotBlank()) issuerInt else issuerExt
-        val label = path.substring(if (i >= 0) i + 1 else 0)
-
-        // 解析算法
-        var algo = uri.getQueryParameter("algorithm")
-        if (algo == null) algo = "sha1"
-        algo = algo.uppercase(Locale.getDefault())
-
-        // 验证算法是否支持
-        Mac.getInstance("Hmac$algo")
-
-        // 解析位数
-        var d = uri.getQueryParameter("digits")
-        if (d == null) {
-            d = if (issuerExt == "Steam") "5" else "6"
-        }
-        val digits = d.toInt()
-        // 验证位数范围
-        if (issuerExt != "Steam" && digits !in 5..8) {
-            throw IllegalArgumentException("位数必须为5到8之间")
-        }
-
-        // 解析周期
-        var p = uri.getQueryParameter("period")
-        if (p == null) p = "30"
-        val period = p.toInt()
-
-        // 解析计数器（仅HOTP需要）
-        val counter =
-            if (type == OtpTokenType.HOTP) {
-                var c = uri.getQueryParameter("counter")
-                if (c == null) c = "0"
-                c.toLong() - 1
+        // Steam 归一为 issuer 为 "Steam" 的 TOTP，app 侧令牌类型仅保留 HOTP/TOTP
+        val isSteam = otpElement.tokenType == KeepassOtpTokenType.STEAM || uri.authority == "steam"
+        val type = if (otpElement.type == OtpType.HOTP) OtpTokenType.HOTP else OtpTokenType.TOTP
+        // OTP 字段未提供 issuer 时会保留占位默认值 "None"，此处按无 issuer 处理
+        val issuer =
+            if (isSteam) {
+                "Steam"
             } else {
-                0
+                otpElement.issuer.takeIf { it.isNotBlank() && it != "None" } ?: ""
             }
-
-        // 解析密钥
-        val secret = uri.getQueryParameter("secret") ?: throw IllegalArgumentException("密钥不能为空")
-        // 解析图像路径
+        // 密钥统一取规范化 Base32 文本，与库内读取路径保持一致
+        val secret = otpElement.getBase32Secret()
+        val algorithm = otpElement.algorithm.name
+        val digits = otpElement.digits
+        val period = otpElement.period
+        // otpauth URI 的 counter 参数指向下一码，入库时减一，使首显码为当前有效码；TOTP 不使用计数器
+        val counterParam = uri.getQueryParameter("counter")?.toLongOrNull() ?: 0L
+        val counter = if (type == OtpTokenType.HOTP) counterParam - 1L else 0L
+        // 图像路径与描述为 app 特有参数，database 侧不解析
         val image = uri.getQueryParameter("image")
         val description = uri.getQueryParameter("description")?.takeIf { it.isNotBlank() }
 
         // 生成唯一标识符
-        val uniqueId = UniqueIdGenerator.generate(secret, algo, digits, period)
+        val uniqueId = UniqueIdGenerator.generate(secret, algorithm, digits, period)
 
         // 创建并返回OtpToken对象
         return OtpToken(
             id = 0,
             ordinal = -System.currentTimeMillis(), // 使新令牌出现在列表顶部
             issuer = issuer,
-            label = label,
+            label = otpElement.name,
             description = description,
             imagePath = image,
             tokenType = type,
-            algorithm = algo,
+            algorithm = algorithm,
             secret = secret,
             digits = digits,
             counter = counter,

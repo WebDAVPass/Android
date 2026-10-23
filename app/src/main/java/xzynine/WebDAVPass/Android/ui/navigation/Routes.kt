@@ -2,7 +2,7 @@ package xzynine.WebDAVPass.Android.ui.navigation
 
 import kotlinx.serialization.Serializable
 import top.yukonga.miuix.kmp.nav.core.NavKey
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
+import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordListMode
 
 @Serializable
 sealed interface Route : NavKey {

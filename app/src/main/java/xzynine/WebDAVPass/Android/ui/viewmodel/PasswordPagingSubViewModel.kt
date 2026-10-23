@@ -15,7 +15,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import kotlin.time.Duration.Companion.milliseconds
 
 internal data class PasswordDataAccess(
@@ -81,7 +80,6 @@ internal class PasswordPagingSubViewModel(
     val passwordHasMore: StateFlow<Boolean> = _passwordHasMore.asStateFlow()
 
     private val _isPageLoading = MutableStateFlow(false)
-    val isPageLoading: StateFlow<Boolean> = _isPageLoading.asStateFlow()
 
     private var refreshJob: Job? = null
     private val pagingMutex = Mutex()
@@ -97,6 +95,7 @@ internal class PasswordPagingSubViewModel(
     private var currentSortMode: PasswordSortMode = PasswordSortMode.DEFAULT
     private var currentAscending: Boolean = true
     private var currentHideExpired: Boolean = false
+    private var currentOnlyWithApp: Boolean = false
 
     /**
      * 更新数据访问提供者
@@ -136,6 +135,7 @@ internal class PasswordPagingSubViewModel(
                     currentSortMode,
                     currentAscending,
                     currentHideExpired,
+                    currentOnlyWithApp,
                 )
             }
 
@@ -154,16 +154,19 @@ internal class PasswordPagingSubViewModel(
         sortMode: PasswordSortMode? = null,
         ascending: Boolean? = null,
         hideExpired: Boolean? = null,
+        onlyWithApp: Boolean? = null,
     ) {
         // null 表示沿用当前持有状态，避免分组导航/写入刷新时重置用户的排序与过滤设置
         if (caseSensitive != null) currentCaseSensitive = caseSensitive
         if (sortMode != null) currentSortMode = sortMode
         if (ascending != null) currentAscending = ascending
         if (hideExpired != null) currentHideExpired = hideExpired
+        if (onlyWithApp != null) currentOnlyWithApp = onlyWithApp
         val effCaseSensitive = currentCaseSensitive
         val effSortMode = currentSortMode
         val effAscending = currentAscending
         val effHideExpired = currentHideExpired
+        val effOnlyWithApp = currentOnlyWithApp
         refreshJob?.cancel()
         refreshJob =
             scope.launch {
@@ -229,7 +232,7 @@ internal class PasswordPagingSubViewModel(
                 // 在 IO 线程完成排序/分组，避免主线程阻塞
                 val sections =
                     withContext(ioDispatcher) {
-                        computeSections(source, keyword, effCaseSensitive, effSortMode, effAscending, effHideExpired)
+                        computeSections(source, keyword, effCaseSensitive, effSortMode, effAscending, effHideExpired, effOnlyWithApp)
                     }
 
                 pagingMutex.withLock {
@@ -344,20 +347,6 @@ internal class PasswordPagingSubViewModel(
         refreshPasswordEntries(searchQuery)
     }
 
-    fun resetPasswordGroupNavigation(searchQuery: String = "") {
-        if (listModeProvider() == PasswordListMode.RECENT_DELETED) {
-            refreshJob?.cancel()
-            refreshJob = null
-            _passwordGroupStack.value = emptyList()
-            refreshPasswordEntries(searchQuery)
-            return
-        }
-        refreshJob?.cancel()
-        refreshJob = null
-        _passwordGroupStack.value = emptyList()
-        refreshPasswordEntries(searchQuery)
-    }
-
     fun resetPasswordGroupStackOnly() {
         refreshJob?.cancel()
         refreshJob = null
@@ -393,6 +382,7 @@ internal class PasswordPagingSubViewModel(
         sortMode: PasswordSortMode = PasswordSortMode.DEFAULT,
         ascending: Boolean = true,
         hideExpired: Boolean = false,
+        onlyWithApp: Boolean = false,
     ): List<IndexedSection> {
         // 预计算排序键缓存：lowercase() 若在比较器内每次比较都重算，全量排序退化为 O(n log n) 字符串小写。
         // 以 entryId 为键避免用 PasswordEntry 作 HashMap 键（深哈希抵消缓存收益）
@@ -402,6 +392,10 @@ internal class PasswordPagingSubViewModel(
                 .asSequence()
                 .filter { item ->
                     if (hideExpired && item.isExpired) {
+                        return@filter false
+                    }
+                    // 文件夹占位行保留，保证过滤态下仍可进入分组
+                    if (onlyWithApp && !item.isFolderGroup && item.appPackageName.isEmpty()) {
                         return@filter false
                     }
                     keyword.isBlank() || matchesKeyword(item, keyword, caseSensitive)

@@ -64,6 +64,11 @@ data class PasswordEntry(
     val isExpired: Boolean = false,
     val customIconUuid: String? = null,
     val tags: List<String> = emptyList(),
+    /**
+     * 「应用」关联字段的包名（含兼容的历史命名槽位，取首个取值非空者）；无关联时为空串。
+     * 列表摘要即携带，供「仅显示安卓应用条目」过滤使用，不依赖字段详情加载。
+     */
+    val appPackageName: String = "",
     val creationTime: Long = 0L,
     val modifiedTime: Long = 0L,
     val isFolderGroup: Boolean = false,
@@ -96,7 +101,9 @@ data class EntryHistoryInfo(
 )
 
 /**
- * 值类型中文标签
+ * 值类型中文标签。
+ *
+ * 与 MergeFieldKeys.displayName 的 url 标签不同源（此处为「链接」，合并流程为「网站」），两处语义各自保留。
  */
 fun RemainingValueType.toDisplayName(): String =
     when (this) {

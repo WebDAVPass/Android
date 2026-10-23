@@ -30,10 +30,11 @@ import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
 
 /**
- * 模板选择对话框。
+ * 模板选择对话框（新建条目的第一步）。
  *
- * 提供内置规范化模板（邮件/Wi-Fi/安全笔记/身份证/银行卡/银行账户/加密货币）与「自定义」，
- * 选中后回调 [onPick]；「自定义」回调 null。
+ * 提供内置规范化模板（邮件/Wi-Fi/安全笔记/身份证/银行卡/银行账户/加密货币）与「不使用模板」，
+ * 选中后回调 [onPick]（模板字段与图标由调用方预填到条目草稿）；
+ * 「不使用模板」回调 null，调用方直接进入空白条目表单。
  */
 @Composable
 fun TemplatePickerDialog(
@@ -57,8 +58,8 @@ fun TemplatePickerDialog(
         }
 
     WindowDialog(
-        title = "从模板添加",
-        summary = "选择模板将自动生成对应字段",
+        title = "新建条目",
+        summary = "先选择模板，再填写条目内容",
         show = show,
         onDismissRequest = onDismiss,
     ) {
@@ -116,7 +117,7 @@ fun TemplatePickerDialog(
                 }
             }
 
-            // 自定义（无模板）
+            // 不使用模板（空白条目）
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
@@ -135,19 +136,19 @@ fun TemplatePickerDialog(
                     EntryIcon(
                         customIconBytes = null,
                         standardIconId = 0,
-                        primary = "自定义",
+                        primary = "不使用模板",
                         secondary = null,
                         modifier = Modifier.size(36.dp),
                     )
                     Column(modifier = Modifier.weight(1f).padding(start = 10.dp)) {
                         Text(
-                            text = "自定义",
+                            text = "不使用模板",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.Medium,
                             color = MiuixTheme.colorScheme.onSurface,
                         )
                         Text(
-                            text = "不使用模板，手动添加字段",
+                            text = "直接填写空白条目，之后再添加自定义字段",
                             fontSize = 12.sp,
                             color = MiuixTheme.colorScheme.onSurfaceSecondary,
                         )

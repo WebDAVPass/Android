@@ -1,4 +1,4 @@
-package xzynine.WebDAVPass.Android.ui.ViewModel
+package xzynine.WebDAVPass.Android.ui.viewmodel
 
 import android.content.Context
 import androidx.lifecycle.ViewModel
@@ -11,6 +11,7 @@ import xzynine.WebDAVPass.Android.data.AppDatabase
 import xzynine.WebDAVPass.Android.data.AppDatabaseHolder
 import xzynine.WebDAVPass.Android.data.WebDavConfig
 import xzynine.WebDAVPass.Android.data.WebDavPasswordCipher
+import xzynine.WebDAVPass.Android.util.ensureTrailingSlash
 
 /**
  * WebDAV 配置视图模型
@@ -91,17 +92,7 @@ class WebDavConfigViewModel(
     }
 
     /**
-     * 更新WebDAV配置（password 加密后落库）
-     * @param config WebDAV配置对象（password 为明文）
-     */
-    fun updateWebDavConfig(config: WebDavConfig) {
-        viewModelScope.launch {
-            updateWebDavConfigInternal(config)
-        }
-    }
-
-    /**
-     * 同步落库更新实现（供 [updateWebDavConfig] 与 [autoSaveAccount] 直接等待）。
+     * 同步落库更新实现（供 [autoSaveAccount] 直接等待）。
      */
     private suspend fun updateWebDavConfigInternal(config: WebDavConfig) {
         database.webDavConfigDao().update(config.copy(password = WebDavPasswordCipher.encrypt(config.password)))
@@ -127,11 +118,11 @@ class WebDavConfigViewModel(
         password: String,
         name: String,
     ) {
-        val normalizedBase = normalizeBaseUrl(baseUrl)
+        val normalizedBase = baseUrl.ensureTrailingSlash()
         val normalizedDir = directory?.trim()?.trim('/')
         val existing =
             database.webDavConfigDao().getAllOnce().firstOrNull {
-                normalizeBaseUrl(it.url) == normalizedBase &&
+                it.url.ensureTrailingSlash() == normalizedBase &&
                     it.username == username &&
                     (it.directory?.trim()?.trim('/') ?: "") == (normalizedDir ?: "")
             }
@@ -152,46 +143,5 @@ class WebDavConfigViewModel(
                 password = password,
             ),
         )
-    }
-
-    /**
-     * 保证服务器根地址以 "/" 结尾
-     */
-    private fun normalizeBaseUrl(raw: String): String = if (raw.endsWith("/")) raw else "$raw/"
-
-    /**
-     * 删除WebDAV配置
-     * @param config WebDAV配置对象
-     */
-    fun deleteWebDavConfig(config: WebDavConfig) {
-        viewModelScope.launch {
-            database.webDavConfigDao().delete(config)
-            refreshWebDavConfigList()
-        }
-    }
-
-    /**
-     * 根据ID删除WebDAV配置
-     * @param id 配置ID
-     */
-    fun deleteWebDavConfigById(id: Long) {
-        viewModelScope.launch {
-            database.webDavConfigDao().deleteById(id)
-            refreshWebDavConfigList()
-        }
-    }
-
-    /**
-     * 根据ID获取WebDAV配置
-     * @param id 配置ID
-     */
-    suspend fun getWebDavConfigById(id: Long): WebDavConfig? = database.webDavConfigDao().getById(id)
-
-    /**
-     * 获取第一个WebDAV配置
-     */
-    suspend fun getFirstWebDavConfig(): WebDavConfig? {
-        val configs = database.webDavConfigDao().getAllOnce()
-        return configs.firstOrNull()
     }
 }

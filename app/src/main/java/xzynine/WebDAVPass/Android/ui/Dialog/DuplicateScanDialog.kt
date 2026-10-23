@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
@@ -36,6 +38,7 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowDialog
 import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.MergeFieldKeys
+import xzynine.WebDAVPass.Android.data.maskIfSensitive
 import xzynine.WebDAVPass.Android.ui.component.MarqueeText
 
 /**
@@ -73,7 +76,14 @@ fun DuplicateScanDialog(
         show = show,
         onDismissRequest = onDismiss,
     ) {
-        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 组列表已用 heightIn 限高；外层滚动保证小屏/大字号下底部「关闭」不被压成 0 高度
+        Column(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
             Text(
                 text = "无冲突组（账号/密码/网站完全一致）可直接合并；冲突组需逐项选择采用哪个条目的值。",
                 fontSize = 13.sp,
@@ -211,12 +221,11 @@ fun DuplicateScanDialog(
  */
 @Composable
 private fun ConflictSummary(group: DuplicateGroupInfo) {
+    // 键集合即「自动合并」判定键，标签统一取自 MergeFieldKeys.displayName
     val conflictKeys =
-        listOf(
-            MergeFieldKeys.ACCOUNT to "账号",
-            MergeFieldKeys.PASSWORD to "密码",
-            MergeFieldKeys.URL to "网站",
-        )
+        MergeFieldKeys.AUTO_MERGE_KEYS.map { key ->
+            key to MergeFieldKeys.displayName(key)
+        }
     val lines =
         conflictKeys.mapNotNull { (key, label) ->
             val distinct =
@@ -230,10 +239,8 @@ private fun ConflictSummary(group: DuplicateGroupInfo) {
                     distinct.joinToString(" ／ ") { value ->
                         if (value.isEmpty()) {
                             "（空）"
-                        } else if (key == MergeFieldKeys.PASSWORD) {
-                            "已设置"
                         } else {
-                            value
+                            maskIfSensitive(key, value, revealed = false)
                         }
                     }
                 "${label}不同：$values"

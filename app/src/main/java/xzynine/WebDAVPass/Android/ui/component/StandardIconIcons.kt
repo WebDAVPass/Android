@@ -129,7 +129,7 @@ internal val standardIconVectorMap: Map<Int, ImageVector> =
         53 to MiuixIcons.Ok, // Checked
         54 to MiuixIcons.Edit, // Pen
         55 to MiuixIcons.Image, // Thumbnail
-        56 to Icons.Rounded.MenuBook, // Book
+        56 to Icons.AutoMirrored.Rounded.MenuBook, // Book
         57 to MiuixIcons.ListView, // List
         58 to Icons.Rounded.VpnKey, // UserKey
         59 to Icons.Rounded.Construction, // Tool

@@ -10,84 +10,20 @@ import android.net.Uri
 import android.os.Build
 import android.os.PersistableBundle
 import android.webkit.MimeTypeMap
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Icon
-import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.icon.MiuixIcons
-import top.yukonga.miuix.kmp.icon.extended.Copy
-import top.yukonga.miuix.kmp.icon.extended.Delete
-import top.yukonga.miuix.kmp.icon.extended.Hide
-import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.RemainingKeyValue
 import xzynine.WebDAVPass.Android.data.RemainingValueType
-
-@Composable
-fun AdditionalFieldRow(
-    item: RemainingKeyValue,
-    onCopy: () -> Unit,
-) {
-    // 受保护字段默认以掩码展示，仅在用户主动切换后显示原值
-    var showProtectedValue by remember { mutableStateOf(false) }
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
-        ) {
-            val displayName = displayFieldName(item.fieldName)
-            Text(
-                text = if (item.isProtected) "$displayName（已保护）" else displayName,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Medium,
-                color = MiuixTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = if (item.isProtected && !showProtectedValue) "••••••" else item.rawValue,
-                fontSize = 13.sp,
-                color = MiuixTheme.colorScheme.onSurfaceSecondary,
-            )
-        }
-        if (item.isProtected) {
-            IconButton(onClick = { showProtectedValue = !showProtectedValue }) {
-                Icon(
-                    imageVector = if (showProtectedValue) MiuixIcons.Hide else MiuixIcons.Show,
-                    contentDescription = if (showProtectedValue) "隐藏受保护字段" else "显示受保护字段",
-                    tint = MiuixTheme.colorScheme.onSurfaceSecondary,
-                )
-            }
-        }
-        IconButton(onClick = onCopy) {
-            Icon(
-                imageVector = MiuixIcons.Copy,
-                contentDescription = "复制 ${item.fieldName}",
-            )
-        }
-    }
-}
 
 /**
  * 模板装饰字段名（如 [SSID]）去除括号后展示，普通字段名原样返回。
@@ -151,11 +87,11 @@ fun openUrl(
 }
 
 /**
- * 将逗号/分号分隔的标签文本解析为去重后的标签列表。
+ * 将逗号/分号（含全角）分隔的标签文本解析为去重后的标签列表。
  */
 fun parseTagsText(text: String): List<String> =
     text
-        .split(',', ';')
+        .split(',', ';', '，', '；')
         .map { it.trim() }
         .filter { it.isNotEmpty() }
         .distinct()
@@ -184,74 +120,6 @@ fun copySensitiveToClipboard(
         }
     clipData.description.extras = sensitiveExtras
     clipboardManager.setPrimaryClip(clipData)
-}
-
-@Composable
-fun AttachmentViewRow(
-    name: String,
-    sizeText: String,
-    onClick: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = name,
-                fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurface,
-            )
-            Text(
-                text = sizeText,
-                fontSize = 12.sp,
-                color = MiuixTheme.colorScheme.onSurfaceSecondary,
-            )
-        }
-    }
-}
-
-@Composable
-fun AttachmentEditRow(
-    name: String,
-    sizeText: String?,
-    canDelete: Boolean,
-    onDelete: () -> Unit,
-) {
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = name,
-                fontSize = 14.sp,
-                color = MiuixTheme.colorScheme.onSurface,
-            )
-            if (sizeText != null) {
-                Text(
-                    text = sizeText,
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                )
-            }
-        }
-        if (canDelete) {
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = MiuixIcons.Delete,
-                    contentDescription = "删除附件",
-                )
-            }
-        }
-    }
 }
 
 /**

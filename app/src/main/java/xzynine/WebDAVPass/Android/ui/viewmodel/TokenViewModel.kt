@@ -25,6 +25,7 @@ import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
 import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
+import xzynine.WebDAVPass.Android.data.LegacyAutofillUrl
 import xzynine.WebDAVPass.Android.data.LibraryContext
 import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.PasswordEntry
@@ -32,11 +33,6 @@ import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
 import xzynine.WebDAVPass.Android.data.SecurityIssuesInfo
 import xzynine.WebDAVPass.Android.data.TokenCode
-import xzynine.WebDAVPass.Android.ui.ViewModel.AutoUnlockViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.CloudSyncViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.LibraryViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordViewModel
-import xzynine.WebDAVPass.Android.ui.ViewModel.WebDavConfigViewModel
 import xzynine.WebDAVPass.Android.util.TokenCodeUtil
 import xzynine.WebDAVPass.Android.util.UniqueIdGenerator
 import java.io.OutputStream
@@ -61,6 +57,9 @@ class TokenViewModel(
 
         /** 截屏防护临时关闭后的自动恢复时长 */
         private const val SECURE_RECOVERY_DELAY_MS = 5 * 60_000L
+
+        /** 写入后备份防抖窗口：窗口内连续修改只触发一次云端同步 */
+        private const val BACKUP_DEBOUNCE_MS = 1_500L
 
         @Volatile
         private var SHARED_VIEW_MODEL: TokenViewModel? = null
@@ -87,12 +86,31 @@ class TokenViewModel(
     private val tokenCodeUtil: TokenCodeUtil = TokenCodeUtil()
     private var tokenRefreshJob: Job? = null
     private var secureRestoreJob: Job? = null
+    private var backupDebounceJob: Job? = null
 
     val libraryViewModel: LibraryViewModel = LibraryViewModel(context)
     val autoUnlockViewModel: AutoUnlockViewModel = AutoUnlockViewModel(context)
     val cloudSyncViewModel: CloudSyncViewModel = CloudSyncViewModel(context)
     val webDavConfigViewModel: WebDavConfigViewModel = WebDavConfigViewModel(context)
     val passwordViewModel: PasswordViewModel = PasswordViewModel(context)
+
+    /**
+     * 自动填充检索专用：读取数据库中全部条目（含字段详情），
+     * 以便按包名/域名/自定义字段（如 AndroidApp1=androidapp://包名）匹配。
+     * 普通列表为性能考虑不加载字段详情，自动填充需要详情，故独立读取。
+     *
+     * KdbxTokenRepository 内部为同步 withDatabase（文件读取 + 解密 + 全量解析，无 IO 调度），
+     * 故本函数挂起并切到 [Dispatchers.IO]，避免调用方（如选择 Activity）阻塞主线程触发 ANR；
+     * 外层的 withTimeoutOrNull 也只有在本函数挂起后才能及时取消。
+     */
+    suspend fun loadAllPasswordEntriesWithDetails(): List<PasswordEntry> {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return emptyList()
+        val masterPassword = libraryViewModel.getMasterPasswordInternal()
+        if (!libraryViewModel.isLibraryUnlocked.value) return emptyList()
+        return withContext(Dispatchers.IO) {
+            kdbxTokenRepository.loadPasswordEntries(localPath, masterPassword, includeFieldDetails = true)
+        }
+    }
 
     private val _tokens = MutableStateFlow<List<OtpToken>>(emptyList())
     val tokens: StateFlow<List<OtpToken>> = _tokens.asStateFlow()
@@ -260,7 +278,11 @@ class TokenViewModel(
             if (loaded) {
                 if (libraryViewModel.shouldAutoSyncCurrentLibrary()) {
                     Logger.d(SYNC_LOG_TAG, "解锁成功，触发自动恢复")
-                    cloudSyncViewModel.autoRestoreTokens(libraryViewModel, kdbxTokenRepository) {
+                    cloudSyncViewModel.autoRestoreTokens(
+                        libraryViewModel,
+                        kdbxTokenRepository,
+                        libraryViewModel.getMasterPasswordInternal(),
+                    ) {
                         loadTokensInternal()
                     }
                 }
@@ -572,6 +594,34 @@ class TokenViewModel(
     }
 
     /**
+     * 检测存量候选：网站字段被旧版自动填充写成 android:// 混淆来源的条目（不含回收站）。
+     */
+    suspend fun detectLegacyAutofillUrlEntries(entryIds: List<Long>): List<LegacyAutofillUrl.Candidate> =
+        passwordViewModel.detectLegacyAutofillUrlEntries(
+            entryIds,
+            libraryViewModel.isLibraryUnlocked.value,
+            libraryViewModel.currentLibrary.value?.localPath,
+            libraryViewModel.getMasterPasswordInternal(),
+        )
+
+    /**
+     * 批量转换存量候选：清空网站字段并把包名回填到「应用」关联字段。
+     */
+    suspend fun convertLegacyAutofillUrlEntries(entryIds: List<Long>): Int {
+        val count =
+            passwordViewModel.convertLegacyAutofillUrlEntries(
+                entryIds,
+                libraryViewModel.isLibraryUnlocked.value,
+                libraryViewModel.currentLibrary.value?.localPath,
+                libraryViewModel.getMasterPasswordInternal(),
+            )
+        if (count > 0) {
+            onPasswordWriteSuccess()
+        }
+        return count
+    }
+
+    /**
      * 将条目附件以增量方式拷贝到指定输出流（供保存到本地文件，避免第二份全量内存拷贝）。
      */
     suspend fun copyEntryAttachmentTo(
@@ -775,6 +825,7 @@ class TokenViewModel(
                     }
                 }
             }
+            onPasswordWriteSuccess()
         }
         return ok
     }
@@ -849,7 +900,38 @@ class TokenViewModel(
         }
         passwordViewModel.refreshPasswordEntries()
         passwordViewModel.refreshRecentDeletedCount()
-        backupTokens()
+        scheduleBackupTokens()
+    }
+
+    /**
+     * 防抖触发备份：窗口内连续写入只执行一次云端同步。
+     * 到期时库已锁定则跳过；ViewModel 销毁取消任务时，未同步修改仍以
+     * 「本地修改时间晚于上次同步时间」持久保留，由下次解锁的自动恢复合并上传。
+     */
+    private fun scheduleBackupTokens() {
+        backupDebounceJob?.cancel()
+        backupDebounceJob =
+            viewModelScope.launch {
+                delay(BACKUP_DEBOUNCE_MS.milliseconds)
+                if (!libraryViewModel.isLibraryUnlocked.value) {
+                    Logger.d(SYNC_LOG_TAG, "备份防抖到期时库已锁定，跳过，待下次解锁补传")
+                    return@launch
+                }
+                backupTokens()
+            }
+    }
+
+    /**
+     * 锁定前补发未执行的防抖备份：同步读取主密码后立即发起同步，
+     * 避免锁定清空密码后防抖任务以空密码失败。
+     */
+    fun flushPendingBackup() {
+        val pending = backupDebounceJob?.isActive == true
+        backupDebounceJob?.cancel()
+        if (pending) {
+            Logger.d(SYNC_LOG_TAG, "锁定前补发未执行的备份")
+            backupTokens()
+        }
     }
 
     /**
@@ -909,10 +991,12 @@ class TokenViewModel(
     }
 
     /**
-     * 添加新令牌
+     * 添加新令牌，返回新条目 ID；令牌已存在或写库失败时返回 null。
+     *
+     * 新条目 ID 供调用方在添加后直接打开详情页，无需再按字段反查。
      */
-    suspend fun addToken(token: OtpToken): Boolean {
-        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
+    suspend fun addToken(token: OtpToken): Long? {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return null
         val masterPassword = libraryViewModel.getMasterPasswordInternal()
 
         val tokenWithId =
@@ -930,32 +1014,18 @@ class TokenViewModel(
                 token
             }
 
-        val duplicate =
-            withContext(Dispatchers.IO) {
-                kdbxTokenRepository.isDuplicate(
-                    localPath,
-                    masterPassword,
-                    tokenWithId.secret,
-                    tokenWithId.algorithm,
-                    tokenWithId.digits,
-                    tokenWithId.period,
-                )
-            }
-        if (duplicate) {
-            return false
-        }
-
-        val added =
+        // 判重与写入由仓库层在同一次开库内完成
+        val entryId =
             withContext(Dispatchers.IO) {
                 kdbxTokenRepository.addToken(localPath, masterPassword, tokenWithId)
             }
-        if (added) {
+        if (entryId != null) {
             viewModelScope.launch {
                 loadTokensInternal()
             }
-            backupTokens()
+            scheduleBackupTokens()
         }
-        return added
+        return entryId
     }
 
     /**
@@ -970,7 +1040,7 @@ class TokenViewModel(
         val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
         val masterPassword = libraryViewModel.getMasterPasswordInternal()
         return withContext(Dispatchers.IO) {
-            kdbxTokenRepository.isDuplicate(
+            kdbxTokenRepository.isTokenDuplicate(
                 localPath,
                 masterPassword,
                 secret,

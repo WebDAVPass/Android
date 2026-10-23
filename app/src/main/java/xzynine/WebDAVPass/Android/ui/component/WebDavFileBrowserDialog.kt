@@ -8,9 +8,7 @@ import android.provider.MediaStore
 import android.util.Log
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,7 +19,6 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Archive
 import androidx.compose.material.icons.rounded.VideoFile
@@ -40,6 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import github.xzynine.webdav.Authorization
+import github.xzynine.webdav.LOCAL_NETWORK_DENIED_MESSAGE
 import github.xzynine.webdav.WebDav
 import github.xzynine.webdav.WebDavFileEntry
 import github.xzynine.webdav.WebDavFileFormat
@@ -47,16 +45,17 @@ import github.xzynine.webdav.WebDavFileKind
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import top.yukonga.miuix.kmp.basic.BreadcrumbBar
+import top.yukonga.miuix.kmp.basic.BreadcrumbItem
 import top.yukonga.miuix.kmp.basic.Button
-import top.yukonga.miuix.kmp.basic.ButtonDefaults
 import top.yukonga.miuix.kmp.basic.Card
 import top.yukonga.miuix.kmp.basic.DropdownEntry
 import top.yukonga.miuix.kmp.basic.DropdownItem
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Text
-import top.yukonga.miuix.kmp.basic.TextButton
 import top.yukonga.miuix.kmp.basic.TextField
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.File
@@ -70,7 +69,6 @@ import top.yukonga.miuix.kmp.menu.WindowIconDropdownMenu
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.window.WindowBottomSheet
 import xzynine.WebDAVPass.Android.BuildConfig
-import java.net.URLEncoder
 import java.text.Collator
 
 /**
@@ -162,6 +160,8 @@ fun WebDavFileBrowserDialog(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+    val localNetworkGate = rememberLocalNetworkPermissionGate()
 
     // 账号信息
     var serverUrl by remember { mutableStateOf(initialServerUrl) }
@@ -185,51 +185,6 @@ fun WebDavFileBrowserDialog(
     var showCreateFolderDialog by remember { mutableStateOf(false) }
     var newFolderName by remember { mutableStateOf("") }
     var showDeleteConfirm by remember { mutableStateOf(false) }
-
-    /**
-     * 保证服务器根地址以 "/" 结尾
-     */
-    fun normalizeServerRootUrl(raw: String): String = if (raw.endsWith('/')) raw else "$raw/"
-
-    /**
-     * 规范化相对路径：去除首尾斜杠并合并重复斜杠
-     */
-    fun normalizeRelativePath(path: String): String = path.trim().trim('/').replace("//", "/")
-
-    /**
-     * 对相对路径逐段 URL 编码
-     */
-    fun encodeRelativePath(path: String): String =
-        normalizeRelativePath(path)
-            .split('/')
-            .filter { it.isNotBlank() }
-            .joinToString("/") {
-                URLEncoder.encode(it, Charsets.UTF_8.name()).replace("+", "%20")
-            }
-
-    /**
-     * 拼接文件完整地址（不带尾部斜杠）
-     */
-    fun buildFileUrl(
-        baseUrl: String,
-        relativePath: String,
-    ): String {
-        val root = normalizeServerRootUrl(baseUrl)
-        val rel = encodeRelativePath(relativePath)
-        return if (rel.isBlank()) root else "$root$rel"
-    }
-
-    /**
-     * 拼接目录完整地址（带尾部斜杠）
-     */
-    fun buildDirectoryUrl(
-        baseUrl: String,
-        relativeDirectory: String,
-    ): String {
-        val root = normalizeServerRootUrl(baseUrl)
-        val rel = encodeRelativePath(relativeDirectory)
-        return if (rel.isBlank()) root else "$root$rel/"
-    }
 
     /**
      * 判断文件是否满足扩展名过滤
@@ -275,9 +230,14 @@ fun WebDavFileBrowserDialog(
         errorText = null
         message = null
         try {
+            val baseUrl = normalizeServerRootUrl(serverUrl)
+            val dirUrl = buildDirectoryUrl(baseUrl, relativeDirectory)
+            // Android 17 起访问局域网 WebDAV 服务器需要「本地网络」权限
+            if (!localNetworkGate.ensure(dirUrl)) {
+                errorText = LOCAL_NETWORK_DENIED_MESSAGE
+                return
+            }
             withContext(Dispatchers.IO) {
-                val baseUrl = normalizeServerRootUrl(serverUrl)
-                val dirUrl = buildDirectoryUrl(baseUrl, relativeDirectory)
                 logDebug("loadDirectory start, dir=$relativeDirectory")
                 val raw =
                     WebDav(dirUrl, Authorization(username, password))
@@ -431,7 +391,6 @@ fun WebDavFileBrowserDialog(
                 showDeleteConfirm && detailEntry != null ->
                     DeleteConfirmView(
                         entry = detailEntry!!,
-                        working = working,
                         onCancel = { showDeleteConfirm = false },
                         onConfirm = {
                             showDeleteConfirm = false
@@ -656,22 +615,11 @@ private fun PathJumpView(
         useLabelAsPlaceholder = true,
         singleLine = true,
     )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        TextButton(
-            text = "取消",
-            onClick = onCancel,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(
-            text = "跳转",
-            onClick = onConfirm,
-            modifier = Modifier.weight(1f),
-            colors = ButtonDefaults.textButtonColorsPrimary(),
-        )
-    }
+    DialogActionRow(
+        onDismiss = onCancel,
+        onConfirm = onConfirm,
+        confirmButtonText = "跳转",
+    )
 }
 
 /**
@@ -693,23 +641,16 @@ private fun CreateFolderView(
         useLabelAsPlaceholder = true,
         singleLine = true,
     )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        TextButton(
-            text = "取消",
-            onClick = onCancel,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(
-            text = "创建",
-            onClick = onConfirm,
-            enabled = newFolderName.isNotBlank() && !working,
-            modifier = Modifier.weight(1f),
-            colors = ButtonDefaults.textButtonColorsPrimary(),
-        )
-    }
+    DialogActionRow(
+        onDismiss = onCancel,
+        onConfirm = {
+            // 空名称或处理中不触发创建
+            if (newFolderName.isNotBlank() && !working) {
+                onConfirm()
+            }
+        },
+        confirmButtonText = "创建",
+    )
 }
 
 /**
@@ -718,28 +659,16 @@ private fun CreateFolderView(
 @Composable
 private fun DeleteConfirmView(
     entry: WebDavFileEntry,
-    working: Boolean,
     onCancel: () -> Unit,
     onConfirm: () -> Unit,
 ) {
     Text("确定删除「${entry.name}」？此操作不可恢复。")
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        TextButton(
-            text = "取消",
-            onClick = onCancel,
-            enabled = !working,
-            modifier = Modifier.weight(1f),
-        )
-        TextButton(
-            text = "删除",
-            onClick = onConfirm,
-            enabled = !working,
-            modifier = Modifier.weight(1f),
-        )
-    }
+    DialogActionRow(
+        onDismiss = onCancel,
+        onConfirm = onConfirm,
+        confirmButtonText = "删除",
+        isDestructive = true,
+    )
 }
 
 /**
@@ -767,37 +696,24 @@ private fun BrowseView(
     onSelectCurrentDirectory: () -> Unit,
 ) {
     // 面包屑层级
-    val segments =
+    val crumbs =
         remember(currentDirectory) {
-            currentDirectory.split('/').filter { it.isNotBlank() }
+            buildList {
+                add(BreadcrumbItem(path = "/", text = "根目录"))
+                currentDirectory.trim('/').split('/').filter { it.isNotBlank() }.forEach { segment ->
+                    add(BreadcrumbItem(path = segment, text = segment))
+                }
+            }
         }
 
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
-    ) {
-        BreadcrumbText(
-            text = "/",
-            active = segments.isEmpty(),
-            onClick = { onJumpTo("") },
-        )
-        segments.forEachIndexed { index, segment ->
-            Text(
-                text = "›",
-                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-            )
-            val target = segments.take(index + 1).joinToString("/")
-            BreadcrumbText(
-                text = segment,
-                active = index == segments.lastIndex,
-                onClick = { onJumpTo(target) },
-            )
-        }
-    }
+    BreadcrumbBar(
+        modifier = Modifier.fillMaxWidth(),
+        items = crumbs,
+        highlightIndex = crumbs.lastIndex,
+        onItemClick = { index ->
+            onJumpTo(crumbs.take(index + 1).joinToString("/") { it.path })
+        },
+    )
 
     // 工具行：排序 + 更多
     Row(
@@ -815,64 +731,68 @@ private fun BrowseView(
             }
         val dirOptions = listOf("升序", "降序")
         val dirIdx = if (sortDescending) 1 else 0
-        WindowIconDropdownMenu(
-            entries =
-                listOf(
-                    DropdownEntry(
-                        items =
-                            sortOptions.mapIndexed { index, option ->
-                                DropdownItem(
-                                    text = option,
-                                    selected = index == sortFieldIdx,
-                                    onClick = {
-                                        onSortFieldChange(
-                                            when (index) {
-                                                1 -> BrowserSortField.SIZE
-                                                2 -> BrowserSortField.TIME
-                                                3 -> BrowserSortField.EXTENSION
-                                                else -> BrowserSortField.NAME
-                                            },
-                                        )
-                                    },
-                                )
-                            },
+        TooltipBox(text = "排序") {
+            WindowIconDropdownMenu(
+                entries =
+                    listOf(
+                        DropdownEntry(
+                            items =
+                                sortOptions.mapIndexed { index, option ->
+                                    DropdownItem(
+                                        text = option,
+                                        selected = index == sortFieldIdx,
+                                        onClick = {
+                                            onSortFieldChange(
+                                                when (index) {
+                                                    1 -> BrowserSortField.SIZE
+                                                    2 -> BrowserSortField.TIME
+                                                    3 -> BrowserSortField.EXTENSION
+                                                    else -> BrowserSortField.NAME
+                                                },
+                                            )
+                                        },
+                                    )
+                                },
+                        ),
+                        DropdownEntry(
+                            items =
+                                dirOptions.mapIndexed { index, option ->
+                                    DropdownItem(
+                                        text = option,
+                                        selected = index == dirIdx,
+                                        onClick = { onSortDescendingChange(index == 1) },
+                                    )
+                                },
+                        ),
                     ),
-                    DropdownEntry(
-                        items =
-                            dirOptions.mapIndexed { index, option ->
-                                DropdownItem(
-                                    text = option,
-                                    selected = index == dirIdx,
-                                    onClick = { onSortDescendingChange(index == 1) },
-                                )
-                            },
-                    ),
-                ),
-        ) {
-            Icon(imageVector = MiuixIcons.Tune, contentDescription = "排序")
+            ) {
+                Icon(imageVector = MiuixIcons.Tune, contentDescription = "排序")
+            }
         }
 
-        WindowIconDropdownMenu(
-            entry =
-                DropdownEntry(
-                    items =
-                        listOf(
-                            DropdownItem(
-                                text = "跳转路径",
-                                onClick = onPathDialog,
+        TooltipBox(text = "更多") {
+            WindowIconDropdownMenu(
+                entry =
+                    DropdownEntry(
+                        items =
+                            listOf(
+                                DropdownItem(
+                                    text = "跳转路径",
+                                    onClick = onPathDialog,
+                                ),
+                                DropdownItem(
+                                    text = "新建文件夹",
+                                    onClick = onCreateFolderDialog,
+                                ),
+                                DropdownItem(
+                                    text = "上传文件",
+                                    onClick = onUpload,
+                                ),
                             ),
-                            DropdownItem(
-                                text = "新建文件夹",
-                                onClick = onCreateFolderDialog,
-                            ),
-                            DropdownItem(
-                                text = "上传文件",
-                                onClick = onUpload,
-                            ),
-                        ),
-                ),
-        ) {
-            Icon(imageVector = MiuixIcons.More, contentDescription = "更多")
+                    ),
+            ) {
+                Icon(imageVector = MiuixIcons.More, contentDescription = "更多")
+            }
         }
     }
 
@@ -922,32 +842,6 @@ private fun BrowseView(
 
 /**
  * 面包屑文本（当前层级高亮）
- */
-@Composable
-private fun BreadcrumbText(
-    text: String,
-    active: Boolean,
-    onClick: () -> Unit,
-) {
-    Text(
-        text = text,
-        modifier =
-            Modifier
-                .clickable(onClick = onClick)
-                .padding(horizontal = 6.dp, vertical = 4.dp),
-        color =
-            if (active) {
-                MiuixTheme.colorScheme.primary
-            } else {
-                MiuixTheme.colorScheme.onSurfaceVariantSummary
-            },
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-    )
-}
-
-/**
- * 状态提示卡（加载中/失败/空目录）
  */
 @Composable
 private fun StatusCard(message: String) {

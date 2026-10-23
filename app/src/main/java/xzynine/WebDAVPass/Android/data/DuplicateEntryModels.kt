@@ -15,7 +15,30 @@ object MergeFieldKeys {
     val AUTO_MERGE_KEYS = setOf(ACCOUNT, PASSWORD, URL)
 
     val STANDARD_KEYS = listOf(TITLE, ACCOUNT, PASSWORD, URL, NOTES, TAGS)
+
+    /**
+     * 字段键的显示标签，未知键回退原键名。
+     */
+    fun displayName(key: String): String =
+        when (key) {
+            TITLE -> "标题"
+            ACCOUNT -> "账号"
+            PASSWORD -> "密码"
+            URL -> "网站"
+            NOTES -> "备注"
+            TAGS -> "标签"
+            else -> key
+        }
 }
+
+/**
+ * 敏感字段值的展示脱敏：密码字段在未展开时显示「已设置」，其余值原样返回。
+ */
+internal fun maskIfSensitive(
+    key: String,
+    value: String,
+    revealed: Boolean,
+): String = if (key == MergeFieldKeys.PASSWORD && !revealed) "已设置" else value
 
 /**
  * 重复条目检测中的条目摘要。
@@ -38,16 +61,7 @@ data class DuplicateEntryInfo(
     val attachmentNames: List<String> = emptyList(),
 ) {
     /** 字段显示标签。 */
-    fun fieldDisplayName(key: String): String =
-        when (key) {
-            MergeFieldKeys.TITLE -> "标题"
-            MergeFieldKeys.ACCOUNT -> "账号"
-            MergeFieldKeys.PASSWORD -> "密码"
-            MergeFieldKeys.URL -> "网站"
-            MergeFieldKeys.NOTES -> "备注"
-            MergeFieldKeys.TAGS -> "标签"
-            else -> key
-        }
+    fun fieldDisplayName(key: String): String = MergeFieldKeys.displayName(key)
 
     /** 某字段的值（用于展示，密码等敏感字段由调用方决定是否脱敏）。 */
     fun fieldValue(key: String): String = fieldValues[key] ?: ""

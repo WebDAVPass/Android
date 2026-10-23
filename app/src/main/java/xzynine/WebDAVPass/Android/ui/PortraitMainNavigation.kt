@@ -17,6 +17,7 @@ import top.yukonga.miuix.kmp.basic.FloatingActionButton
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Scan
@@ -30,11 +31,11 @@ import xzynine.WebDAVPass.Android.ui.Screen.LockedScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
 import xzynine.WebDAVPass.Android.ui.Screen.WelcomeScreen
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.navigation.Route
 import xzynine.WebDAVPass.Android.ui.navigation.pop
 import xzynine.WebDAVPass.Android.ui.navigation.push
 import xzynine.WebDAVPass.Android.ui.navigation.replaceAll
+import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 @Composable
@@ -147,15 +148,17 @@ fun PortraitMainNavigation(
                         )
                     },
                     floatingActionButton = {
-                        FloatingActionButton(
-                            onClick = {
-                                showScanBottomSheet.value = true
-                            },
-                        ) {
-                            Icon(
-                                imageVector = MiuixIcons.Scan,
-                                contentDescription = "扫描二维码",
-                            )
+                        TooltipBox(text = "扫描二维码") {
+                            FloatingActionButton(
+                                onClick = {
+                                    showScanBottomSheet.value = true
+                                },
+                            ) {
+                                Icon(
+                                    imageVector = MiuixIcons.Scan,
+                                    contentDescription = "扫描二维码",
+                                )
+                            }
                         }
                     },
                     floatingActionButtonPosition = FabPosition.End,

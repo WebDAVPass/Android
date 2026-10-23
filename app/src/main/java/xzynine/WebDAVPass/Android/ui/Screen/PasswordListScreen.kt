@@ -2,11 +2,13 @@ package xzynine.WebDAVPass.Android.ui.Screen
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -28,6 +30,7 @@ import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
 import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -36,7 +39,9 @@ import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzylib.base.util.ToastUtils
 import xzynine.WebDAVPass.Android.data.DuplicateEntryInfo
 import xzynine.WebDAVPass.Android.data.DuplicateGroupInfo
+import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.GroupNodeInfo
+import xzynine.WebDAVPass.Android.data.LegacyAutofillUrl
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.PasswordEntryEditDraft
 import xzynine.WebDAVPass.Android.data.PasswordGroupEditDraft
@@ -44,6 +49,8 @@ import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.DuplicateScanDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryMergeDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.GroupPickerDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.LegacyAutofillConvertDialog
+import xzynine.WebDAVPass.Android.ui.Dialog.TemplatePickerDialog
 import xzynine.WebDAVPass.Android.ui.component.buildBrandIconBytes
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordFolderIndexLabel
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordSortMode
@@ -82,6 +89,7 @@ fun PasswordListScreen(
     var sortModeOrdinal by rememberSaveable { mutableStateOf(PasswordSortMode.DEFAULT.ordinal) }
     var sortAscending by rememberSaveable { mutableStateOf(true) }
     var hideExpired by rememberSaveable { mutableStateOf(false) }
+    var onlyWithApp by rememberSaveable { mutableStateOf(false) }
     val sortMode = PasswordSortMode.entries.getOrElse(sortModeOrdinal) { PasswordSortMode.DEFAULT }
     val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
@@ -90,6 +98,7 @@ fun PasswordListScreen(
     val selectedTargets = remember { mutableStateMapOf<Long, Boolean>() }
 
     val showCreateEntryDialog = remember { mutableStateOf(false) }
+    val showCreateTemplatePicker = remember { mutableStateOf(false) }
     val showCreateGroupDialog = remember { mutableStateOf(false) }
     val showDeleteDialog = remember { mutableStateOf(false) }
     val showPermanentDeleteDialog = remember { mutableStateOf(false) }
@@ -110,11 +119,20 @@ fun PasswordListScreen(
     val showMergeConfirm = remember { mutableStateOf(false) }
     var mergeConfirmTarget by remember { mutableStateOf<Pair<Long, Map<String, Long>>?>(null) }
 
+    val legacyCandidates = remember { mutableStateOf<List<LegacyAutofillUrl.Candidate>>(emptyList()) }
+    val showLegacyConvertDialog = remember { mutableStateOf(false) }
+    val showLegacyConvertConfirm = remember { mutableStateOf(false) }
+    var legacyConvertTarget by remember { mutableStateOf<List<Long>?>(null) }
+
     var createEntryTitle by remember { mutableStateOf("") }
     var createEntryUsername by remember { mutableStateOf("") }
     var createEntryPassword by remember { mutableStateOf("") }
     var createEntryUrl by remember { mutableStateOf("") }
     var createEntryNotes by remember { mutableStateOf("") }
+
+    /** 模板选择第一步的结果（字段与图标），创建或取消后清空。 */
+    var createEntryCustomFields by remember { mutableStateOf<List<EditableFieldDraft>>(emptyList()) }
+    var createEntryIconStandardId by remember { mutableStateOf(0) }
 
     var createGroupTitle by remember { mutableStateOf("") }
     var createGroupNotes by remember { mutableStateOf("") }
@@ -126,6 +144,11 @@ fun PasswordListScreen(
         showPermanentDeleteDialog.value = false
         showSolidifyDialog.value = false
         solidifyUpdates = emptyMap()
+    }
+
+    /** 新建条目：先弹出模板选择，选定模板（或「不使用模板」）后才打开条目编辑弹窗。 */
+    fun openCreateEntryFlow() {
+        showCreateTemplatePicker.value = true
     }
 
     fun restoreSelectedEntries() {
@@ -172,21 +195,6 @@ fun PasswordListScreen(
                 ToastUtils.showShortToast(context, if (groupPickerIsMove) "移动失败" else "复制失败")
             }
             clearSelectionMode()
-        }
-    }
-
-    fun toggleSelection(item: PasswordEntry) {
-        if (!allowWriteActions) {
-            return
-        }
-        isSelectionMode.value = true
-        if (selectedTargets.containsKey(item.entryId)) {
-            selectedTargets.remove(item.entryId)
-        } else {
-            selectedTargets[item.entryId] = item.isFolderPlaceholder
-        }
-        if (selectedTargets.isEmpty()) {
-            isSelectionMode.value = false
         }
     }
 
@@ -281,6 +289,40 @@ fun PasswordListScreen(
             if (groups.isEmpty()) {
                 showDuplicateScanDialog.value = false
             }
+        }
+    }
+
+    /** 扫描当前视图，检测旧版自动填充污染条目。 */
+    fun scanLegacyAutofillEntries() {
+        coroutineScope.launch {
+            val entryIds = visibleEntryIds()
+            if (entryIds.isEmpty()) {
+                ToastUtils.showShortToast(context, "当前视图无条目")
+                return@launch
+            }
+            val candidates = tokenViewModel.detectLegacyAutofillUrlEntries(entryIds)
+            if (candidates.isEmpty()) {
+                ToastUtils.showShortToast(context, "未发现可转换条目")
+                return@launch
+            }
+            legacyCandidates.value = candidates
+            showLegacyConvertDialog.value = true
+        }
+    }
+
+    /** 执行存量转换并关闭对话框链。 */
+    fun executeLegacyAutofillConvert(entryIds: List<Long>) {
+        coroutineScope.launch {
+            val count = tokenViewModel.convertLegacyAutofillUrlEntries(entryIds)
+            if (count > 0) {
+                ToastUtils.showShortToast(context, "已转换 $count 条条目")
+            } else {
+                ToastUtils.showShortToast(context, "转换失败")
+            }
+            legacyCandidates.value = emptyList()
+            legacyConvertTarget = null
+            showLegacyConvertDialog.value = false
+            showLegacyConvertConfirm.value = false
         }
     }
 
@@ -400,7 +442,7 @@ fun PasswordListScreen(
     // 首次进入且搜索为空时跳过刷新（reloadInitialPasswordData 已完成加载）；
     // 后续任何搜索/排序/过滤变化均统一在此触发刷新
     val isFirstComposition = remember { mutableStateOf(true) }
-    LaunchedEffect(searchQuery, searchCaseSensitive, sortModeOrdinal, sortAscending, hideExpired) {
+    LaunchedEffect(searchQuery, searchCaseSensitive, sortModeOrdinal, sortAscending, hideExpired, onlyWithApp) {
         if (isFirstComposition.value && searchQuery.isBlank()) {
             isFirstComposition.value = false
             return@LaunchedEffect
@@ -412,6 +454,7 @@ fun PasswordListScreen(
             sortMode = sortMode,
             ascending = sortAscending,
             hideExpired = hideExpired,
+            onlyWithApp = onlyWithApp,
         )
     }
 
@@ -469,6 +512,37 @@ fun PasswordListScreen(
         }
     }
 
+    // 顶栏动作区：嵌入模式 SmallTopAppBar 与独立模式 TopAppBar 共用同一份实参
+    val topBarActions: @Composable RowScope.() -> Unit = {
+        PasswordListTopBarActions(
+            isSelectionMode = isSelectionMode.value,
+            selectedTargets = selectedTargets,
+            enableRecycleBinActions = enableRecycleBinActions,
+            allowWriteActions = allowWriteActions,
+            enableGroupNavigation = enableGroupNavigation,
+            sortMode = sortMode,
+            onSortModeChange = { sortModeOrdinal = it.ordinal },
+            sortAscending = sortAscending,
+            onSortAscendingChange = { sortAscending = it },
+            hideExpired = hideExpired,
+            onHideExpiredChange = { hideExpired = it },
+            onlyWithApp = onlyWithApp,
+            onOnlyWithAppChange = { onlyWithApp = it },
+            onSelectAll = { selectAllVisible() },
+            onInvertSelection = { invertSelection() },
+            onRestoreSelected = { restoreSelectedEntries() },
+            onRequestPermanentDelete = { showPermanentDeleteDialog.value = true },
+            onRequestDelete = { showDeleteDialog.value = true },
+            onSolidifyBrandIcons = { solidifySelectedBrandIcons() },
+            onMergeSelection = { openEntryMergeForSelection() },
+            onMoveSelection = { openGroupPicker(isMove = true) },
+            onCopySelection = { openGroupPicker(isMove = false) },
+            onScanDuplicates = { scanDuplicateEntries() },
+            onConvertLegacyAutofill = { scanLegacyAutofillEntries() },
+            onCreateEntry = { openCreateEntryFlow() },
+        ) { showCreateGroupDialog.value = true }
+    }
+
     // 嵌入模式与独立模式共用 Scaffold：保留顶栏功能区
     // 嵌入模式用紧凑 SmallTopAppBar（由 TopAppBar 自行处理状态栏 insets，缓解高度压缩）
     Scaffold(
@@ -479,82 +553,64 @@ fun PasswordListScreen(
                     title = if (isSelectionMode.value) "已选 ${selectedTargets.size} 项" else title,
                     navigationIcon = {
                         if (isSelectionMode.value) {
-                            IconButton(
-                                onClick = {
-                                    clearSelectionMode()
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Close,
-                                    contentDescription = "取消选择",
-                                )
+                            TooltipBox(text = "取消选择") {
+                                IconButton(
+                                    onClick = {
+                                        clearSelectionMode()
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Close,
+                                        contentDescription = "取消选择",
+                                    )
+                                }
                             }
                         } else if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Back,
-                                    contentDescription = "返回上一级",
-                                )
+                            TooltipBox(text = "返回上一级") {
+                                IconButton(
+                                    onClick = {
+                                        tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Back,
+                                        contentDescription = "返回上一级",
+                                    )
+                                }
                             }
                         }
                     },
-                    actions = {
-                        PasswordListTopBarActions(
-                            isSelectionMode = isSelectionMode.value,
-                            selectedTargets = selectedTargets,
-                            enableRecycleBinActions = enableRecycleBinActions,
-                            allowWriteActions = allowWriteActions,
-                            enableGroupNavigation = enableGroupNavigation,
-                            sortMode = sortMode,
-                            onSortModeChange = { sortModeOrdinal = it.ordinal },
-                            sortAscending = sortAscending,
-                            onSortAscendingChange = { sortAscending = it },
-                            hideExpired = hideExpired,
-                            onHideExpiredChange = { hideExpired = it },
-                            onSelectAll = { selectAllVisible() },
-                            onInvertSelection = { invertSelection() },
-                            onRestoreSelected = { restoreSelectedEntries() },
-                            onRequestPermanentDelete = { showPermanentDeleteDialog.value = true },
-                            onRequestDelete = { showDeleteDialog.value = true },
-                            onSolidifyBrandIcons = { solidifySelectedBrandIcons() },
-                            onMergeSelection = { openEntryMergeForSelection() },
-                            onMoveSelection = { openGroupPicker(isMove = true) },
-                            onCopySelection = { openGroupPicker(isMove = false) },
-                            onScanDuplicates = { scanDuplicateEntries() },
-                            onCreateEntry = { showCreateEntryDialog.value = true },
-                            onCreateGroup = { showCreateGroupDialog.value = true },
-                        )
-                    },
+                    actions = topBarActions,
                 )
             } else {
                 TopAppBar(
                     title = if (isSelectionMode.value) "已选 ${selectedTargets.size} 项" else title,
                     navigationIcon = {
                         if (isSelectionMode.value) {
-                            IconButton(
-                                onClick = {
-                                    clearSelectionMode()
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Close,
-                                    contentDescription = "取消选择",
-                                )
+                            TooltipBox(text = "取消选择") {
+                                IconButton(
+                                    onClick = {
+                                        clearSelectionMode()
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Close,
+                                        contentDescription = "取消选择",
+                                    )
+                                }
                             }
                         } else if (enableGroupNavigation && passwordGroupStack.isNotEmpty()) {
-                            IconButton(
-                                onClick = {
-                                    tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
-                                },
-                            ) {
-                                Icon(
-                                    imageVector = MiuixIcons.Back,
-                                    contentDescription = "返回上一级",
-                                )
+                            TooltipBox(text = "返回上一级") {
+                                IconButton(
+                                    onClick = {
+                                        tokenViewModel.passwordViewModel.navigateUpPasswordGroup(searchQuery)
+                                    },
+                                ) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Back,
+                                        contentDescription = "返回上一级",
+                                    )
+                                }
                             }
                         } else {
                             IconButton(
@@ -567,33 +623,7 @@ fun PasswordListScreen(
                             }
                         }
                     },
-                    actions = {
-                        PasswordListTopBarActions(
-                            isSelectionMode = isSelectionMode.value,
-                            selectedTargets = selectedTargets,
-                            enableRecycleBinActions = enableRecycleBinActions,
-                            allowWriteActions = allowWriteActions,
-                            enableGroupNavigation = enableGroupNavigation,
-                            sortMode = sortMode,
-                            onSortModeChange = { sortModeOrdinal = it.ordinal },
-                            sortAscending = sortAscending,
-                            onSortAscendingChange = { sortAscending = it },
-                            hideExpired = hideExpired,
-                            onHideExpiredChange = { hideExpired = it },
-                            onSelectAll = { selectAllVisible() },
-                            onInvertSelection = { invertSelection() },
-                            onRestoreSelected = { restoreSelectedEntries() },
-                            onRequestPermanentDelete = { showPermanentDeleteDialog.value = true },
-                            onRequestDelete = { showDeleteDialog.value = true },
-                            onSolidifyBrandIcons = { solidifySelectedBrandIcons() },
-                            onMergeSelection = { openEntryMergeForSelection() },
-                            onMoveSelection = { openGroupPicker(isMove = true) },
-                            onCopySelection = { openGroupPicker(isMove = false) },
-                            onScanDuplicates = { scanDuplicateEntries() },
-                            onCreateEntry = { showCreateEntryDialog.value = true },
-                            onCreateGroup = { showCreateGroupDialog.value = true },
-                        )
-                    },
+                    actions = topBarActions,
                 )
             }
         },
@@ -628,6 +658,25 @@ fun PasswordListScreen(
         )
     }
 
+    // 新建条目的第一步：先选模板，选定后再打开条目编辑弹窗并预填模板字段与图标
+    TemplatePickerDialog(
+        show = showCreateTemplatePicker.value,
+        onDismiss = {
+            showCreateTemplatePicker.value = false
+        },
+        onPick = { template ->
+            showCreateTemplatePicker.value = false
+            createEntryCustomFields =
+                template?.let { t ->
+                    mutableListOf<EditableFieldDraft>().apply {
+                        applyTemplateFields(t)
+                    }
+                } ?: emptyList()
+            createEntryIconStandardId = template?.icon?.standard?.id ?: 0
+            showCreateEntryDialog.value = true
+        },
+    )
+
     PasswordEntryEditorDialog(
         title = "新建条目",
         show = showCreateEntryDialog,
@@ -638,9 +687,13 @@ fun PasswordListScreen(
                 password = createEntryPassword,
                 url = createEntryUrl,
                 notes = createEntryNotes,
+                customFields = createEntryCustomFields,
+                iconStandardId = createEntryIconStandardId,
             ),
         onDismiss = {
             showCreateEntryDialog.value = false
+            createEntryCustomFields = emptyList()
+            createEntryIconStandardId = 0
         },
         onConfirm = { draft ->
             coroutineScope.launch {
@@ -658,6 +711,8 @@ fun PasswordListScreen(
                     createEntryPassword = ""
                     createEntryUrl = ""
                     createEntryNotes = ""
+                    createEntryCustomFields = emptyList()
+                    createEntryIconStandardId = 0
                 }
             }
         },
@@ -786,6 +841,35 @@ fun PasswordListScreen(
         )
     }
 
+    if (legacyCandidates.value.isNotEmpty() && showLegacyConvertDialog.value) {
+        LegacyAutofillConvertDialog(
+            candidates = legacyCandidates.value,
+            show = showLegacyConvertDialog.value,
+            onDismiss = {
+                showLegacyConvertDialog.value = false
+                legacyCandidates.value = emptyList()
+            },
+            onConvert = { selectedIds ->
+                legacyConvertTarget = selectedIds
+                showLegacyConvertDialog.value = false
+                showLegacyConvertConfirm.value = true
+            },
+        )
+    }
+
+    if (showLegacyConvertConfirm.value && legacyConvertTarget != null) {
+        ConfirmationDialog(
+            title = "确认转换",
+            summary =
+                "将修复所选 ${legacyConvertTarget!!.size} 条条目：清空被污染的网站字段、" +
+                    "回填「应用」关联字段，并在无自定义图标时回填应用图标；原版本保留在条目历史中。",
+            show = showLegacyConvertConfirm,
+            onDismiss = { showLegacyConvertConfirm.value = false },
+            confirmButtonText = "转换",
+            onConfirm = { executeLegacyAutofillConvert(legacyConvertTarget!!) },
+        )
+    }
+
     if (mergeDialogEntries.value.isNotEmpty() && showMergeDialog.value) {
         EntryMergeDialog(
             entries = mergeDialogEntries.value,
@@ -798,12 +882,9 @@ fun PasswordListScreen(
 
     if (showAutoMergeConfirm.value && autoMergeTarget != null) {
         val (masterId, sourceIds) = autoMergeTarget!!
-        ConfirmationDialog(
-            title = "确认合并",
-            summary = "将合并 ${sourceIds.size + 1} 条条目为 1 条，其余 ${sourceIds.size} 条将移入回收站（可恢复）。",
+        MergeConfirmDialog(
             show = showAutoMergeConfirm,
-            onDismiss = { showAutoMergeConfirm.value = false },
-            confirmButtonText = "合并",
+            summary = "将合并 ${sourceIds.size + 1} 条条目为 1 条，其余 ${sourceIds.size} 条将移入回收站（可恢复）。",
             onConfirm = { executeMerge(masterId, sourceIds, emptyMap()) },
         )
     }
@@ -811,15 +892,35 @@ fun PasswordListScreen(
     if (showMergeConfirm.value && mergeConfirmTarget != null) {
         val (masterId, selections) = mergeConfirmTarget!!
         val sourceIds = mergeDialogEntries.value.map { it.entryId }.filter { it != masterId }
-        ConfirmationDialog(
-            title = "确认合并",
-            summary = "将把 ${sourceIds.size} 条条目合并进所选主条目，并移入回收站（可恢复）。",
+        MergeConfirmDialog(
             show = showMergeConfirm,
-            onDismiss = { showMergeConfirm.value = false },
-            confirmButtonText = "合并",
+            summary = "将把 ${sourceIds.size} 条条目合并进所选主条目，并移入回收站（可恢复）。",
             onConfirm = { executeMerge(masterId, sourceIds, selections) },
         )
     }
+}
+
+/**
+ * 合并确认对话框：自动合并与逐项选择合并两处共用同一外壳（标题与确认按钮文案相同）。
+ *
+ * @param show 显示状态，取消与确认均通过该状态关闭
+ * @param summary 合并范围摘要
+ * @param onConfirm 确认回调
+ */
+@Composable
+private fun MergeConfirmDialog(
+    show: MutableState<Boolean>,
+    summary: String,
+    onConfirm: () -> Unit,
+) {
+    ConfirmationDialog(
+        title = "确认合并",
+        summary = summary,
+        show = show,
+        onDismiss = { show.value = false },
+        confirmButtonText = "合并",
+        onConfirm = onConfirm,
+    )
 }
 
 /**

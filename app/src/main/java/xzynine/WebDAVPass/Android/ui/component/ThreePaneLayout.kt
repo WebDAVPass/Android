@@ -7,17 +7,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.VerticalDivider
-import top.yukonga.miuix.kmp.theme.MiuixTheme
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordEntryDetailScreen
 import xzynine.WebDAVPass.Android.ui.Screen.PasswordListScreen
-import xzynine.WebDAVPass.Android.ui.ViewModel.PasswordListMode
+import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
 
 /**
@@ -83,21 +78,14 @@ fun LandscapePasswordPanes(
                     isEmbedded = true,
                 )
             } else {
-                Box(
+                CenteredEmptyState(
+                    text = "选择一个条目查看详情",
                     modifier =
                         Modifier
                             .fillMaxSize()
                             .statusBarsPadding()
                             .padding(24.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "选择一个条目查看详情",
-                        fontSize = 14.sp,
-                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
-                        textAlign = TextAlign.Center,
-                    )
-                }
+                )
             }
         }
     }

@@ -1,13 +1,9 @@
 package xzynine.WebDAVPass.Android.data
 
-import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import android.util.Base64
-import java.security.KeyStore
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
-import javax.crypto.spec.GCMParameterSpec
 
 /**
  * WebDAV 密码加解密工具
@@ -24,10 +20,7 @@ object WebDavPasswordCipher {
     const val PREFIX = "AES:"
 
     private const val KEY_ALIAS = "webdavpass_password_key"
-    private const val ANDROID_KEYSTORE = "AndroidKeyStore"
-    private const val TRANSFORMATION = "AES/GCM/NoPadding"
     private const val IV_LENGTH = 12
-    private const val TAG_BITS = 128
 
     private val lock = Any()
 
@@ -48,14 +41,14 @@ object WebDavPasswordCipher {
         if (plain.startsWith(PREFIX) && decrypt(plain) != null) {
             return plain
         }
-        val cipher = Cipher.getInstance(TRANSFORMATION)
+        val cipher = Cipher.getInstance(KeyStoreAes.AES_GCM_TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, getOrCreateKey())
         val iv = cipher.iv
         val encrypted = cipher.doFinal(plain.toByteArray(Charsets.UTF_8))
         val payload = ByteArray(iv.size + encrypted.size)
         System.arraycopy(iv, 0, payload, 0, iv.size)
         System.arraycopy(encrypted, 0, payload, iv.size, encrypted.size)
-        return PREFIX + Base64.encodeToString(payload, Base64.NO_WRAP)
+        return PREFIX + KeyStoreAes.encodeBase64(payload)
     }
 
     /**
@@ -72,7 +65,7 @@ object WebDavPasswordCipher {
         if (!stored.startsWith(PREFIX)) {
             return null
         }
-        val payload = runCatching { Base64.decode(stored.removePrefix(PREFIX), Base64.NO_WRAP) }.getOrNull() ?: return null
+        val payload = runCatching { KeyStoreAes.decodeBase64(stored.removePrefix(PREFIX)) }.getOrNull() ?: return null
         if (payload.size <= IV_LENGTH) {
             return null
         }
@@ -80,8 +73,8 @@ object WebDavPasswordCipher {
         return runCatching {
             val iv = payload.copyOfRange(0, IV_LENGTH)
             val encrypted = payload.copyOfRange(IV_LENGTH, payload.size)
-            val cipher = Cipher.getInstance(TRANSFORMATION)
-            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(TAG_BITS, iv))
+            val cipher = Cipher.getInstance(KeyStoreAes.AES_GCM_TRANSFORMATION)
+            cipher.init(Cipher.DECRYPT_MODE, key, KeyStoreAes.gcmParameterSpec(iv))
             String(cipher.doFinal(encrypted), Charsets.UTF_8)
         }.getOrNull()
     }
@@ -94,7 +87,7 @@ object WebDavPasswordCipher {
     private fun getKey(): SecretKey? {
         cachedKey?.let { return it }
         return runCatching {
-            val keyStore = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
+            val keyStore = KeyStoreAes.openKeyStore()
             keyStore.getKey(KEY_ALIAS, null) as? SecretKey
         }.getOrNull()?.also { cachedKey = it }
     }
@@ -108,15 +101,8 @@ object WebDavPasswordCipher {
         getKey()?.let { return it }
         synchronized(lock) {
             getKey()?.let { return it }
-            val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, ANDROID_KEYSTORE)
-            keyGenerator.init(
-                KeyGenParameterSpec
-                    .Builder(KEY_ALIAS, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
-                    .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-                    .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-                    .setKeySize(256)
-                    .build(),
-            )
+            val keyGenerator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KeyStoreAes.ANDROID_KEYSTORE)
+            keyGenerator.init(KeyStoreAes.keyGenParameterSpecBuilder(KEY_ALIAS).build())
             return keyGenerator.generateKey().also { cachedKey = it }
         }
     }

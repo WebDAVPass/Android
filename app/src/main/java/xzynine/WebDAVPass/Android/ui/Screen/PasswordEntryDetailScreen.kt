@@ -1,7 +1,5 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -15,12 +13,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.launch
 import top.yukonga.miuix.kmp.basic.Icon
 import top.yukonga.miuix.kmp.basic.IconButton
 import top.yukonga.miuix.kmp.basic.Scaffold
 import top.yukonga.miuix.kmp.basic.SmallTopAppBar
+import top.yukonga.miuix.kmp.basic.TooltipBox
 import top.yukonga.miuix.kmp.basic.TopAppBar
 import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
@@ -29,16 +27,19 @@ import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
 import top.yukonga.miuix.kmp.icon.extended.Ok
 import xzylib.base.util.ToastUtils
+import xzynine.WebDAVPass.Android.data.AppPackageField.normalizeAppPackage
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
-import xzynine.WebDAVPass.Android.data.KdbxTokenRepository
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingValueType
+import xzynine.WebDAVPass.Android.data.splitAppPackageField
 import xzynine.WebDAVPass.Android.ui.Dialog.ConfirmationDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.EntryHistoryDialog
 import xzynine.WebDAVPass.Android.ui.Dialog.IconPickerDialog
+import xzynine.WebDAVPass.Android.ui.component.rememberAttachmentPicker
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import xzynine.WebDAVPass.Android.util.FileSizeLimits
 
 @Composable
 fun PasswordEntryDetailScreen(
@@ -68,6 +69,7 @@ fun PasswordEntryDetailScreen(
     var editUrl by rememberSaveable(entryId) { mutableStateOf("") }
     var editNotes by rememberSaveable(entryId) { mutableStateOf("") }
     var editTagsText by rememberSaveable(entryId) { mutableStateOf("") }
+    var editAppPackage by rememberSaveable(entryId) { mutableStateOf("") }
 
     // 附件 / 自定义字段 / 过期时间 / 图标（编辑态）
     // 注意：附件含 ByteArray，不能用 rememberSaveable（无法序列化）
@@ -99,7 +101,8 @@ fun PasswordEntryDetailScreen(
         editAttachments = entry.attachments.map { EditableAttachmentDraft(name = it.name) }
         // 仅排除真正的标准字段（isStandard），保留同名但属于额外字段（extra）的合法字段，
         // 避免从其他工具迁移来的、命名为 Password 等的 extra 在保存时被静默删除。
-        editCustomFields =
+        // 应用关联字段（AndroidApp / AndroidApp_1 …）单独拆出到 editAppPackage，不进自定义字段列表
+        val appSplit =
             entry.keyValues
                 .filter { !it.isStandard }
                 .map {
@@ -111,7 +114,9 @@ fun PasswordEntryDetailScreen(
                         valueType = it.valueType,
                         isStandard = it.isStandard,
                     )
-                }
+                }.splitAppPackageField()
+        editCustomFields = appSplit.fields
+        editAppPackage = appSplit.packageName
         editExpiryTime = entry.expiryTime
         editIconStandardId = entry.standardIconId
         editCustomIconUuid = entry.customIconUuid
@@ -147,45 +152,8 @@ fun PasswordEntryDetailScreen(
 
     // 附件导入：选择文件后增量读取字节加入编辑态附件列表（带硬性大小上限，避免 OOM）
     val attachmentPicker =
-        rememberLauncherForActivityResult(
-            contract = ActivityResultContracts.GetContent(),
-        ) { uri ->
-            uri ?: return@rememberLauncherForActivityResult
-            // 先用声明大小预检（content provider 可能返回 -1，故仅作软提示，真正上限在增量读取处强制）
-            val declaredSize = DocumentFile.fromSingleUri(context, uri)?.length() ?: -1L
-            if (declaredSize > KdbxTokenRepository.MAX_ATTACHMENT_BYTES) {
-                ToastUtils.showShortToast(context, "附件过大（上限 ${KdbxTokenRepository.MAX_ATTACHMENT_BYTES / 1024 / 1024} MiB），已取消")
-                return@rememberLauncherForActivityResult
-            }
-            runCatching {
-                context.contentResolver.openInputStream(uri)?.use { input ->
-                    // 增量读取并强制上限：超过则抛异常，拒绝进入内存
-                    val buffer = java.io.ByteArrayOutputStream(8 * 1024)
-                    val chunk = ByteArray(8 * 1024)
-                    var total = 0
-                    while (true) {
-                        val read = input.read(chunk)
-                        if (read < 0) break
-                        total += read
-                        if (total > KdbxTokenRepository.MAX_ATTACHMENT_BYTES) {
-                            throw IllegalStateException("附件过大")
-                        }
-                        buffer.write(chunk, 0, read)
-                    }
-                    val bytes = buffer.toByteArray()
-                    val name =
-                        uri.lastPathSegment?.substringAfterLast('/')?.takeIf { it.isNotBlank() }
-                            ?: "attachment_${System.currentTimeMillis()}"
-                    editAttachments = editAttachments +
-                        EditableAttachmentDraft(
-                            name = name,
-                            data = bytes,
-                            isNew = true,
-                        )
-                }
-            }.onFailure {
-                ToastUtils.showShortToast(context, "附件过大或读取失败，已取消")
-            }
+        rememberAttachmentPicker(context, FileSizeLimits.ATTACHMENT_MAX_BYTES) { name, data ->
+            editAttachments = editAttachments + EditableAttachmentDraft(name = name, data = data, isNew = true)
         }
 
     // 保存当前编辑内容（编辑态顶栏保存按钮共用）
@@ -207,6 +175,7 @@ fun PasswordEntryDetailScreen(
                         customIconUuid = editCustomIconUuid,
                         iconStandardId = editIconStandardId,
                         newCustomIconBytes = editNewCustomIconBytes,
+                        appPackageName = normalizeAppPackage(editAppPackage),
                     ),
                 )
             if (updated) {
@@ -221,39 +190,47 @@ fun PasswordEntryDetailScreen(
     val detailActions: @Composable () -> Unit = {
         if (selectedEntry != null) {
             if (isEditing) {
-                IconButton(
-                    onClick = {
-                        selectedEntry?.let { syncEditFields(it) }
-                        isEditing = false
-                    },
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Close,
-                        contentDescription = "取消编辑",
-                    )
+                TooltipBox(text = "取消编辑") {
+                    IconButton(
+                        onClick = {
+                            selectedEntry?.let { syncEditFields(it) }
+                            isEditing = false
+                        },
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Close,
+                            contentDescription = "取消编辑",
+                        )
+                    }
                 }
-                IconButton(onClick = { saveEntry() }) {
-                    Icon(
-                        imageVector = MiuixIcons.Ok,
-                        contentDescription = "保存",
-                    )
+                TooltipBox(text = "保存") {
+                    IconButton(onClick = { saveEntry() }) {
+                        Icon(
+                            imageVector = MiuixIcons.Ok,
+                            contentDescription = "保存",
+                        )
+                    }
                 }
             } else {
-                IconButton(
-                    onClick = {
-                        showDeleteDialog.value = true
-                    },
-                ) {
-                    Icon(
-                        imageVector = MiuixIcons.Delete,
-                        contentDescription = "删除",
-                    )
+                TooltipBox(text = "删除") {
+                    IconButton(
+                        onClick = {
+                            showDeleteDialog.value = true
+                        },
+                    ) {
+                        Icon(
+                            imageVector = MiuixIcons.Delete,
+                            contentDescription = "删除",
+                        )
+                    }
                 }
-                IconButton(onClick = { isEditing = true }) {
-                    Icon(
-                        imageVector = MiuixIcons.Edit,
-                        contentDescription = "编辑",
-                    )
+                TooltipBox(text = "编辑") {
+                    IconButton(onClick = { isEditing = true }) {
+                        Icon(
+                            imageVector = MiuixIcons.Edit,
+                            contentDescription = "编辑",
+                        )
+                    }
                 }
             }
         }
@@ -306,6 +283,9 @@ fun PasswordEntryDetailScreen(
             onEditPasswordChange = { editPassword = it },
             editUrl = editUrl,
             onEditUrlChange = { editUrl = it },
+            editAppPackage = editAppPackage,
+            onEditAppPackageChange = { editAppPackage = it },
+            editCustomIconUuid = editCustomIconUuid,
             editNotes = editNotes,
             onEditNotesChange = { editNotes = it },
             editTagsText = editTagsText,
@@ -318,6 +298,7 @@ fun PasswordEntryDetailScreen(
             onEditExpiryTimeChange = { editExpiryTime = it },
             editIconStandardId = editIconStandardId,
             editNewCustomIconBytes = editNewCustomIconBytes,
+            onEditNewCustomIconBytesChange = { editNewCustomIconBytes = it },
             showOtpSecret = showOtpSecret,
             onShowOtpSecretChange = { showOtpSecret = it },
             showQrCode = showQrCode,

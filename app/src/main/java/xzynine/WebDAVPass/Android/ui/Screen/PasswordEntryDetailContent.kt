@@ -1,13 +1,9 @@
 package xzynine.WebDAVPass.Android.ui.Screen
 
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Context
 import android.widget.ImageView
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -16,10 +12,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -37,11 +38,16 @@ import top.yukonga.miuix.kmp.basic.SmallTitle
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextField
 import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Copy
+import top.yukonga.miuix.kmp.icon.extended.Delete
 import top.yukonga.miuix.kmp.icon.extended.Edit
+import top.yukonga.miuix.kmp.icon.extended.Hide
 import top.yukonga.miuix.kmp.icon.extended.Notes
+import top.yukonga.miuix.kmp.icon.extended.Show
 import top.yukonga.miuix.kmp.theme.MiuixTheme
 import top.yukonga.miuix.kmp.utils.PressFeedbackType
 import xzylib.base.util.ToastUtils
+import xzynine.WebDAVPass.Android.data.AppPackageField
 import xzynine.WebDAVPass.Android.data.EditableAttachmentDraft
 import xzynine.WebDAVPass.Android.data.EditableFieldDraft
 import xzynine.WebDAVPass.Android.data.EntryHistoryInfo
@@ -49,11 +55,15 @@ import xzynine.WebDAVPass.Android.data.OtpToken
 import xzynine.WebDAVPass.Android.data.PasswordEntry
 import xzynine.WebDAVPass.Android.data.RemainingValueType
 import xzynine.WebDAVPass.Android.data.TokenCode
+import xzynine.WebDAVPass.Android.ui.component.CenteredEmptyState
+import xzynine.WebDAVPass.Android.ui.component.CenteredLoading
 import xzynine.WebDAVPass.Android.ui.component.EntryIcon
+import xzynine.WebDAVPass.Android.ui.component.OutlinedReadOnlyCard
 import xzynine.WebDAVPass.Android.ui.component.Preference
 import xzynine.WebDAVPass.Android.ui.component.PreferenceType
 import xzynine.WebDAVPass.Android.ui.component.TokenCard
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
+import xzynine.WebDAVPass.Android.util.InstalledAppsProvider
 import xzynine.WebDAVPass.Android.util.LocalTimeFormatter
 import xzynine.WebDAVPass.Android.util.QrCodeUtil
 
@@ -75,6 +85,9 @@ fun PasswordEntryDetailContent(
     onEditPasswordChange: (String) -> Unit,
     editUrl: String,
     onEditUrlChange: (String) -> Unit,
+    editAppPackage: String,
+    onEditAppPackageChange: (String) -> Unit,
+    editCustomIconUuid: String?,
     editNotes: String,
     onEditNotesChange: (String) -> Unit,
     editTagsText: String,
@@ -87,6 +100,7 @@ fun PasswordEntryDetailContent(
     onEditExpiryTimeChange: (Long?) -> Unit,
     editIconStandardId: Int,
     editNewCustomIconBytes: ByteArray?,
+    onEditNewCustomIconBytesChange: (ByteArray?) -> Unit,
     showOtpSecret: Boolean,
     onShowOtpSecretChange: (Boolean) -> Unit,
     showQrCode: Boolean,
@@ -101,26 +115,13 @@ fun PasswordEntryDetailContent(
     tokenViewModel: TokenViewModel,
     coroutineScope: CoroutineScope,
 ) {
-    val cornerRadius = 12.dp
-    val cardBorderColor = MiuixTheme.colorScheme.onSurfaceSecondary.copy(alpha = 0.18f)
-
     if (!detailLoaded) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "加载中...")
-        }
+        CenteredLoading(modifier = modifier)
         return
     }
 
     if (selectedEntry == null) {
-        Box(
-            modifier = modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(text = "条目不存在")
-        }
+        CenteredEmptyState(text = "条目不存在", modifier = modifier)
         return
     }
 
@@ -136,6 +137,9 @@ fun PasswordEntryDetailContent(
     val notesField = selectedEntry.keyValues.firstOrNull { it.fieldName.equals("Notes", ignoreCase = true) }
     val otpFields = selectedEntry.keyValues.filter { isOtpField(it) }
     val otpSecretField = otpFields.firstOrNull()
+    // 应用关联字段（AndroidApp / AndroidApp_N）：编辑态已由 editAppPackage 单独承载，
+    // 查看态在「应用」行展示，这里都要从附加信息中排除以免重复
+    val appIdField = selectedEntry.keyValues.firstOrNull { AppPackageField.isAppIdFieldName(it.fieldName) }
     val additionalFields =
         selectedEntry.keyValues
             .filterNot { item ->
@@ -143,6 +147,7 @@ fun PasswordEntryDetailContent(
                     item == passwordField ||
                     item == urlField ||
                     item == notesField ||
+                    item == appIdField ||
                     (selectedToken != null && isOtpField(item))
             }.filterNot { item ->
                 // Passkey 字段在下方独立区块展示
@@ -169,6 +174,22 @@ fun PasswordEntryDetailContent(
     val urlValue = urlField?.rawValue?.ifBlank { "--" } ?: "--"
     val notesValue = notesField?.rawValue?.ifBlank { "--" } ?: "--"
 
+    // 应用关联：编辑态取编辑框内的包名，查看态取条目内的应用字段（归一化为裸包名）
+    val appPackage =
+        AppPackageField
+            .normalizeAppPackage(if (isEditing) editAppPackage else appIdField?.rawValue)
+            .takeIf { it.isNotEmpty() }
+    var appLabel by remember(appPackage) { mutableStateOf("") }
+    LaunchedEffect(appPackage) {
+        appLabel =
+            appPackage
+                ?.let { pkg ->
+                    withContext(Dispatchers.IO) {
+                        runCatching { InstalledAppsProvider.getApplicationLabel(context, pkg) }.getOrNull()
+                    }
+                }.orEmpty()
+    }
+
     LazyColumn(
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
@@ -183,9 +204,7 @@ fun PasswordEntryDetailContent(
                     onClick = {
                         if (!showOtpSecret) {
                             tokenCode?.let { code ->
-                                val clipboardManager = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                                val clipData = ClipData.newPlainText("2FA Token", code.code)
-                                clipboardManager.setPrimaryClip(clipData)
+                                copySensitiveToClipboard(context, "2FA Token", code.code)
                                 ToastUtils.showShortToast(context, "已复制到剪贴板")
                             }
                         }
@@ -211,21 +230,7 @@ fun PasswordEntryDetailContent(
                 }
 
                 item {
-                    Card(
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .border(
-                                    width = 0.5.dp,
-                                    color = cardBorderColor,
-                                    shape = RoundedCornerShape(cornerRadius),
-                                ),
-                        colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-                        cornerRadius = cornerRadius,
-                        pressFeedbackType = PressFeedbackType.None,
-                        showIndication = false,
-                        onClick = {},
-                    ) {
+                    OutlinedReadOnlyCard {
                         Column(
                             modifier =
                                 Modifier
@@ -246,7 +251,7 @@ fun PasswordEntryDetailContent(
                                 modifier = Modifier.padding(top = 8.dp),
                             )
 
-                            if (showQrCode && selectedToken != null) {
+                            if (showQrCode) {
                                 Text(
                                     text = "扫描二维码添加到其他设备:",
                                     fontSize = 14.sp,
@@ -273,21 +278,7 @@ fun PasswordEntryDetailContent(
         }
 
         item {
-            Card(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .border(
-                            width = 0.5.dp,
-                            color = cardBorderColor,
-                            shape = RoundedCornerShape(cornerRadius),
-                        ),
-                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-                cornerRadius = cornerRadius,
-                pressFeedbackType = PressFeedbackType.None,
-                showIndication = false,
-                onClick = {},
-            ) {
+            OutlinedReadOnlyCard {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     if (isEditing) {
                         TextField(
@@ -415,6 +406,35 @@ fun PasswordEntryDetailContent(
                         thickness = 0.5.dp,
                     )
 
+                    // 应用（安装包名）：编辑态提供独立输入行与本机应用选择器；
+                    // 查看态仅在已关联应用时展示，点击尝试拉起该应用
+                    if (isEditing) {
+                        AppPackageFieldEditor(
+                            value = editAppPackage,
+                            onValueChange = { onEditAppPackageChange(it) },
+                            hasCustomIcon = editNewCustomIconBytes != null || editCustomIconUuid != null,
+                            onAppIconPicked = { onEditNewCustomIconBytesChange(it) },
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                    } else if (appPackage != null) {
+                        Preference(
+                            type = PreferenceType.Arrow,
+                            title = "应用",
+                            summary = if (appLabel.isEmpty() || appLabel == appPackage) appPackage else "$appLabel · $appPackage",
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                if (!InstalledAppsProvider.launchApp(context, appPackage)) {
+                                    ToastUtils.showShortToast(context, "未安装该应用")
+                                }
+                            },
+                        )
+                    }
+
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = 14.dp),
+                        thickness = 0.5.dp,
+                    )
+
                     if (isEditing) {
                         TextField(
                             value = editNotes,
@@ -510,21 +530,7 @@ fun PasswordEntryDetailContent(
 
         // 过期时间（编辑态可设置，非编辑态展示）
         item {
-            Card(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .border(
-                            width = 0.5.dp,
-                            color = cardBorderColor,
-                            shape = RoundedCornerShape(cornerRadius),
-                        ),
-                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-                cornerRadius = cornerRadius,
-                pressFeedbackType = PressFeedbackType.None,
-                showIndication = false,
-                onClick = {},
-            ) {
+            OutlinedReadOnlyCard {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     if (isEditing) {
                         ExpiryTimeEditor(
@@ -551,21 +557,7 @@ fun PasswordEntryDetailContent(
                 SmallTitle(text = "Passkey")
             }
             item {
-                Card(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .border(
-                                width = 0.5.dp,
-                                color = cardBorderColor,
-                                shape = RoundedCornerShape(cornerRadius),
-                            ),
-                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-                    cornerRadius = cornerRadius,
-                    pressFeedbackType = PressFeedbackType.None,
-                    showIndication = false,
-                    onClick = {},
-                ) {
+                OutlinedReadOnlyCard {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         PasskeyInfoRow(
                             label = "依赖方",
@@ -601,10 +593,15 @@ fun PasswordEntryDetailContent(
                 SmallTitle(text = "自定义字段")
             }
             item {
-                CustomFieldsEditor(
-                    fields = editCustomFields,
-                    onFieldsChange = { onEditCustomFieldsChange(it) },
-                )
+                // 编辑器本身是平铺结构，详情页用与相邻分区一致的卡片壳包裹
+                OutlinedReadOnlyCard {
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        CustomFieldsEditor(
+                            fields = editCustomFields,
+                            onFieldsChange = { onEditCustomFieldsChange(it) },
+                        )
+                    }
+                }
             }
         }
 
@@ -619,21 +616,7 @@ fun PasswordEntryDetailContent(
             SmallTitle(text = "附件 ($attachmentCount)")
         }
         item {
-            Card(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .border(
-                            width = 0.5.dp,
-                            color = cardBorderColor,
-                            shape = RoundedCornerShape(cornerRadius),
-                        ),
-                colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-                cornerRadius = cornerRadius,
-                pressFeedbackType = PressFeedbackType.None,
-                showIndication = false,
-                onClick = {},
-            ) {
+            OutlinedReadOnlyCard {
                 Column(modifier = Modifier.fillMaxWidth()) {
                     if (selectedEntry.attachments.isEmpty() && !isEditing) {
                         Text(
@@ -648,23 +631,40 @@ fun PasswordEntryDetailContent(
                     }
                     if (isEditing) {
                         editAttachments.filter { !it.removed }.forEachIndexed { index, att ->
-                            AttachmentEditRow(
-                                name = att.name,
-                                sizeText =
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = att.name,
+                                        fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.onSurface,
+                                    )
                                     if (att.isNew) {
-                                        "${formatFileSize((att.data?.size ?: 0).toLong())} · 新增"
-                                    } else {
-                                        null
-                                    },
-                                canDelete = true,
-                                onDelete = {
+                                        Text(
+                                            text = "${formatFileSize((att.data?.size ?: 0).toLong())} · 新增",
+                                            fontSize = 12.sp,
+                                            color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = {
                                     onEditAttachmentsChange(
                                         editAttachments.map {
                                             if (it === att) it.copy(removed = true) else it
                                         },
                                     )
-                                },
-                            )
+                                }) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Delete,
+                                        contentDescription = "删除附件",
+                                    )
+                                }
+                            }
                             if (index < editAttachments.filter { !it.removed }.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 14.dp),
@@ -674,32 +674,47 @@ fun PasswordEntryDetailContent(
                         }
                     } else {
                         selectedEntry.attachments.forEachIndexed { index, att ->
-                            AttachmentViewRow(
-                                name = att.name,
-                                sizeText = formatFileSize(att.size),
-                                onClick = {
-                                    coroutineScope.launch {
-                                        val dir = java.io.File(context.cacheDir, "attachments").apply { mkdirs() }
-                                        val file = dir.resolve(att.name.replace("/", "_"))
-                                        // 解密写入放 IO 线程；先删同名旧文件，避免附件更新后残留旧明文
-                                        val ok =
-                                            withContext(Dispatchers.IO) {
-                                                runCatching {
-                                                    file.delete()
-                                                    file.outputStream().use { out ->
-                                                        tokenViewModel.copyEntryAttachmentTo(entryId, att.name, out)
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            coroutineScope.launch {
+                                                val dir = java.io.File(context.cacheDir, "attachments").apply { mkdirs() }
+                                                val file = dir.resolve(att.name.replace("/", "_"))
+                                                // 解密写入放 IO 线程；先删同名旧文件，避免附件更新后残留旧明文
+                                                val ok =
+                                                    withContext(Dispatchers.IO) {
+                                                        runCatching {
+                                                            file.delete()
+                                                            file.outputStream().use { out ->
+                                                                tokenViewModel.copyEntryAttachmentTo(entryId, att.name, out)
+                                                            }
+                                                            true
+                                                        }.getOrElse { false }
                                                     }
-                                                    true
-                                                }.getOrElse { false }
+                                                if (ok) {
+                                                    openAttachment(context, att.name, file)
+                                                } else {
+                                                    ToastUtils.showShortToast(context, "读取附件失败或附件过大")
+                                                }
                                             }
-                                        if (ok) {
-                                            openAttachment(context, att.name, file)
-                                        } else {
-                                            ToastUtils.showShortToast(context, "读取附件失败或附件过大")
-                                        }
-                                    }
-                                },
-                            )
+                                        }.padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = att.name,
+                                        fontSize = 14.sp,
+                                        color = MiuixTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = formatFileSize(att.size),
+                                        fontSize = 12.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                    )
+                                }
+                            }
                             if (index < selectedEntry.attachments.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 14.dp),
@@ -746,30 +761,54 @@ fun PasswordEntryDetailContent(
             }
 
             item {
-                Card(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .border(
-                                width = 0.5.dp,
-                                color = cardBorderColor,
-                                shape = RoundedCornerShape(cornerRadius),
-                            ),
-                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-                    cornerRadius = cornerRadius,
-                    pressFeedbackType = PressFeedbackType.None,
-                    showIndication = false,
-                    onClick = {},
-                ) {
+                OutlinedReadOnlyCard {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         additionalFields.forEachIndexed { index, item ->
-                            AdditionalFieldRow(
-                                item = item,
-                                onCopy = {
+                            // 受保护字段默认以掩码展示，仅在用户主动切换后显示原值
+                            var showProtectedValue by remember { mutableStateOf(false) }
+                            Row(
+                                modifier =
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    val displayName = displayFieldName(item.fieldName)
+                                    Text(
+                                        text = if (item.isProtected) "$displayName（已保护）" else displayName,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MiuixTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = if (item.isProtected && !showProtectedValue) "••••••" else item.rawValue,
+                                        fontSize = 13.sp,
+                                        color = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                    )
+                                }
+                                if (item.isProtected) {
+                                    IconButton(onClick = { showProtectedValue = !showProtectedValue }) {
+                                        Icon(
+                                            imageVector = if (showProtectedValue) MiuixIcons.Hide else MiuixIcons.Show,
+                                            contentDescription = if (showProtectedValue) "隐藏受保护字段" else "显示受保护字段",
+                                            tint = MiuixTheme.colorScheme.onSurfaceSecondary,
+                                        )
+                                    }
+                                }
+                                IconButton(onClick = {
                                     copySensitiveToClipboard(context, item.fieldName, item.rawValue)
                                     ToastUtils.showShortToast(context, "已复制到剪贴板")
-                                },
-                            )
+                                }) {
+                                    Icon(
+                                        imageVector = MiuixIcons.Copy,
+                                        contentDescription = "复制 ${item.fieldName}",
+                                    )
+                                }
+                            }
                             if (index < additionalFields.lastIndex) {
                                 HorizontalDivider(
                                     modifier = Modifier.padding(horizontal = 14.dp),
@@ -790,21 +829,7 @@ fun PasswordEntryDetailContent(
                 )
             }
             item {
-                Card(
-                    modifier =
-                        Modifier
-                            .fillMaxWidth()
-                            .border(
-                                width = 0.5.dp,
-                                color = cardBorderColor,
-                                shape = RoundedCornerShape(cornerRadius),
-                            ),
-                    colors = CardDefaults.defaultColors(color = MiuixTheme.colorScheme.surface),
-                    cornerRadius = cornerRadius,
-                    pressFeedbackType = PressFeedbackType.None,
-                    showIndication = false,
-                    onClick = {},
-                ) {
+                OutlinedReadOnlyCard {
                     Column(modifier = Modifier.fillMaxWidth()) {
                         // 列表按时间倒序（最新在前）展示
                         historyItems.asReversed().forEachIndexed { index, history ->
