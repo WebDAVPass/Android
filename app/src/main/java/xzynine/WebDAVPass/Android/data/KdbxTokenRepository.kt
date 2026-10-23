@@ -1716,13 +1716,15 @@ class KdbxTokenRepository(
         }
 
     /**
-     * 新增令牌，已存在时返回 false；判重与写入在同一次开库内完成。
+     * 新增令牌，返回新条目 ID；令牌已存在或写库失败时返回 null。
+     *
+     * 判重与写入在同一次开库内完成，调用方无需再查重。
      */
     fun addToken(
         localPath: String,
         masterPassword: String,
         token: OtpToken,
-    ): Boolean {
+    ): Long? {
         return withDatabase(localPath, masterPassword, saveAfter = true) { db ->
             val existing =
                 findExistingTokenEntry(
@@ -1734,14 +1736,14 @@ class KdbxTokenRepository(
                     token.period,
                 )
             if (existing != null) {
-                return@withDatabase false
+                return@withDatabase null
             }
 
-            val root = db.rootGroup ?: return@withDatabase false
-            val entry = db.createEntry() ?: return@withDatabase false
+            val root = db.rootGroup ?: return@withDatabase null
+            val entry = db.createEntry() ?: return@withDatabase null
             applyTokenToEntry(db, entry, token)
             db.addEntryTo(entry, root)
-            true
+            toStableId(entry)
         }
     }
 

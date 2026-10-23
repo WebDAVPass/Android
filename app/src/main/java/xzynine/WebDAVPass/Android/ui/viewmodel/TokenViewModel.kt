@@ -991,10 +991,12 @@ class TokenViewModel(
     }
 
     /**
-     * 添加新令牌
+     * 添加新令牌，返回新条目 ID；令牌已存在或写库失败时返回 null。
+     *
+     * 新条目 ID 供调用方在添加后直接打开详情页，无需再按字段反查。
      */
-    suspend fun addToken(token: OtpToken): Boolean {
-        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return false
+    suspend fun addToken(token: OtpToken): Long? {
+        val localPath = libraryViewModel.currentLibrary.value?.localPath ?: return null
         val masterPassword = libraryViewModel.getMasterPasswordInternal()
 
         val tokenWithId =
@@ -1013,17 +1015,17 @@ class TokenViewModel(
             }
 
         // 判重与写入由仓库层在同一次开库内完成
-        val added =
+        val entryId =
             withContext(Dispatchers.IO) {
                 kdbxTokenRepository.addToken(localPath, masterPassword, tokenWithId)
             }
-        if (added) {
+        if (entryId != null) {
             viewModelScope.launch {
                 loadTokensInternal()
             }
             scheduleBackupTokens()
         }
-        return added
+        return entryId
     }
 
     /**

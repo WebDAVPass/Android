@@ -76,7 +76,7 @@ import java.util.concurrent.Executors
 @Composable
 fun ScanTokenScreen(
     tokenViewModel: TokenViewModel,
-    onTokenScanned: () -> Unit,
+    onTokenScanned: (entryId: Long) -> Unit,
     onDismiss: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -138,13 +138,12 @@ fun ScanTokenScreen(
                             }
 
                         coroutineScope.launch(Dispatchers.Main) {
-                            val added =
+                            val entryId =
                                 addScannedToken(tokenViewModel, tokenString.toUri()) { message ->
                                     pickedImageError = message
                                 }
-                            if (added) {
-                                ToastUtils.showShortToast(context, "令牌添加成功")
-                                onTokenScanned()
+                            if (entryId != null) {
+                                onTokenScanned(entryId)
                             }
                         }
                     } else {
@@ -261,20 +260,13 @@ fun ScanTokenScreen(
                                                     imageProxy,
                                                     tokenQRCodeDecoder,
                                                     tokenViewModel,
-                                                    onTokenFound = { _ ->
-                                                        // 标记已找到令牌
+                                                    onTokenFound = { entryId ->
+                                                        // 标记已找到令牌，后续帧不再解码
                                                         foundToken.value = true
 
-                                                        // 在主线程上更新UI
+                                                        // 在主线程上回到详情页完成对码
                                                         coroutineScope.launch {
-                                                            // 显示成功提示
-                                                            ToastUtils.showShortToast(
-                                                                context,
-                                                                "令牌添加成功",
-                                                            )
-
-                                                            // 通知父组件
-                                                            onTokenScanned()
+                                                            onTokenScanned(entryId)
                                                         }
                                                     },
                                                     lastScannedUrl = lastScannedUrl,
@@ -383,15 +375,14 @@ fun ScanTokenScreen(
                         }
 
                         coroutineScope.launch {
-                            val added =
+                            val entryId =
                                 addScannedToken(tokenViewModel, raw.toUri()) { message ->
                                     pickedImageError = message
                                 }
-                            if (added) {
-                                ToastUtils.showShortToast(context, "令牌添加成功")
+                            if (entryId != null) {
                                 manualInputText = ""
                                 showManualInput.value = false
-                                onTokenScanned()
+                                onTokenScanned(entryId)
                             }
                         }
                     },
@@ -440,7 +431,7 @@ private fun processImageProxy(
     imageProxy: ImageProxy,
     tokenQRCodeDecoder: TokenQRCodeDecoder,
     tokenViewModel: TokenViewModel,
-    onTokenFound: (String) -> Unit,
+    onTokenFound: (entryId: Long) -> Unit,
     lastScannedUrl: MutableState<String?>,
 ) {
     try {
@@ -466,14 +457,13 @@ private fun processImageProxy(
 
                     // 使用Dispatchers.Main协程作用域，确保UI操作在主线程执行
                     GlobalScope.launch(Dispatchers.Main) {
-                        val added =
+                        val entryId =
                             addScannedToken(tokenViewModel, tokenString.toUri()) { message ->
                                 ToastUtils.showShortToast(context, message)
                             }
-                        if (added) {
-                            // 调用回调，通知父组件关闭扫描窗口
-                            onTokenFound(tokenString)
-                            // 不在这里清除URL，由父组件关闭扫描窗口时处理
+                        if (entryId != null) {
+                            // 添加成功后回到详情页完成对码
+                            onTokenFound(entryId)
                         }
                     }
                 }
@@ -529,13 +519,13 @@ private fun errorTypeToMessage(type: TokenQRCodeDecoder.ParseResult.ErrorType): 
  * 由扫描、上传图片或手动输入得到的 URI 添加令牌。
  *
  * @param onFailure 解析失败或令牌已存在时的提示文案回调
- * @return 令牌已添加返回 true；令牌已存在或解析失败返回 false
+ * @return 令牌已添加时返回新条目 ID；令牌已存在或解析失败返回 null
  */
 private suspend fun addScannedToken(
     tokenViewModel: TokenViewModel,
     uri: Uri,
     onFailure: (String) -> Unit,
-): Boolean {
+): Long? {
     val token =
         try {
             OtpTokenFactory.createFromUri(uri)
@@ -548,18 +538,18 @@ private suspend fun addScannedToken(
                     else -> "无效的二维码格式"
                 },
             )
-            return false
+            return null
         }
-    val added =
+    val entryId =
         try {
             tokenViewModel.addToken(token)
         } catch (e: Exception) {
             Logger.e("ScanToken", "添加令牌失败: ${e.message}", e)
             onFailure("添加令牌失败")
-            return false
+            return null
         }
-    if (!added) {
+    if (entryId == null) {
         onFailure("该令牌已存在")
     }
-    return added
+    return entryId
 }

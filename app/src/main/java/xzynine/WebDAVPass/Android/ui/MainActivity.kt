@@ -50,6 +50,7 @@ import xzynine.WebDAVPass.Android.ui.Screen.isOnboardingCompleted
 import xzynine.WebDAVPass.Android.ui.component.CategoryNavigationItem
 import xzynine.WebDAVPass.Android.ui.navigation.LocalNavigator
 import xzynine.WebDAVPass.Android.ui.navigation.Route
+import xzynine.WebDAVPass.Android.ui.navigation.push
 import xzynine.WebDAVPass.Android.ui.navigation.replaceAll
 import xzynine.WebDAVPass.Android.ui.viewmodel.PasswordListMode
 import xzynine.WebDAVPass.Android.ui.viewmodel.TokenViewModel
@@ -364,8 +365,10 @@ fun MainScreen() {
                 ) {
                     ScanTokenScreen(
                         tokenViewModel = tokenViewModel,
-                        onTokenScanned = {
+                        onTokenScanned = { entryId ->
+                            // 关闭扫码面板并直接进入新条目详情页，由用户完成对码
                             showScanBottomSheet.value = false
+                            backStack.push(Route.PasswordEntryDetail(entryId))
                         },
                         onDismiss = {
                             showScanBottomSheet.value = false

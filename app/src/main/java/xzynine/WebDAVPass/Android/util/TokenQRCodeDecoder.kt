@@ -79,26 +79,21 @@ class TokenQRCodeDecoder {
      * @return 解析结果对象，包含成功状态、内容和错误类型
      */
     fun parseQRCode(image: ImageProxy): ParseResult {
-        // 在某些手机上，行跨度大于宽度。使用行跨度来避免缓冲区溢出
-        val rowStride = image.planes[0].rowStride
+        // 在某些手机上，行跨度大于宽度，亮度源按 rowStride * height 读取，
+        // 因此缓冲区必须按该容量校验；只比较 yBuffer.remaining() 会在分辨率变化时越界
         val width = image.width
         val height = image.height
-
-        if (!::imageData.isInitialized) {
-            imageData = ByteArray(rowStride * height)
-        }
 
         synchronized(imageData) {
             // 只需要YUV的Y分量
             val y = image.planes[0]
+            val rowStride = y.rowStride
+            val required = rowStride * height
+            if (imageData.size < required) {
+                imageData = ByteArray(required)
+            }
             val yBuffer = y.buffer
             val ySize = yBuffer.remaining()
-            val rowStride = y.rowStride
-
-            if (ySize > imageData.size) {
-                imageData = ByteArray(ySize)
-            }
-
             yBuffer.get(imageData, 0, ySize)
 
             try {
@@ -136,77 +131,56 @@ class TokenQRCodeDecoder {
      * @return 解析结果对象，包含成功状态、内容和错误类型
      */
     private fun decodeBinaryBitmap(binaryBitmap: BinaryBitmap): ParseResult {
-        // 配置解析参数，提高成功率
-        val hints = hashMapOf<com.google.zxing.DecodeHintType, Any>()
-        hints[com.google.zxing.DecodeHintType.CHARACTER_SET] = "UTF-8"
-        hints[com.google.zxing.DecodeHintType.TRY_HARDER] = true
-        hints[com.google.zxing.DecodeHintType.POSSIBLE_FORMATS] = listOf(com.google.zxing.BarcodeFormat.QR_CODE)
-
-        // 第一次尝试：带所有参数
-        try {
-            val result = qrCodeReader.decode(binaryBitmap, hints)
-            val resultText = result.text
-
-            // 检查是否是重复的URL，避免重复日志
-            if (resultText != lastDecodedUrl) {
-                Logger.d(tag, "成功解析二维码: $resultText")
-                lastDecodedUrl = resultText
-            }
-
-            return ParseResult(success = true, content = resultText)
-        } catch (e: NotFoundException) {
-            // 未找到二维码，不记录任何日志
-            return ParseResult(success = false, errorType = ParseResult.ErrorType.NOT_FOUND)
-        } catch (e: Exception) {
-            // 其他错误，尝试第二次解析
+        // 先按最严格的方式解析；失败后仅放宽格式限制重试一次，仍失败再交由无提示解析兜底。
+        // 三次尝试共用同一 binaryBitmap，ZXing 每次 decode 都会自行重建状态，可重复调用。
+        val attempts =
+            listOf(
+                mapOf<com.google.zxing.DecodeHintType, Any>(
+                    com.google.zxing.DecodeHintType.CHARACTER_SET to "UTF-8",
+                    com.google.zxing.DecodeHintType.TRY_HARDER to true,
+                    com.google.zxing.DecodeHintType.POSSIBLE_FORMATS to listOf(com.google.zxing.BarcodeFormat.QR_CODE),
+                ),
+                mapOf<com.google.zxing.DecodeHintType, Any>(
+                    com.google.zxing.DecodeHintType.CHARACTER_SET to "UTF-8",
+                    com.google.zxing.DecodeHintType.TRY_HARDER to true,
+                ),
+                emptyMap(),
+            )
+        // 保留最后一次失败原因：重试期间的真实异常不能被丢弃，否则错误分类会指向错误方向。
+        var lastFailure: Exception? = null
+        for (hints in attempts) {
             try {
-                // 第二次尝试：降低参数要求
-                val hints2 = hashMapOf<com.google.zxing.DecodeHintType, Any>()
-                hints2[com.google.zxing.DecodeHintType.CHARACTER_SET] = "UTF-8"
-                hints2[com.google.zxing.DecodeHintType.TRY_HARDER] = true
-
-                val result = qrCodeReader.decode(binaryBitmap, hints2)
-                val resultText = result.text
-
-                // 检查是否是重复的URL，避免重复日志
+                val resultText = qrCodeReader.decode(binaryBitmap, hints).text
                 if (resultText != lastDecodedUrl) {
                     Logger.d(tag, "成功解析二维码: $resultText")
                     lastDecodedUrl = resultText
                 }
-
                 return ParseResult(success = true, content = resultText)
-            } catch (e2: NotFoundException) {
-                // 再次未找到二维码，不记录任何日志
+            } catch (e: NotFoundException) {
+                // 画面中没有二维码属常态，直接返回且不记日志
+                lastFailure = e
                 return ParseResult(success = false, errorType = ParseResult.ErrorType.NOT_FOUND)
-            } catch (e2: Exception) {
-                // 第三次尝试：无任何参数
-                try {
-                    val result = qrCodeReader.decode(binaryBitmap)
-                    val resultText = result.text
+            } catch (e: Exception) {
+                lastFailure = e
+            } finally {
+                qrCodeReader.reset()
+            }
+        }
+        val failure = lastFailure
+        return when {
+            failure is ChecksumException -> {
+                Logger.e(tag, "二维码校验和错误: ${failure.message}", failure)
+                ParseResult(success = false, errorType = ParseResult.ErrorType.CHECKSUM_ERROR)
+            }
 
-                    // 检查是否是重复的URL，避免重复日志
-                    if (resultText != lastDecodedUrl) {
-                        Logger.d(tag, "成功解析二维码: $resultText")
-                        lastDecodedUrl = resultText
-                    }
+            failure is FormatException -> {
+                Logger.e(tag, "二维码格式错误: ${failure.message}", failure)
+                ParseResult(success = false, errorType = ParseResult.ErrorType.FORMAT_ERROR)
+            }
 
-                    return ParseResult(success = true, content = resultText)
-                } catch (e3: NotFoundException) {
-                    // 最终未找到二维码，不记录任何日志
-                    return ParseResult(success = false, errorType = ParseResult.ErrorType.NOT_FOUND)
-                } catch (e3: ChecksumException) {
-                    // 二维码校验和错误，记录日志
-                    Logger.e(tag, "二维码校验和错误")
-                    return ParseResult(success = false, errorType = ParseResult.ErrorType.CHECKSUM_ERROR)
-                } catch (e3: FormatException) {
-                    // 二维码格式错误，记录日志
-                    Logger.e(tag, "二维码格式错误")
-                    return ParseResult(success = false, errorType = ParseResult.ErrorType.FORMAT_ERROR)
-                } catch (e3: Exception) {
-                    // 其他错误，记录日志
-                    Logger.e(tag, "二维码解析未知错误: ${e3.message}", e3)
-                    return ParseResult(success = false, errorType = ParseResult.ErrorType.UNKNOWN_ERROR)
-                }
+            else -> {
+                failure?.let { Logger.e(tag, "二维码解析未知错误: ${it.message}", it) }
+                ParseResult(success = false, errorType = ParseResult.ErrorType.UNKNOWN_ERROR)
             }
         }
     }
